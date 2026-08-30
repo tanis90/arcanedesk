@@ -1,7 +1,7 @@
 {
   "name": "arcane-desktop",
-  "productName": "Arcane Desk",
-  "version": "0.1.2",
+  "productName": "ArcaneDesk",
+  "version": "0.1.4",
   "private": true,
   "license": "Apache-2.0",
   "description": "Arcane Desk — an agent-native desktop companion for Foundry VTT.",
@@ -49,8 +49,9 @@
   },
   "build": {
     "appId": "cn.bitterbebop.arcanedesk",
-    "productName": "Arcane Desk",
+    "productName": "ArcaneDesk",
     "asar": false,
+    "afterPack": "scripts/mac-adhoc-sign.mjs",
     "directories": {
       "output": "dist"
     },
