@@ -44,8 +44,8 @@ App 会在 Agent 启动前解压并校验随包 Node。当前 shell 中：
 
 平台细节按需读取：
 
-- Windows：`references/windows-install.md`
-- macOS：`references/macos-install.md`
+- Windows：[references/windows-install.md](references/windows-install.md)
+- macOS：[references/macos-install.md](references/macos-install.md)
 
 Node.js distribution ZIP 流程：
 
@@ -60,8 +60,16 @@ Node.js distribution ZIP 流程：
 
 ## 可选 Data 内容
 
-社区 profile 的 `installDefaults.systems/modules/worlds` 全部为空。不得因为用户说“安装
-Foundry”就顺带下载 system、module 或 world。
+`community-distribution.json` 的 `installDefaults.systems/modules/worlds` 全部为空，Desktop 不打包 Demo world、
+其版本或依赖清单。不得因为用户只说“安装 Foundry”就静默下载 system、module 或 world。
+
+Foundry Core 启动验收后，普通安装只询问一次用户是否继续安装“完整 Arcane Demo 环境”；先调用
+`arcane-fvtt-mods` 的只读 `world-inspect`，让它从 OSS 当前 world、环境 profile 和 stable package 快照解析
+准确总下载量、Core/system/module/world 版本、哈希与目标 Data 目录，再让用户选择。用户拒绝或暂不选择时
+就以 Core 安装完成交接，
+不重复劝说。用户一开始明确要求“完整 Arcane/FVTT 环境”“带 Demo 世界”时，视为已选择该能力，
+仍须展示准确计划，然后按 `arcane-fvtt-mods` 的 `references/demo-world.md` 完成 staging、一次停服提交和
+`--world=arcane-demo` 验收。OSS 尚未发布 world 时不要猜 URL，Core 安装仍可独立成功。
 
 用户明确要求 dnd5e 时，从清单 `systems` 读取固定上游 URL、版本、许可证与 SHA256，
 并在下载前展示这些信息、目标目录和是否会覆盖，得到明确同意后才继续。只使用清单中的

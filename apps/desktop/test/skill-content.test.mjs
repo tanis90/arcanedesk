@@ -42,6 +42,16 @@ const REQUIRED_MARKERS = new Map([
     "Manage Modules",
     "references/install.md",
     "references/updates.md",
+    "references/demo-world.md",
+    "Data/.arcane-world-backups/<id>/",
+  ]],
+  ["skills/prep/arcane-fvtt-mods/references/demo-world.md", [
+    "world-inspect",
+    "world-stage",
+    "world-commit",
+    "foundry-environment-profile",
+    "Data/.arcane-managed/profiles/",
+    "--world=arcane-demo",
   ]],
 ]);
 

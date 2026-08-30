@@ -11,6 +11,7 @@ const setupSkillMacos = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-se
 const opsSkill = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-ops", "SKILL.md");
 const distributionFile = path.join(desktopRoot, "distribution", "community-distribution.json");
 const moduleReaderSkill = path.join(desktopRoot, "skills", "prep", "arcane-module-reader", "SKILL.md");
+const desktopPackage = path.join(desktopRoot, "package.json");
 
 test("distribution pins a verified Node artifact for every supported desktop target", async () => {
   const distribution = JSON.parse(await readFile(distributionFile, "utf8"));
@@ -57,6 +58,14 @@ test("community distribution has no mirror, world, module, or default third-part
   assert.match(dnd5e.sha256, /^[a-f0-9]{64}$/);
 });
 
+test("desktop packages generic skills but no demo world or environment profile artifact", async () => {
+  const packageJson = JSON.parse(await readFile(desktopPackage, "utf8"));
+  assert.equal(packageJson.build.files.includes("skills/**/*"), true);
+  assert.equal(packageJson.build.files.includes("scripts/prepare-world-profile.mjs"), false);
+  assert.equal(packageJson.build.files.some((entry) => /worlds|arcane-demo|environment-profile/i.test(entry)), false);
+  assert.equal(JSON.stringify(packageJson).includes("arcane-demo"), false);
+});
+
 test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workflow", async () => {
   const skill = await readFile(setupSkill, "utf8");
   // 平台专属流程拆在 references/ 下:SKILL.md 留共享契约与路由,平台细节在各自文件里。
@@ -72,6 +81,11 @@ test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workfl
   assert.match(skill, /references\/windows-install\.md/);
   assert.match(skill, /references\/macos-install\.md/);
   assert.match(skill, /不使用代理池或第三方镜像/);
+  assert.match(skill, /Desktop 不打包 Demo world/);
+  assert.match(skill, /只询问一次/);
+  assert.match(skill, /arcane-fvtt-mods/);
+  assert.match(skill, /world-inspect/);
+  assert.match(skill, /references\/demo-world\.md/);
   assert.doesNotMatch(skill, /fvtt_setup/);
   assert.doesNotMatch(skill, /install-node|install-core|doctor/);
 

@@ -1,6 +1,6 @@
 # Windows 安装流程
 
-由 `../SKILL.md` 的「按物料类型安装 Core」引用，仅包含 Windows 桌面物料（EXE / 便携 ZIP）。共享的运行时契约、物料识别、Data 内容安装、验收与安全纪律都在 `../SKILL.md`；macOS 流程在 `macos-install.md`。
+由 `../SKILL.md` 的「安装 Foundry Core」引用，仅包含 Windows 桌面物料（EXE / 便携 ZIP）。共享的运行时契约、物料识别、Data 内容安装、验收与安全纪律都在 `../SKILL.md`；macOS 流程在 `macos-install.md`。
 
 ## Windows Portable Build ZIP
 

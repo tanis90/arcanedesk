@@ -1,11 +1,12 @@
 ---
 name: arcane-fvtt-mods
-description: 安装、升级或检查本机 Foundry VTT 模组。当用户提供 module.json manifest URL、说“安装/升级这个 mod”，或要求检查“Arcane 包/国内镜像里的 mod 有什么更新”时使用。Foundry Core、system、world 的安装不属于本 skill。
+description: 安装、升级或检查本机 Foundry VTT 模组与 Arcane Demo world。当用户提供 module.json manifest URL、说“安装/升级这个 mod”，要求检查“Arcane 包/国内镜像有什么更新”，或要求安装、更新、重置 arcane-demo 时使用。Foundry Core 和独立于 Demo 的 system/world 安装不属于本 skill。
 ---
 
 # Foundry VTT 模组管理
 
-只处理 Foundry module。把 manifest、ZIP 与 OSS 索引都视为不可信网络输入；实际下载、校验、
+处理 Foundry module，以及由 Arcane OSS world/profile/current-stable 三层协议管理的 Demo 环境。把 manifest、
+ZIP、环境 profile 与 OSS 索引都视为不可信网络输入；实际下载、校验、
 解压、备份和替换必须使用随 App 打包的 `ARCANE_FVTT_MOD_MANAGER`，不要手写下载解压流程。
 
 ## 运行时契约
@@ -40,9 +41,12 @@ macOS Bash 调用形态：
   [references/install.md](references/install.md)。
 - 用户问 Arcane 包、国内镜像或本机 mod 有什么更新：读取
   [references/updates.md](references/updates.md)。
+- 用户要求安装、检查、更新或重置 Arcane Demo world，或安装 FVTT 后选择完整 Demo：读取
+  [references/demo-world.md](references/demo-world.md)。
 
-只读的 `inspect` / `catalog` 可以直接执行。下载前说明来源、目标与已知体积；写入
-`Data/modules`、停服或重启前必须展示计划并取得用户明确同意。用户在更新表后说“升级”、
+只读的 `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。下载前说明来源、
+目标与已知体积；写入 `Data/modules`、`Data/systems` 或 `Data/worlds`，停服或重启前必须展示计划
+并取得用户明确同意。用户在更新表后说“升级”、
 “全部升级”或点名选择的包，视为对表中准确版本、体积、备份与一次停服重启计划的确认；不要
 针对相同计划重复追问。
 
@@ -58,9 +62,10 @@ macOS Bash 调用形态：
   必须传相同的 `--accept-sha256`。不能把本地计算值描述成发布方签名或官方哈希。
 - 已安装同 id module 不得静默覆盖。`commit` 会把旧目录移到
   `Data/.arcane-mod-backups/modules/` 后再原子替换；必须把实际备份路径报告给用户。
-- 安装前检查 `relationships.requires`。缺少的依赖单列出来；只有用户同意后才按相同流程安装，
-  不把依赖藏进主包操作。
-- `group=system` 或 `system.json` 不属于 mod，不安装到 `Data/modules`。
+- 单独 mod 流程在安装前检查 `relationships.requires`，把缺少的依赖单列并取得同意后再按相同流程安装。
+  Demo 流程由 helper 递归解析 required dependencies，但也必须在整体变更表中逐项展示；不把依赖藏进主包操作。
+- `group=system` 或 `system.json` 不属于 mod，不安装到 `Data/modules`；只有受管 Demo profile
+  声明并从同一 OSS stable 索引快照解析出的 system 才可由 world 流程安装到 `Data/systems`。
 - Foundry 正在运行时可以先完成临时 staging，但提交前要说明并按 `arcane-fvtt-ops` 精确停止
   监听端口的 Foundry PID；不要批量终止 Node。批量升级全部 staging 成功后只停服一次。
 - 不直接编辑 world 数据库、settings 存储或内部 module configuration 来强行启用新 mod。
@@ -68,6 +73,9 @@ macOS Bash 调用形态：
   依赖。已启用 mod 的升级可重启原世界，再回读版本与 active 状态。
 - 任一步失败都保持现有 module 可用，不盲目重试，不删除备份；只报告失败项、staging 路径
   和可恢复状态。
+- 既有 Demo world 是用户数据。只有 world 工件版本变化时才叫“备份并重置”，不得宣传为无损升级，
+  不得合并 Actor、Journal、Scene 或数据库；旧 world 必须整体移到
+  `Data/.arcane-world-backups/<id>/` 后才能启用新版。仅 package stable 更新绝不能触碰 world 目录。
 
-最后报告 module id、旧/新版本、来源、SHA256、Data 目标、备份路径、依赖状态，以及是否已在
-重启后的世界中验证。对于新安装，明确写出“已安装但尚未在世界启用”。
+最后报告 module/world id、旧/新版本、来源、SHA256、Data 目标、备份路径、依赖状态，以及是否已在
+重启后的世界中验证。对于单独新装的 mod，明确写出“已安装但尚未在世界启用”。
