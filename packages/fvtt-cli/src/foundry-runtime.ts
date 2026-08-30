@@ -9,9 +9,9 @@ import {
   type RuntimeStatus,
   type WriteDirectAction,
 } from "@arcanedesk/foundry-sdk/contracts";
-import { directRuntimeFunction } from "@arcanedesk/foundry-sdk/runtime";
+import { runtimeFunction } from "@arcanedesk/foundry-sdk/runtime";
 
-export { directRuntimeFunction };
+export { runtimeFunction };
 export type { DirectAction } from "@arcanedesk/foundry-sdk/contracts";
 export {
   actionBlockV2,
@@ -1589,7 +1589,7 @@ export class FoundryRuntimeClient {
     let dispatched = false;
     try {
       return (await this.callFunction(
-        directRuntimeFunction,
+        runtimeFunction,
         [
           { value: action },
           { value: args },
