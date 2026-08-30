@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +10,7 @@ import {
   readJson,
   validateRuntimeMetadata,
 } from "./desktop-release-metadata.mjs";
+import { macBundleRoot } from "./mac-adhoc-sign.mjs";
 
 export const requiredFiles = [
   "package.json",
@@ -135,6 +136,25 @@ function verifyBundledNode(appRoot, releaseManifest, distribution, expectedPlatf
   return errors;
 }
 
+// macOS 分发未走 Developer ID 签名/公证，但包内签名必须"有效"：签名失效时
+// Gatekeeper 报"已损坏"且无 GUI 绕过；有效的 ad-hoc 签名则回落为可绕过的
+// "无法验证开发者"提示（accepted 为将来签名+公证后的形态）。
+function verifyMacBundleSignature(bundlePath) {
+  const errors = [];
+  const verify = spawnSync("codesign", ["--verify", "--deep", "--strict", bundlePath], { encoding: "utf8" });
+  if (verify.status !== 0) {
+    const detail = `${verify.stdout ?? ""}${verify.stderr ?? ""}`.trim();
+    errors.push(`macOS bundle signature is invalid; Gatekeeper would report the app as damaged: ${detail}`);
+    return errors;
+  }
+  const assess = spawnSync("spctl", ["--assess", "--type", "execute", "--verbose", bundlePath], { encoding: "utf8" });
+  const output = `${assess.stdout ?? ""}${assess.stderr ?? ""}`;
+  if (!/\b(accepted|rejected)\b/.test(output)) {
+    errors.push(`unexpected Gatekeeper assessment for ${bundlePath}: ${output.trim() || `exit ${assess.status}`}`);
+  }
+  return errors;
+}
+
 export function verifyPackagedApp(appRootArg, options = {}) {
   const appRoot = path.resolve(appRootArg);
   const errors = [];
@@ -190,6 +210,10 @@ export function verifyPackagedApp(appRootArg, options = {}) {
   } catch (error) {
     errors.push(`runtime metadata inspection failed: ${error.message}`);
   }
+
+  // codesign/spctl 只在 macOS 宿主上可用；Windows 交叉产物无 bundle 可查。
+  const bundle = process.platform === "darwin" ? macBundleRoot(appRoot) : null;
+  if (bundle) errors.push(...verifyMacBundleSignature(bundle));
 
   return {
     ok: errors.length === 0,

@@ -281,10 +281,11 @@ jobs:
           fi
           release_flags=()
           if [[ "$RELEASE_CHANNEL" != "stable" ]]; then release_flags+=(--prerelease); fi
-          printf -v release_notes '%s\n\n%s\n\n%s' \
+          printf -v release_notes '%s\n\n%s\n\n%s\n\n%s' \
             "Automated release." \
             "Manifest: https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/$release_id/release.json" \
-            "Installation notice: These builds are currently unsigned. Windows may display a Microsoft Defender SmartScreen warning. macOS may display a Gatekeeper warning because the app is not signed or notarized."
+            "Installation notice: These builds are unsigned. Windows may display a Microsoft Defender SmartScreen warning. macOS builds are ad-hoc signed but not notarized, so the first launch reports that the developer cannot be verified: open via right-click > Open (macOS 13/14) or System Settings > Privacy & Security > Open Anyway (macOS 15+)." \
+            "If macOS reports the app as damaged, clear the download quarantine flag once: xattr -dr com.apple.quarantine /Applications/Arcane\\ Desk.app"
           gh release create "$release_id" \
             --title "Arcane Desk $release_id" \
             --notes "$release_notes" \

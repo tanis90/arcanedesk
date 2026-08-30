@@ -71,9 +71,14 @@ A formal release uses the same workflow with `create_github_release=true` and,
 only after every object is verified, `update_latest=true`. Non-`stable` channels
 create a GitHub prerelease. Do not enable either option merely to test CI.
 
-Current Desktop artifacts are unsigned: Windows can trigger SmartScreen, and
-macOS can trigger Gatekeeper because the app is not signed or notarized. This
-must remain visible in release notes until signing is implemented.
+Current Desktop artifacts are unsigned. Windows can trigger SmartScreen, and
+macOS builds are only ad-hoc signed (re-signed after packaging so the signature
+is valid): Gatekeeper shows a bypassable "developer cannot be verified" prompt
+instead of the dead-end "damaged" dialog. Users open the app via right-click >
+Open (macOS 13/14) or System Settings > Privacy & Security > Open Anyway
+(macOS 15+); clearing the quarantine attribute with `xattr -dr
+com.apple.quarantine` remains the documented fallback. This must remain visible
+in release notes until Developer ID signing and notarization are implemented.
 
 ## Local Windows emergency path
 

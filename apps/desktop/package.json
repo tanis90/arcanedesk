@@ -51,6 +51,7 @@
     "appId": "cn.bitterbebop.arcanedesk",
     "productName": "Arcane Desk",
     "asar": false,
+    "afterPack": "scripts/mac-adhoc-sign.mjs",
     "directories": {
       "output": "dist"
     },
