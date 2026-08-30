@@ -6,7 +6,7 @@
 
 以下坐标已写入 package metadata，但仍需项目所有者在首次推送前确认：
 
-- GitHub：`arcanedesk/arcane-desk`
+- GitHub：`tanis90/arcanedesk`
 - npm：`@arcanedesk/foundry-sdk`、`@arcanedesk/fvtt-cli`
 - Desktop npm package：`arcane-desktop`，保持 `private: true`
 - 初始版本：`0.1.0`，明确为 pre-release API
@@ -16,17 +16,17 @@
 
 ## 所有者需要逐项确认
 
-- [ ] 确认 GitHub owner/repository 为 `arcanedesk/arcane-desk`，或在推送前给出替代坐标。
-- [ ] 确认 npm 组织 `@arcanedesk` 可用且发布者具备权限；本次不执行 npm publish。
+- [x] 确认 GitHub owner/repository 为 `tanis90/arcanedesk`；同账号下既有私有 legacy repository 不属于本次操作范围。
+- [x] 首次公开只推送源码，不执行 npm publish；`@arcanedesk` scope 与发布权限延后到首次 npm 发布前确认。
 - [x] 项目所有者已确认私有历史中恢复的 3 个 display name 均为本人使用的署名，不存在需要另行取得许可的第三方作者；公开仓库不再保留单独的作者名册。
-- [ ] 确认 Apache-2.0 适用于本次迁移代码，且贡献采用 DCO sign-off，不要求 CLA。
-- [ ] 确认 Arcane Desk 名称、Logo 与官方产品 artwork 继续保留商标权；代码许可证不授予品牌使用权。
-- [ ] 确认仓库可以包含现有 Arcane Desk 品牌素材作为官方项目资产；第三方 fork 必须采用不同品牌。
-- [ ] 确认 Foundry VTT 仅作为独立、非官方兼容目标；仓库和候选产物不分发 Foundry 软件、许可证、商业内容或私有 world。
-- [ ] 确认 community distribution 默认不安装 system/module/world；可选第三方下载必须固定上游、版本、许可证和 SHA256，并由用户明确选择。
-- [ ] 确认 API key 使用 OS `safeStorage`，第三方文档上传逐文档征求同意，遥测默认边界与公开文档一致。
-- [ ] 确认代码中公开的 Arcane website、Spark gateway、telemetry endpoint 与官方 application ID 可以随源码发布：Spark 只有配置 key 后才可调用，telemetry 只有明确 consent 后才发送，相关 endpoint 均可由环境配置覆盖。
-- [ ] 确认首次公开 Desktop candidate 可以是 unsigned；签名、notarization、npm token、GitHub Release 和正式分发均属于后续受控发布流程。
+- [x] 确认 Apache-2.0 适用于本次迁移代码，且贡献采用 DCO sign-off，不要求 CLA。
+- [x] 确认 Arcane Desk 名称、Logo 与官方产品 artwork 继续保留商标权；代码许可证不授予品牌使用权。
+- [x] 确认仓库可以包含现有 Arcane Desk 品牌素材作为官方项目资产；第三方 fork 必须采用不同品牌。
+- [x] 确认 Foundry VTT 仅作为独立、非官方兼容目标；仓库和候选产物不分发 Foundry 软件、许可证、商业内容或私有 world。
+- [x] 确认 community distribution 默认不安装 system/module/world；可选第三方下载必须固定上游、版本、许可证和 SHA256，并由用户明确选择。
+- [x] 确认 API key 使用 OS `safeStorage`，第三方文档上传逐文档征求同意，遥测默认边界与公开文档一致。
+- [x] 确认代码中公开的 Arcane website、Spark gateway、telemetry endpoint 与官方 application ID 可以随源码发布：Spark 只有配置 key 后才可调用，telemetry 只有明确 consent 后才发送，相关 endpoint 均可由环境配置覆盖。
+- [x] 首次公开只推送源码；签名、notarization、npm token、Desktop candidate、GitHub Release 和正式分发均属于后续受控发布流程。
 
 ## 架构与公开边界
 
@@ -48,7 +48,7 @@
 
 - [x] 锁文件安装：`npm ci --workspaces --include-workspace-root`
 - [x] 根 gate：repository/docs/typecheck/tests/build/pack 全绿
-- [x] 测试：SDK 32、CLI 232、Desktop 186 全部通过
+- [x] 测试：SDK 33、CLI 232、Desktop 202 全部通过
 - [x] Desktop：当前 Windows unpacked candidate 构建与 package verifier 通过
 - [x] production audit：0 vulnerabilities
 - [x] CycloneDX production SBOM 可生成且依赖图无悬空引用
@@ -78,7 +78,7 @@
 只有在上方所有者检查完成、GitHub 空仓库已由所有者创建后，才可以人工执行：
 
 ```shell
-git remote add origin git@github.com:arcanedesk/arcane-desk.git
+git remote add origin https://github.com/tanis90/arcanedesk.git
 git push -u origin main
 ```
 
