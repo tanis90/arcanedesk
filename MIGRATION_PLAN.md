@@ -470,6 +470,39 @@ gh run view <run-id> --repo tanis90/arcanedesk
 
 ---
 
+## M11 — Arcane Desk 0.1.2 正式发布
+
+**状态：IN PROGRESS**
+
+### 目标
+
+从公开仓库受保护的 `main` 发布 Arcane Desk `0.1.2` 四平台正式候选，创建可审计的 GitHub Pre-release，并在全部 OSS 对象通过远端验收后把公开 `latest.json` 从 `0.1.1` 提升到 `0.1.2`。
+
+### 范围
+
+- Desktop 版本真源和根 lockfile 同步升级到 `0.1.2`；SDK 与 CLI 版本不随 Desktop 发版改动。
+- 通过 PR 和必需检查合入版本 commit，不在未提交或 feature branch 状态发版。
+- 使用 `private-beta`、`create_github_release=true`、`update_latest=true`、`skip_oss=false` 运行官方四平台 workflow。
+- releaseId 使用 `<version>-<main-commit8>`；不可覆盖 M10 的 `0.1.0-3b7094ce` 灰度目录或现有 `0.1.1` 正式目录。
+- Windows 和 macOS 产物仍未签名/公证；GitHub Release 必须保持 Pre-release 状态，不隐藏 SmartScreen/Gatekeeper 限制。
+
+### 验收命令
+
+```powershell
+npm run prepare:desktop-release --workspace arcane-desktop
+npm test --workspace arcane-desktop
+npm run typecheck --workspace arcane-desktop
+npm run dist:win --workspace arcane-desktop -- --x64
+node apps/desktop/scripts/verify-package.mjs apps/desktop/dist/win-unpacked/resources/app --expected-node-platform win-x64
+gh workflow run arcane-desktop-release.yml --repo tanis90/arcanedesk --ref main -f channel=private-beta -f update_latest=true -f create_github_release=true -f skip_oss=false
+```
+
+### 完成证据
+
+- 待四平台 workflow、OSS manifest/文件、GitHub Pre-release、latest 指针和生产下载同步全部验收后填写。
+
+---
+
 ## 进度日志
 
 | 时间 | Milestone | 事件 | 证据/备注 |
@@ -498,3 +531,4 @@ gh run view <run-id> --repo tanis90/arcanedesk
 | 2026-08-30 | M10 | 官方 Desktop CI/CD 开始 | 读取私有发布 SOP、四平台 workflow、OSS 发布器和最小 RAM 策略；确定先 build-only、再上传不切 latest 的不可变灰度 release。 |
 | 2026-08-30 | M10 | 四平台 build-only 通过 | `33307751957` 的 macOS arm64/x64、Windows x64/arm64 均完成 package verification、SHA256、attestation 和 artifact upload；publish job 跳过。 |
 | 2026-08-30 | M10 | Milestone 完成 | 独立最小权限 RAM 身份与 GitHub Environment secrets 生效；`33308053581` 将 `0.1.0-3b7094ce` 灰度发布到不可变 OSS 路径，12/12 文件外部 HEAD 验收通过，线上 latest 指纹不变且未创建 GitHub Release。 |
+| 2026-08-30 | M11 | Arcane Desk 0.1.2 正式发布开始 | Desktop 版本真源与根 lockfile 升级到 `0.1.2`；发布通道保持 `private-beta`，计划在四平台和 OSS 全量验收后创建 GitHub Pre-release 并切换 latest。 |
