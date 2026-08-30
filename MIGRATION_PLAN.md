@@ -102,7 +102,7 @@ npm pack --workspace @arcanedesk/foundry-sdk --dry-run
 - `npm run build --workspace @arcanedesk/foundry-sdk`、`typecheck` 均 exit 0。
 - 28 个 action 有穷尽 effect metadata：11 read、17 write；所有写操作 dispatch 后中断都不可自动重试，`executeTurn` 返回 typed receipt，其余写 action 抛带稳定 code 与 `indeterminate` details 的错误。
 - `npm test --workspace @arcanedesk/foundry-sdk`：32/32 通过；其中 drift gate 逐个比较 30 个 helper 的编译函数体与注入 runtime 闭包，30/30 完全一致。
-- `npm pack --workspace @arcanedesk/foundry-sdk --dry-run --json`：exit 0，28 files，94,832 bytes packed，包含 package-local `LICENSE` 与 `NOTICE`。
+- `npm pack --workspace @arcanedesk/foundry-sdk --dry-run --json`：exit 0，28 files，94,829 bytes packed，包含 package-local `LICENSE` 与 `NOTICE`；本仓库与 clean clone 的 shasum 均为 `4917b0b8375484899b118be5b52119e005424415`。
 - workspace subpath import smoke test 通过。
 
 ---
@@ -141,7 +141,7 @@ npm pack --workspace @arcanedesk/fvtt-cli --dry-run
 - `npm test --workspace @arcanedesk/fvtt-cli`：1 test file、232/232 tests 通过；覆盖全部写 action CDP dispatch 后的 `indeterminate`/`retry:false` 语义、读操作/dispatch 前失败的区分，以及多 tab、精确 target ID/URL/origin 与近似 URL 拒绝。
 - `node packages/fvtt-cli/dist/cli.js --help`：exit 0，完整命令树可加载。
 - CLI 是 bin-only package：只公开 `./package.json`；root 与 `dist/*` bare subpath import 均返回 `ERR_PACKAGE_PATH_NOT_EXPORTED`，而 `.bin/arcane-fvtt` 正常运行。
-- `npm pack --workspace @arcanedesk/fvtt-cli --dry-run --json`：exit 0，24 files，54,069 bytes packed；prepack 强制 typecheck/test/build，不含编译后的测试，包含 `LICENSE` 与 `NOTICE`。
+- `npm pack --workspace @arcanedesk/fvtt-cli --dry-run --json`：exit 0，24 files，53,954 bytes packed；prepack 强制 typecheck/test/build，不含编译后的测试，包含 `LICENSE` 与 `NOTICE`；本仓库与 clean clone 的 shasum 均为 `b725b00bfeb8c5908f309ff020021456e71b6fe7`。
 
 ---
 
@@ -267,7 +267,7 @@ npm audit --omit=dev
 
 ## M6 — 完整发布门与首次推送前检查
 
-**状态：IN_PROGRESS**
+**状态：COMPLETE**
 
 ### 目标
 
@@ -284,11 +284,13 @@ npm audit --omit=dev
 ### 验收命令
 
 ```powershell
-npm ci
-npm run typecheck
-npm test
-npm run build
+npm ci --workspaces --include-workspace-root
+npm run verify
 npm audit --omit=dev
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -oneline
+go run github.com/zricethezav/gitleaks/v8@v8.30.1 detect --no-git --source . --no-banner --redact
+npm run dist:dir --workspace arcane-desktop
+node apps/desktop/scripts/verify-package.mjs apps/desktop/dist/win-unpacked/resources/app --expected-node-platform win-x64
 git status --short
 git log --oneline --decorate -n 20
 git remote -v
@@ -296,7 +298,15 @@ git remote -v
 
 ### 完成证据
 
-- 待填写。
+- `npm ci --workspaces --include-workspace-root`：从根 lockfile 安装 586 packages，audit 590 packages，0 vulnerabilities；5 个 transitive tooling deprecation warning 已记入首次推送检查单，不隐瞒为全静默安装。
+- 最终根 `npm run verify` 与 final-HEAD 本地 clean clone 的同一命令均 exit 0：repository 153 tracked files/4 packages/15 direct third-party dependencies 无错误，27 个 Markdown 文件链接通过，SDK 32、CLI 232、Desktop 186 tests 全绿，typecheck/build 全绿。
+- `pack:check` 已升级为实际消费者 gate：真实打包、在 OS 临时空项目安装、导入 SDK 5 个公开子路径、核对 28 action 的 11 read/17 write metadata、验证 CLI 深层 import 被封锁并运行安装后的 `.bin --help`；临时目录自动清除。
+- 最终 LF-normalized SDK tarball：94,829 bytes，SHA-256 `69894e4606138abc4aa3181170f195630666b16d0edacfc11ef33a63b372e2a3`；CLI tarball：53,954 bytes，SHA-256 `6c4759b3b224e3f360b2e30192b766bd7d459fd7f649df79d41e262ad7236644`。npm shasum 与 clean clone 一致。
+- gitleaks 8.30.1 对 107.54 MB 最终工作树扫描：`no leaks found`；迁移 denylist、凭据规则、高熵字面量、credential-like filename、大文件、嵌套 lockfile 均通过。两个 URL credential 候选是“拒绝并不回显”的负向测试夹具，不含真实 secret。
+- actionlint 1.7.12：0 diagnostics；3 个 workflow YAML 解析通过；production audit 258 dependencies、0 vulnerabilities；CycloneDX 1.5 为 258 components/259 dependency nodes、0 悬空引用。
+- Windows Desktop final-HEAD unpacked candidate 构建通过；package verifier `ok=true`、`errors=[]`、36 required files，release metadata 含真实 Git commit。构建输出全部处于 ignored `apps/desktop/dist`/`generated`。
+- 本地 Git 采用 clean history：implementation root commit 为 `f254dd3eae7a1a715fd9d083bca9195420eb3768`，最终检查材料由其后一个 sign-off commit 记录；`main` 工作树干净，remote 为空，未执行 push。
+- 原私有仓库始终作为只读迁移输入，本仓库的安装、验证、构建和候选包不引用它。
 
 ---
 
@@ -317,3 +327,4 @@ git remote -v
 | 2026-08-30 | M5 | CI 与发布准备验收开始 | 验证 clean-clone 脚本顺序、Actions 语法、SBOM/校验和/attestation 与最小权限。 |
 | 2026-08-30 | M5 | Milestone 完成 | actionlint/YAML 全绿；production audit 0 漏洞；CycloneDX SBOM 图完整；发布 workflow 无发布/推送/外部上传；无 SDK/CLI dist 的根 verify 全绿。 |
 | 2026-08-30 | M6 | 完整发布门开始 | 处理最终安全审计项、生成首次推送前检查单、本地提交并在本地 clean clone 复验。 |
+| 2026-08-30 | M6 | Milestone 完成 | gitleaks/actionlint/audit/SBOM/consumer tarball/Desktop package/final-HEAD clean clone 全绿；两笔本地 sign-off commit、clean status、无 remote、无 push。 |

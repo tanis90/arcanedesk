@@ -46,17 +46,17 @@
 
 最终复验完成后，本节必须同时满足：
 
-- [ ] 锁文件安装：`npm ci --workspaces --include-workspace-root`
-- [ ] 根 gate：repository/docs/typecheck/tests/build/pack 全绿
-- [ ] 测试：SDK 32、CLI 232、Desktop 186 全部通过（若后续增测，以最终数字为准）
-- [ ] Desktop：当前 Windows unpacked candidate 构建与 package verifier 通过
-- [ ] production audit：0 vulnerabilities
-- [ ] CycloneDX production SBOM 可生成且依赖图无悬空引用
-- [ ] 3 个 GitHub workflow 通过 actionlint 与 YAML 解析
-- [ ] secrets、当前机器绝对路径、私有 migration denylist、大文件、嵌套 lockfile 扫描通过
-- [ ] SDK/CLI tarball 安装后 subpath import 与 CLI `--help` consumer smoke test 通过
-- [ ] 本地 clean clone 执行 `npm ci` 与 `npm run verify` 通过
-- [ ] `git status --short` 无输出，`git remote -v` 无输出
+- [x] 锁文件安装：`npm ci --workspaces --include-workspace-root`
+- [x] 根 gate：repository/docs/typecheck/tests/build/pack 全绿
+- [x] 测试：SDK 32、CLI 232、Desktop 186 全部通过
+- [x] Desktop：当前 Windows unpacked candidate 构建与 package verifier 通过
+- [x] production audit：0 vulnerabilities
+- [x] CycloneDX production SBOM 可生成且依赖图无悬空引用
+- [x] 3 个 GitHub workflow 通过 actionlint 与 YAML 解析
+- [x] secrets、当前机器绝对路径、私有 migration denylist、大文件、嵌套 lockfile 扫描通过
+- [x] SDK/CLI tarball 安装后 subpath import 与 CLI `--help` consumer smoke test 通过
+- [x] 本地 clean clone 执行 `npm ci` 与 `npm run verify` 通过
+- [x] `git status --short` 无输出，`git remote -v` 无输出
 
 精确命令、结果和 milestone 状态记录在 [MIGRATION_PLAN.md](MIGRATION_PLAN.md)。
 
@@ -71,6 +71,7 @@
 5. 评估是否把 GitHub Actions 从官方 major tag 进一步固定到完整 commit SHA，并由 Dependabot 维护。
 6. 在 1.0 前决定是否为其余 24 个 maintenance action 提供完整 typed action map。
 7. 跟进 `npm ci` 当前来自 transitive build/tooling tree 的 `inflight`、旧 `rimraf`、旧 `glob`、`boolean` 与 `node-domexception` deprecation warning；当前 production audit 为 0，但应随上游可用版本持续升级。
+8. 决定正式 Desktop release 的 ASAR 策略并补 package author metadata；当前 `asar: false` 使开源 app 内容可直接检查，但 electron-builder 会给出加固建议，这不是代码许可证或签名替代品。
 
 ## 拟执行的首次推送命令
 
@@ -85,8 +86,8 @@ git push -u origin main
 
 ## 最终本地提交
 
-- 实现提交：待最终 gate 后填写。
-- 检查材料提交：待最终 gate 后填写。
+- 实现提交：`f254dd3eae7a1a715fd9d083bca9195420eb3768`（`Initial SDK-first open-source workspace`）。
+- 检查材料提交：本文件所在最终 `HEAD`；用 `git log -2 --show-signature` 核对，避免在提交内嵌无法自洽的自身 hash。
 - 分支：`main`
 - Remote：无
 - Push：未执行
