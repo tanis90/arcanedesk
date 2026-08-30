@@ -472,7 +472,7 @@ gh run view <run-id> --repo tanis90/arcanedesk
 
 ## M11 — Arcane Desk 0.1.2 正式发布
 
-**状态：IN PROGRESS**
+**状态：COMPLETE**
 
 ### 目标
 
@@ -499,7 +499,13 @@ gh workflow run arcane-desktop-release.yml --repo tanis90/arcanedesk --ref main 
 
 ### 完成证据
 
-- 待四平台 workflow、OSS manifest/文件、GitHub Pre-release、latest 指针和生产下载同步全部验收后填写。
+- [PR #6](https://github.com/tanis90/arcanedesk/pull/6) 通过 Linux、macOS、Windows、依赖审查与 CodeQL 后以 rebase 方式线性合入；正式 source commit 为 `b27c2d19ba44d4d8060639a97243b4da87ecff04`，Desktop 版本源与根 lockfile 均为 `0.1.2`。
+- 本地锁定安装和根 `npm run verify` 全绿：Desktop 206 tests、SDK 33 tests、CLI 232 tests、production audit 0 漏洞；Windows x64 的 `0.1.2` NSIS/ZIP 正式打包与 36 项包内资源验证通过。
+- 正式发布 [run 33309567260](https://github.com/tanis90/arcanedesk/actions/runs/33309567260) 全绿；四平台均完成 package verification、SHA256、provenance attestation，publish job 完成 OSS 上传/校验、GitHub Pre-release 创建和 latest promotion。
+- 公开 OSS manifest 为 [`0.1.2-b27c2d19/release.json`](https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/0.1.2-b27c2d19/release.json)；独立验收确认 source commit 精确匹配，4 个平台共 12 个文件全部 HTTP 200 且 `Content-Length` 与 manifest 完全一致。
+- [GitHub Pre-release `0.1.2-b27c2d19`](https://github.com/tanis90/arcanedesk/releases/tag/0.1.2-b27c2d19) 非 draft、target commit 正确、12 个资产齐全；Release notes 已明确 Windows 未签名及 macOS 未签名/未公证的 SmartScreen/Gatekeeper 限制，workflow 模板同步固化该提示。
+- `latest.json` 已从 `0.1.1-1fc9119f` 提升为 `0.1.2-b27c2d19`，新 SHA-256 为 `5883e2683291a76ef3f75a112017bb525e64fe2dbe313853a828f37b1b066256`；OSS CORS 明确允许 `https://arcanedesk.bitterbebop.cn`。
+- 真实生产浏览器验收确认 `https://arcanedesk.bitterbebop.cn/` 显示“最新版本 0.1.2”，下载按钮已启用且控制台无错误；网站通过公开 latest/manifest 动态同步，无需重发网站。
 
 ---
 
@@ -532,3 +538,5 @@ gh workflow run arcane-desktop-release.yml --repo tanis90/arcanedesk --ref main 
 | 2026-08-30 | M10 | 四平台 build-only 通过 | `33307751957` 的 macOS arm64/x64、Windows x64/arm64 均完成 package verification、SHA256、attestation 和 artifact upload；publish job 跳过。 |
 | 2026-08-30 | M10 | Milestone 完成 | 独立最小权限 RAM 身份与 GitHub Environment secrets 生效；`33308053581` 将 `0.1.0-3b7094ce` 灰度发布到不可变 OSS 路径，12/12 文件外部 HEAD 验收通过，线上 latest 指纹不变且未创建 GitHub Release。 |
 | 2026-08-30 | M11 | Arcane Desk 0.1.2 正式发布开始 | Desktop 版本真源与根 lockfile 升级到 `0.1.2`；发布通道保持 `private-beta`，计划在四平台和 OSS 全量验收后创建 GitHub Pre-release 并切换 latest。 |
+| 2026-08-30 | M11 | 四平台正式发布通过 | `33309567260` 从 `b27c2d19…` 构建并验证四平台，发布不可变 `0.1.2-b27c2d19`，创建 12-asset GitHub Pre-release，并在二次全量 HEAD 验收后切换 latest。 |
+| 2026-08-30 | M11 | Milestone 完成 | OSS 12/12 文件长度、GitHub Release、latest、CORS 与生产网页下载运行态全部独立验收通过；补齐当前和未来 Release 的未签名/未公证安装提示。 |
