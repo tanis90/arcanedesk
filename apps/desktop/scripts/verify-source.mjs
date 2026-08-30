@@ -33,6 +33,7 @@ const policyFiles = new Set(["scripts/verify-package.mjs", "scripts/verify-sourc
 const exactDirectories = new Map([
   ["scripts", [
     "archive.mjs",
+    "audit-package-mirror.mjs",
     "desktop-release-metadata.mjs",
     "mac-adhoc-sign.mjs",
     "prepare-bundled-node.mjs",

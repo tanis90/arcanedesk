@@ -135,12 +135,18 @@ test("trusted staging verifies the mirror hash and commit backs up an installed 
     manifest: manifestUrl,
     esmodules: ["scripts/demo.js"],
   };
-  // Mirror ZIPs may intentionally omit distribution-only download/manifest fields.
-  const archivedManifest = { id: "demo", title: "Demo", version: "2.0.0", esmodules: ["scripts/demo.js"] };
+  const archivedManifest = {
+    id: "demo",
+    title: "Demo",
+    version: "2.0.0",
+    manifest: "https://github.example.test/demo/releases/latest/module.json",
+    download: "https://github.example.test/demo/releases/download/2.0.0/module.zip",
+    esmodules: ["scripts/demo.js"],
+  };
   const zipFile = path.join(root, "fixture.zip");
   await execFileAsync("python", [
     "-c",
-    "import json,sys,zipfile; m=json.loads(sys.argv[2]); z=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED); z.writestr('demo/module.json',json.dumps(m)); z.writestr('demo/scripts/demo.js','export const ok = true;'); z.close()",
+    "import json,sys,zipfile; m=json.loads(sys.argv[2]); z=zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED); z.writestr('module.json',json.dumps(m)); z.writestr('scripts/demo.js','export const ok = true;'); z.writestr('source/module.json',json.dumps({'id':'source-copy','version':'0.0.0'})); z.close()",
     zipFile,
     JSON.stringify(archivedManifest),
   ]);
@@ -186,7 +192,10 @@ test("trusted staging verifies the mirror hash and commit backs up an installed 
   assert.equal(committed.version, "2.0.0");
   assert.equal(committed.target, oldDir);
   assert.ok(committed.backup);
-  assert.equal(JSON.parse(await readFile(path.join(oldDir, "module.json"), "utf8")).version, "2.0.0");
+  const installedManifest = JSON.parse(await readFile(path.join(oldDir, "module.json"), "utf8"));
+  assert.equal(installedManifest.version, "2.0.0");
+  assert.equal(installedManifest.manifest, manifestUrl);
+  assert.equal(installedManifest.download, downloadUrl);
   assert.equal(await readFile(path.join(committed.backup, "old.txt"), "utf8"), "old");
   await assert.rejects(stat(staged.stageDir), { code: "ENOENT" });
 
@@ -313,12 +322,20 @@ test("world profiles resolve current stable packages independently from world ar
       download: artifacts.world.downloadUrl,
     },
   };
+  const archivedManifests = {
+    ...manifests,
+    module: {
+      ...manifests.module,
+      manifest: "https://github.example.test/demo-module/releases/latest/module.json",
+      download: "https://github.example.test/demo-module/releases/download/2.0.0/module.zip",
+    },
+  };
   const manifestBuffers = Object.fromEntries(
     Object.entries(manifests).map(([kind, value]) => [kind, Buffer.from(JSON.stringify(value))]),
   );
   const zipBuffers = {
     system: await createContentZip(path.join(root, "system.zip"), "dnd5e", "system.json", manifests.system),
-    module: await createContentZip(path.join(root, "module.zip"), "demo-module", "module.json", manifests.module),
+    module: await createContentZip(path.join(root, "module.zip"), "demo-module", "module.json", archivedManifests.module),
     dependency: await createContentZip(path.join(root, "dependency.zip"), "socketlib", "module.json", manifests.dependency),
     world: await createContentZip(path.join(root, "world.zip"), "arcane-demo", "world.json", manifests.world, "new-content.txt"),
   };
@@ -394,6 +411,30 @@ test("world profiles resolve current stable packages independently from world ar
   assert.equal(inspected.modules[1].status, "current");
   assert.equal(inspected.world.status, "upgrade");
   assert.equal(inspected.plannedArchiveBytes, zipBuffers.module.length + zipBuffers.world.length);
+  assert.match(inspected.resolutionSha256, /^[a-f0-9]{64}$/);
+
+  payloads.set(artifacts.module.manifestUrl, Buffer.from(JSON.stringify({
+    ...manifests.module,
+    description: "changed without advancing the index generation",
+  })));
+  await assert.rejects(
+    stageWorldEnvironment({
+      worldId: "arcane-demo",
+      dataDir,
+      expectedWorldVersion: inspected.version,
+      expectedWorldSha256: inspected.archiveSha256,
+      expectedProfileId: inspected.profile.id,
+      expectedProfileRevision: inspected.profile.revision,
+      expectedProfileSha256: inspected.profile.profileSha256,
+      expectedIndexGenerated: inspected.generated,
+      expectedResolutionSha256: inspected.resolutionSha256,
+      fetchImpl: fakeFetch,
+      indexUrl,
+      tempRoot: root,
+    }),
+    /world resolution SHA256 changed/,
+  );
+  payloads.set(artifacts.module.manifestUrl, manifestBuffers.module);
 
   const staged = await stageWorldEnvironment({
     worldId: "arcane-demo",
@@ -404,6 +445,7 @@ test("world profiles resolve current stable packages independently from world ar
     expectedProfileRevision: inspected.profile.revision,
     expectedProfileSha256: inspected.profile.profileSha256,
     expectedIndexGenerated: inspected.generated,
+    expectedResolutionSha256: inspected.resolutionSha256,
     fetchImpl: fakeFetch,
     indexUrl,
     tempRoot: root,
@@ -437,7 +479,10 @@ test("world profiles resolve current stable packages independently from world ar
     expectedCurrentVersion: "0.1.0",
   });
   assert.equal(committed.version, "0.2.0");
-  assert.equal(JSON.parse(await readFile(path.join(moduleDir, "module.json"), "utf8")).version, "2.0.0");
+  const committedModuleManifest = JSON.parse(await readFile(path.join(moduleDir, "module.json"), "utf8"));
+  assert.equal(committedModuleManifest.version, "2.0.0");
+  assert.equal(committedModuleManifest.manifest, artifacts.module.manifestUrl);
+  assert.equal(committedModuleManifest.download, artifacts.module.downloadUrl);
   assert.equal(JSON.parse(await readFile(path.join(worldDir, "world.json"), "utf8")).version, "0.2.0");
   const worldBackup = committed.backups.find((entry) => entry.kind === "world");
   assert.match(worldBackup.path, /\.arcane-world-backups[\\/]arcane-demo/);
@@ -484,6 +529,7 @@ test("world profiles resolve current stable packages independently from world ar
     expectedProfileRevision: packageOnlyPlan.profile.revision,
     expectedProfileSha256: packageOnlyPlan.profile.profileSha256,
     expectedIndexGenerated: packageOnlyPlan.generated,
+    expectedResolutionSha256: packageOnlyPlan.resolutionSha256,
     fetchImpl: fakeFetch,
     indexUrl,
     tempRoot: root,

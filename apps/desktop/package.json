@@ -8,6 +8,7 @@
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {
+    "audit:package-mirror": "node scripts/audit-package-mirror.mjs",
     "prepare:desktop-release": "node scripts/prepare-desktop-release.mjs",
     "prepare:node-runtime": "node scripts/prepare-bundled-node.mjs",
     "prepare:renderer-assets": "node scripts/prepare-renderer-assets.mjs",

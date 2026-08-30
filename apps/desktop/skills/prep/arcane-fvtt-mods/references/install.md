@@ -38,8 +38,10 @@ mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <Foundry D
 mod-manager stage --manifest-url <URL> --expected-id <id> --expected-version <version> --expected-download-url <URL>
 ```
 
-`stage` 只写 OS 临时目录。它会重新读取 manifest、下载 ZIP、计算 SHA256、安全解压，并核对
-archive 内 `module.json`。检查返回的 `id`、`version`、`archiveSha256`、`archiveBytes`、
+`stage` 只写 OS 临时目录。它会重新读取外部 manifest、下载 ZIP、计算 SHA256、安全解压，并核对
+archive 根 `module.json` 的 id/version。归档内的上游 manifest/download URL 只是构建来源元数据，
+可以与镜像不同；ZIP 与身份通过后，helper 用已验证外部 manifest 的原始字节替换 staging 中的
+`module.json`。检查返回的 `id`、`version`、`manifestSha256`、`archiveSha256`、`archiveBytes`、
 `trustedByMirrorIndex`、`stageDir` 和 `requiresSecondConfirmation`。
 
 - 镜像索引包：bytes 与 SHA256 必须匹配；匹配后可按已确认计划继续。

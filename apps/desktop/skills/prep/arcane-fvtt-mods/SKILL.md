@@ -52,8 +52,10 @@ macOS Bash 调用形态：
 
 ## 共同边界
 
-- 只接受 HTTPS manifest 和 download URL；只安装 archive 内 `module.json` 的 `id`、`version`
-  与远端 manifest 完全一致的 module。
+- 只接受 HTTPS manifest 和 download URL。外部 manifest 是分发元数据的唯一规范来源；archive 内根
+  `module.json` / `system.json` / `world.json` 的 `id`、`version` 必须与它完全一致。archive 内保留的
+  上游 `manifest` / `download` URL 允许不同，但仅在 ZIP bytes/SHA256 与包身份均已通过校验后，helper
+  才会把已验证外部 manifest 的原始字节写入 staging。身份、哈希或外部 URL 不一致仍必须拒绝。
 - 默认镜像目录是 `https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json`。这是带
   `generated` 时间的全局当前版本索引，不是名为 `latest.json` 的指针。
 - 索引中与 manifest URL 精确匹配的包必须逐字节核对 `bytes` 和 SHA256；不匹配即停止，

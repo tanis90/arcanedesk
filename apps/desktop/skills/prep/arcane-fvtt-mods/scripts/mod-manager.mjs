@@ -336,8 +336,16 @@ async function loadIndex(fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL) {
 }
 
 async function loadManifest(fetchImpl, manifestUrl) {
+  return (await loadManifestDocument(fetchImpl, manifestUrl)).manifest;
+}
+
+async function loadManifestDocument(fetchImpl, manifestUrl) {
   const source = moduleManifestUrl(manifestUrl);
-  return validateModuleManifest(await fetchJson(fetchImpl, source, "module manifest"), source);
+  const document = await fetchJsonDocument(fetchImpl, source, "module manifest");
+  return {
+    manifest: validateModuleManifest(document.value, source),
+    document,
+  };
 }
 
 function parseVersion(value) {
@@ -744,6 +752,40 @@ function dependencyRow(artifact, installed) {
   };
 }
 
+function resolutionArtifact(artifact) {
+  return {
+    kind: artifact.kind,
+    id: artifact.id,
+    version: artifact.version,
+    manifestUrl: artifact.manifestUrl,
+    manifestBytes: artifact.manifestBytes,
+    manifestSha256: artifact.manifestSha256,
+    downloadUrl: artifact.downloadUrl,
+    bytes: artifact.bytes,
+    sha256: artifact.sha256,
+    resolutionSource: artifact.resolutionSource ?? null,
+  };
+}
+
+function worldResolutionSha256({ generated, profile, world, system, modules }) {
+  const canonical = {
+    generated,
+    profile: {
+      id: profile.id,
+      revision: profile.revision,
+      profileUrl: profile.profileUrl,
+      profileBytes: profile.profileBytes,
+      profileSha256: profile.profileSha256,
+      packageChannel: profile.packageChannel,
+      system: profile.system,
+      modules: profile.modules,
+    },
+    world: resolutionArtifact(world),
+    packages: [system, ...modules].map(resolutionArtifact),
+  };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
 export function buildWorldCatalog(indexValue, installedValue) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.worlds) ? installedValue.worlds : [];
@@ -814,6 +856,17 @@ export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fe
   const world = dependencyRow(entry, installedWorlds.worlds);
   const artifacts = [system, ...modules, world];
   const actionable = artifacts.filter((artifact) => ["missing", "upgrade"].includes(artifact.status));
+  const profilePlan = {
+    id: profile.id,
+    title: profile.title,
+    revision: profile.revision,
+    packageChannel: profile.packageChannel,
+    system: profile.system,
+    modules: profile.modules,
+    profileUrl: profileEntry.profileUrl,
+    profileBytes: profileEntry.profileBytes,
+    profileSha256: profileEntry.profileSha256,
+  };
   return {
     kind: "world-profile-plan",
     indexUrl,
@@ -828,20 +881,17 @@ export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fe
     manifestSha256: entry.manifestSha256,
     downloadUrl: entry.downloadUrl,
     archiveSha256: entry.sha256,
-    profile: {
-      id: profile.id,
-      title: profile.title,
-      revision: profile.revision,
-      packageChannel: profile.packageChannel,
-      system: profile.system,
-      modules: profile.modules,
-      profileUrl: profileEntry.profileUrl,
-      profileBytes: profileEntry.profileBytes,
-      profileSha256: profileEntry.profileSha256,
-    },
+    profile: profilePlan,
     system,
     modules,
     world,
+    resolutionSha256: worldResolutionSha256({
+      generated: index.generated,
+      profile: profilePlan,
+      world,
+      system,
+      modules,
+    }),
     changes: artifacts.filter((artifact) => artifact.status !== "current"),
     actionable,
     plannedArchiveBytes: actionable.reduce((total, artifact) => total + artifact.bytes, 0),
@@ -965,9 +1015,9 @@ async function findModulePayload(extractedRoot) {
 }
 
 async function findContentPayload(extractedRoot, manifestFileName, label) {
-  const candidates = [];
   const rootManifest = path.join(extractedRoot, manifestFileName);
-  if ((await fsp.stat(rootManifest).catch(() => null))?.isFile()) candidates.push(extractedRoot);
+  if ((await fsp.stat(rootManifest).catch(() => null))?.isFile()) return extractedRoot;
+  const candidates = [];
   const top = await fsp.readdir(extractedRoot, { withFileTypes: true });
   for (const entry of top) {
     if (!entry.isDirectory()) continue;
@@ -1000,7 +1050,7 @@ export async function stageModule({
   tempRoot = os.tmpdir(),
   archiveExtractor = extractArchiveFile,
 }) {
-  const manifest = await loadManifest(fetchImpl, manifestUrl);
+  const { manifest, document: manifestDocument } = await loadManifestDocument(fetchImpl, manifestUrl);
   assertExpected(manifest.id, expectedId, "module id");
   assertExpected(manifest.version, expectedVersion, "module version");
   assertExpected(manifest.download, httpsUrl(expectedDownloadUrl, "expected download URL"), "module download URL");
@@ -1038,12 +1088,19 @@ export async function stageModule({
     });
     assertExpected(archived.id, manifest.id, "archive module id");
     assertExpected(archived.version, manifest.version, "archive module version");
-    if (archived.download) assertExpected(archived.download, manifest.download, "archive module download URL");
-    if (archived.manifest && archived.manifest !== manifest.manifestUrl) {
-      throw new Error(`archive module manifest URL mismatch: expected ${manifest.manifestUrl}; got ${archived.manifest}`);
+    await fsp.writeFile(path.join(payloadRoot, "module.json"), manifestDocument.buffer);
+    const normalized = manifestShape(
+      await readJsonFile(path.join(payloadRoot, "module.json"), "normalized module manifest"),
+      { requireDownload: true },
+    );
+    assertExpected(normalized.id, manifest.id, "normalized module id");
+    assertExpected(normalized.version, manifest.version, "normalized module version");
+    assertExpected(normalized.download, manifest.download, "normalized module download URL");
+    if (normalized.manifest && normalized.manifest !== manifest.manifestUrl) {
+      throw new Error(`normalized module manifest URL mismatch: expected ${manifest.manifestUrl}; got ${normalized.manifest}`);
     }
     const record = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       createdAt: new Date().toISOString(),
       id: manifest.id,
       title: manifest.title,
@@ -1055,6 +1112,8 @@ export async function stageModule({
       payload: path.relative(stageDir, payloadRoot),
       archiveBytes: download.bytes,
       archiveSha256: download.sha256,
+      manifestBytes: manifestDocument.bytes,
+      manifestSha256: manifestDocument.sha256,
       trustedByMirrorIndex: Boolean(mirror),
       mirrorGenerated: mirror ? index.generated : null,
       indexError,
@@ -1085,9 +1144,10 @@ function contentRootForKind(layout, kind) {
   throw new Error(`unsupported Foundry content kind: ${kind}`);
 }
 
-function assertArtifactManifest(manifest, artifact, { archived = false } = {}) {
+function assertArtifactManifest(manifest, artifact, { archived = false, identityOnly = false } = {}) {
   assertExpected(manifest.id, artifact.id, `${archived ? "archive" : "remote"} ${artifact.kind} id`);
   assertExpected(manifest.version, artifact.version, `${archived ? "archive" : "remote"} ${artifact.kind} version`);
+  if (identityOnly) return;
   if (manifest.download) {
     assertExpected(manifest.download, artifact.downloadUrl, `${archived ? "archive" : "remote"} ${artifact.kind} download URL`);
   }
@@ -1135,7 +1195,13 @@ async function stagePlannedArtifact({
     await readJsonFile(path.join(payloadRoot, manifestFileName), `archive ${artifact.kind} manifest`),
     artifact.kind,
   );
-  assertArtifactManifest(archivedManifest, artifact, { archived: true });
+  assertArtifactManifest(archivedManifest, artifact, { archived: true, identityOnly: true });
+  await fsp.writeFile(path.join(payloadRoot, manifestFileName), manifestDocument.buffer);
+  const normalizedManifest = installedContentManifestShape(
+    await readJsonFile(path.join(payloadRoot, manifestFileName), `normalized ${artifact.kind} manifest`),
+    artifact.kind,
+  );
+  assertArtifactManifest(normalizedManifest, artifact);
 
   return {
     kind: artifact.kind,
@@ -1166,6 +1232,7 @@ export async function stageWorldEnvironment({
   expectedProfileRevision,
   expectedProfileSha256,
   expectedIndexGenerated,
+  expectedResolutionSha256,
   fetchImpl = fetch,
   indexUrl = MIRROR_INDEX_URL,
   tempRoot = os.tmpdir(),
@@ -1175,6 +1242,9 @@ export async function stageWorldEnvironment({
   if (!ID_PATTERN.test(id)) throw new Error(`world id is unsafe: ${id}`);
   const plan = await inspectWorldEnvironment({ worldId: id, dataDir, fetchImpl, indexUrl });
   assertExpected(plan.generated, expectedIndexGenerated, "mirror index generation");
+  const resolutionSha256 = requireString(expectedResolutionSha256, "expected resolution SHA256", 64).toLowerCase();
+  if (!SHA256_PATTERN.test(resolutionSha256)) throw new Error("expected resolution SHA256 is invalid");
+  assertExpected(plan.resolutionSha256, resolutionSha256, "world resolution SHA256");
   assertExpected(plan.version, expectedWorldVersion, "world version");
   assertExpected(
     plan.archiveSha256,
@@ -1221,7 +1291,7 @@ export async function stageWorldEnvironment({
       }));
     }
     const record = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       kind: "foundry-world-profile-stage",
       createdAt: new Date().toISOString(),
       id: plan.id,
@@ -1229,6 +1299,7 @@ export async function stageWorldEnvironment({
       version: plan.version,
       coreVersion: plan.coreVersion,
       mirrorGenerated: plan.generated,
+      resolutionSha256: plan.resolutionSha256,
       profile: plan.profile,
       world: {
         kind: "world",
@@ -1311,7 +1382,7 @@ async function exists(file) {
 export async function commitStage({ stageDir, dataDir, expectedCurrentVersion, acceptSha256 = null }) {
   const stage = await validatedStageDirectory(stageDir);
   const record = await readJsonFile(path.join(stage, "stage.json"), "Arcane module stage record");
-  if (record?.schemaVersion !== 1 || !ID_PATTERN.test(String(record.id ?? ""))) {
+  if (record?.schemaVersion !== 2 || !ID_PATTERN.test(String(record.id ?? ""))) {
     throw new Error("Arcane module stage record is invalid");
   }
   const archive = path.resolve(stage, requireString(record.archive, "stage archive path", 128));
@@ -1322,6 +1393,10 @@ export async function commitStage({ stageDir, dataDir, expectedCurrentVersion, a
   const actualArchive = await sha256File(archive);
   if (actualArchive.sha256 !== record.archiveSha256 || actualArchive.bytes !== record.archiveBytes) {
     throw new Error("staged module ZIP changed after verification");
+  }
+  const actualManifest = await sha256File(path.join(payload, "module.json"));
+  if (actualManifest.sha256 !== record.manifestSha256 || actualManifest.bytes !== record.manifestBytes) {
+    throw new Error("staged module manifest changed after verification");
   }
   if (!record.trustedByMirrorIndex) {
     const accepted = String(acceptSha256 ?? "").toLowerCase();
@@ -1335,6 +1410,9 @@ export async function commitStage({ stageDir, dataDir, expectedCurrentVersion, a
   assertExpected(stagedManifest.id, record.id, "staged module id");
   assertExpected(stagedManifest.version, record.version, "staged module version");
   if (stagedManifest.download) assertExpected(stagedManifest.download, record.downloadUrl, "staged module download URL");
+  if (stagedManifest.manifest && stagedManifest.manifest !== record.manifestUrl) {
+    throw new Error(`staged module manifest URL mismatch: expected ${record.manifestUrl}; got ${stagedManifest.manifest}`);
+  }
 
   const installed = await listInstalledModules(dataDir);
   const matches = installed.modules.filter((entry) => entry.id === record.id);
@@ -1361,6 +1439,10 @@ export async function commitStage({ stageDir, dataDir, expectedCurrentVersion, a
   });
   assertExpected(copiedManifest.id, record.id, "incoming module id");
   assertExpected(copiedManifest.version, record.version, "incoming module version");
+  const copiedManifestIdentity = await sha256File(path.join(incoming, "module.json"));
+  if (copiedManifestIdentity.sha256 !== record.manifestSha256 || copiedManifestIdentity.bytes !== record.manifestBytes) {
+    throw new Error("incoming module manifest changed during copy");
+  }
 
   try {
     if (current) {
@@ -1384,6 +1466,10 @@ export async function commitStage({ stageDir, dataDir, expectedCurrentVersion, a
   });
   if (activated.id !== record.id || activated.version !== record.version) {
     throw new Error(`activated module verification failed for ${record.id}`);
+  }
+  const activatedManifestIdentity = await sha256File(path.join(target, "module.json"));
+  if (activatedManifestIdentity.sha256 !== record.manifestSha256 || activatedManifestIdentity.bytes !== record.manifestBytes) {
+    throw new Error(`activated module manifest verification failed for ${record.id}`);
   }
   await fsp.rm(stage, { recursive: true, force: true });
   return {
@@ -1486,7 +1572,7 @@ async function validateWorldStage(stageDir) {
   const stage = await validatedStageDirectory(stageDir, WORLD_STAGE_PREFIX);
   const rawRecord = await readJsonFile(path.join(stage, "stage.json"), "Arcane world stage record");
   if (
-    rawRecord?.schemaVersion !== 2 ||
+    rawRecord?.schemaVersion !== 3 ||
     rawRecord.kind !== "foundry-world-profile-stage" ||
     !Array.isArray(rawRecord.resolvedPackages) ||
     !Array.isArray(rawRecord.artifacts)
@@ -1522,6 +1608,16 @@ async function validateWorldStage(stageDir) {
       throw new Error(`Arcane world stage does not resolve profile module ${moduleId}`);
     }
   }
+  const resolutionSha256 = requireString(rawRecord.resolutionSha256, "staged resolution SHA256", 64).toLowerCase();
+  if (!SHA256_PATTERN.test(resolutionSha256)) throw new Error("staged resolution SHA256 is invalid");
+  const actualResolutionSha256 = worldResolutionSha256({
+    generated: rawRecord.mirrorGenerated,
+    profile,
+    world,
+    system: resolvedPackages.find((artifact) => artifact.kind === "system"),
+    modules: resolvedPackages.filter((artifact) => artifact.kind === "module"),
+  });
+  assertExpected(actualResolutionSha256, resolutionSha256, "staged resolution SHA256");
   const record = { ...rawRecord, profile, world, resolvedPackages };
   const seen = new Set();
   const artifacts = [];
@@ -1854,7 +1950,7 @@ function usage() {
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
     "  mod-manager world-inspect --world-id <id> --data-dir <dir>",
     "  mod-manager world-catalog --data-dir <dir>",
-    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp>",
+    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256>",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
   ].join("\n");
 }
@@ -1900,6 +1996,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         expectedProfileRevision: options["expected-profile-revision"],
         expectedProfileSha256: options["expected-profile-sha256"],
         expectedIndexGenerated: options["expected-index-generated"],
+        expectedResolutionSha256: options["expected-resolution-sha256"],
       });
     case "world-commit":
       return commitWorldStage({

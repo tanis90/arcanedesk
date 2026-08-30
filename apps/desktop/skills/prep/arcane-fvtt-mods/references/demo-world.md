@@ -36,7 +36,7 @@ mod-manager world-catalog --data-dir <Foundry Data 目录>
 
 动作含 missing、current、upgrade、local-newer、unknown、duplicate。`duplicate` / `unknown` 必须先处理；
 `local-newer` 默认保留，绝不为了匹配 profile 而降级。表后给出 `plannedArchiveBytes`、world 版本和 SHA256、
-profile id/revision/SHA256 及索引 `generated`。明确区分：
+profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutionSha256`。明确区分：
 
 - 只有 package 变更：不替换、不重置、不备份 world；
 - world 变更：旧 world 整体备份后重置，内容不做 merge；
@@ -60,15 +60,17 @@ profile id/revision/SHA256 及索引 `generated`。明确区分：
 把 `world-inspect` 返回的稳定字段原样传回，防止确认后远端指针变化：
 
 ```text
-mod-manager world-stage --world-id arcane-demo --data-dir <Data目录> --expected-world-version <version> --expected-world-sha256 <world SHA256> --expected-profile-id <profile id> --expected-profile-revision <revision> --expected-profile-sha256 <profile SHA256> --expected-index-generated <generated>
+mod-manager world-stage --world-id arcane-demo --data-dir <Data目录> --expected-world-version <version> --expected-world-sha256 <world SHA256> --expected-profile-id <profile id> --expected-profile-revision <revision> --expected-profile-sha256 <profile SHA256> --expected-index-generated <generated> --expected-resolution-sha256 <resolutionSha256>
 ```
 
 `world-stage` 重新读取索引、world manifest 和 profile，重新解析当前 stable 包，只下载状态为 missing/upgrade
-的 system、modules 和 world。每个 manifest、ZIP、archive 内 manifest 都通过身份、bytes、SHA256 与安全路径
-校验后才返回 `stageDir`。任一项失败时 helper 删除本次 staging，现有 Foundry 内容保持不变，不要停服。
+的 system、modules 和 world。外部 manifest、ZIP 和 archive 根 manifest 依次通过 URL、身份、bytes、SHA256
+与安全路径校验；archive 内上游 URL 可以不同，helper 会在包身份和 ZIP 哈希通过后用已验证的外部 manifest
+规范化 staging。任一项失败时 helper 删除本次 staging，现有 Foundry 内容保持不变，不要停服。
 
-将返回的 `dependencyReplacements`、实际 staging 总量与确认计划核对。索引 generation、world/profile 哈希、
-解析包集合或本地快照变化时重新 inspect，不绕过 helper 的拒绝。
+将返回的 `dependencyReplacements`、实际 staging 总量与确认计划核对。`resolutionSha256` 覆盖索引 generation、
+world/profile 哈希及解析后每个包的版本、URL、manifest/ZIP bytes 与 SHA256；任一变化时重新 inspect，
+不绕过 helper 的拒绝。
 
 ## 4. 一次停服并事务提交
 
