@@ -1,6 +1,6 @@
 # First push review
 
-> 本文件是首次公开推送前的所有者检查单。当前仓库只完成本地构建、测试和提交；未配置 Git remote，未执行 `git push`，也未创建 GitHub 仓库、npm package 或 Release。
+> 本文件记录首次公开源码推送的所有者检查结果。GitHub public repository 已创建并完成 `main` 推送；未创建 npm package、Desktop 安装包或 GitHub Release。
 
 ## 拟公开坐标
 
@@ -56,7 +56,7 @@
 - [x] secrets、当前机器绝对路径、私有 migration denylist、大文件、嵌套 lockfile 扫描通过
 - [x] SDK/CLI tarball 安装后 subpath import 与 CLI `--help` consumer smoke test 通过
 - [x] 本地 clean clone 执行 `npm ci` 与 `npm run verify` 通过
-- [x] `git status --short` 无输出，`git remote -v` 无输出
+- [x] 首次推送前 `git status --short` 无输出且无 remote；推送后 `main` 只跟踪精确的新 public `origin`
 
 精确命令、结果和 milestone 状态记录在 [MIGRATION_PLAN.md](MIGRATION_PLAN.md)。
 
@@ -64,7 +64,7 @@
 
 这些事项不阻塞公开源码首推，但阻塞相应正式发布：
 
-1. 在 GitHub 仓库设置中启用 private vulnerability reporting、branch protection、required CI 与 CodeQL。
+1. 已启用 private vulnerability reporting、branch protection、required CI 与 CodeQL；首次三平台 CI 与 CodeQL 全绿。
 2. 为 npm 启用 trusted publishing 或最小权限 token、2FA 和 provenance；先确认 package 名未被占用。
 3. 在正式 npm/Desktop release 前增加机器生成的完整 transitive license report，并审核未知/不兼容许可证；当前人工 notice 已覆盖所有直接第三方依赖。
 4. 配置 Windows signing 与 Apple Developer ID/notarization；密钥不得进入仓库。
@@ -73,21 +73,21 @@
 7. 跟进 `npm ci` 当前来自 transitive build/tooling tree 的 `inflight`、旧 `rimraf`、旧 `glob`、`boolean` 与 `node-domexception` deprecation warning；当前 production audit 为 0，但应随上游可用版本持续升级。
 8. 决定正式 Desktop release 的 ASAR 策略并补 package author metadata；当前 `asar: false` 使开源 app 内容可直接检查，但 electron-builder 会给出加固建议，这不是代码许可证或签名替代品。
 
-## 拟执行的首次推送命令
+## 已执行的首次推送
 
-只有在上方所有者检查完成、GitHub 空仓库已由所有者创建后，才可以人工执行：
+首次推送使用以下目标完成：
 
 ```shell
 git remote add origin https://github.com/tanis90/arcanedesk.git
 git push -u origin main
 ```
 
-本迁移任务不会执行这些命令。若最终坐标不同，先改 package metadata 并复验，再使用正确 remote。
+远端创建、坐标核对和推送结果记录在 [MIGRATION_PLAN.md](MIGRATION_PLAN.md) 的 M9；后续 push 受 `main` branch protection 和 required checks 约束。
 
 ## 最终本地提交
 
-- 实现提交：`f254dd3eae7a1a715fd9d083bca9195420eb3768`（`Initial SDK-first open-source workspace`）。
+- 首次公开源码提交：`ffeebe76d3bd046219ed373f62ee65b3cc059044`（`chore(repo): prepare public GitHub launch`）。
 - 检查材料提交：本文件所在最终 `HEAD`；用 `git log -2 --show-signature` 核对，避免在提交内嵌无法自洽的自身 hash。
 - 分支：`main`
-- Remote：无
-- Push：未执行
+- Remote：`https://github.com/tanis90/arcanedesk.git`
+- Push：已执行，仅包含 `main` 源码；无 npm、安装包或 Release

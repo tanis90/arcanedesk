@@ -387,7 +387,7 @@ git diff --check
 
 ## M9 — 首次公开源码发布
 
-**状态：IN PROGRESS**
+**状态：COMPLETE**
 
 ### 目标
 
@@ -416,7 +416,15 @@ gh run list --repo tanis90/arcanedesk
 
 ### 完成证据
 
-- 待首次公开推送和远端核验完成后填写。
+- GitHub CLI 2.98.0 安装完成并确认认证账号为 `tanis90`；创建前查询证明新目标不存在，本地仓库无任何 remote。
+- 新 public repository 已创建于 `https://github.com/tanis90/arcanedesk`，默认分支为 `main`；本地 `origin` 的 fetch/push URL 均精确指向该新仓库。
+- 首次推送 commit 为 `ffeebe76d3bd046219ed373f62ee65b3cc059044`，保留 6 个现有提交、作者与邮箱；未执行 squash 或历史重写。
+- 当前工作树与独立临时 clean clone 均执行 `npm run verify` 成功：repository/docs/typecheck 全绿，Desktop 202、SDK 33、CLI 232 tests 全绿，build 与真实 pack consumer smoke test 通过；clean clone `npm ci` 安装 586 packages、audit 590 packages、0 vulnerabilities。
+- Gitleaks 8.30.1 扫描全部 6 个 Git commits：1.93 MB、`no leaks found`；旧私有仓库 URL 和本机绝对路径扫描 0 命中。
+- 首次公开 CI run `33306429201`：Ubuntu、macOS、Windows 三个平台全部成功；CodeQL run `33306429218`：JavaScript/TypeScript 分析成功。
+- 新仓库已启用 secret scanning、push protection、Dependabot security updates 与 private vulnerability reporting；关闭 wiki，并设置 Electron、Foundry VTT、SDK、CLI、TypeScript topics。
+- `main` branch protection 要求 Linux/macOS/Windows verify 与 CodeQL 四项检查，启用 strict/linear history/conversation resolution，禁止 force-push 和删除；单人维护阶段保留管理员应急旁路。
+- 本 milestone 仅创建并推送新公开仓库；未查询或修改既有私有 legacy repository，未发布 npm、Desktop 安装包或 GitHub Release。
 
 ---
 
@@ -444,3 +452,4 @@ gh run list --repo tanis90/arcanedesk
 | 2026-08-30 | M8 | 版权归属清理开始 | 项目所有者确认旧作者名册中的 3 个 display name 均为本人署名；开始移除名册及全部强制引用。 |
 | 2026-08-30 | M8 | Milestone 完成 | 删除旧作者名册并清理全部引用；修复校验器对未提交删除文件的处理；全仓扫描、155-file repository gate、26-file docs gate 与根 `npm run verify` 全绿。 |
 | 2026-08-30 | M9 | 首次公开源码发布开始 | 目标固定为全新 `tanis90/arcanedesk`；确认 `gh` 登录账号为 `tanis90` 且新目标尚不存在，既有私有 legacy repository 排除在操作范围外。 |
+| 2026-08-30 | M9 | Milestone 完成 | 新 public repository 创建并推送；三平台 CI、CodeQL、历史 Gitleaks 与 clean-clone 根 gate 全绿，安全设置和 `main` branch protection 生效，未发布任何 package、安装包或 Release。 |
