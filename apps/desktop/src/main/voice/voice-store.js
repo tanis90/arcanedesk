@@ -7,12 +7,16 @@
 // 显式填写才算覆盖；renderer 始终只接收掩码。
 import { readFileSync, writeFileSync } from "node:fs";
 import { VOICE_PRESET } from "./preset.js";
+import { decodeBoundCredential, encodeBoundCredential } from "../bound-credential.js";
+import { err } from "../i18n-error.mjs";
+import { providerCredentialTarget, validateProviderBaseUrl } from "../provider-endpoint.js";
 import { DEFAULT_NEW_API_BASE_URL } from "../providers.js";
 import { createUnavailableSecretStorage } from "../secret-storage.js";
 
 const MAX_HOTWORDS = 100; // 智谱 GLM-ASR-2512 hotwords 上限
 const DEFAULT_HOLD_KEY = "F9"; // 长按模式默认键;chord 语法见 renderer/shortcuts.js
 const PROVIDERS = new Set(["zhipu", "arcane-relay"]);
+const ZHIPU_CREDENTIAL_TARGET = "origin:https://open.bigmodel.cn";
 
 /** chord 字符串,空串 = 不绑定。 */
 function normalizeKey(value, fallback = "") {
@@ -20,10 +24,15 @@ function normalizeKey(value, fallback = "") {
   return key || fallback;
 }
 
-/** 中转地址;空串 = 跟随 Arcane Spark,非法输入也归零为跟随。 */
-function normalizeBaseUrl(value) {
-  const url = String(value ?? "").trim().replace(/\/+$/, "");
-  return /^https?:\/\//.test(url) ? url : "";
+function voiceCredentialTarget(provider, baseUrl, relayBaseUrl) {
+  if (provider === "zhipu") {
+    return { ok: true, target: ZHIPU_CREDENTIAL_TARGET, baseUrl: "" };
+  }
+  const endpoint = providerCredentialTarget({
+    api: "openai-completions",
+    baseUrl: baseUrl || relayBaseUrl || DEFAULT_NEW_API_BASE_URL,
+  });
+  return endpoint;
 }
 
 /**
@@ -31,21 +40,41 @@ function normalizeBaseUrl(value) {
  * 地址再兜底默认网关。spark 形如 {apiKey,baseUrl},可为 null
  * (内置 provider 被移除的极端情况)。
  */
-export function resolveRelayCredentials(voiceData, spark) {
-  return {
-    apiKey: voiceData.apiKey || String(spark?.apiKey ?? ""),
-    baseUrl:
-      voiceData.baseUrl ||
-      String(spark?.baseUrl ?? "") ||
-      DEFAULT_NEW_API_BASE_URL,
-  };
+export function resolveRelayCredentials(voiceData, spark, relayBaseUrl = DEFAULT_NEW_API_BASE_URL) {
+  const ownTarget = voiceCredentialTarget("arcane-relay", voiceData.baseUrl, spark?.baseUrl || relayBaseUrl);
+  if (
+    ownTarget.ok &&
+    voiceData.apiKey &&
+    voiceData.credentialTarget === ownTarget.target
+  ) {
+    return { apiKey: voiceData.apiKey, baseUrl: ownTarget.baseUrl };
+  }
+
+  const sparkEndpoint = spark?.apiKey
+    ? providerCredentialTarget({ api: "openai-completions", baseUrl: spark.baseUrl })
+    : null;
+  if (sparkEndpoint?.ok) {
+    return { apiKey: String(spark.apiKey), baseUrl: sparkEndpoint.baseUrl };
+  }
+
+  const fallback = providerCredentialTarget({ api: "openai-completions", baseUrl: relayBaseUrl });
+  return { apiKey: "", baseUrl: fallback.ok ? fallback.baseUrl : DEFAULT_NEW_API_BASE_URL };
 }
 
 export class VoiceStore {
-  constructor(filePath, log = console.log, secretStorage = createUnavailableSecretStorage()) {
+  constructor(
+    filePath,
+    log = console.log,
+    secretStorage = createUnavailableSecretStorage(),
+    relayBaseUrl = DEFAULT_NEW_API_BASE_URL,
+  ) {
     this.filePath = filePath;
     this.log = log;
     this.secretStorage = secretStorage;
+    const relayEndpoint = validateProviderBaseUrl(relayBaseUrl);
+    this.relayBaseUrl = relayEndpoint.ok && relayEndpoint.baseUrl
+      ? relayEndpoint.baseUrl
+      : DEFAULT_NEW_API_BASE_URL;
     const loaded = this.load();
     this.data = loaded.data;
     if (loaded.needsMigration) this.save();
@@ -54,12 +83,27 @@ export class VoiceStore {
   load() {
     try {
       const parsed = JSON.parse(readFileSync(this.filePath, "utf8"));
-      const needsMigration = Object.hasOwn(parsed, "apiKey");
+      let needsMigration = Object.hasOwn(parsed, "apiKey");
+      const provider = PROVIDERS.has(parsed.provider) ? parsed.provider : "zhipu";
+      const rawBaseUrl = String(parsed.baseUrl ?? "").trim();
+      const endpoint = validateProviderBaseUrl(rawBaseUrl);
+      const baseUrl = endpoint.ok ? endpoint.baseUrl : "";
       let apiKey = "";
+      let credentialTarget = null;
       try {
-        apiKey = parsed.apiKeyProtected
+        const revealed = parsed.apiKeyProtected
           ? this.secretStorage.reveal(parsed.apiKeyProtected)
           : String(parsed.apiKey ?? "");
+        const decoded = decodeBoundCredential(revealed);
+        apiKey = decoded.secret;
+        credentialTarget = decoded.target;
+        if (apiKey && (!credentialTarget || decoded.legacy)) {
+          const derived = rawBaseUrl && !endpoint.ok
+            ? null
+            : voiceCredentialTarget(provider, baseUrl, this.relayBaseUrl);
+          credentialTarget = derived?.ok ? derived.target : null;
+          needsMigration = true;
+        }
       } catch (error) {
         this.log(`[voice] protected API key could not be opened: ${error.message}`);
       }
@@ -67,9 +111,10 @@ export class VoiceStore {
       const legacyHold = Array.isArray(parsed.hotkeys) ? parsed.hotkeys[0] : null;
       return { data: {
         enabled: Boolean(parsed.enabled),
-        provider: PROVIDERS.has(parsed.provider) ? parsed.provider : "zhipu",
+        provider,
         apiKey,
-        baseUrl: normalizeBaseUrl(parsed.baseUrl),
+        ...(apiKey && credentialTarget ? { credentialTarget } : {}),
+        baseUrl,
         prompt: parsed.prompt == null ? VOICE_PRESET.prompt : String(parsed.prompt),
         hotwords: Array.isArray(parsed.hotwords)
           ? parsed.hotwords.map(String).filter(Boolean).slice(0, MAX_HOTWORDS)
@@ -93,11 +138,11 @@ export class VoiceStore {
   }
 
   save() {
-    const { apiKey, ...configuration } = this.data;
+    const { apiKey, credentialTarget, ...configuration } = this.data;
     writeFileSync(this.filePath, JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       ...configuration,
-      apiKeyProtected: this.secretStorage.protect(apiKey),
+      apiKeyProtected: this.secretStorage.protect(encodeBoundCredential(apiKey, credentialTarget)),
     }, null, 2));
   }
 
@@ -110,10 +155,14 @@ export class VoiceStore {
    */
   toPublic(spark = null) {
     const relay = this.data.provider === "arcane-relay";
-    const resolved = relay ? resolveRelayCredentials(this.data, spark) : null;
-    const effectiveApiKey = relay ? resolved.apiKey : this.data.apiKey;
-    const followsSpark = relay && !this.data.apiKey && Boolean(spark?.apiKey);
-    const ownApiKey = this.data.apiKey;
+    const resolved = this.credentialForUse(spark);
+    const ownTarget = voiceCredentialTarget(this.data.provider, this.data.baseUrl, spark?.baseUrl || this.relayBaseUrl);
+    const ownUsable = Boolean(
+      this.data.apiKey && ownTarget.ok && this.data.credentialTarget === ownTarget.target,
+    );
+    const effectiveApiKey = resolved.apiKey;
+    const followsSpark = relay && !ownUsable && Boolean(effectiveApiKey && spark?.apiKey);
+    const ownApiKey = ownUsable ? this.data.apiKey : "";
     return {
       enabled: this.data.enabled,
       provider: this.data.provider,
@@ -132,18 +181,47 @@ export class VoiceStore {
     };
   }
 
-  /** apiKey 语义同 ProviderStore:空字符串或打码值 = 保持原值,否则覆盖。 */
-  update(input) {
-    const apiKey =
-      !input.apiKey || String(input.apiKey).startsWith("••••")
-        ? this.data.apiKey
-        : String(input.apiKey).trim();
+  /** apiKey 仅在 provider/credential target 不变时允许留空或用掩码复用。 */
+  update(input, spark = null) {
+    const provider = PROVIDERS.has(input.provider) ? input.provider : "zhipu";
+    const rawBaseUrl = provider === "arcane-relay" ? String(input.baseUrl ?? "").trim() : "";
+    const endpoint = validateProviderBaseUrl(rawBaseUrl);
+    if (!endpoint.ok) return endpoint;
+    const target = voiceCredentialTarget(
+      provider,
+      endpoint.baseUrl,
+      spark?.baseUrl || this.relayBaseUrl,
+    );
+    if (!target.ok) return target;
+    const inputApiKey = String(input?.apiKey ?? "").trim();
+    const reusesStoredKey = !inputApiKey || inputApiKey.startsWith("••••");
+    const targetChanged = Boolean(
+      reusesStoredKey &&
+      this.data.apiKey &&
+      this.data.credentialTarget !== target.target,
+    );
+    if (targetChanged && provider === this.data.provider) {
+      return {
+        ok: false,
+        code: "KEY_REENTRY_REQUIRED",
+        error: err("err.provider.keyReentryRequired"),
+      };
+    }
+    // Changing provider with a blank field intentionally drops the old provider's
+    // own key. It must never follow the user into the newly selected service.
+    const apiKey = reusesStoredKey
+      ? (targetChanged ? "" : this.data.apiKey)
+      : inputApiKey;
+    const credentialTarget = apiKey
+      ? (reusesStoredKey ? this.data.credentialTarget : target.target)
+      : null;
     this.data = {
       enabled: Boolean(input.enabled),
-      provider: PROVIDERS.has(input.provider) ? input.provider : "zhipu",
+      provider,
       apiKey,
-      // 空串 = 跟随 Arcane Spark;非法输入同样归零为跟随
-      baseUrl: normalizeBaseUrl(input.baseUrl),
+      ...(credentialTarget ? { credentialTarget } : {}),
+      // 空串 = 跟随 Arcane Spark；非空地址已经过 HTTPS/loopback 校验。
+      baseUrl: endpoint.baseUrl,
       prompt: String(input.prompt ?? ""),
       hotwords: (Array.isArray(input.hotwords) ? input.hotwords : [])
         .map((w) => String(w ?? "").trim())
@@ -163,9 +241,18 @@ export class VoiceStore {
    */
   usable(spark = null) {
     if (!this.data.enabled) return false;
+    return Boolean(this.credentialForUse(spark).apiKey);
+  }
+
+  /** Resolve the exact endpoint paired with a usable credential; never expose an unbound key. */
+  credentialForUse(spark = null) {
     if (this.data.provider === "arcane-relay") {
-      return Boolean(this.data.apiKey || spark?.apiKey);
+      return resolveRelayCredentials(this.data, spark, this.relayBaseUrl);
     }
-    return Boolean(this.data.apiKey);
+    const target = voiceCredentialTarget("zhipu", "", this.relayBaseUrl);
+    return {
+      apiKey: this.data.apiKey && this.data.credentialTarget === target.target ? this.data.apiKey : "",
+      baseUrl: "",
+    };
   }
 }

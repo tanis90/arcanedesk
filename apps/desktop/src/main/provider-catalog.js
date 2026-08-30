@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { err } from "./i18n-error.mjs";
+import { validateProviderBaseUrl } from "./provider-endpoint.js";
 
 const catalogPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "provider-catalog.json");
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
@@ -36,13 +37,16 @@ export function listPresets() {
  * 仅支持 openai-completions 类端点;其他 API 类型(anthropic/google)由调用方拦截。
  */
 export async function fetchModels({ baseUrl, apiKey }) {
-  const base = String(baseUrl ?? "").trim().replace(/\/+$/, "");
-  if (!base) return { ok: false, error: err("err.fetch.needBaseUrl") };
+  if (!String(baseUrl ?? "").trim()) return { ok: false, error: err("err.fetch.needBaseUrl") };
+  const endpoint = validateProviderBaseUrl(baseUrl);
+  if (!endpoint.ok) return endpoint;
   if (!apiKey) return { ok: false, error: err("err.fetch.needApiKey") };
   let res;
   try {
-    res = await fetch(`${base}/models`, {
+    res = await fetch(`${endpoint.baseUrl}/models`, {
+      method: "GET",
       headers: { Authorization: `Bearer ${apiKey}` },
+      redirect: "error",
       signal: AbortSignal.timeout(15000),
     });
   } catch (error) {

@@ -70,7 +70,7 @@ contextBridge.exposeInMainWorld("arcane", {
     ipcRenderer.invoke("display-source:respond", { requestId, sourceId, includeAudio }),
   /** Provider 预设目录(内置供应商+模型视觉表)。 */
   getProviderCatalog: () => ipcRenderer.invoke("providers:catalog"),
-  /** 用 baseUrl+apiKey 拉端点的 GET /models;key 留空/打码时用已保存的同 id provider 的 key。 */
+  /** 用 baseUrl+apiKey 拉端点的 GET /models;key 留空/打码时仅可对原 credential target 复用。 */
   fetchProviderModels: (input) => ipcRenderer.invoke("providers:fetch-models", input),
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite: () => ipcRenderer.invoke("app:open-arcane-website"),

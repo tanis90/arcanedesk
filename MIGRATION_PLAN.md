@@ -310,6 +310,46 @@ git remote -v
 
 ---
 
+## M7 — Provider 凭据与网络端点安全绑定
+
+**状态：COMPLETE**
+
+### 目标
+
+消除 Desktop 使用已保存 API Key 时由 renderer 单独替换 Base URL 的凭据外传路径，并保证模型拉取、正常模型调用和语音中转都只能把 Key 发送到它原本绑定的安全目标。
+
+### 范围
+
+- Provider Key 与 credential target（显式端点的 scheme/host/port，或无显式端点时的 API 默认目标）绑定。
+- Key 与 target 一起进入 Electron `safeStorage` 加密封装；明文 `providers.json`/`voice.json` 中的 Base URL 被篡改时 fail closed。
+- provider/voice 配置 schema 升级到 v3；旧明文及 pre-v3 protected raw key 自动迁移为绑定封装。
+- 保存 Provider、拉取模型或修改语音中转目标时，跨 target 复用空白/打码 Key 返回 `KEY_REENTRY_REQUIRED`；显式重新输入 Key 才可换目标。
+- 远程端点强制 HTTPS；HTTP 只允许精确 loopback `localhost`、`127.0.0.1`、`[::1]`。
+- `/models` 请求禁止跟随 redirect；拒绝带 URL credential、query 或 fragment 的 Base URL。
+- provider 设置、模型拉取、语音设置和语音上传 IPC 只接受本地 Chat 主 frame。
+- Arcane Spark 聊天与语音共享 Key 时始终复用同一组已验证 Key/endpoint，不再允许语音 override 与 Spark Key 重新组合。
+
+### 验收命令
+
+```powershell
+node --test apps/desktop/test/providers.test.mjs apps/desktop/test/provider-endpoint.test.mjs apps/desktop/test/voice-store.test.mjs
+npm run typecheck --workspace arcane-desktop
+npm test --workspace arcane-desktop
+npm run verify
+git diff --check
+```
+
+### 完成证据
+
+- 31 个针对性安全测试全部通过，覆盖同 origin 换路径、scheme/host/port 变化、显式重输、Arcane Spark 任意地址转发、远程 HTTP、loopback HTTP、redirect 禁止、IPC sender gate 和 v2→v3 迁移。
+- 明文 Provider/Voice Base URL 篡改测试证明：加密封装内的 target 不匹配时 renderer 不再看到可用 Key，ModelRuntime、模型目录请求和语音中转均拿不到该 Key。
+- 借用 Arcane Spark Key 的语音路径始终使用 Spark 自己的已验证 Base URL；切换语音供应商会丢弃前一个供应商的自有 Key，不跨供应商继承。
+- Desktop `typecheck` 通过，Desktop 测试由 186 增至 202，`202/202` 全绿。
+- 根 `npm run verify` exit 0：repository/source/docs/typecheck 全绿，Desktop 202、SDK 33、CLI 232 tests 全绿，SDK/CLI build 与真实 pack consumer smoke test 通过。
+- `git diff --check` 无错误；工作分支为 `codex/provider-credential-origin`，未配置远端、未执行 push。
+
+---
+
 ## 进度日志
 
 | 时间 | Milestone | 事件 | 证据/备注 |
@@ -329,3 +369,5 @@ git remote -v
 | 2026-08-30 | M6 | 完整发布门开始 | 处理最终安全审计项、生成首次推送前检查单、本地提交并在本地 clean clone 复验。 |
 | 2026-08-30 | M6 | Milestone 完成 | gitleaks/actionlint/audit/SBOM/consumer tarball/Desktop package/final-HEAD clean clone 全绿；两笔本地 sign-off commit、clean status、无 remote、无 push。 |
 | 2026-08-30 | M6 | 推送前 review 修订 | 所有者侧 code review 后：runtime 导出收敛为 `runtimeFunction`/`runtimeHash`（移除 `directRuntimeFunction`/`runtimeSource` 别名），`verify:repo` 不再永久要求迁移文档，SDK README 记录 runtime 单一事实源退出计划；根 `npm run verify` 全绿，runtime SHA-256 `827e008b…` 不变，tarball 哈希随导出面变化。 |
+| 2026-08-30 | M7 | Provider 凭据安全收口开始 | 复现已保存 Key 与 renderer 提供 Base URL 解耦的问题，并将语音中转的同类复用路径纳入同一安全边界。 |
+| 2026-08-30 | M7 | Milestone 完成 | Key/target 加密绑定、HTTPS/loopback、redirect、trusted IPC 和语音成对解析全部生效；31 个针对性测试、Desktop 202 tests 与根 `npm run verify` 全绿。 |

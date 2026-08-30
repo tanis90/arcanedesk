@@ -3,7 +3,9 @@
 // 应用层自己持有这份配置,不去改 ~/.pi/agent/models.json 的格式——
  // 运行时注册(registerProvider)与 Pi 配置文件里的 provider 可以共存。
 import { readFileSync, writeFileSync } from "node:fs";
+import { decodeBoundCredential, encodeBoundCredential } from "./bound-credential.js";
 import { err } from "./i18n-error.mjs";
+import { providerCredentialTarget } from "./provider-endpoint.js";
 import { createUnavailableSecretStorage } from "./secret-storage.js";
 
 // Keep the default product budget aligned with the 256K context exposed by
@@ -25,6 +27,12 @@ function cleanEnvValue(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function usableCredential(provider) {
+  if (!provider?.apiKey || !provider.credentialTarget) return false;
+  const target = providerCredentialTarget(provider);
+  return target.ok && target.target === provider.credentialTarget;
+}
+
 export class ProviderStore {
   constructor(filePath, log = console.log, env = process.env, secretStorage = createUnavailableSecretStorage()) {
     this.filePath = filePath;
@@ -41,17 +49,35 @@ export class ProviderStore {
       const parsed = JSON.parse(readFileSync(this.filePath, "utf8"));
       let needsMigration = false;
       const providers = (Array.isArray(parsed.providers) ? parsed.providers : []).map((provider) => {
-        const { apiKey: legacyApiKey, apiKeyProtected, ...publicConfig } = provider ?? {};
+        const {
+          apiKey: legacyApiKey,
+          apiKeyProtected,
+          credentialTarget: _untrustedCredentialTarget,
+          ...publicConfig
+        } = provider ?? {};
         if (Object.hasOwn(provider ?? {}, "apiKey")) needsMigration = true;
         let apiKey = "";
+        let credentialTarget = null;
         try {
-          apiKey = apiKeyProtected
+          const revealed = apiKeyProtected
             ? this.secretStorage.reveal(apiKeyProtected)
             : String(legacyApiKey ?? "");
+          const decoded = decodeBoundCredential(revealed);
+          apiKey = decoded.secret;
+          credentialTarget = decoded.target;
+          if (apiKey && (!credentialTarget || decoded.legacy)) {
+            const derived = providerCredentialTarget(publicConfig);
+            credentialTarget = derived.ok ? derived.target : null;
+            needsMigration = true;
+          }
         } catch (error) {
           this.log(`[providers] protected API key could not be opened for ${provider?.id ?? "unknown"}: ${error.message}`);
         }
-        return { ...publicConfig, apiKey };
+        return {
+          ...publicConfig,
+          apiKey,
+          ...(apiKey && credentialTarget ? { credentialTarget } : {}),
+        };
       });
       return {
         data: { providers, defaultModel: parsed.defaultModel ?? null },
@@ -64,10 +90,10 @@ export class ProviderStore {
 
   save() {
     const persisted = {
-      schemaVersion: 2,
-      providers: this.data.providers.map(({ apiKey, ...provider }) => ({
+      schemaVersion: 3,
+      providers: this.data.providers.map(({ apiKey, credentialTarget, ...provider }) => ({
         ...provider,
-        apiKeyProtected: this.secretStorage.protect(apiKey),
+        apiKeyProtected: this.secretStorage.protect(encodeBoundCredential(apiKey, credentialTarget)),
       })),
       defaultModel: this.data.defaultModel,
     };
@@ -92,12 +118,20 @@ export class ProviderStore {
         this.log(`[providers] read ARCANE_SPARK_API_KEY_FILE failed: ${error.message}`);
       }
     }
+    const baseUrl = cleanEnvValue(env.ARCANE_SPARK_BASE_URL) || DEFAULT_NEW_API_BASE_URL;
+    const desiredTarget = providerCredentialTarget({ api: "openai-completions", baseUrl });
+    const injectedApiKey = apiKey;
+    if (!apiKey) apiKey = existing?.apiKey || "";
+    const credentialTarget = injectedApiKey
+      ? (desiredTarget.ok ? desiredTarget.target : null)
+      : existing?.credentialTarget;
     const record = {
       id: ARCANE_SPARK_PROVIDER_ID,
       name: ARCANE_SPARK_PROVIDER_NAME,
       api: "openai-completions",
-      baseUrl: cleanEnvValue(env.ARCANE_SPARK_BASE_URL) || DEFAULT_NEW_API_BASE_URL,
-      apiKey: apiKey || existing?.apiKey || "",
+      baseUrl: desiredTarget.ok ? desiredTarget.baseUrl : baseUrl,
+      apiKey,
+      ...(apiKey && credentialTarget ? { credentialTarget } : {}),
       models: [{ id: ARCANE_SPARK_MODEL_ID, name: ARCANE_SPARK_PROVIDER_NAME, vision: true }],
     };
 
@@ -136,8 +170,8 @@ export class ProviderStore {
         managed: p.id === ARCANE_SPARK_PROVIDER_ID,
         api: p.api ?? "openai-completions",
         baseUrl: p.baseUrl ?? "",
-        apiKey: p.apiKey ? `••••${p.apiKey.slice(-4)}` : "",
-        hasKey: Boolean(p.apiKey),
+        apiKey: usableCredential(p) ? `••••${p.apiKey.slice(-4)}` : "",
+        hasKey: usableCredential(p),
         models: (p.models ?? []).map((m) => ({ id: m.id, name: m.name ?? m.id, vision: Boolean(m.vision) })),
       })),
       defaultModel: this.data.defaultModel,
@@ -149,7 +183,7 @@ export class ProviderStore {
     const pref = this.data.defaultModel;
     if (!pref?.providerId) return null;
     const provider = this.data.providers.find((p) => p.id === pref.providerId);
-    if (!provider || provider.apiKey) return null;
+    if (!provider || usableCredential(provider)) return null;
     return {
       providerId: provider.id,
       providerName: provider.name ?? provider.id,
@@ -158,7 +192,8 @@ export class ProviderStore {
   }
 
   /**
-   * 新增/更新 provider。apiKey 语义:空字符串或打码值("••••xxxx")= 保持原值;
+   * 新增/更新 provider。apiKey 语义:空字符串或打码值("••••xxxx")= 仅在
+   * credential target 不变时保持原值;origin/API 默认目标变化时必须重输。
    * 否则覆盖。models 接受 [{id,name?,vision?}]——vision: true 表示支持图片输入,
    * 注册进 pi 时映射为 input: ["text","image"](pi 缺省 ["text"],图片会被静默丢弃)。
    */
@@ -167,8 +202,28 @@ export class ProviderStore {
     if (!id) return { ok: false, error: err("err.provider.idEmpty") };
     if (!/^[a-z0-9][a-z0-9-_]*$/i.test(id)) return { ok: false, error: err("err.provider.idInvalid") };
     const existing = this.data.providers.find((p) => p.id === id);
-    const apiKey =
-      !input.apiKey || input.apiKey.startsWith("••••") ? existing?.apiKey ?? "" : String(input.apiKey).trim();
+    const managed = id === ARCANE_SPARK_PROVIDER_ID;
+    const api = managed ? "openai-completions" : String(input.api ?? "openai-completions");
+    const baseUrl = managed ? DEFAULT_NEW_API_BASE_URL : String(input.baseUrl ?? "").trim();
+    const target = providerCredentialTarget({ api, baseUrl });
+    if (!target.ok) return target;
+    const inputApiKey = String(input?.apiKey ?? "").trim();
+    const reusesStoredKey = !inputApiKey || inputApiKey.startsWith("••••");
+    if (
+      reusesStoredKey &&
+      existing?.apiKey &&
+      existing.credentialTarget !== target.target
+    ) {
+      return {
+        ok: false,
+        code: "KEY_REENTRY_REQUIRED",
+        error: err("err.provider.keyReentryRequired"),
+      };
+    }
+    const apiKey = reusesStoredKey ? existing?.apiKey ?? "" : inputApiKey;
+    const credentialTarget = apiKey
+      ? (reusesStoredKey ? existing?.credentialTarget : target.target)
+      : null;
     const models = (Array.isArray(input.models) ? input.models : [])
       .map((m) => ({
         id: String(m?.id ?? "").trim(),
@@ -176,22 +231,23 @@ export class ProviderStore {
         vision: Boolean(m?.vision),
       }))
       .filter((m) => m.id);
-    const managed = id === ARCANE_SPARK_PROVIDER_ID;
     const record = managed
       ? {
           id,
           name: ARCANE_SPARK_PROVIDER_NAME,
           api: "openai-completions",
-          baseUrl: DEFAULT_NEW_API_BASE_URL,
+          baseUrl: target.baseUrl,
           apiKey,
+          ...(credentialTarget ? { credentialTarget } : {}),
           models: [{ id: ARCANE_SPARK_MODEL_ID, name: ARCANE_SPARK_PROVIDER_NAME, vision: true }],
         }
       : {
           id,
           name: String(input.name ?? "").trim() || id,
-          api: String(input.api ?? "openai-completions"),
-          baseUrl: String(input.baseUrl ?? "").trim(),
+          api,
+          baseUrl: target.baseUrl,
           apiKey,
+          ...(credentialTarget ? { credentialTarget } : {}),
           models,
         };
     if (existing) {
@@ -201,6 +257,48 @@ export class ProviderStore {
     }
     this.save();
     return { ok: true };
+  }
+
+  /** Resolve a fetch-models credential without allowing a saved key to cross targets. */
+  resolveCredentialForRequest(input) {
+    const api = String(input?.api ?? "openai-completions");
+    const baseUrl = String(input?.baseUrl ?? "").trim();
+    if (!baseUrl) return { ok: false, error: err("err.fetch.needBaseUrl") };
+    const target = providerCredentialTarget({ api, baseUrl });
+    if (!target.ok) return target;
+
+    const inputApiKey = String(input?.apiKey ?? "").trim();
+    if (inputApiKey && !inputApiKey.startsWith("••••")) {
+      return { ok: true, apiKey: inputApiKey, baseUrl: target.baseUrl };
+    }
+
+    const stored = this.data.providers.find((p) => p.id === String(input?.providerId ?? ""));
+    if (!stored?.apiKey) return { ok: false, error: err("err.fetch.needApiKey") };
+    if (stored.credentialTarget !== target.target || !usableCredential(stored)) {
+      return {
+        ok: false,
+        code: "KEY_REENTRY_REQUIRED",
+        error: err("err.provider.keyReentryRequired"),
+      };
+    }
+    return { ok: true, apiKey: stored.apiKey, baseUrl: target.baseUrl };
+  }
+
+  /** Return a complete credential/endpoint pair only when its encrypted binding is valid. */
+  credentialForProvider(id) {
+    const provider = this.data.providers.find((candidate) => candidate.id === id);
+    if (!provider || !usableCredential(provider)) return null;
+    const endpoint = providerCredentialTarget(provider);
+    if (!endpoint.ok) return null;
+    return { apiKey: provider.apiKey, baseUrl: endpoint.baseUrl };
+  }
+
+  /** Return a validated public endpoint without exposing or requiring its credential. */
+  baseUrlForProvider(id) {
+    const provider = this.data.providers.find((candidate) => candidate.id === id);
+    if (!provider) return null;
+    const endpoint = providerCredentialTarget(provider);
+    return endpoint.ok ? endpoint.baseUrl : null;
   }
 
   removeProvider(id) {
@@ -230,7 +328,7 @@ export class ProviderStore {
         modelRuntime.registerProvider(p.id, {
           name: p.name ?? p.id,
           baseUrl: p.baseUrl || undefined,
-          apiKey: p.apiKey || undefined,
+          apiKey: usableCredential(p) ? p.apiKey : undefined,
           api: p.api ?? "openai-completions",
           authHeader: true,
           models: (p.models ?? []).map((m) => ({
