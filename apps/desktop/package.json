@@ -39,7 +39,7 @@
     "yauzl": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.4.0",
     "@types/yauzl": "3.4.0",
     "electron": "44.0.0",
     "electron-builder": "26.15.3",
