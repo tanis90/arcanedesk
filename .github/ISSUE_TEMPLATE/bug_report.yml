@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem that is not a security vulnerability.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not include credentials, private world data,
+        Foundry license keys, commercial assets, or undisclosed vulnerabilities.
+        Follow SECURITY.md for security reports.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Foundry SDK
+        - FVTT CLI
+        - Desktop application
+        - Documentation or build tooling
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Arcane Desk version or commit
+      placeholder: v0.x.y or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, and Foundry/system versions when relevant.
+      placeholder: Windows 11; Node 24.x; Foundry 13.x; system name/version
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: State the expected and observed behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide numbered steps and the smallest original or redistributable fixture possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Paste only logs from which secrets, URLs, player data, and commercial content have been removed.
+      render: shell
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I tested only systems I own or am authorized to use.
+          required: true
+        - label: This report contains no secrets, private world data, Foundry binaries, or commercial content.
+          required: true
+        - label: This is not an undisclosed security vulnerability.
+          required: true

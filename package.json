@@ -1,0 +1,26 @@
+{
+  "name": "arcane-desk-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "npm@11.13.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:sdk": "npm run build --workspace @arcanedesk/foundry-sdk",
+    "build": "npm run build:sdk && npm run build --workspace @arcanedesk/fvtt-cli",
+    "pretest": "npm run build:sdk",
+    "test": "npm test --workspaces --if-present",
+    "pretypecheck": "npm run build:sdk",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "pack:check": "npm pack --workspace @arcanedesk/foundry-sdk --dry-run && npm pack --workspace @arcanedesk/fvtt-cli --dry-run",
+    "docs:check": "node scripts/check-markdown-links.mjs",
+    "verify:repo": "node scripts/verify-repository.mjs",
+    "verify": "npm run verify:repo && npm run docs:check && npm run typecheck && npm test && npm run build && npm run pack:check"
+  }
+}

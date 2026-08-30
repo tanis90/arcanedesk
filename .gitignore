@@ -1,0 +1,35 @@
+# Dependencies and package manager output
+node_modules/
+*.tgz
+npm-debug.log*
+
+# Build and test output
+dist/
+build/
+coverage/
+generated/
+artifacts/
+*.log
+
+# Local runtime state and secrets
+.env
+.env.*
+!.env.example
+*.local
+key
+*.key
+*.pem
+.local-secrets/
+runtime/
+
+# Editor and OS state
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Temporary files
+.tmp/
+tmp/
+temp/
