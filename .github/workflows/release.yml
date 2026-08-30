@@ -1,0 +1,141 @@
+name: Build release candidates
+
+# This workflow intentionally creates short-lived candidate artifacts and
+# GitHub provenance attestations. It does not publish to npm, create a GitHub
+# Release, push commits/tags, or upload to an external distribution service.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  packages:
+    name: Build SDK and CLI candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Verify all workspaces
+        run: npm run verify
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Create candidate directories
+        run: mkdir -p artifacts/npm
+
+      - name: Pack the SDK without publishing
+        run: npm pack --workspace packages/foundry-sdk --pack-destination artifacts/npm
+
+      - name: Pack the CLI without publishing
+        run: npm pack --workspace packages/fvtt-cli --pack-destination artifacts/npm
+
+      - name: Generate a CycloneDX SBOM
+        run: npm sbom --package-lock-only --omit=dev --sbom-format=cyclonedx > artifacts/sbom.cdx.json
+
+      - name: Generate package checksums
+        working-directory: artifacts/npm
+        run: sha256sum *.tgz > SHA256SUMS
+
+      - name: Attest package provenance and SBOM
+        uses: actions/attest@v4
+        with:
+          subject-checksums: artifacts/npm/SHA256SUMS
+          sbom-path: artifacts/sbom.cdx.json
+
+      - name: Upload SDK, CLI, checksums, and SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package-candidates
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop:
+    name: Build unsigned Desktop candidate for ${{ matrix.target }}
+    needs: packages
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Build unsigned Desktop candidate
+        run: npm run dist:${{ matrix.target }} --workspace apps/desktop
+
+      - name: Generate Desktop checksums
+        shell: pwsh
+        run: |
+          $candidateFiles = Get-ChildItem -LiteralPath apps/desktop/dist -File |
+            Where-Object {
+              $_.Name -ne 'SHA256SUMS' -and
+              $_.Extension -in @('.exe', '.dmg', '.zip', '.blockmap')
+            } |
+            Select-Object -ExpandProperty FullName
+          if (-not $candidateFiles) { throw 'No Desktop release artifacts were produced.' }
+          node apps/desktop/scripts/write-sha256sums.mjs apps/desktop/dist/SHA256SUMS @candidateFiles
+
+      - name: Attest Desktop candidate provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: apps/desktop/dist/SHA256SUMS
+
+      - name: Upload Desktop candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.target }}-candidate
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

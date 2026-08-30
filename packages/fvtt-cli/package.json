@@ -1,0 +1,45 @@
+{
+  "name": "@arcanedesk/fvtt-cli",
+  "version": "0.1.0",
+  "description": "Typed direct-CDP CLI for Foundry Virtual Tabletop integrations",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "arcane-fvtt": "dist/cli.js"
+  },
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src/foundry-runtime.test.ts",
+    "prepack": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@arcanedesk/foundry-sdk": "0.1.0",
+    "commander": "14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.6"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arcanedesk/arcane-desk.git",
+    "directory": "packages/fvtt-cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "name": "arcane-desktop",
+  "productName": "Arcane Desk",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Arcane Desk — an agent-native desktop companion for Foundry VTT.",
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "prepare:desktop-release": "node scripts/prepare-desktop-release.mjs",
+    "prepare:node-runtime": "node scripts/prepare-bundled-node.mjs",
+    "prepare:renderer-assets": "node scripts/prepare-renderer-assets.mjs",
+    "verify:source": "node scripts/verify-source.mjs",
+    "prestart": "npm run verify:source && npm run prepare:renderer-assets",
+    "start": "electron .",
+    "pretest": "npm run verify:source",
+    "test": "node --test test/*.test.mjs",
+    "pretypecheck": "npm run verify:source",
+    "typecheck": "tsc --noEmit",
+    "verify:package": "node scripts/verify-package.mjs",
+    "prepare:dist": "npm run verify:source && npm run prepare:renderer-assets && npm run prepare:node-runtime && npm run prepare:desktop-release",
+    "predist:dir": "npm run prepare:dist",
+    "dist:dir": "electron-builder --dir",
+    "predist:mac": "npm run prepare:dist",
+    "dist:mac": "electron-builder --mac dmg zip",
+    "predist:win": "npm run prepare:dist",
+    "dist:win": "electron-builder --win nsis zip"
+  },
+  "dependencies": {
+    "@arcanedesk/foundry-sdk": "0.1.0",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@highlightjs/cdn-assets": "^11.12.0",
+    "katex": "^0.18.4",
+    "marked": "18.0.11",
+    "mermaid": "11.17.2",
+    "tar": "7.5.22",
+    "typebox": "^1.3.7",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/yauzl": "3.4.0",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
+    "typescript": "7.0.2"
+  },
+  "build": {
+    "appId": "cn.bitterbebop.arcanedesk",
+    "productName": "Arcane Desk",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "preload.cjs",
+      "skills/**/*",
+      "system-prompts/**/*",
+      "scripts/archive.mjs",
+      "distribution/community-distribution.json",
+      "generated/desktop-release.json",
+      "generated/renderer-assets/**/*",
+      "LICENSE",
+      "NOTICE",
+      "THIRD_PARTY_NOTICES.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "generated/bundled-node",
+        "to": "runtime/node"
+      }
+    ],
+    "mac": {
+      "artifactName": "Arcane-Desk-${version}-mac-${arch}.${ext}",
+      "category": "public.app-category.productivity",
+      "minimumSystemVersion": "13.0",
+      "identity": null,
+      "hardenedRuntime": false,
+      "icon": "src/renderer/logo-icon.png",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Arcane Desk uses the microphone only when you choose voice input or allow Foundry voice chat.",
+        "NSCameraUsageDescription": "Arcane Desk uses the camera only when you allow Foundry video chat."
+      }
+    },
+    "win": {
+      "artifactName": "Arcane-Desk-${version}-win-${arch}.${ext}",
+      "icon": "src/renderer/logo-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "selectPerMachineByDefault": false
+    },
+    "dmg": {
+      "sign": false
+    }
+  }
+}

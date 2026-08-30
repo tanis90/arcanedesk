@@ -1,0 +1,15 @@
+Arcane Desk
+Copyright 2026 Arcane Desk contributors
+
+This product includes software developed by the Arcane Desk contributors.
+
+Portions of this work were migrated from the earlier Arcane Desk codebase.
+Contributor attribution is preserved in the source repository. Third-party
+runtime dependencies are declared in package.json and remain under their own
+licenses.
+
+Arcane Desk is an independent, unofficial integration for Foundry Virtual
+Tabletop. It is not affiliated with, endorsed by, or sponsored by Foundry
+Gaming LLC. Foundry Virtual Tabletop is a trademark of Foundry Gaming LLC.
+Foundry Virtual Tabletop software and other commercial content are not part of
+this work. Users must obtain and operate their own lawfully licensed copy.

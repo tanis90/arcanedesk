@@ -1,0 +1,185 @@
+{
+  "comment": "provider 预设 + 模型视觉能力表。exact 是实测/官方文档确认的(2026-08-19 阿里云 Token Plan 用 scripts/probe-vision.mjs 实测;同日 Kimi 编程套餐 4 个短 id(k3/k3-256k/kimi-for-coding/-highspeed,来自 api.kimi.com/coding/v1 端点)与 gemini-3.7-flash 用 scripts/probe-provider-vision.mjs 实测;其余来自各家官方文档);patterns 是兜底启发式,命不中默认 false(保守,用户可在表单里手动改)。coding plan 套餐端点与按量端点是不同地址,别混。注意 kimi 短 id 只有 exact 兜底,patterns 里的 ^kimi-k* 前缀规则匹配不到它们。",
+  "providers": [
+    {
+      "id": "alibaba-token-plan",
+      "name": "阿里云 Token Plan",
+      "nameEn": "Alibaba Cloud Token Plan",
+      "api": "openai-completions",
+      "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "models": ["qwen3.7-plus", "qwen3.8-max", "qwen3.7-max", "qwen3.6-flash", "glm-5.2", "deepseek-v4-pro", "deepseek-v4-flash-0731"]
+    },
+    {
+      "id": "kimi-coding",
+      "name": "Kimi 编程套餐",
+      "nameEn": "Kimi Coding Plan",
+      "api": "openai-completions",
+      "baseUrl": "https://api.kimi.com/coding/v1",
+      "models": ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"]
+    },
+    {
+      "id": "zhipu-coding",
+      "name": "智谱 GLM Coding Plan",
+      "nameEn": "Zhipu GLM Coding Plan",
+      "api": "openai-completions",
+      "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "models": ["glm-5.2", "glm-4.7"]
+    },
+    {
+      "id": "alibaba-dashscope",
+      "name": "阿里云百炼 DashScope",
+      "nameEn": "Alibaba Cloud DashScope (Bailian)",
+      "api": "openai-completions",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "models": ["qwen3.7-plus", "qwen3.8-max", "qwen-vl-max"]
+    },
+    {
+      "id": "volcano-ark",
+      "name": "火山方舟(豆包)",
+      "nameEn": "Volcano Ark (Doubao)",
+      "api": "openai-completions",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+      "models": ["doubao-seed-2-1-pro", "doubao-seed-1-6", "doubao-1-5-vision-pro"]
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "api": "openai-completions",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "api": "openai-completions",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "models": ["MiniMax-M2"]
+    },
+    {
+      "id": "xiaomi-mimo",
+      "name": "小米 MiMo",
+      "nameEn": "Xiaomi MiMo",
+      "api": "openai-completions",
+      "baseUrl": "https://api.xiaomimimo.com/v1",
+      "models": []
+    },
+    {
+      "id": "siliconflow",
+      "name": "硅基流动 SiliconFlow",
+      "nameEn": "SiliconFlow",
+      "api": "openai-completions",
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "models": []
+    },
+    {
+      "id": "moonshot",
+      "name": "Moonshot Kimi(按量)",
+      "nameEn": "Moonshot Kimi (pay-as-you-go)",
+      "api": "openai-completions",
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "models": []
+    },
+    {
+      "id": "zhipu",
+      "name": "智谱 GLM(按量)",
+      "nameEn": "Zhipu GLM (pay-as-you-go)",
+      "api": "openai-completions",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "models": ["glm-5.2", "glm-4v-plus", "glm-4.6v-flash"]
+    },
+    {
+      "id": "stepfun",
+      "name": "阶跃星辰",
+      "nameEn": "StepFun",
+      "api": "openai-completions",
+      "baseUrl": "https://api.stepfun.com/v1",
+      "models": ["step-3"]
+    },
+    {
+      "id": "baidu-qianfan",
+      "name": "百度千帆",
+      "nameEn": "Baidu Qianfan",
+      "api": "openai-completions",
+      "baseUrl": "https://qianfan.baidubce.com/v2",
+      "models": []
+    },
+    {
+      "id": "tencent-hunyuan",
+      "name": "腾讯混元",
+      "nameEn": "Tencent Hunyuan",
+      "api": "openai-completions",
+      "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1",
+      "models": []
+    },
+    {
+      "id": "qiniu",
+      "name": "七牛云",
+      "nameEn": "Qiniu Cloud",
+      "api": "openai-completions",
+      "baseUrl": "https://api.qnaigc.com/v1",
+      "models": []
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "api": "openai-completions",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "models": []
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "api": "openai-completions",
+      "baseUrl": "https://api.openai.com/v1",
+      "models": []
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "api": "anthropic-messages",
+      "baseUrl": "",
+      "models": []
+    },
+    {
+      "id": "google",
+      "name": "Google Gemini",
+      "api": "google-generative-ai",
+      "baseUrl": "",
+      "models": []
+    },
+    {
+      "id": "agentrouter",
+      "name": "AgentRouter",
+      "api": "openai-completions",
+      "baseUrl": "https://agentrouter.org/v1",
+      "models": ["gpt-5.6-sol", "gpt-5.5"]
+    }
+  ],
+  "vision": {
+    "exact": {
+      "qwen3.7-plus": true,
+      "qwen3.8-max": true,
+      "qwen3.6-flash": true,
+      "qwen3.7-max": false,
+      "qwen-vl-max": true,
+    "k3": true,
+    "k3-256k": true,
+    "kimi-for-coding": true,
+    "kimi-for-coding-highspeed": true,
+    "gemini-3.7-flash": true,
+      "glm-5.2": false,
+      "glm-4.7": false,
+      "deepseek-v4-pro": false,
+      "deepseek-v4-flash-0731": false,
+      "deepseek-chat": false,
+      "deepseek-reasoner": false,
+      "kimi-k2.6": true,
+      "kimi-k3": true,
+      "doubao-seed-2-1-pro": true,
+      "doubao-seed-1-6": true,
+      "minimax-m2": false,
+      "step-3": true
+    },
+    "patterns": ["-vl", "vision", "^gpt-(4o|4\\.1|5)", "claude", "gemini", "^glm-4v", "^glm-4\\.\\d+v", "^kimi-k2\\.[5-9]", "^kimi-k[3-9]"]
+  }
+}

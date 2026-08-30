@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "profileId": "arcane-community-foundry13-dnd5e",
+  "description": "Community profile with no Arcane-hosted mirror, world, module, or private service dependency.",
+  "policy": {
+    "foundryCore": "user-supplied-only",
+    "thirdPartyDownloads": "explicit-opt-in",
+    "requireSha256BeforeInstall": true,
+    "allowPipeToShell": false
+  },
+  "core": {
+    "foundry": "13.351",
+    "node": "22.23.2",
+    "nodeLicense": "Node.js project license included in each official archive",
+    "nodeSource": "https://nodejs.org/dist/v22.23.2/",
+    "nodeArtifacts": {
+      "win-x64": {
+        "file": "node-v22.23.2-win-x64.zip",
+        "sha256": "1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97"
+      },
+      "win-arm64": {
+        "file": "node-v22.23.2-win-arm64.zip",
+        "sha256": "fec025a6da31757e3b6af84c5a1628e9d38442ca99a2161091d78f2fcfa35ef3"
+      },
+      "darwin-x64": {
+        "file": "node-v22.23.2-darwin-x64.tar.gz",
+        "sha256": "58e99022c2ff89395576cc7fd4d98cea24bb68081475d5f88b801ee8729fb026"
+      },
+      "darwin-arm64": {
+        "file": "node-v22.23.2-darwin-arm64.tar.gz",
+        "sha256": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6"
+      }
+    },
+    "windowsInstaller": {
+      "version": "13.351.0",
+      "arch": "x64",
+      "bytes": 227580416,
+      "sha256": "da2d4c06f55791520f7229b413ce226ebb7dccadfaa6b171ba5f2e64374d6e85",
+      "signaturePublisher": "Foundry Gaming LLC",
+      "format": "nsis-3-unicode",
+      "requestedExecutionLevel": "requireAdministrator",
+      "silent": {
+        "switch": "/S",
+        "installDirPrefix": "/D=",
+        "installDirMustBeLast": true,
+        "installDirMustNotBeQuoted": true,
+        "elevation": "runas"
+      },
+      "source": "User-provided Foundry VTT purchase download only; this project does not distribute it."
+    }
+  },
+  "systems": [
+    {
+      "id": "dnd5e",
+      "version": "5.3.3",
+      "defaultInstall": false,
+      "license": {
+        "software": "MIT",
+        "srdContent": "CC BY 4.0",
+        "details": "https://github.com/foundryvtt/dnd5e/blob/release-5.3.3/LICENSE.txt"
+      },
+      "manifest": "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/system.json",
+      "download": "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/dnd5e-release-5.3.3.zip",
+      "sha256": "d998061b7cc67d12a07dc93c7fb627c195974b59fd2e9b15fae19899c3f2f1be"
+    }
+  ],
+  "modules": [],
+  "worlds": [],
+  "installDefaults": {
+    "systems": [],
+    "modules": [],
+    "worlds": []
+  }
+}

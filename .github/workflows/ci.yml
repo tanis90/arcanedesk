@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Verify all workspaces
+        run: npm run verify
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+  dependency-review:
+    name: Review dependency changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
