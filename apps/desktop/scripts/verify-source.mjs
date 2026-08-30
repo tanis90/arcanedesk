@@ -37,11 +37,12 @@ const exactDirectories = new Map([
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
     "prepare-renderer-assets.mjs",
+    "publish-release.mjs",
     "verify-package.mjs",
     "verify-source.mjs",
     "write-sha256sums.mjs",
   ]],
-  ["distribution", ["community-distribution.json"]],
+  ["distribution", ["community-distribution.json", "oss-release-contract.md"]],
 ]);
 
 function walk(directory, files = []) {

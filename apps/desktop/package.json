@@ -25,7 +25,8 @@
     "predist:mac": "npm run prepare:dist",
     "dist:mac": "electron-builder --mac dmg zip",
     "predist:win": "npm run prepare:dist",
-    "dist:win": "electron-builder --win nsis zip"
+    "dist:win": "electron-builder --win nsis zip",
+    "publish:release": "node scripts/publish-release.mjs"
   },
   "dependencies": {
     "@arcanedesk/foundry-sdk": "0.1.0",
@@ -41,6 +42,7 @@
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/yauzl": "3.4.0",
+    "ali-oss": "^6.21.0",
     "electron": "44.0.0",
     "electron-builder": "26.15.3",
     "typescript": "7.0.2"

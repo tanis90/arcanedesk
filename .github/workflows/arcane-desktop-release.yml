@@ -1,0 +1,313 @@
+name: Release Arcane Desktop
+
+# Official four-platform Desktop build and release entrypoint. Dispatch with
+# skip_oss=true for a build-only validation. Immutable OSS objects are uploaded
+# and fully verified before latest.json may be changed.
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: "Release id (default: <version>-<commit8>)"
+        required: false
+        type: string
+      channel:
+        description: "Release channel"
+        required: true
+        default: private-beta
+        type: string
+      update_latest:
+        description: "Update desktop/arcane-desk/latest.json after verification"
+        required: true
+        default: true
+        type: boolean
+      create_github_release:
+        description: "Create a GitHub Release with the same artifacts"
+        required: true
+        default: true
+        type: boolean
+      skip_oss:
+        description: "Build-only validation (no OSS upload)"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arcane-desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ARCANE_RELEASE_CHANNEL: ${{ inputs.channel || 'private-beta' }}
+  RELEASE_CHANNEL: ${{ inputs.channel || 'private-beta' }}
+  RELEASE_ID: ${{ inputs.release_id || '' }}
+  UPDATE_LATEST: ${{ inputs.update_latest || false }}
+  CREATE_GITHUB_RELEASE: ${{ inputs.create_github_release || false }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      ARCANE_RELEASE_ID: ${{ inputs.release_id }}
+      ARCANE_SOURCE_COMMIT: ${{ github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            os: macos-14
+            arch: arm64
+            node_platform: darwin-arm64
+            builder: dist:mac
+          - platform: macos-x64
+            os: macos-15-intel
+            arch: x64
+            node_platform: darwin-x64
+            builder: dist:mac
+          - platform: windows-x64
+            os: windows-latest
+            arch: x64
+            node_platform: win-x64
+            builder: dist:win
+          - platform: windows-arm64
+            os: windows-latest
+            arch: arm64
+            node_platform: win-arm64
+            builder: dist:win
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Build shared SDK
+        run: npm run build:sdk
+
+      - name: Verify Desktop source
+        run: npm run typecheck --workspace arcane-desktop
+
+      - name: Build package (${{ matrix.platform }})
+        env:
+          ARCANE_BUNDLED_NODE_PLATFORM: ${{ matrix.node_platform }}
+        run: npm run ${{ matrix.builder }} --workspace arcane-desktop -- --${{ matrix.arch }}
+
+      - name: Verify packaged resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_dir="apps/desktop/dist/win-unpacked/resources/app"
+          runtime_flag=""
+          if [[ "${{ matrix.platform }}" == "macos-arm64" ]]; then
+            app_dir="apps/desktop/dist/mac-arm64/Arcane Desk.app/Contents/Resources/app"
+          elif [[ "${{ matrix.platform }}" == "macos-x64" ]]; then
+            app_dir="apps/desktop/dist/mac/Arcane Desk.app/Contents/Resources/app"
+          elif [[ "${{ matrix.platform }}" == "windows-arm64" ]]; then
+            app_dir="apps/desktop/dist/win-arm64-unpacked/resources/app"
+            runtime_flag="--runtime-from-manifest"
+          fi
+          test -d "$app_dir"
+          node apps/desktop/scripts/verify-package.mjs \
+            "$app_dir" $runtime_flag \
+            --expected-node-platform "${{ matrix.node_platform }}"
+          if [[ "${{ matrix.platform }}" == macos-* ]]; then
+            suffix=""
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then suffix="-arm64"; fi
+            /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" \
+              "apps/desktop/dist/mac${suffix}/Arcane Desk.app/Contents/Info.plist"
+          fi
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "staging/${{ matrix.platform }}"
+          cd apps/desktop/dist
+          shopt -s nullglob
+          copied=0
+          for ext in dmg zip exe; do
+            for file in *.${ext}; do
+              case "$file" in
+                *-${{ matrix.arch }}.*)
+                  cp "$file" "$GITHUB_WORKSPACE/staging/${{ matrix.platform }}/"
+                  copied=$((copied + 1))
+                  ;;
+              esac
+            done
+          done
+          cd "$GITHUB_WORKSPACE/staging/${{ matrix.platform }}"
+          if [[ "$copied" -ne 2 ]]; then
+            echo "expected exactly two package artifacts for ${{ matrix.platform }}, copied $copied" >&2
+            exit 1
+          fi
+          packages=( *.dmg *.zip *.exe )
+          node "$GITHUB_WORKSPACE/apps/desktop/scripts/write-sha256sums.mjs" \
+            SHA256SUMS.txt "${packages[@]}"
+          ls -la
+
+      - name: Attest Desktop artifact provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: staging/${{ matrix.platform }}/SHA256SUMS.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: arcane-desk-${{ matrix.platform }}-${{ github.sha }}
+          path: staging/${{ matrix.platform }}/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to OSS (+ optional GitHub Release)
+    needs: build
+    if: ${{ !inputs.skip_oss }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: desktop-release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Audit production dependencies and generate release SBOM
+        shell: bash
+        run: |
+          npm audit --omit=dev
+          mkdir -p release-audit
+          npm sbom --package-lock-only --omit=dev --sbom-format=cyclonedx > release-audit/sbom.cdx.json
+
+      - name: Regenerate release manifest at pinned commit
+        env:
+          ARCANE_RELEASE_ID: ${{ env.RELEASE_ID }}
+          ARCANE_SOURCE_COMMIT: ${{ github.sha }}
+        run: npm run prepare:desktop-release --workspace arcane-desktop
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: staging
+          pattern: arcane-desk-*-*
+          merge-multiple: false
+
+      - name: Flatten staging into platform directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish-staging
+          for dir in staging/arcane-desk-*; do
+            platform=$(basename "$dir" | sed -E 's/^arcane-desk-(.+)-[0-9a-f]{40}$/\1/')
+            mkdir -p "publish-staging/$platform"
+            cp "$dir"/* "publish-staging/$platform/"
+          done
+          find publish-staging -type f | sort
+
+      - name: Publish immutable release to arcane-package OSS
+        env:
+          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
+          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+        shell: bash
+        run: |
+          args=(--staging publish-staging --channel "$RELEASE_CHANNEL" --skip-latest)
+          if [[ -n "$RELEASE_ID" ]]; then args+=(--release-id "$RELEASE_ID"); fi
+          node apps/desktop/scripts/publish-release.mjs "${args[@]}"
+
+      - name: Stage uniquely named GitHub Release assets
+        if: ${{ inputs.create_github_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p github-release-assets
+          asset_count=0
+          for platform_dir in publish-staging/*; do
+            platform=$(basename "$platform_dir")
+            for source in "$platform_dir"/*; do
+              name=$(basename "$source")
+              if [[ "$name" == "SHA256SUMS.txt" ]]; then
+                name="SHA256SUMS-${platform}.txt"
+              fi
+              target="github-release-assets/$name"
+              if [[ -e "$target" ]]; then
+                echo "duplicate GitHub Release asset name: $name" >&2
+                exit 1
+              fi
+              cp "$source" "$target"
+              asset_count=$((asset_count + 1))
+            done
+          done
+          if [[ "$asset_count" -ne 12 ]]; then
+            echo "expected 12 GitHub Release assets, staged $asset_count" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create_github_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          release_id="$RELEASE_ID"
+          if [[ -z "$release_id" ]]; then
+            release_id=$(node -e "console.log(require('./apps/desktop/generated/desktop-release.json').releaseId)")
+          fi
+          release_flags=()
+          if [[ "$RELEASE_CHANNEL" != "stable" ]]; then release_flags+=(--prerelease); fi
+          gh release create "$release_id" \
+            --title "Arcane Desk $release_id" \
+            --notes "Automated release. Manifest: https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/$release_id/release.json" \
+            --target "${{ github.sha }}" \
+            "${release_flags[@]}" \
+            github-release-assets/*
+
+      - name: Promote verified release to OSS latest
+        if: ${{ inputs.update_latest }}
+        env:
+          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
+          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+        shell: bash
+        run: |
+          release_id="$RELEASE_ID"
+          if [[ -z "$release_id" ]]; then
+            release_id=$(node -e "console.log(require('./apps/desktop/generated/desktop-release.json').releaseId)")
+          fi
+          node apps/desktop/scripts/publish-release.mjs --promote-release "$release_id"
+
+      - name: Upload release metadata audit artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: arcane-desk-release-metadata-${{ github.sha }}
+          path: |
+            apps/desktop/distribution/releases/*.json
+            apps/desktop/distribution/desktop-latest.json
+            release-audit/sbom.cdx.json
+          if-no-files-found: warn
+          retention-days: 30

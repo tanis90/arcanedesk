@@ -428,6 +428,42 @@ gh run list --repo tanis90/arcanedesk
 
 ---
 
+## M10 — 官方 Desktop 四平台 CI/CD
+
+**状态：IN PROGRESS**
+
+### 目标
+
+在公开仓库中建立可重复、可审计的 Arcane Desktop 官方四平台构建与发布流水线，并用独立最小权限身份打通 OSS 灰度交付；不影响既有线上 latest 指针。
+
+### 范围
+
+- 私有 legacy repository 仅作为只读发布基线；所有实现、提交、PR、workflow 和 secrets 只进入 `tanis90/arcanedesk`。
+- 保留 `macos-arm64`、`macos-x64`、`windows-x64`、`windows-arm64` 四平台矩阵，以及 `typecheck → electron-builder → verify-package → SHA256` 门禁。
+- 迁移 OSS 发布器、不可变 release 目录、全量 HEAD 验收、latest 指针与本地 Windows hotfix 能力，并补测试和公开运行手册。
+- 为公开仓库创建独立 RAM 用户 `ArcaneDeskGithubRelease`，只挂载无 Delete 的 `ArcaneDeskReleasePublish` 策略；AccessKey 仅写入 GitHub Actions secrets，不写文件、日志或 Git 历史。
+- 第一阶段执行 `skip_oss=true` 的四平台 build-only；第二阶段上传新的不可变灰度 release，使用 `update_latest=false`、`create_github_release=false`，不改变线上下载指针。
+- 正式切换 latest、创建 GitHub Release、npm 发布、Windows 签名及 macOS 签名/公证均不属于本 milestone。
+
+### 验收命令
+
+```powershell
+npm ci --workspaces --include-workspace-root
+npm test --workspace arcane-desktop
+npm run typecheck --workspace arcane-desktop
+npm run verify
+node apps/desktop/scripts/publish-release.mjs --staging <fixture> --release-id <id> --channel private-beta --skip-latest --dry-run
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -oneline
+gh workflow run arcane-desktop-release.yml --repo tanis90/arcanedesk --ref main -f skip_oss=true -f update_latest=false -f create_github_release=false
+gh run view <run-id> --repo tanis90/arcanedesk
+```
+
+### 完成证据
+
+- 待四平台 build-only、独立凭据和 OSS 灰度发布全部验收后填写。
+
+---
+
 ## 进度日志
 
 | 时间 | Milestone | 事件 | 证据/备注 |
@@ -453,3 +489,4 @@ gh run list --repo tanis90/arcanedesk
 | 2026-08-30 | M8 | Milestone 完成 | 删除旧作者名册并清理全部引用；修复校验器对未提交删除文件的处理；全仓扫描、155-file repository gate、26-file docs gate 与根 `npm run verify` 全绿。 |
 | 2026-08-30 | M9 | 首次公开源码发布开始 | 目标固定为全新 `tanis90/arcanedesk`；确认 `gh` 登录账号为 `tanis90` 且新目标尚不存在，既有私有 legacy repository 排除在操作范围外。 |
 | 2026-08-30 | M9 | Milestone 完成 | 新 public repository 创建并推送；三平台 CI、CodeQL、历史 Gitleaks 与 clean-clone 根 gate 全绿，安全设置和 `main` branch protection 生效，未发布任何 package、安装包或 Release。 |
+| 2026-08-30 | M10 | 官方 Desktop CI/CD 开始 | 读取私有发布 SOP、四平台 workflow、OSS 发布器和最小 RAM 策略；确定先 build-only、再上传不切 latest 的不可变灰度 release。 |
