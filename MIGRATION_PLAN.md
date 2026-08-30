@@ -430,7 +430,7 @@ gh run list --repo tanis90/arcanedesk
 
 ## M10 — 官方 Desktop 四平台 CI/CD
 
-**状态：IN PROGRESS**
+**状态：COMPLETE**
 
 ### 目标
 
@@ -460,7 +460,13 @@ gh run view <run-id> --repo tanis90/arcanedesk
 
 ### 完成证据
 
-- 待四平台 build-only、独立凭据和 OSS 灰度发布全部验收后填写。
+- [PR #4](https://github.com/tanis90/arcanedesk/pull/4) 以 rebase 方式线性合入 `main`；Linux、macOS、Windows、依赖审查和 CodeQL 全绿，合入后的 source commit 为 `3b7094ce81475b38fb8e78c2082b58d447033716`。
+- 本地完成 Windows x64 NSIS/ZIP 正式打包、包内资源验证和真实产物发布 dry-run；Desktop 206 tests、typecheck、根 `npm run verify`、actionlint、Gitleaks 与 production audit 全绿。
+- OSS 发布器对不可变对象同时执行存在性预检和 `x-oss-forbid-overwrite: true` 原子防覆盖；上传完成后按 manifest 对全部对象执行 identity-encoded HEAD 与精确 `Content-Length` 验证。
+- 四平台 build-only [run 33307751957](https://github.com/tanis90/arcanedesk/actions/runs/33307751957) 成功；四个 build job 均完成 package verification、SHA256、provenance attestation 和 artifact upload，publish job 按预期跳过。
+- 新建 RAM 用户 `ArcaneDeskGithubRelease`，仅挂载自定义策略 `ArcaneDeskReleasePublish`；策略无 Delete，用户只有 1 个 Active AccessKey。GitHub `desktop-release` Environment 仅保存 `OSS_RELEASE_KEY_ID` 与 `OSS_RELEASE_KEY_SECRET`，密钥值未写文件、日志或 Git 历史。
+- OSS 灰度发布 [run 33308053581](https://github.com/tanis90/arcanedesk/actions/runs/33308053581) 成功；公开 manifest 为 [`0.1.0-3b7094ce/release.json`](https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/0.1.0-3b7094ce/release.json)，记录 4 个平台、每平台 2 个安装产物和 1 个 SHA256 文件，共 12 个文件。
+- 独立远端验收确认 manifest 与 12 个文件均为 HTTP 200，12/12 `Content-Length` 精确匹配；`latest.json` 发布前后 SHA-256 均为 `f607165d529cfb078757dc5540d23e3d0cb640f60a37a02b355175c4ee99cca4`，仍指向 `0.1.1-1fc9119f`；未创建同名 GitHub Release。
 
 ---
 
@@ -490,3 +496,5 @@ gh run view <run-id> --repo tanis90/arcanedesk
 | 2026-08-30 | M9 | 首次公开源码发布开始 | 目标固定为全新 `tanis90/arcanedesk`；确认 `gh` 登录账号为 `tanis90` 且新目标尚不存在，既有私有 legacy repository 排除在操作范围外。 |
 | 2026-08-30 | M9 | Milestone 完成 | 新 public repository 创建并推送；三平台 CI、CodeQL、历史 Gitleaks 与 clean-clone 根 gate 全绿，安全设置和 `main` branch protection 生效，未发布任何 package、安装包或 Release。 |
 | 2026-08-30 | M10 | 官方 Desktop CI/CD 开始 | 读取私有发布 SOP、四平台 workflow、OSS 发布器和最小 RAM 策略；确定先 build-only、再上传不切 latest 的不可变灰度 release。 |
+| 2026-08-30 | M10 | 四平台 build-only 通过 | `33307751957` 的 macOS arm64/x64、Windows x64/arm64 均完成 package verification、SHA256、attestation 和 artifact upload；publish job 跳过。 |
+| 2026-08-30 | M10 | Milestone 完成 | 独立最小权限 RAM 身份与 GitHub Environment secrets 生效；`33308053581` 将 `0.1.0-3b7094ce` 灰度发布到不可变 OSS 路径，12/12 文件外部 HEAD 验收通过，线上 latest 指纹不变且未创建 GitHub Release。 |
