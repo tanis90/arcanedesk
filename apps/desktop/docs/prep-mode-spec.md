@@ -19,5 +19,6 @@ AgentHost profile，但共享会话、ProviderStore 和 Foundry panel。
 
 - `arcane-fvtt-setup`：用户提供物料的安装/迁移；
 - `arcane-fvtt-ops`：既有实例的启停、日志与端口排障；
+- `arcane-fvtt-mods`：从 `module.json` 安装 mod，并把本地版本与 Arcane OSS 全局索引对比后按用户选择升级；
 - `arcane-module-reader`：在明确云上传同意后整理用户有权处理的 PDF；
 - `arcane-actor-images`：把用户图片写入世界 Data 的稳定相对路径。

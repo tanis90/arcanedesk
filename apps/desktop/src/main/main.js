@@ -571,6 +571,16 @@ app.whenReady().then(async () => {
   // Agent shell scripts read the packaged policy directly with the bundled
   // Node. This is process-local and never changes the user's environment.
   process.env.ARCANE_FVTT_DISTRIBUTION_FILE = distributionFile;
+  process.env.ARCANE_FVTT_MOD_MANAGER = path.join(
+    __dirname,
+    "..",
+    "..",
+    "skills",
+    "prep",
+    "arcane-fvtt-mods",
+    "scripts",
+    "mod-manager.mjs",
+  );
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");

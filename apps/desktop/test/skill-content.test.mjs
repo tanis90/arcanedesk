@@ -34,6 +34,15 @@ const REQUIRED_MARKERS = new Map([
     "ring.subject.texture",
     "已在场景里的存量 token",
   ]],
+  ["skills/prep/arcane-fvtt-mods/SKILL.md", [
+    "ARCANE_FVTT_MOD_MANAGER",
+    "index.json",
+    "Data/.arcane-mod-backups/modules/",
+    "--accept-sha256",
+    "Manage Modules",
+    "references/install.md",
+    "references/updates.md",
+  ]],
 ]);
 
 for (const [file, markers] of REQUIRED_MARKERS) {
