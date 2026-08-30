@@ -1,6 +1,6 @@
 {
   "name": "arcane-desktop",
-  "productName": "Arcane Desk",
+  "productName": "ArcaneDesk",
   "version": "0.1.3",
   "private": true,
   "license": "Apache-2.0",
@@ -49,7 +49,7 @@
   },
   "build": {
     "appId": "cn.bitterbebop.arcanedesk",
-    "productName": "Arcane Desk",
+    "productName": "ArcaneDesk",
     "asar": false,
     "afterPack": "scripts/mac-adhoc-sign.mjs",
     "directories": {

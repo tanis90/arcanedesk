@@ -817,7 +817,7 @@ export class AgentHost {
         const outcome = await capturePageNavigationSafe(webContents, { signal });
         if (outcome.status === "aborted") throw new Error("foundry_screenshot was aborted");
         if (outcome.status === "timeout") {
-          throw new Error(`Foundry screenshot timed out after ${outcome.timeoutMs}ms; restore the Arcane Desk window before one retry`);
+          throw new Error(`Foundry screenshot timed out after ${outcome.timeoutMs}ms; restore the ArcaneDesk window before one retry`);
         }
         if (outcome.status === "navigated") {
           throw new Error(`Foundry navigated to ${outcome.url} during capture; inspect the new page before one retry`);

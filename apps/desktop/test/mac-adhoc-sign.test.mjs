@@ -13,8 +13,8 @@ test("ad-hoc re-sign applies only to intentionally unsigned macOS builds", () =>
 
 test("packaged app root resolves to its macOS bundle", () => {
   assert.equal(
-    macBundleRoot("/tmp/dist/mac-arm64/Arcane Desk.app/Contents/Resources/app"),
-    "/tmp/dist/mac-arm64/Arcane Desk.app",
+    macBundleRoot("/tmp/dist/mac-arm64/ArcaneDesk.app/Contents/Resources/app"),
+    "/tmp/dist/mac-arm64/ArcaneDesk.app",
   );
   assert.equal(macBundleRoot("/tmp/dist/win-unpacked/resources/app"), null);
   assert.equal(macBundleRoot("/tmp/plain-dir"), null);

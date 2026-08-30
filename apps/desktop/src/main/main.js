@@ -46,7 +46,7 @@ const FOUNDRY_MIN_WIDTH = 640;
 const SPLITTER_GUTTER = 6; // 分隔条占用的 chat 侧像素(归 chat 页面,接收拖拽事件)
 
 // 应用身份:userData 目录由 app 名决定(~/Library/Application Support/<name>)。
-// 打包版用 productName "Arcane Desk";dev(npm start)保持 "arcane-desktop",
+// 打包版用 productName "ArcaneDesk";dev(npm start)保持 "arcane-desktop",
 // 继续用既有 userData,两份配置互不干扰。
 if (!app.isPackaged) app.setName("arcane-desktop");
 // Windows 任务栏按 Application User Model ID 识别和分组应用。开发版实际

@@ -37,7 +37,7 @@ App 会在 Agent 启动前解压并校验随包 Node。当前 shell 中：
 不要把未知非空目录当作安装目标。
 
 用户只给父目录时，在其下创建 `FoundryVTT-<core.foundry>`。完全未指定时，Windows 使用
-`%LOCALAPPDATA%\Arcane Desk\runtime\foundry\<版本>`，macOS 使用 Arcane
+`%LOCALAPPDATA%\ArcaneDesk\runtime\foundry\<版本>`，macOS 使用 ArcaneDesk
 `userData/runtime/foundry/<版本>`。采用默认值前告诉用户准确路径。
 
 ## 安装 Foundry Core

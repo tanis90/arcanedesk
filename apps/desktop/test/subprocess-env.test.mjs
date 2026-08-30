@@ -42,12 +42,12 @@ test("FVTT Ops Node is explicit and first on the Windows Agent PATH", () => {
     Path: "C:\\Windows\\System32;C:\\Program Files\\nodejs",
     PATH: "C:\\duplicate-path-key",
   };
-  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
+  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
   assert.equal(applyArcaneFvttOpsEnvironment(env, nodeBinary, "win32"), env);
   assert.equal(env.ARCANE_FVTT_NODE, nodeBinary);
   assert.equal(
     env.Path,
-    "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64;" +
+    "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64;" +
       "C:\\Windows\\System32;C:\\Program Files\\nodejs;C:\\duplicate-path-key",
   );
   assert.equal("PATH" in env, false);

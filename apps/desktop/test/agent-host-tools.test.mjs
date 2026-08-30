@@ -51,19 +51,19 @@ test("Agent shell spawn pins Arcane Node ahead of Pi and system tool directories
       Path: "C:\\Users\\dm\\.pi\\agent\\bin;C:\\Program Files\\nodejs;C:\\Windows\\System32",
     },
   };
-  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
+  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
 
   assert.equal(pinArcaneNodeForShellSpawn(context, nodeBinary, "win32"), context);
   assert.equal(context.env.ARCANE_FVTT_NODE, nodeBinary);
   assert.equal(
     context.env.Path,
-    "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64;" +
+    "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64;" +
       "C:\\Users\\dm\\.pi\\agent\\bin;C:\\Program Files\\nodejs;C:\\Windows\\System32",
   );
 });
 
 test("the Pi shell override receives the pinned Node environment at execution", async () => {
-  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
+  const nodeBinary = "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64\\node.exe";
   let captured = null;
   const tool = arcaneShellTool("C:\\Prep", nodeBinary, "win32", {
     async exec(command, cwd, options) {
@@ -76,7 +76,7 @@ test("the Pi shell override receives the pinned Node environment at execution", 
   assert.equal(captured.cwd, "C:\\Prep");
   assert.equal(captured.env.ARCANE_FVTT_NODE, nodeBinary);
   const pathKey = Object.keys(captured.env).find((key) => key.toLowerCase() === "path");
-  assert.equal(captured.env[pathKey].split(";")[0], "C:\\Users\\dm\\AppData\\Local\\Arcane Desk\\runtime\\node\\22.23.2\\win-x64");
+  assert.equal(captured.env[pathKey].split(";")[0], "C:\\Users\\dm\\AppData\\Local\\ArcaneDesk\\runtime\\node\\22.23.2\\win-x64");
 });
 
 test("Agent startup fails before Pi initialization when packaged Node bootstrap fails", async () => {
