@@ -45,9 +45,7 @@ The exact runtime and integrity metadata are available from the stable subpath:
 
 ```ts
 import {
-  directRuntimeFunction,
   runtimeFunction,
-  runtimeSource,
   runtimeHash,
   protocolVersion,
 } from "@arcanedesk/foundry-sdk/runtime";
@@ -57,6 +55,14 @@ Pure helpers that adapters or tests need outside the injected closure are
 available from `@arcanedesk/foundry-sdk/runtime-helpers`. The SDK test suite
 requires their compiled function bodies to remain exactly equal to the copies
 inside `runtimeFunction`.
+
+`runtimeFunction` is a frozen v0.1.0 baseline kept byte-identical to the
+previously validated runtime, so the helpers above exist in two synchronized
+copies enforced by that drift gate. The intended end state is a single source
+of truth: build the injected runtime string from the `runtime-helpers` sources
+at compile time and update `runtimeHash` in the same change, then retire the
+drift gate. New runtime behavior should be written in a way that moves toward
+that structure instead of extending the duplicated copies.
 
 If any write action is interrupted after evaluation begins, the client never
 reports a retryable failure. `executeTurn` retains its typed `indeterminate`

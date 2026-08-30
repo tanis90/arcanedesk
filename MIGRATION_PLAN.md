@@ -328,3 +328,4 @@ git remote -v
 | 2026-08-30 | M5 | Milestone 完成 | actionlint/YAML 全绿；production audit 0 漏洞；CycloneDX SBOM 图完整；发布 workflow 无发布/推送/外部上传；无 SDK/CLI dist 的根 verify 全绿。 |
 | 2026-08-30 | M6 | 完整发布门开始 | 处理最终安全审计项、生成首次推送前检查单、本地提交并在本地 clean clone 复验。 |
 | 2026-08-30 | M6 | Milestone 完成 | gitleaks/actionlint/audit/SBOM/consumer tarball/Desktop package/final-HEAD clean clone 全绿；两笔本地 sign-off commit、clean status、无 remote、无 push。 |
+| 2026-08-30 | M6 | 推送前 review 修订 | 所有者侧 code review 后：runtime 导出收敛为 `runtimeFunction`/`runtimeHash`（移除 `directRuntimeFunction`/`runtimeSource` 别名），`verify:repo` 不再永久要求迁移文档，SDK README 记录 runtime 单一事实源退出计划；根 `npm run verify` 全绿，runtime SHA-256 `827e008b…` 不变，tarball 哈希随导出面变化。 |

@@ -10,7 +10,7 @@ import {
   checkActivityTargetRangeWithFoundry,
   collectActionCandidatesV2,
   deriveActivityInputContract,
-  directRuntimeFunction,
+  runtimeFunction,
   effectiveActivityActivationTypeV2,
   featureDeclaredRiderOptionsV2,
   FoundryRuntimeClient,
@@ -334,7 +334,7 @@ describe("strict Actor export and import", () => {
     vi.stubGlobal("foundry", { utils: { deepClone: structuredClone } });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       const exported = await runtime("actorExport", { identifier: raw._id }, { requireGM: true });
       expect(exported.actor).toEqual(raw);
 
@@ -385,7 +385,7 @@ describe("strict Actor export and import", () => {
       folders: new Map(),
     });
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       await expect(runtime("actorImport", {
         expectedWorldId: "wrong-world",
         actor: raw,
@@ -457,7 +457,7 @@ describe("strict Actor export and import", () => {
       packs: new Map([["pack.weapons", { getDocument }]]),
     });
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       const result = await runtime("actorAddItemsFromCompendium", {
         expectedWorldId: "dragonlance",
         actorId: actor.id,
@@ -2407,7 +2407,7 @@ describe("direct runtime injection", () => {
     });
 
     return {
-      runtime: new Function("return (" + directRuntimeFunction + ");")(),
+      runtime: new Function("return (" + runtimeFunction + ");")(),
       actionId: actionIdV2(actor.uuid, item.id, activity.id),
       actor,
       item,
@@ -2591,7 +2591,7 @@ describe("direct runtime injection", () => {
   }
 
   it("produces a syntactically valid browser function with v2 support", () => {
-    const factory = new Function("return (" + directRuntimeFunction + ");");
+    const factory = new Function("return (" + runtimeFunction + ");");
     expect(typeof factory()).toBe("function");
     for (const marker of [
       "actionIdV2",
@@ -2630,9 +2630,9 @@ describe("direct runtime injection", () => {
       'case "actorBilingualSync"',
       "matchingEffects.map(activeEffect => activeEffect.id)",
     ]) {
-      expect(directRuntimeFunction).toContain(marker);
+      expect(runtimeFunction).toContain(marker);
     }
-    expect(directRuntimeFunction).not.toContain(
+    expect(runtimeFunction).not.toContain(
       "Math.max(Math.abs(from.x - to.x), Math.abs(from.y - to.y))",
     );
   });
@@ -3716,7 +3716,7 @@ describe("direct runtime injection", () => {
     });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       const dryRun = await runtime("actorDamageMigrate", { manifest, apply: false }, { requireGM: true });
       expect(dryRun.before).toMatchObject({ actorCount: 1, attackCount: 1, pending: 1, migrated: 0 });
       expect(updateEmbeddedDocuments).not.toHaveBeenCalled();
@@ -3790,7 +3790,7 @@ describe("direct runtime injection", () => {
     });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       await expect(runtime("actorDamageMigrate", { manifest, apply: true }, { requireGM: true }))
         .rejects.toThrow("unexpected base bonus");
       expect(updateEmbeddedDocuments).not.toHaveBeenCalled();
@@ -3985,7 +3985,7 @@ describe("direct runtime injection", () => {
     });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       const dryRun = await runtime("actorBilingualSync", { manifest, apply: false }, { requireGM: true });
       expect(dryRun.before).toMatchObject({ pairCount: 1, documentCount: 3, unlinkedTokenCount: 1, pending: 2, consistent: 1 });
 
@@ -4346,7 +4346,7 @@ describe("direct runtime injection", () => {
     vi.stubGlobal("MidiQOL", { checkActivityRange, completeItemUse });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       await expect(
         runtime(
           "useAction",
@@ -4443,7 +4443,7 @@ describe("direct runtime injection", () => {
     });
 
     try {
-      const runtime = new Function("return (" + directRuntimeFunction + ");")();
+      const runtime = new Function("return (" + runtimeFunction + ");")();
       await expect(
         runtime(
           "useAction",

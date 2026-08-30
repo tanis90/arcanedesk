@@ -14,7 +14,7 @@ import {
   type WriteDirectAction,
   type WorldInfo,
 } from "./contracts.js";
-import { runtimeSource as defaultRuntimeSource } from "./runtime-source.js";
+import { runtimeFunction as defaultRuntimeFunction } from "./runtime-source.js";
 
 export const DEFAULT_READY_TIMEOUT_MS = 90_000;
 export const DEFAULT_READ_TIMEOUT_MS = 30_000;
@@ -328,7 +328,7 @@ export class FoundryRuntimeClient<Context = unknown> {
       throw new TypeError("transport.evaluate must be a function");
     }
 
-    const source = options.runtimeSource ?? defaultRuntimeSource;
+    const source = options.runtimeSource ?? defaultRuntimeFunction;
     if (typeof source !== "string" || !source.trim()) {
       throw new TypeError("runtimeSource must be a non-empty string");
     }
