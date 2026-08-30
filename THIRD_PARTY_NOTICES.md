@@ -25,6 +25,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | --- | --- | --- |
 | `@types/node` | MIT | <https://github.com/DefinitelyTyped/DefinitelyTyped> |
 | `@types/yauzl` | MIT | <https://github.com/DefinitelyTyped/DefinitelyTyped> |
+| `ali-oss` | MIT | <https://github.com/ali-sdk/ali-oss> |
 | `electron` | MIT | <https://github.com/electron/electron> |
 | `electron-builder` | MIT | <https://github.com/electron-userland/electron-builder> |
 | `typescript` | Apache-2.0 | <https://www.typescriptlang.org/> |
