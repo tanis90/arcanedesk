@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { statSync, readFileSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 import { basename, extname, resolve, relative, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -12,7 +12,10 @@ const output = execFileSync(
   { cwd: repositoryRoot, encoding: "utf8", windowsHide: true },
 );
 
-const files = output.split("\0").filter(Boolean).sort();
+const files = output
+  .split("\0")
+  .filter((file) => file && existsSync(resolve(repositoryRoot, file)))
+  .sort();
 const errors = [];
 const warnings = [];
 
@@ -102,7 +105,6 @@ for (const file of files) {
 }
 
 for (const requiredFile of [
-  "AUTHORS.md",
   "CODE_OF_CONDUCT.md",
   "CONTRIBUTING.md",
   "LICENSE",

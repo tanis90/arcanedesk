@@ -10,7 +10,9 @@ const output = execFileSync(
   ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: repositoryRoot, encoding: "utf8", windowsHide: true },
 );
-const markdownFiles = output.split("\0").filter(file => file.endsWith(".md"));
+const markdownFiles = output
+  .split("\0")
+  .filter((file) => file.endsWith(".md") && existsSync(resolve(repositoryRoot, file)));
 const failures = [];
 
 for (const file of markdownFiles) {

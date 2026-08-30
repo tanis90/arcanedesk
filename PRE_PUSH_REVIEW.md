@@ -18,7 +18,7 @@
 
 - [ ] 确认 GitHub owner/repository 为 `arcanedesk/arcane-desk`，或在推送前给出替代坐标。
 - [ ] 确认 npm 组织 `@arcanedesk` 可用且发布者具备权限；本次不执行 npm publish。
-- [ ] 确认 `AUTHORS.md` 中从私有历史恢复的 3 个 display name 可以公开。
+- [x] 项目所有者已确认私有历史中恢复的 3 个 display name 均为本人使用的署名，不存在需要另行取得许可的第三方作者；公开仓库不再保留单独的作者名册。
 - [ ] 确认 Apache-2.0 适用于本次迁移代码，且贡献采用 DCO sign-off，不要求 CLA。
 - [ ] 确认 Arcane Desk 名称、Logo 与官方产品 artwork 继续保留商标权；代码许可证不授予品牌使用权。
 - [ ] 确认仓库可以包含现有 Arcane Desk 品牌素材作为官方项目资产；第三方 fork 必须采用不同品牌。
