@@ -36,7 +36,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arcanedesk/arcane-desk.git",
+    "url": "https://github.com/tanis90/arcanedesk.git",
     "directory": "packages/fvtt-cli"
   },
   "publishConfig": {

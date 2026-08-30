@@ -385,6 +385,41 @@ git diff --check
 
 ---
 
+## M9 — 首次公开源码发布
+
+**状态：IN PROGRESS**
+
+### 目标
+
+将 SDK-first monorepo 的最终验证状态首次发布到全新的 GitHub public repository，同时确保同账号下既有私有仓库不被读取、修改或用作 remote。
+
+### 范围
+
+- 新公开坐标固定为 `tanis90/arcanedesk`，仓库名为无连字符的小写 `arcanedesk`。
+- 既有私有 legacy repository 明确排除在本 milestone 之外；本地只使用独立 OSS checkout，remote 只能指向新公开仓库。
+- 保留现有 Git 提交结构、作者 `tanis` 和作者邮箱，不执行 squash 或历史重写。
+- 将 SDK/CLI package repository metadata 更新为新公开坐标，npm scope 仍为 `@arcanedesk`。
+- 将最终工作分支 fast-forward 到 `main`，创建全新 public repository 并只推送源码；不发布 npm、Desktop 安装包或 GitHub Release。
+- 首次推送后核对仓库可见性、默认分支、remote、CI 与公开 URL。
+
+### 验收命令
+
+```powershell
+npm run verify
+go run github.com/zricethezav/gitleaks/v8@v8.30.1 git . --no-banner --redact
+git diff --check
+git status --short --branch
+git remote get-url origin
+gh repo view tanis90/arcanedesk --json nameWithOwner,visibility,url,defaultBranchRef
+gh run list --repo tanis90/arcanedesk
+```
+
+### 完成证据
+
+- 待首次公开推送和远端核验完成后填写。
+
+---
+
 ## 进度日志
 
 | 时间 | Milestone | 事件 | 证据/备注 |
@@ -408,3 +443,4 @@ git diff --check
 | 2026-08-30 | M7 | Milestone 完成 | Key/target 加密绑定、HTTPS/loopback、redirect、trusted IPC 和语音成对解析全部生效；31 个针对性测试、Desktop 202 tests 与根 `npm run verify` 全绿。 |
 | 2026-08-30 | M8 | 版权归属清理开始 | 项目所有者确认旧作者名册中的 3 个 display name 均为本人署名；开始移除名册及全部强制引用。 |
 | 2026-08-30 | M8 | Milestone 完成 | 删除旧作者名册并清理全部引用；修复校验器对未提交删除文件的处理；全仓扫描、155-file repository gate、26-file docs gate 与根 `npm run verify` 全绿。 |
+| 2026-08-30 | M9 | 首次公开源码发布开始 | 目标固定为全新 `tanis90/arcanedesk`；确认 `gh` 登录账号为 `tanis90` 且新目标尚不存在，既有私有 legacy repository 排除在操作范围外。 |
