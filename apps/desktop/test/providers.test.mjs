@@ -58,12 +58,19 @@ test("provisions Arcane Spark from an injected Key", () => {
     api: "openai-completions",
     baseUrl: "https://llm.arcanedesk.bitterbebop.cn/v1",
     apiKey: "restricted-token",
+    credentialTarget: "origin:https://llm.arcanedesk.bitterbebop.cn",
     models: [{ id: "arcane-spark", name: "Arcane Spark", vision: true }],
   });
   const persisted = readFileSync(file, "utf8");
   assert.equal(persisted.includes("restricted-token"), false);
   assert.equal(JSON.parse(persisted).providers[0].apiKey, undefined);
   assert.equal(JSON.parse(persisted).providers[0].apiKeyProtected.scheme, "electron-safe-storage-v1");
+  const protectedPayload = testSecretStorage().reveal(JSON.parse(persisted).providers[0].apiKeyProtected);
+  assert.deepEqual(JSON.parse(protectedPayload), {
+    kind: "arcane-bound-credential-v1",
+    secret: "restricted-token",
+    target: "origin:https://llm.arcanedesk.bitterbebop.cn",
+  });
   assert.equal(store.missingApiKeyForDefault(), null);
   assert.equal(store.toPublic().providers[0].hasKey, true);
 });
@@ -157,6 +164,7 @@ test("saving the managed provider cannot replace the Arcane Spark contract", () 
     api: "openai-completions",
     baseUrl: "https://llm.arcanedesk.bitterbebop.cn/v1",
     apiKey: "new-restricted-token",
+    credentialTarget: "origin:https://llm.arcanedesk.bitterbebop.cn",
     models: [{ id: "arcane-spark", name: "Arcane Spark", vision: true }],
   });
 });
@@ -182,4 +190,174 @@ test("registers models with a 256K context budget by default", () => {
 
   assert.equal(registered.get("arcane-spark").models[0].contextWindow, 262144);
   assert.equal(registered.get("custom-provider").models[0].contextWindow, 262144);
+});
+
+test("reuses a stored key only within the same HTTPS origin", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  assert.deepEqual(store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://provider.example/v1",
+    apiKey: "original-key",
+    models: [],
+  }), { ok: true });
+
+  assert.deepEqual(store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://provider.example/v2/",
+    apiKey: "",
+    models: [],
+  }), { ok: true });
+  assert.equal(store.data.providers[0].apiKey, "original-key");
+  assert.equal(store.data.providers[0].baseUrl, "https://provider.example/v2");
+  assert.equal(store.data.providers[0].credentialTarget, "origin:https://provider.example");
+
+  assert.deepEqual(store.resolveCredentialForRequest({
+    providerId: "custom",
+    api: "openai-completions",
+    baseUrl: "https://provider.example/models-api",
+    apiKey: "",
+  }), {
+    ok: true,
+    apiKey: "original-key",
+    baseUrl: "https://provider.example/models-api",
+  });
+});
+
+test("rejects a saved-key reuse when scheme, host, or port changes", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://provider.example/v1",
+    apiKey: "original-key",
+    models: [],
+  });
+
+  for (const baseUrl of [
+    "https://attacker.example/v1",
+    "https://provider.example:8443/v1",
+    "http://localhost:39000/v1",
+  ]) {
+    const before = structuredClone(store.data.providers[0]);
+    const saved = store.upsertProvider({
+      id: "custom",
+      api: "openai-completions",
+      baseUrl,
+      apiKey: "",
+      models: [],
+    });
+    assert.equal(saved.ok, false);
+    assert.equal(saved.code, "KEY_REENTRY_REQUIRED");
+    assert.equal(saved.error.key, "err.provider.keyReentryRequired");
+    assert.deepEqual(store.data.providers[0], before);
+
+    const fetched = store.resolveCredentialForRequest({
+      providerId: "custom",
+      api: "openai-completions",
+      baseUrl,
+      apiKey: "",
+    });
+    assert.equal(fetched.ok, false);
+    assert.equal(fetched.code, "KEY_REENTRY_REQUIRED");
+    assert.equal(JSON.stringify(fetched).includes("original-key"), false);
+  }
+});
+
+test("allows an origin change only with an explicitly re-entered key", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://old.example/v1",
+    apiKey: "old-key",
+    models: [],
+  });
+
+  assert.deepEqual(store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://new.example/v1",
+    apiKey: "new-key",
+    models: [],
+  }), { ok: true });
+  assert.equal(store.data.providers[0].apiKey, "new-key");
+  assert.equal(store.data.providers[0].credentialTarget, "origin:https://new.example");
+});
+
+test("blocks renderer attempts to forward the managed Arcane Spark key", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_API_KEY: "spark-secret" }, testSecretStorage());
+
+  const result = store.resolveCredentialForRequest({
+    providerId: "arcane-spark",
+    api: "openai-completions",
+    baseUrl: "https://attacker.example/v1",
+    apiKey: "",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "KEY_REENTRY_REQUIRED");
+  assert.equal(JSON.stringify(result).includes("spark-secret"), false);
+});
+
+test("an encrypted credential target detects public-config tampering", () => {
+  const { file } = tempConfig();
+  const storage = testSecretStorage();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  store.upsertProvider({
+    id: "custom",
+    api: "openai-completions",
+    baseUrl: "https://provider.example/v1",
+    apiKey: "bound-key",
+    models: [{ id: "model" }],
+  });
+
+  const persisted = JSON.parse(readFileSync(file, "utf8"));
+  persisted.providers[0].baseUrl = "https://attacker.example/v1";
+  writeFileSync(file, JSON.stringify(persisted));
+
+  const reloaded = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  assert.equal(reloaded.toPublic().providers[0].hasKey, false);
+  assert.equal(reloaded.credentialForProvider("custom"), null);
+  assert.deepEqual(reloaded.missingApiKeyForDefault(), null);
+  const registered = new Map();
+  reloaded.applyToRuntime({ registerProvider: (id, config) => registered.set(id, config) });
+  assert.equal(registered.get("custom").apiKey, undefined);
+  const result = reloaded.resolveCredentialForRequest({
+    providerId: "custom",
+    api: "openai-completions",
+    baseUrl: "https://attacker.example/v1",
+    apiKey: "",
+  });
+  assert.equal(result.code, "KEY_REENTRY_REQUIRED");
+});
+
+test("migrates a pre-v3 protected key into a target-bound encrypted payload", () => {
+  const { file } = tempConfig();
+  const storage = testSecretStorage();
+  writeFileSync(file, JSON.stringify({
+    schemaVersion: 2,
+    providers: [{
+      id: "custom",
+      api: "openai-completions",
+      baseUrl: "https://provider.example/v1",
+      apiKeyProtected: storage.protect("legacy-protected-key"),
+      models: [],
+    }],
+    defaultModel: null,
+  }));
+
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  assert.equal(store.data.providers[0].apiKey, "legacy-protected-key");
+  assert.equal(store.data.providers[0].credentialTarget, "origin:https://provider.example");
+  const migrated = JSON.parse(storage.reveal(JSON.parse(readFileSync(file, "utf8")).providers[0].apiKeyProtected));
+  assert.deepEqual(migrated, {
+    kind: "arcane-bound-credential-v1",
+    secret: "legacy-protected-key",
+    target: "origin:https://provider.example",
+  });
 });

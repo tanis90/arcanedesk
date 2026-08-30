@@ -6,12 +6,12 @@ import { DirectFoundryRuntime } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState } from "./foundry-web.js";
 import { AgentHost } from "./agent-host.js";
-import { ProviderStore } from "./providers.js";
+import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
-import { VoiceStore, resolveRelayCredentials } from "./voice/voice-store.js";
+import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
@@ -553,7 +553,12 @@ app.whenReady().then(async () => {
 
   const secretStorage = new SecretStorage(safeStorage);
   const providerStore = new ProviderStore(configPath("providers.json"), console.log, process.env, secretStorage);
-  const voiceStore = new VoiceStore(configPath("voice.json"), console.log, secretStorage);
+  const voiceStore = new VoiceStore(
+    configPath("voice.json"),
+    console.log,
+    secretStorage,
+    providerStore.baseUrlForProvider("arcane-spark") ?? DEFAULT_NEW_API_BASE_URL,
+  );
   const prepStore = new PrepStore(configPath("prep.json"));
   // Large, replaceable runtimes stay outside the signed/read-only app bundle.
   // Windows uses LocalAppData rather than roaming AppData; macOS/Linux use the
@@ -772,7 +777,8 @@ app.whenReady().then(async () => {
   });
 
   // ---- 设置:LLM provider 管理 + 默认模型(两 host 共享偏好,各自切换) ----
-  ipcMain.handle("settings:get", async () => {
+  ipcMain.handle("settings:get", async (event) => {
+    if (!isTrustedChatIpc(event)) return { providers: [], defaultModel: null, models: [] };
     const settings = providerStore.toPublic();
     const models = await hosts.combat.listModels();
     const known = new Set(models.map((model) => model.label));
@@ -788,10 +794,13 @@ app.whenReady().then(async () => {
     }
     return { ...settings, models };
   });
-  ipcMain.handle("settings:model-access", () => ({
-    missingKey: providerStore.missingApiKeyForDefault(),
-  }));
-  ipcMain.handle("settings:save-provider", (_event, input) => {
+  ipcMain.handle("settings:model-access", (event) => (
+    isTrustedChatIpc(event)
+      ? { missingKey: providerStore.missingApiKeyForDefault() }
+      : { missingKey: null }
+  ));
+  ipcMain.handle("settings:save-provider", (event, input) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const result = providerStore.upsertProvider(input ?? {});
     if (result.ok) {
       for (const host of Object.values(hosts)) {
@@ -800,10 +809,12 @@ app.whenReady().then(async () => {
     }
     return result;
   });
-  ipcMain.handle("settings:delete-provider", (_event, id) => {
+  ipcMain.handle("settings:delete-provider", (event, id) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     return providerStore.removeProvider(String(id ?? ""));
   });
-  ipcMain.handle("settings:default-model", (_event, pref) => {
+  ipcMain.handle("settings:default-model", (event, pref) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const pid = String(pref?.providerId ?? "");
     const mid = String(pref?.modelId ?? "");
     for (const host of Object.values(hosts)) void host.setDefaultModel(pid, mid);
@@ -890,19 +901,17 @@ app.whenReady().then(async () => {
     return displayMediaController.respond(payload?.requestId, payload?.sourceId, payload?.includeAudio);
   });
   // provider 预设目录(设置页"模板"下拉)与 GET /models 拉取。
-  // 拉取时 apiKey 留空或打码值("••••xxxx")= 用已保存的同 id provider 的 key。
-  ipcMain.handle("providers:catalog", () => listPresets());
-  ipcMain.handle("providers:fetch-models", (_event, input) => {
+  // 拉取时 apiKey 留空或打码值("••••xxxx")= 仅在 credential target 不变时复用已保存 key。
+  ipcMain.handle("providers:catalog", (event) => isTrustedChatIpc(event) ? listPresets() : []);
+  ipcMain.handle("providers:fetch-models", (event, input) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const api = String(input?.api ?? "openai-completions");
     if (api !== "openai-completions") {
       return { ok: false, error: err("err.fetch.apiUnsupported") };
     }
-    let apiKey = String(input?.apiKey ?? "").trim();
-    if (!apiKey || apiKey.startsWith("••••")) {
-      const stored = providerStore.data.providers.find((p) => p.id === String(input?.providerId ?? ""));
-      apiKey = stored?.apiKey ?? "";
-    }
-    return fetchModels({ baseUrl: input?.baseUrl, apiKey });
+    const credential = providerStore.resolveCredentialForRequest(input);
+    if (!credential.ok || !("apiKey" in credential)) return credential;
+    return fetchModels({ baseUrl: credential.baseUrl, apiKey: credential.apiKey });
   });
   ipcMain.handle("app:open-arcane-website", async () => {
     await shell.openExternal(ARCANE_WEBSITE_URL);
@@ -912,15 +921,20 @@ app.whenReady().then(async () => {
   // ---- 语音输入:ASR 配置 + 识别(智谱直连 / Arcane 中转,上游都是 GLM-ASR-2512) ----
   // 单 Key:relay 模式默认复用内置 arcane-spark provider 的 Key/地址(方案文档第 9 节)
   const arcaneSparkForVoice = () => {
-    const spark = providerStore.data.providers.find((p) => p.id === "arcane-spark");
-    if (!spark) return null;
-    return { apiKey: String(spark.apiKey ?? ""), baseUrl: String(spark.baseUrl ?? "") };
+    return providerStore.credentialForProvider("arcane-spark");
   };
-  ipcMain.handle("voice:get-config", () => voiceStore.toPublic(arcaneSparkForVoice()));
-  ipcMain.handle("voice:save-config", (_event, input) => voiceStore.update(input ?? {}));
+  ipcMain.handle("voice:get-config", (event) => {
+    if (!isTrustedChatIpc(event)) return null;
+    return voiceStore.toPublic(arcaneSparkForVoice());
+  });
+  ipcMain.handle("voice:save-config", (event, input) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
+    return voiceStore.update(input ?? {}, arcaneSparkForVoice());
+  });
   // macOS 麦克风要系统级授权:首次录音前调用,未授权则向系统申请;
   // 被拒时返回 false,renderer 提示用户去系统设置开。Windows/Linux 恒 true。
-  ipcMain.handle("voice:ensure-mic", async () => {
+  ipcMain.handle("voice:ensure-mic", async (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     if (process.platform !== "darwin") return { ok: true };
     if (systemPreferences.getMediaAccessStatus("microphone") === "granted") return { ok: true };
     const granted = await systemPreferences.askForMediaAccess("microphone");
@@ -928,7 +942,8 @@ app.whenReady().then(async () => {
       ? { ok: true }
       : { ok: false, error: err("err.voice.micDenied") };
   });
-  ipcMain.handle("voice:transcribe", async (_event, wav) => {
+  ipcMain.handle("voice:transcribe", async (event, wav) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const spark = arcaneSparkForVoice();
     if (!voiceStore.usable(spark)) {
       return { ok: false, error: err("err.voice.notUsable") };
@@ -936,10 +951,7 @@ app.whenReady().then(async () => {
     const buffer = Buffer.isBuffer(wav) ? wav : Buffer.from(wav ?? new ArrayBuffer(0));
     if (buffer.length < 1000) return { ok: false, error: err("err.voice.tooShort") };
     if (buffer.length > 25 * 1024 * 1024) return { ok: false, error: err("err.voice.tooLarge") };
-    const relay = voiceStore.data.provider === "arcane-relay";
-    const credentials = relay
-      ? resolveRelayCredentials(voiceStore.data, spark)
-      : { apiKey: voiceStore.data.apiKey, baseUrl: voiceStore.data.baseUrl };
+    const credentials = voiceStore.credentialForUse(spark);
     try {
       const result = await transcribe({
         provider: voiceStore.data.provider,
