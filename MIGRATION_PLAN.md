@@ -200,7 +200,7 @@ npm run dist:dir --workspace arcane-desktop
 ### 范围
 
 - Apache-2.0 `LICENSE`。
-- `NOTICE`、`AUTHORS.md`、`THIRD_PARTY_NOTICES.md`。
+- `NOTICE`、`THIRD_PARTY_NOTICES.md`。
 - `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`。
 - `TRADEMARKS.md`：代码开源，Arcane Desk 名称和 Logo 保留权利。
 - README 包含 unofficial Foundry VTT integration 声明与用户自备合法 Foundry 副本要求。
@@ -216,7 +216,7 @@ npm run docs:check
 
 ### 完成证据
 
-- 根目录包含 Apache-2.0 `LICENSE`、`NOTICE`、`AUTHORS.md`、`THIRD_PARTY_NOTICES.md`、贡献指南、安全政策、商标政策与行为准则；SDK、CLI 与 Desktop candidate 另带适用的 package-local legal files。
+- 根目录包含 Apache-2.0 `LICENSE`、`NOTICE`、`THIRD_PARTY_NOTICES.md`、贡献指南、安全政策、商标政策与行为准则；SDK、CLI 与 Desktop candidate 另带适用的 package-local legal files。
 - `THIRD_PARTY_NOTICES.md` 与三个 workspace manifests 机械比对：15/15 个直接第三方依赖有记录。
 - Foundry 非官方集成、用户自备合法副本、不得分发商业内容、Arcane 名称/Logo 保留权利等边界已写入 README、贡献、安全和商标文档。
 - 当前仓库/用户绝对路径、迁移专用私有 denylist、凭据模式、私有发行资产、旧 distribution 与 legacy runtime staging 综合扫描 0 命中；denylist 本身不写入公开仓库。
@@ -350,6 +350,41 @@ git diff --check
 
 ---
 
+## M8 — 版权归属确认与作者名册清理
+
+**状态：COMPLETE**
+
+### 目标
+
+依据项目所有者对旧代码权属的确认，移除可能让公开项目误解为存在多名历史版权人的作者名册，同时保留 Apache-2.0 发行所需的许可证、NOTICE 与第三方声明。
+
+### 范围
+
+- 项目所有者确认旧作者名册中的 3 个 display name 均为本人使用的署名，自动化账号不构成人类作者，不存在需要另行取得 Apache-2.0 再许可的第三方作者。
+- 删除旧作者名册文件，并清理根目录和 Desktop `NOTICE`、首次推送检查单、迁移账本及仓库校验器中的引用。
+- 保留 Apache-2.0 `LICENSE`、项目 `NOTICE`、`THIRD_PARTY_NOTICES.md` 与 Git 历史；不把作者名册作为 Apache-2.0 合规前提。
+
+### 验收命令
+
+```powershell
+rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'AUTHOR[S]\.md|author[s]\.md' .
+npm run verify:repo
+npm run docs:check
+npm run verify
+git diff --check
+```
+
+### 完成证据
+
+- 旧作者名册文件已删除；全仓对应文件名引用扫描 0 命中，根目录和 Desktop `NOTICE` 不再依赖单独作者文件。
+- 首次推送检查单已记录所有者确认：旧名册中的 3 个 display name 均为本人署名，不存在需要另行授权的第三方作者；Apache-2.0 `LICENSE`、项目 `NOTICE` 和第三方声明均保留。
+- repository verifier 与 Markdown link checker 已修复暂存前删除 tracked 文件时的 `ENOENT`，现在只读取工作树中实际存在的文件。
+- `npm run verify:repo`：155 个文件、4 个 package、15 个直接第三方依赖，0 errors、0 warnings；`npm run docs:check`：26 个 Markdown 文件链接全部通过。
+- 根 `npm run verify` exit 0：repository/docs/typecheck 全绿，Desktop 202、SDK 33、CLI 232 tests 全绿，SDK/CLI build 与真实 pack consumer smoke test 通过。
+- `git diff --check` 无错误；未配置远端、未执行 push。
+
+---
+
 ## 进度日志
 
 | 时间 | Milestone | 事件 | 证据/备注 |
@@ -371,3 +406,5 @@ git diff --check
 | 2026-08-30 | M6 | 推送前 review 修订 | 所有者侧 code review 后：runtime 导出收敛为 `runtimeFunction`/`runtimeHash`（移除 `directRuntimeFunction`/`runtimeSource` 别名），`verify:repo` 不再永久要求迁移文档，SDK README 记录 runtime 单一事实源退出计划；根 `npm run verify` 全绿，runtime SHA-256 `827e008b…` 不变，tarball 哈希随导出面变化。 |
 | 2026-08-30 | M7 | Provider 凭据安全收口开始 | 复现已保存 Key 与 renderer 提供 Base URL 解耦的问题，并将语音中转的同类复用路径纳入同一安全边界。 |
 | 2026-08-30 | M7 | Milestone 完成 | Key/target 加密绑定、HTTPS/loopback、redirect、trusted IPC 和语音成对解析全部生效；31 个针对性测试、Desktop 202 tests 与根 `npm run verify` 全绿。 |
+| 2026-08-30 | M8 | 版权归属清理开始 | 项目所有者确认旧作者名册中的 3 个 display name 均为本人署名；开始移除名册及全部强制引用。 |
+| 2026-08-30 | M8 | Milestone 完成 | 删除旧作者名册并清理全部引用；修复校验器对未提交删除文件的处理；全仓扫描、155-file repository gate、26-file docs gate 与根 `npm run verify` 全绿。 |
