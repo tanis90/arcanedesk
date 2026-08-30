@@ -25,6 +25,11 @@ export const requiredFiles = [
   "skills/prep/arcane-fvtt-setup/SKILL.md",
   "skills/prep/arcane-fvtt-setup/references/windows-install.md",
   "skills/prep/arcane-fvtt-setup/references/macos-install.md",
+  "skills/prep/arcane-fvtt-mods/SKILL.md",
+  "skills/prep/arcane-fvtt-mods/references/install.md",
+  "skills/prep/arcane-fvtt-mods/references/updates.md",
+  "skills/prep/arcane-fvtt-mods/references/demo-world.md",
+  "skills/prep/arcane-fvtt-mods/scripts/mod-manager.mjs",
   "skills/prep/arcane-actor-images/SKILL.md",
   "skills/prep/arcane-module-reader/SKILL.md",
   "scripts/archive.mjs",
@@ -59,9 +64,9 @@ const forbiddenPaths = [
   "usr/bin/bash.exe",
 ];
 
-const exactDirectories = new Map([
+export const exactDirectories = new Map([
   ["system-prompts", ["combat.md"]],
-  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader"]],
+  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader"]],
   ["scripts", ["archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
   ["generated", ["desktop-release.json", "renderer-assets"]],

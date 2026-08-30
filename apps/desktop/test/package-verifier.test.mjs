@@ -5,7 +5,7 @@ import {
   minimumOsForElectron,
   validateRuntimeMetadata,
 } from "../scripts/desktop-release-metadata.mjs";
-import { requiredFiles } from "../scripts/verify-package.mjs";
+import { exactDirectories, requiredFiles } from "../scripts/verify-package.mjs";
 
 const artifact = (file) => ({ file, sha256: "a".repeat(64) });
 
@@ -77,6 +77,12 @@ test("packaged app must carry project and third-party legal notices", () => {
     ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"].filter((file) => requiredFiles.includes(file)),
     ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"],
   );
+});
+
+test("packaged app verifier requires the mod-management skill and helper", () => {
+  assert.equal(requiredFiles.includes("skills/prep/arcane-fvtt-mods/SKILL.md"), true);
+  assert.equal(requiredFiles.includes("skills/prep/arcane-fvtt-mods/scripts/mod-manager.mjs"), true);
+  assert.equal(exactDirectories.get("skills/prep").includes("arcane-fvtt-mods"), true);
 });
 
 test("old Pi content fails even when all expected files exist", () => {
