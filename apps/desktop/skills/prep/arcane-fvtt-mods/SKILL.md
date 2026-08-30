@@ -75,6 +75,9 @@ macOS Bash 调用形态：
   依赖。已启用 mod 的升级可重启原世界，再回读版本与 active 状态。
 - 任一步失败都保持现有 module 可用，不盲目重试，不删除备份；只报告失败项、staging 路径
   和可恢复状态。
+- `world-stage` 的确认字段必须逐项取自本次 `world-inspect` 输出，尤其必须传
+  `--expected-resolution-sha256 <resolutionSha256>`。不得复用旧会话、旧日志或记忆中的命令模板；
+  helper 新增确认字段后，先重读当前 reference/usage，再执行 staging。
 - 既有 Demo world 是用户数据。只有 world 工件版本变化时才叫“备份并重置”，不得宣传为无损升级，
   不得合并 Actor、Journal、Scene 或数据库；旧 world 必须整体移到
   `Data/.arcane-world-backups/<id>/` 后才能启用新版。仅 package stable 更新绝不能触碰 world 目录。

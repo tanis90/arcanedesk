@@ -59,6 +59,9 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 
 把 `world-inspect` 返回的稳定字段原样传回，防止确认后远端指针变化：
 
+必须从刚完成的本次 `world-inspect` 结果构造命令，不得照抄旧会话、旧日志或记忆中的参数列表。执行前逐项核对
+下面八个 `--expected-*` 参数；即使其他字段相同，也不能省略 `--expected-resolution-sha256`。
+
 ```text
 mod-manager world-stage --world-id arcane-demo --data-dir <Data目录> --expected-world-version <version> --expected-world-sha256 <world SHA256> --expected-profile-id <profile id> --expected-profile-revision <revision> --expected-profile-sha256 <profile SHA256> --expected-index-generated <generated> --expected-resolution-sha256 <resolutionSha256>
 ```

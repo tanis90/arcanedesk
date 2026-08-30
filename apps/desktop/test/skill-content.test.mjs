@@ -44,6 +44,8 @@ const REQUIRED_MARKERS = new Map([
     "references/updates.md",
     "references/demo-world.md",
     "Data/.arcane-world-backups/<id>/",
+    "--expected-resolution-sha256 <resolutionSha256>",
+    "不得复用旧会话",
   ]],
   ["skills/prep/arcane-fvtt-mods/references/demo-world.md", [
     "world-inspect",
@@ -52,6 +54,8 @@ const REQUIRED_MARKERS = new Map([
     "foundry-environment-profile",
     "Data/.arcane-managed/profiles/",
     "--world=arcane-demo",
+    "--expected-resolution-sha256 <resolutionSha256>",
+    "不得照抄旧会话",
   ]],
 ]);
 

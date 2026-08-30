@@ -413,6 +413,23 @@ test("world profiles resolve current stable packages independently from world ar
   assert.equal(inspected.plannedArchiveBytes, zipBuffers.module.length + zipBuffers.world.length);
   assert.match(inspected.resolutionSha256, /^[a-f0-9]{64}$/);
 
+  await assert.rejects(
+    stageWorldEnvironment({
+      worldId: "arcane-demo",
+      dataDir,
+      expectedWorldVersion: inspected.version,
+      expectedWorldSha256: inspected.archiveSha256,
+      expectedProfileId: inspected.profile.id,
+      expectedProfileRevision: inspected.profile.revision,
+      expectedProfileSha256: inspected.profile.profileSha256,
+      expectedIndexGenerated: inspected.generated,
+      fetchImpl: fakeFetch,
+      indexUrl,
+      tempRoot: root,
+    }),
+    /--expected-resolution-sha256 is required; rerun world-inspect/,
+  );
+
   payloads.set(artifacts.module.manifestUrl, Buffer.from(JSON.stringify({
     ...manifests.module,
     description: "changed without advancing the index generation",

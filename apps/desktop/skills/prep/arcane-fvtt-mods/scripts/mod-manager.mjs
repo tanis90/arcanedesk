@@ -1242,6 +1242,11 @@ export async function stageWorldEnvironment({
   if (!ID_PATTERN.test(id)) throw new Error(`world id is unsafe: ${id}`);
   const plan = await inspectWorldEnvironment({ worldId: id, dataDir, fetchImpl, indexUrl });
   assertExpected(plan.generated, expectedIndexGenerated, "mirror index generation");
+  if (typeof expectedResolutionSha256 !== "string" || expectedResolutionSha256.trim() === "") {
+    throw new Error(
+      "--expected-resolution-sha256 is required; rerun world-inspect and pass its resolutionSha256 from the current plan",
+    );
+  }
   const resolutionSha256 = requireString(expectedResolutionSha256, "expected resolution SHA256", 64).toLowerCase();
   if (!SHA256_PATTERN.test(resolutionSha256)) throw new Error("expected resolution SHA256 is invalid");
   assertExpected(plan.resolutionSha256, resolutionSha256, "world resolution SHA256");
