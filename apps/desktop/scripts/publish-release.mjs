@@ -329,7 +329,7 @@ async function main() {
 
   const releaseBody = `${JSON.stringify(release, null, 2)}\n`;
   const latestBody = `${JSON.stringify(latest, null, 2)}\n`;
-  /** @type {{ key: string; file?: string; body?: string; bytes: number; cache: string; contentType: string }[]} */
+  /** @type {{ key: string; file?: string; body?: string; bytes: number; cache: string; contentType: string; immutable?: boolean }[]} */
   const immutableObjects = [
     ...files.map((f) => ({
       key: `${RELEASE_ROOT}/${releaseId}/${f.platform}/${f.name}`,
