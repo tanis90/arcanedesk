@@ -28,16 +28,32 @@ description: 阅读和整理 TRPG/D&D 模组 PDF，将其保存为按实际章�
 
 ## 准备 MinerU CLI
 
-先运行 `mineru-open-api version`。如果命令不存在，不得把任何网络响应直接送入 shell
-或脚本解释器执行。说明缺少 CLI，并让用户选择以下安全路径之一：
+先运行 `mineru-open-api version`。命令可用时直接进入提取流程。
 
-1. 用户按 MinerU 官方文档自行安装，再由 Agent 复查版本；或
-2. 用户提供官方安装包/归档、版本和发布方校验值。Agent 先下载到临时目录，核对最终
-   HTTPS 域名、文件大小、SHA256/发布签名并检查归档内容，再展示验证结果并取得明确确认，
-   最后才执行或安装。
+命令不存在时，使用 MinerU 官方安装脚本（opendatalab/MinerU-Ecosystem 发布的零依赖单二进制，
+不需要 Python 或 Node），只从这两个官方 URL 获取：
 
-不能取得发布方校验值或签名时，不自动执行下载内容。不要为了安装 CLI 再要求用户安装
-Python 或另一套 Node；报告实际阻碍，也不要悄悄改用其他云端 PDF 服务。
+- macOS / Linux：`https://cdn-mineru.openxlab.org.cn/open-api-cli/install.sh`
+- Windows PowerShell：`https://cdn-mineru.openxlab.org.cn/open-api-cli/install.ps1`
+
+不得把任何网络响应直接送入 shell 或脚本解释器执行。正确做法是先下载到临时目录：
+
+```bash
+# macOS / Linux
+curl -fsSL -o /tmp/mineru-install.sh "https://cdn-mineru.openxlab.org.cn/open-api-cli/install.sh"
+```
+
+```powershell
+# Windows PowerShell
+Invoke-WebRequest -Uri "https://cdn-mineru.openxlab.org.cn/open-api-cli/install.ps1" -OutFile "$env:TEMP\mineru-install.ps1"
+```
+
+核对最终 HTTPS 域名是 `cdn-mineru.openxlab.org.cn`、记录文件大小，有发布方校验值时核对
+SHA256/发布签名；向用户展示脚本将执行的安装动作并取得明确确认后，才执行下载好的脚本。
+脚本会从同一官方域名安装二进制。安装完成后重新运行 `mineru-open-api version` 复查版本。
+
+不要使用第三方镜像或这两个官方 URL 之外的来源。不要为了安装 CLI 再要求用户安装 Python
+或另一套 Node；安装失败时报告实际命令输出和剩余阻碍，不要悄悄改用其他云端 PDF 服务。
 
 ## 提取 PDF
 
