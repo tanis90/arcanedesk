@@ -80,11 +80,12 @@ test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workfl
   assert.match(skill, /Core 目录与\s*Data 目录必须分开/s);
   assert.match(skill, /installDefaults\.systems\/modules\/worlds.*全部为空/s);
   assert.match(skill, /逐字节核对\s*SHA256/s);
-  // 交互预算与计划声明：3 个交互点，交付物料即授权，声明显示信息但不等待批准
+  // 交互预算与计划确认门：4 个交互点，交付物料只授权读取与验证，确认门之后才有写入
   assert.match(skill, /用户交互预算/);
-  assert.match(skill, /交互点最多 3 个/);
-  assert.match(skill, /交付物料即授权/);
-  assert.match(skill, /计划声明/);
+  assert.match(skill, /交互点最多 4 个/);
+  assert.match(skill, /交付物料只授权读取与验证/);
+  assert.match(skill, /安装计划与确认/);
+  assert.match(skill, /--allow-missing-data-dir/);
   // Demo 环境默认安装，内容统一走 arcane mirror，禁止混链校验
   assert.match(skill, /Demo 环境默认安装/);
   assert.match(skill, /不在 arcane mirror 选过的 mod\s+之内/s);

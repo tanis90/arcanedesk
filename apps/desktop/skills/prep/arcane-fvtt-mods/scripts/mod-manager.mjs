@@ -395,20 +395,28 @@ export function compareVersions(left, right) {
   return comparePrerelease(a.prerelease, b.prerelease);
 }
 
-async function assertDataDirectory(dataDir) {
+async function assertDataDirectory(dataDir, { allowMissing = false } = {}) {
   const resolved = path.resolve(requireString(dataDir, "Foundry Data directory"));
-  const stat = await fsp.stat(resolved).catch(() => null);
-  if (!stat?.isDirectory()) throw new Error(`Foundry Data directory does not exist: ${resolved}`);
   const contentRoot = path.join(resolved, "Data");
-  const contentStat = await fsp.stat(contentRoot).catch(() => null);
-  if (!contentStat?.isDirectory()) throw new Error(`Foundry Data directory is missing Data/: ${resolved}`);
-  return {
+  const layout = {
     dataDir: resolved,
+    dataDirExists: false,
     contentRoot,
     modulesRoot: path.join(contentRoot, "modules"),
     systemsRoot: path.join(contentRoot, "systems"),
     worldsRoot: path.join(contentRoot, "worlds"),
   };
+  const stat = await fsp.stat(resolved).catch(() => null);
+  if (!stat?.isDirectory()) {
+    if (!allowMissing) throw new Error(`Foundry Data directory does not exist: ${resolved}`);
+    return layout;
+  }
+  layout.dataDirExists = true;
+  const contentStat = await fsp.stat(contentRoot).catch(() => null);
+  if (!contentStat?.isDirectory() && !allowMissing) {
+    throw new Error(`Foundry Data directory is missing Data/: ${resolved}`);
+  }
+  return layout;
 }
 
 async function readJsonFile(file, label) {
@@ -421,8 +429,8 @@ async function readJsonFile(file, label) {
   }
 }
 
-export async function listInstalledModules(dataDir) {
-  const layout = await assertDataDirectory(dataDir);
+export async function listInstalledModules(dataDir, { allowMissingDataDir = false } = {}) {
+  const layout = await assertDataDirectory(dataDir, { allowMissing: allowMissingDataDir });
   const entries = await fsp.readdir(layout.modulesRoot, { withFileTypes: true }).catch((error) => {
     if (error?.code === "ENOENT") return [];
     throw error;
@@ -472,8 +480,8 @@ function installedContentManifestShape(value, kind) {
   };
 }
 
-async function listInstalledContent(dataDir, kind) {
-  const layout = await assertDataDirectory(dataDir);
+async function listInstalledContent(dataDir, kind, { allowMissingDataDir = false } = {}) {
+  const layout = await assertDataDirectory(dataDir, { allowMissing: allowMissingDataDir });
   const root = kind === "system" ? layout.systemsRoot : kind === "world" ? layout.worldsRoot : layout.modulesRoot;
   const fileName = kind === "system" ? "system.json" : kind === "world" ? "world.json" : "module.json";
   const entries = await fsp.readdir(root, { withFileTypes: true }).catch((error) => {
@@ -505,13 +513,13 @@ async function listInstalledContent(dataDir, kind) {
   return { ...layout, items, invalid };
 }
 
-export async function listInstalledSystems(dataDir) {
-  const result = await listInstalledContent(dataDir, "system");
+export async function listInstalledSystems(dataDir, options) {
+  const result = await listInstalledContent(dataDir, "system", options);
   return { ...result, systems: result.items };
 }
 
-export async function listInstalledWorlds(dataDir) {
-  const result = await listInstalledContent(dataDir, "world");
+export async function listInstalledWorlds(dataDir, options) {
+  const result = await listInstalledContent(dataDir, "world", options);
   return { ...result, worlds: result.items };
 }
 
@@ -556,6 +564,7 @@ export function buildCatalog(indexValue, installedValue) {
     generated: index.generated,
     foundry: index.foundry ?? null,
     dnd5e: index.dnd5e ?? null,
+    dataDirExists: installedValue?.dataDirExists ?? null,
     rows,
     updates: rows.filter((row) => row.status === "update"),
     notInMirror,
@@ -563,10 +572,10 @@ export function buildCatalog(indexValue, installedValue) {
   };
 }
 
-export async function catalogModules({ dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL }) {
+export async function catalogModules({ dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
   const [index, installed] = await Promise.all([
     loadIndex(fetchImpl, indexUrl),
-    listInstalledModules(dataDir),
+    listInstalledModules(dataDir, { allowMissingDataDir }),
   ]);
   return buildCatalog(index, installed);
 }
@@ -817,6 +826,7 @@ export function buildWorldCatalog(indexValue, installedValue) {
   return {
     indexUrl: MIRROR_INDEX_URL,
     generated: index.generated,
+    dataDirExists: installedValue?.dataDirExists ?? null,
     rows,
     updates: rows.filter((row) => row.status === "update"),
     notInMirror,
@@ -824,15 +834,15 @@ export function buildWorldCatalog(indexValue, installedValue) {
   };
 }
 
-export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL }) {
+export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
   const [index, installed] = await Promise.all([
     loadIndex(fetchImpl, indexUrl),
-    listInstalledWorlds(dataDir),
+    listInstalledWorlds(dataDir, { allowMissingDataDir }),
   ]);
   return buildWorldCatalog(index, installed);
 }
 
-export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL }) {
+export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
   const id = requireString(worldId, "world id", 128);
   if (!ID_PATTERN.test(id)) throw new Error(`world id is unsafe: ${id}`);
   const index = await loadIndex(fetchImpl, indexUrl);
@@ -843,9 +853,9 @@ export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fe
   const [{ manifest: worldManifest }, { profile }, installedModules, installedSystems, installedWorlds] = await Promise.all([
     loadWorldManifestForEntry(fetchImpl, entry),
     loadEnvironmentProfile(fetchImpl, profileEntry),
-    listInstalledModules(dataDir),
-    listInstalledSystems(dataDir),
-    listInstalledWorlds(dataDir),
+    listInstalledModules(dataDir, { allowMissingDataDir }),
+    listInstalledSystems(dataDir, { allowMissingDataDir }),
+    listInstalledWorlds(dataDir, { allowMissingDataDir }),
   ]);
   if (worldManifest.system !== profile.system) {
     throw new Error(`world ${id} uses system ${worldManifest.system}; profile requires ${profile.system}`);
@@ -871,6 +881,7 @@ export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fe
     kind: "world-profile-plan",
     indexUrl,
     generated: index.generated,
+    dataDirExists: installedModules.dataDirExists,
     id: entry.id,
     title: entry.title,
     version: entry.version,
@@ -927,10 +938,10 @@ function exactMirrorEntry(index, manifestUrl) {
   return index?.packages?.find((entry) => isModuleIndexEntry(entry) && entry.manifestUrl === manifestUrl) ?? null;
 }
 
-export async function inspectModule({ manifestUrl, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL }) {
+export async function inspectModule({ manifestUrl, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
   const [manifest, installed] = await Promise.all([
     loadManifest(fetchImpl, manifestUrl),
-    listInstalledModules(dataDir),
+    listInstalledModules(dataDir, { allowMissingDataDir }),
   ]);
   let index = null;
   let indexError = null;
@@ -946,6 +957,7 @@ export async function inspectModule({ manifestUrl, dataDir, fetchImpl = fetch, i
   const localMatches = installed.modules.filter((entry) => entry.id === manifest.id);
   return {
     kind: "module",
+    dataDirExists: installed.dataDirExists,
     id: manifest.id,
     title: manifest.title,
     version: manifest.version,
@@ -1930,6 +1942,8 @@ export async function commitWorldStage({ stageDir, dataDir, expectedCurrentVersi
   };
 }
 
+const BOOLEAN_OPTIONS = new Set(["allow-missing-data-dir"]);
+
 function parseCli(argv) {
   const [command, ...rest] = argv;
   const options = {};
@@ -1937,9 +1951,13 @@ function parseCli(argv) {
     const token = rest[index];
     if (!token.startsWith("--")) throw new Error(`unexpected argument: ${token}`);
     const key = token.slice(2);
+    if (Object.hasOwn(options, key)) throw new Error(`duplicate option: --${key}`);
+    if (BOOLEAN_OPTIONS.has(key)) {
+      options[key] = true;
+      continue;
+    }
     const value = rest[index + 1];
     if (!value || value.startsWith("--")) throw new Error(`missing value for --${key}`);
-    if (Object.hasOwn(options, key)) throw new Error(`duplicate option: --${key}`);
     options[key] = value;
     index += 1;
   }
@@ -1949,12 +1967,12 @@ function parseCli(argv) {
 function usage() {
   return [
     "Usage:",
-    "  mod-manager inspect --manifest-url <url> --data-dir <dir>",
-    "  mod-manager catalog --data-dir <dir>",
+    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir]",
+    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir]",
     "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url>",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
-    "  mod-manager world-inspect --world-id <id> --data-dir <dir>",
-    "  mod-manager world-catalog --data-dir <dir>",
+    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir]",
+    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir]",
     "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256>",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
   ].join("\n");
@@ -1967,9 +1985,13 @@ export async function runCli(argv = process.argv.slice(2)) {
       return inspectModule({
         manifestUrl: options["manifest-url"],
         dataDir: options["data-dir"],
+        allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "catalog":
-      return catalogModules({ dataDir: options["data-dir"] });
+      return catalogModules({
+        dataDir: options["data-dir"],
+        allowMissingDataDir: options["allow-missing-data-dir"] === true,
+      });
     case "stage":
       return stageModule({
         manifestUrl: options["manifest-url"],
@@ -1988,9 +2010,13 @@ export async function runCli(argv = process.argv.slice(2)) {
       return inspectWorldEnvironment({
         worldId: options["world-id"],
         dataDir: options["data-dir"],
+        allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-catalog":
-      return catalogWorlds({ dataDir: options["data-dir"] });
+      return catalogWorlds({
+        dataDir: options["data-dir"],
+        allowMissingDataDir: options["allow-missing-data-dir"] === true,
+      });
     case "world-stage":
       return stageWorldEnvironment({
         worldId: options["world-id"],

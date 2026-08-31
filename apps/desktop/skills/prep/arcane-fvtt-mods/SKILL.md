@@ -46,7 +46,10 @@ macOS Bash 调用形态：
 - 用户要求安装、检查、更新或重置 Arcane Demo world，安装 FVTT 后继续 Demo 环境，或点名
   安装 dnd5e 等 system：读取 [references/demo-world.md](references/demo-world.md)。
 
-只读的 `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。下载前说明来源、
+只读的 `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
+Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
+`arcane-fvtt-setup` 全新安装流程在计划确认前传 `--allow-missing-data-dir`，输出带 `dataDirExists`
+标记；stage/commit 不接受该旗标，永远严格。下载前说明来源、
 目标与已知体积；写入 `<数据目录>/Data/modules`、`<数据目录>/Data/systems` 或
 `<数据目录>/Data/worlds`、停服或重启前展示计划。计划是告知，不是反复追问：用户明确要求
 安装/升级，或在更新表后说“升级”、“全部升级”或点名选择的包，即视为对表中准确版本、体积、

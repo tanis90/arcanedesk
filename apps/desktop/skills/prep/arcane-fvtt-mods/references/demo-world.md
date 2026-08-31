@@ -19,6 +19,10 @@ skill 不固定 world 版本、Core 版本、profile revision、system/module id
 mod-manager world-inspect --world-id arcane-demo --data-dir <数据目录>
 ```
 
+由 `arcane-fvtt-setup` 全新安装流程进入、Data 目录尚不存在时，只读命令追加
+`--allow-missing-data-dir`；输出 `dataDirExists: false` 表示全新安装，计划中把该目录标为
+「将新建」。不要为跑只读检查提前创建目录——目录结构在计划确认后的写入阶段才创建。
+
 若用户问所有已发布 world 的更新，可先执行：
 
 ```text
@@ -44,7 +48,8 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 
 ## 2. 安装授权
 
-- 由 `arcane-fvtt-setup` 的全新安装流程进入时，计划声明已构成授权，直接继续，不再单独询问。
+- 由 `arcane-fvtt-setup` 的全新安装流程进入时，setup 的计划确认门已确认包含本环境的完整计划，
+  直接继续，不再单独询问。
 - 用户直接对本 skill 要求安装/更新/重置时，变更表即计划告知；用户看后说“安装”“升级”“重置”
   或“继续”，视为授权该计划，不重复追问。
 
@@ -60,6 +65,10 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 全部下载可在 Foundry 运行时完成 staging；实际替换前只停服一次。
 
 ## 3. 下载并校验 staging
+
+`world-stage` / `world-commit` 永远严格校验 Data 目录存在（不接受 `--allow-missing-data-dir`）。
+全新安装时，计划确认后先创建标准目录结构（`<数据目录>/Config`、`<数据目录>/Data`、
+`<数据目录>/Logs`），再执行 staging。
 
 把 `world-inspect` 返回的稳定字段原样传回，防止远端指针变化：
 

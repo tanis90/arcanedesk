@@ -10,18 +10,20 @@ description: 在本机 Windows/macOS 安装、修复、升级或迁移 Foundry V
 
 ## 用户交互预算
 
-一次完整安装，用户交互点最多 3 个，除此之外不得再有提问、确认或选择：
+一次完整安装，用户交互点最多 4 个，除此之外不得再有提问、确认或选择：
 
 1. **提供 Foundry 付费工件**：粘贴官方 timed URL 或拖入本地安装文件。给用户图文指引
    （登录 foundryvtt.com → Purchased Licenses → 复制对应平台的下载链接）。
-   交付物料即授权整个安装计划。
-2. **处理 OS 安全弹窗**：UAC、Gatekeeper、安全软件提示必须对用户可见并由用户处理。
+   交付物料只授权读取与验证，不授权任何写入。
+2. **确认安装计划**：Agent 展示完整计划（装什么、版本、总下载量、准确路径），
+   用户一句"可以/继续"放行。这是唯一的确认门，确认后相同计划不再追问。
+3. **处理 OS 安全弹窗**：UAC、Gatekeeper、安全软件提示必须对用户可见并由用户处理。
    弹窗前用一句话预告会出现什么窗口、点哪个按钮；用户取消 UAC 就停止。
-3. **浏览器内收尾**：EULA、license 激活、GM 登录由用户在 Foundry 页面完成，
+4. **浏览器内收尾**：EULA、license 激活、GM 登录由用户在 Foundry 页面完成，
    Agent 在服务就绪后给出精确步骤，不代办。
 
-下载、覆盖文件或修改配置前仍要说明来源、目标与副作用，但这是告知，不等待批准。
-新增任何用户交互前，先论证为什么不能归入这 3 点。
+计划确认后，执行过程中对来源、目标与副作用的说明是告知，不等待批准。
+新增任何用户交互前，先论证为什么不能归入这 4 点。
 
 ## 运行时契约
 
@@ -37,19 +39,33 @@ App 会在 Agent 启动前解压并校验随包 Node。当前 shell 中：
 社区清单没有 Arcane 镜像、官方私有模块、预制世界或默认大体积下载。Foundry Core 始终由
 用户从其 Purchased Licenses 页面提供；清单不会提供或猜测付费下载地址。
 
-## 安装计划声明
+## 安装计划与确认
 
-用户提出安装时、任何下载开始之前，用一段话声明完整计划：
+安装分两个阶段：先只读解析出计划，用户确认后才进入任何写入。
+
+**只读阶段**（交付物料后即可做，不用再问）：本地物料的哈希、签名与归档结构检查；
+HEAD 请求拿体积；小 JSON 元数据下载（mirror `index.json`、world manifest、环境
+profile、各包 manifest——即 `world-inspect` 的全部网络活动）。全新安装时 Data 目录
+通常还不存在：给 `world-inspect` 等只读命令传 `--allow-missing-data-dir`，输出
+`dataDirExists: false` 表示全新安装，计划中把该目录标为「将新建」。此旗标仅限本流程
+的只读命令，stage/commit 永远严格校验目录。不得为了跑只读检查提前创建目录——建目录
+属于写入阶段。
+
+**写入阶段**（确认门之后才开始）：任何内容 ZIP 下载（哪怕只有几 KB）、解压、目标
+目录的创建与变更、Foundry 服务的停启。
+
+计划用一段话展示：
 
 - 装什么：Foundry Core `<core.foundry>`，以及 Arcane Demo 环境（Demo world 及环境
   profile 从 arcane mirror 索引实时解析出的 system/modules，见下文「内容安装」）；
-- 总下载量：Core 物料体积 + 内容体积（内容体积以只读 `world-inspect` 实时解析为准，
-  可在物料就绪后补全，但内容下载必须在声明之后）；
-- 解析后的 Core 目录与 Data 目录准确绝对路径；
+- 总下载量：Core 物料体积 + 内容体积（以只读 `world-inspect` 实时解析为准）；
+- 解析后的 Core 目录与 Data 目录准确绝对路径，不存在的标「将新建」；
 - 一句「不想装哪部分，现在说一声」。
 
-声明显示信息但不等待批准；用户交付物料即为对声明计划的授权。OSS 尚未发布 world 时
-计划只含 Core；不猜 URL，Core 安装仍可独立成功。
+用户确认后才进入写入。确认针对这份计划的版本、体积、哈希与路径：staging 用
+`--expected-*` 参数锁死计划，远端漂移由 helper 拒绝，不再问用户；重新 inspect 解析出
+不同 resolution 就是计划变了，必须重新展示并再次确认。OSS 尚未发布 world 时计划只含
+Core；不猜 URL，Core 安装仍可独立成功。
 
 ## 物料识别与目录解析
 
@@ -60,10 +76,12 @@ App 会在 Agent 启动前解压并校验随包 Node。当前 shell 中：
 3. 用户提供的 Foundry 官方 timed URL：确认是 Foundry 官方 HTTPS 地址后下载到临时目录。
 4. 用户没有安装或物料：说明 Foundry 是付费软件，请用户自行取得官方工件或 timed URL。
 
-目录永远不问用户，用平台默认值，并在计划声明与最终报告中写清准确路径。Core 目录与
-Data 目录必须分开。用户只给父目录时，在其下创建 `FoundryVTT-<core.foundry>`；完全未
-指定时，Windows 使用 `%LOCALAPPDATA%\ArcaneDesk\runtime\foundry\<版本>`，macOS 使用
-ArcaneDesk `userData/runtime/foundry/<版本>`。Data 目录完全未指定时，Windows 使用
+目录永远不问用户，用平台默认值，并在计划与最终报告中写清准确路径。Core 目录与
+Data 目录必须分开。用户主动给位置时不反问，按规则推导：只给一个位置时视为父目录，
+Core = `<该目录>\FoundryVTT-<core.foundry>`、Data = `<该目录>\foundry-data`；明确分别
+指定 Core 与 Data 位置的，原样采用并各自校验；只说 Data 位置的，Data 用它、Core 用
+默认值。完全未指定时，Windows 使用 `%LOCALAPPDATA%\ArcaneDesk\runtime\foundry\<版本>`，
+macOS 使用 ArcaneDesk `userData/runtime/foundry/<版本>`。Data 目录完全未指定时，Windows 使用
 `%LOCALAPPDATA%\ArcaneDesk\runtime\foundry-data`，macOS 使用 ArcaneDesk
 `userData/runtime/foundry-data`。不要递归扫描整块磁盘，不要把未知非空目录当作安装
 目标，也不要发明其他默认位置。
@@ -123,7 +141,7 @@ Desktop 不打包 Demo world、其版本或依赖清单。清单 `systems` 里�
 
 - **Demo 环境默认安装**：Core 验收后直接继续，不单独询问。按 `arcane-fvtt-mods` 的
   [references/demo-world.md](../arcane-fvtt-mods/references/demo-world.md) 执行：先跑
-  只读 `world-inspect` 解析准确包集合、体积与哈希（计划声明的内容体积以此为准），
+  只读 `world-inspect` 解析准确包集合、体积与哈希（计划中的内容体积以此为准），
   然后 staging、一次停服提交、`--world=arcane-demo` 验收。OSS 尚未发布 world 时
   不猜 URL，Core 安装独立成功即可交接。
 - **用户点名要 dnd5e**：dnd5e 已收录于 mirror，随 Demo 环境 profile 一并解析安装。
@@ -136,7 +154,7 @@ Desktop 不打包 Demo world、其版本或依赖清单。清单 `systems` 里�
   https://arcanedesk.bitterbebop.cn/ 反馈我们。」确认后按 `arcane-fvtt-mods` 的
   install 流程安装；SHA256 由 Agent 计算、核对、写进报告，但只是本次下载指纹，
   不再把 hex 串交给用户判断。
-- 单项体积与总量已在计划声明里展示，不再单独确认；失败时保留原目录，不留半安装
+- 单项体积与总量已在计划里展示并经确认门覆盖，不再单独确认；失败时保留原目录，不留半安装
   状态，只重试失败项。
 
 校验纪律：mirror 内容的验证基准只用索引声明的哈希。禁止混链校验——从 mirror 下载
@@ -171,6 +189,6 @@ macOS DMG 安装的 App 副本在首次启动前必须按
 - 不代取 Foundry 付费工件、license，不代替用户同意 EULA。
 - 不绕过 UAC、Gatekeeper 和安全软件提示；静默安装不得用于绕过提权。
 - 不静默覆盖 Core、世界、用户数据；冲突先备份，备份成功才继续，备份位置写进报告。
-- 所有下载先落盘、验证，再按已声明的计划使用；不执行网络响应。
+- 所有下载先落盘、验证，再按已确认的计划使用；不执行网络响应。
 - 不把 App 安装目录当成可写 Data 目录。
 - 不打印 license key、完整 `options.json` 或凭据。

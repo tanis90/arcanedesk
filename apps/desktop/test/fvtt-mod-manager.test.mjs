@@ -11,11 +11,13 @@ import { fileURLToPath } from "node:url";
 import {
   buildCatalog,
   buildWorldCatalog,
+  catalogModules,
   commitStage,
   commitWorldStage,
   compareVersions,
   inspectWorldEnvironment,
   listInstalledModules,
+  runCli,
   stageModule,
   stageWorldEnvironment,
   validateEnvironmentProfile,
@@ -201,6 +203,54 @@ test("trusted staging verifies the mirror hash and commit backs up an installed 
 
   const installed = await listInstalledModules(dataDir);
   assert.deepEqual(installed.modules.map(({ id, version }) => ({ id, version })), [{ id: "demo", version: "2.0.0" }]);
+});
+
+test("read-only data directory checks tolerate a missing directory only with the explicit flag", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "arcane-mod-manager-missing-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dataDir = path.join(root, "foundry-data");
+
+  // 默认严格：目录不存在必须硬报错（错误路径警报器）
+  await assert.rejects(listInstalledModules(dataDir), /Foundry Data directory does not exist/);
+
+  // 显式容忍：空清单 + dataDirExists 标记
+  const tolerant = await listInstalledModules(dataDir, { allowMissingDataDir: true });
+  assert.equal(tolerant.dataDirExists, false);
+  assert.deepEqual(tolerant.modules, []);
+  assert.equal(tolerant.dataDir, path.resolve(dataDir));
+
+  // 目录存在但缺 Data/：严格报错，容忍则标记存在但清单为空
+  await mkdir(dataDir, { recursive: true });
+  await assert.rejects(listInstalledModules(dataDir), /missing Data\//);
+  const existsButEmpty = await listInstalledModules(dataDir, { allowMissingDataDir: true });
+  assert.equal(existsButEmpty.dataDirExists, true);
+  assert.deepEqual(existsButEmpty.modules, []);
+
+  // 正常初始化的目录：两种模式都返回 dataDirExists: true
+  await mkdir(path.join(dataDir, "Data", "modules"), { recursive: true });
+  const strict = await listInstalledModules(dataDir);
+  assert.equal(strict.dataDirExists, true);
+
+  // catalog 穿透：容忍旗标 + 空索引
+  const emptyIndexFetch = async () => jsonResponse({ generated: "2026-08-31T00:00:00+08:00", packages: [] });
+  await assert.rejects(
+    catalogModules({ dataDir: path.join(root, "still-missing"), fetchImpl: emptyIndexFetch, indexUrl }),
+    /Foundry Data directory does not exist/,
+  );
+  const catalog = await catalogModules({
+    dataDir: path.join(root, "still-missing"),
+    fetchImpl: emptyIndexFetch,
+    indexUrl,
+    allowMissingDataDir: true,
+  });
+  assert.equal(catalog.dataDirExists, false);
+  assert.deepEqual(catalog.rows, []);
+
+  // 布尔旗标重复传 => parseCli 拒绝（在任何网络访问之前抛错）
+  await assert.rejects(
+    runCli(["catalog", "--data-dir", dataDir, "--allow-missing-data-dir", "--allow-missing-data-dir"]),
+    /duplicate option: --allow-missing-data-dir/,
+  );
 });
 
 test("an unindexed stage cannot commit without accepting its exact computed hash", async (t) => {
@@ -412,6 +462,24 @@ test("world profiles resolve current stable packages independently from world ar
   assert.equal(inspected.world.status, "upgrade");
   assert.equal(inspected.plannedArchiveBytes, zipBuffers.module.length + zipBuffers.world.length);
   assert.match(inspected.resolutionSha256, /^[a-f0-9]{64}$/);
+
+  // 全新安装：目录不存在时严格模式硬报错；显式容忍旗标下按全量 missing 解析
+  const freshDir = path.join(root, "fresh-data");
+  await assert.rejects(
+    inspectWorldEnvironment({ worldId: "arcane-demo", dataDir: freshDir, fetchImpl: fakeFetch, indexUrl }),
+    /Foundry Data directory does not exist/,
+  );
+  const freshInspect = await inspectWorldEnvironment({
+    worldId: "arcane-demo",
+    dataDir: freshDir,
+    fetchImpl: fakeFetch,
+    indexUrl,
+    allowMissingDataDir: true,
+  });
+  assert.equal(freshInspect.dataDirExists, false);
+  assert.equal(freshInspect.system.status, "missing");
+  assert.equal(freshInspect.world.status, "missing");
+  assert.equal(freshInspect.modules.every((artifact) => artifact.status === "missing"), true);
 
   await assert.rejects(
     stageWorldEnvironment({
