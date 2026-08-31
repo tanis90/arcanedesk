@@ -7,6 +7,7 @@ import {
   arcaneShellTool,
   builtinToolNamesForPlatform,
   pinArcaneNodeForShellSpawn,
+  PREP_PREAMBLE,
 } from "../src/main/agent-host.js";
 
 const TOOL_NAMES = [
@@ -449,4 +450,10 @@ test("structured tools fail closed when the page runtime is unavailable", async 
     turnContext.execute("turn-call", {}),
     /Foundry page runtime is unavailable/
   );
+});
+
+test("prep preamble forces reading the matching skill before install actions", () => {
+  assert.ok(PREP_PREAMBLE.includes("必须先 read 对应 skill 的 SKILL.md 全文"));
+  assert.ok(PREP_PREAMBLE.includes("arcane-fvtt-setup"));
+  assert.ok(PREP_PREAMBLE.includes("出错后再回头读 skill"));
 });
