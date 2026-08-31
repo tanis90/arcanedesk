@@ -192,7 +192,8 @@ function appendMermaidBlock(container, source) {
   const id = `md-mermaid-${Date.now()}-${mermaidSeq++}`;
   (async () => {
     try {
-      lib.initialize({ startOnLoad: false, securityLevel: "strict", theme });
+      // suppressErrorRendering:失败时只抛错,不让 mermaid 把错误图插进 document.body
+      lib.initialize({ startOnLoad: false, securityLevel: "strict", theme, suppressErrorRendering: true });
       const { svg } = await lib.render(id, source);
       // 例外一:innerHTML 插入 mermaid 输出的 SVG 字符串(securityLevel strict 已 sanitize)
       view.innerHTML = svg;
@@ -200,6 +201,9 @@ function appendMermaidBlock(container, source) {
       view.textContent = "";
       view.appendChild(el("div", "md-mermaid-error", t("md.mermaidFailed", { error: error?.message ?? error })));
       details.open = true; // 失败时直接展开源码
+      // 兜底清掉 mermaid 可能已挂到 body 的临时/错误节点,避免残留浮条消不掉
+      document.getElementById(id)?.remove();
+      document.getElementById(`d${id}`)?.remove();
     }
   })();
 }
