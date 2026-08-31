@@ -62,9 +62,9 @@ async function probeNodeVersion(binary) {
   }
 }
 
-// Staging and destination are both below runtimeRoot, so directory renames stay
-// on one volume. Keep the previous runtime until the incoming tree is ready.
-async function replaceDirectory(source, destination) {
+// Staging and destination must share one parent directory so renames stay on
+// one volume. Keep the previous tree until the incoming tree is ready.
+export async function replaceDirectory(source, destination) {
   const parent = path.dirname(destination);
   const token = randomUUID();
   const incoming = path.join(parent, `.${path.basename(destination)}.arcane-incoming-${token}`);

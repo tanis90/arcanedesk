@@ -80,6 +80,35 @@ Open (macOS 13/14) or System Settings > Privacy & Security > Open Anyway
 com.apple.quarantine` remains the documented fallback. This must remain visible
 in release notes until Developer ID signing and notarization are implemented.
 
+## Skills bundle publish
+
+Bundled skills are part of the system, but their text can ship independently of
+an app release through the `Publish Arcane Skills` workflow. It packs
+`apps/desktop/skills/prep` into an immutable versioned bundle:
+
+- Immutable objects:
+  `desktop/arcane-desk/skills/<revision>/bundle.tar.gz` and
+  `.../manifest.json` (per-file SHA256 list).
+- Mutable pointer: `desktop/arcane-desk/skills/latest.json`, uploaded with
+  `Cache-Control: no-cache` only after every immutable object passes the HEAD
+  verification. `skip_latest=true` uploads without moving the pointer.
+- `skills/prep/bundle.json` owns the monotonic `revision`; any PR that changes
+  skills must increment it. The publisher refuses a revision that is not newer
+  than the published pointer, so a bundle is never overwritten or rolled back.
+- `bundle.json` may carry `minAppVersion` when a skill depends on an app
+  capability that has not shipped yet; older apps then keep their current
+  bundle (fail closed) until they update.
+
+The desktop app checks the pointer in the background on every launch, verifies
+the tarball and every extracted file against the manifest, swaps the bundle
+atomically into `userData/skills/active`, and falls back to the packaged
+baseline on any failure. New agent sessions pick up an activated bundle
+immediately; running sessions keep their snapshot.
+
+```powershell
+node apps/desktop/scripts/publish-skills.mjs --dry-run
+```
+
 ## Local Windows emergency path
 
 The local path is only for an urgent Windows-only hotfix or read-only release

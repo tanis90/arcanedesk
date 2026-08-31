@@ -18,6 +18,7 @@ import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
 import { DisplayMediaController, installDevicePermissionDenials } from "./permissions/display-media.js";
 import { err, errorToIpc } from "./i18n-error.mjs";
 import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
+import { SkillsUpdater } from "./skills-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 
@@ -571,16 +572,28 @@ app.whenReady().then(async () => {
   // Agent shell scripts read the packaged policy directly with the bundled
   // Node. This is process-local and never changes the user's environment.
   process.env.ARCANE_FVTT_DISTRIBUTION_FILE = distributionFile;
-  process.env.ARCANE_FVTT_MOD_MANAGER = path.join(
-    __dirname,
-    "..",
-    "..",
-    "skills",
-    "prep",
-    "arcane-fvtt-mods",
-    "scripts",
-    "mod-manager.mjs",
-  );
+  // 内置 skills 是系统的一部分,但文本可走独立下发通道:userData 里经完整性
+  // 校验的激活副本优先于包内基线(见 skills-updater.mjs)。解析发生在每次
+  // session 创建时,所以启动后刷新成功即对后续新 session 生效,无需重启。
+  const skillsUpdater = new SkillsUpdater({
+    bundledSkillsDir: path.join(__dirname, "..", "..", "skills", "prep"),
+    stateDir: path.join(app.getPath("userData"), "skills"),
+    appVersion: app.getVersion(),
+    // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback)。
+    baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL,
+    onActivated: (dir) => applyModManagerEnv(dir),
+  });
+  function applyModManagerEnv(skillsDir) {
+    process.env.ARCANE_FVTT_MOD_MANAGER = path.join(
+      skillsDir,
+      "arcane-fvtt-mods",
+      "scripts",
+      "mod-manager.mjs",
+    );
+  }
+  applyModManagerEnv(skillsUpdater.resolveSkillsDir());
+  // 启动后后台刷新一次;失败静默保留现状,绝不阻塞启动。
+  skillsUpdater.refresh().catch((error) => console.error("[skills] unexpected refresh failure:", error));
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");
@@ -637,7 +650,7 @@ app.whenReady().then(async () => {
         getCwd: () => prepStore.data.lastCwd ?? prepFallbackWorkspace,
         builtinTools: true,
         systemPrompt: "append",
-        skillPaths: [path.join(__dirname, "..", "..", "skills", "prep")],
+        getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate"],
         fence: true,
       },

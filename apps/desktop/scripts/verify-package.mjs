@@ -21,6 +21,7 @@ export const requiredFiles = [
   "src/main/main.js",
   "src/main/fvtt-ops-runtime.mjs",
   "system-prompts/combat.md",
+  "skills/prep/bundle.json",
   "skills/prep/arcane-fvtt-ops/SKILL.md",
   "skills/prep/arcane-fvtt-setup/SKILL.md",
   "skills/prep/arcane-fvtt-setup/references/windows-install.md",
@@ -66,7 +67,7 @@ const forbiddenPaths = [
 
 export const exactDirectories = new Map([
   ["system-prompts", ["combat.md"]],
-  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader"]],
+  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
   ["scripts", ["archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
   ["generated", ["desktop-release.json", "renderer-assets"]],
