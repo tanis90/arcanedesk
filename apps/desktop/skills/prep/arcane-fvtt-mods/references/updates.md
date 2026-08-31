@@ -9,7 +9,7 @@ mod-manager catalog --data-dir <Foundry Data 目录>
 ```
 
 helper 会无缓存读取固定的 OSS `index.json`，只选 `module.json` 包，并扫描
-`Data/modules/*/module.json`。它不会把 `group=system` 的 system 当成 mod。
+`<数据目录>/Data/modules/*/module.json`。它不会把 `group=system` 的 system 当成 mod。
 
 `rows` 只包含本机已安装且能在 Arcane 索引中精确按 id 找到的 module，状态含义：
 

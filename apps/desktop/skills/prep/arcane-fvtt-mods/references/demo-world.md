@@ -16,13 +16,13 @@ skill 不固定 world 版本、Core 版本、profile revision、system/module id
 确认 Foundry Data 目录后执行：
 
 ```text
-mod-manager world-inspect --world-id arcane-demo --data-dir <Foundry Data 目录>
+mod-manager world-inspect --world-id arcane-demo --data-dir <数据目录>
 ```
 
 若用户问所有已发布 world 的更新，可先执行：
 
 ```text
-mod-manager world-catalog --data-dir <Foundry Data 目录>
+mod-manager world-catalog --data-dir <数据目录>
 ```
 
 `index.json` 没有目标 world/profile/package 时只说明发布数据不完整；不要回退到 Desktop 内置清单，
@@ -42,12 +42,16 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 - world 变更：旧 world 整体备份后重置，内容不做 merge；
 - profile revision 变更：只代表包 id 集合变化，本身不是可安装目录。
 
-## 2. 取得安装授权
+## 2. 安装授权
 
-用户在准确计划后说“安装”“升级”“重置”或“继续”，视为授权该计划，不重复询问。
+- 由 `arcane-fvtt-setup` 的全新安装流程进入时，计划声明已构成授权，直接继续，不再单独询问。
+- 用户直接对本 skill 要求安装/更新/重置时，变更表即计划告知；用户看后说“安装”“升级”“重置”
+  或“继续”，视为授权该计划，不重复追问。
 
-- 只有 package missing/upgrade：说明将备份并替换这些全局 `Data/systems` / `Data/modules`，可能影响其他 world；
-  不要声称 Demo world 会被重置。
+措辞约定：
+
+- 只有 package missing/upgrade：说明将备份并替换这些全局 `<数据目录>/Data/systems` /
+  `<数据目录>/Data/modules`，可能影响其他 world；不要声称 Demo world 会被重置。
 - world missing：称为“安装 Arcane Demo”。
 - world upgrade：称为“备份并重置 Arcane Demo 到 <version>”，并明确 Actor、Item、Journal、Scene、聊天和数据库
   不会自动合并。
@@ -57,13 +61,13 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 
 ## 3. 下载并校验 staging
 
-把 `world-inspect` 返回的稳定字段原样传回，防止确认后远端指针变化：
+把 `world-inspect` 返回的稳定字段原样传回，防止远端指针变化：
 
 必须从刚完成的本次 `world-inspect` 结果构造命令，不得照抄旧会话、旧日志或记忆中的参数列表。执行前逐项核对
 下面八个 `--expected-*` 参数；即使其他字段相同，也不能省略 `--expected-resolution-sha256`。
 
 ```text
-mod-manager world-stage --world-id arcane-demo --data-dir <Data目录> --expected-world-version <version> --expected-world-sha256 <world SHA256> --expected-profile-id <profile id> --expected-profile-revision <revision> --expected-profile-sha256 <profile SHA256> --expected-index-generated <generated> --expected-resolution-sha256 <resolutionSha256>
+mod-manager world-stage --world-id arcane-demo --data-dir <数据目录> --expected-world-version <version> --expected-world-sha256 <world SHA256> --expected-profile-id <profile id> --expected-profile-revision <revision> --expected-profile-sha256 <profile SHA256> --expected-index-generated <generated> --expected-resolution-sha256 <resolutionSha256>
 ```
 
 `world-stage` 重新读取索引、world manifest 和 profile，重新解析当前 stable 包，只下载状态为 missing/upgrade
@@ -80,20 +84,21 @@ world/profile 哈希及解析后每个包的版本、URL、manifest/ZIP bytes �
 记录当前 Core、Data、端口和 world id，再按 `arcane-fvtt-ops` 精确停止监听端口的 Foundry PID。然后执行：
 
 ```text
-mod-manager world-commit --stage-dir <stageDir> --data-dir <Data目录> --expected-current-version <version-or-none>
+mod-manager world-commit --stage-dir <stageDir> --data-dir <数据目录> --expected-current-version <version-or-none>
 ```
 
 未安装 world 时传字面量 `none`。helper 会再次验证 staging 和所有本地包/world 快照，把全部 incoming 内容准备好
-后才开始替换。变更的 modules/system 备份到 `Data/.arcane-mod-backups/`；只有 world 本体确实变化时才备份到
-`Data/.arcane-world-backups/<id>/`。中途失败会尝试回滚已开始的替换；不要删除报告的 incoming、backup 或
-rollback 路径。
+后才开始替换。变更的 modules/system 备份到 `<数据目录>/Data/.arcane-mod-backups/`；只有 world 本体确实变化时
+才备份到 `<数据目录>/Data/.arcane-world-backups/<id>/`。中途失败会尝试回滚已开始的替换；不要删除报告的
+incoming、backup 或 rollback 路径。
 
-提交完成后 helper 写入 `Data/.arcane-managed/profiles/<profile-id>.json` receipt，记录本次 profile、world、
-解析到的精确包版本/哈希及实际安装版本。receipt 只用于审计，不锁住未来 stable，也不能代替下一次读取 OSS 索引。
+提交完成后 helper 写入 `<数据目录>/Data/.arcane-managed/profiles/<profile-id>.json` receipt，记录本次
+profile、world、解析到的精确包版本/哈希及实际安装版本。receipt 只用于审计，不锁住未来 stable，也不能代替
+下一次读取 OSS 索引。
 
 ## 5. 启动与验收
 
-使用 world 要求的 Core 与同一 Data 目录启动，安装/重置 world 时追加 `--world=arcane-demo`。等待 ready GM 页面后只读回验：
+使用 world 要求的 Core 与同一数据目录启动，安装/重置 world 时追加 `--world=arcane-demo`。等待 ready GM 页面后只读回验：
 
 - `game.world.id`、`game.world.version` 与 `game.version`；
 - `game.system.id` 和当前安装版本；

@@ -51,11 +51,15 @@ test("community distribution has no mirror, world, module, or default third-part
   assert.equal(JSON.stringify(distribution).includes("arcane-package"), false);
   assert.equal(JSON.stringify(distribution).includes("proxy"), false);
 
+  // dnd5e 条目已降级为出处/许可证记录：mirror 有的内容全部走 mirror，
+  // 清单不得再充当安装来源或校验基准。
   const dnd5e = distribution.systems.find((system) => system.id === "dnd5e");
-  assert.equal(dnd5e.defaultInstall, false);
   assert.equal(dnd5e.license.software, "MIT");
   assert.equal(dnd5e.license.srdContent, "CC BY 4.0");
-  assert.match(dnd5e.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(dnd5e.download, undefined);
+  assert.equal(dnd5e.manifest, undefined);
+  assert.equal(dnd5e.sha256, undefined);
+  assert.equal(dnd5e.defaultInstall, undefined);
 });
 
 test("desktop packages generic skills but no demo world or environment profile artifact", async () => {
@@ -73,16 +77,27 @@ test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workfl
   assert.match(skill, /ARCANE_FVTT_DISTRIBUTION_FILE/);
   assert.match(skill, /FoundryVTT-<core\.foundry>/);
   assert.match(skill, /本地 `\.zip`、`\.exe` 或 `\.dmg`/);
-  assert.match(skill, /Core 目录与 Data 目录必须分开/);
+  assert.match(skill, /Core 目录与\s*Data 目录必须分开/s);
   assert.match(skill, /installDefaults\.systems\/modules\/worlds.*全部为空/s);
-  assert.match(skill, /明确同意/);
-  assert.match(skill, /逐字节核对 SHA256/);
+  assert.match(skill, /逐字节核对\s*SHA256/s);
+  // 交互预算与计划声明：3 个交互点，交付物料即授权，声明显示信息但不等待批准
+  assert.match(skill, /用户交互预算/);
+  assert.match(skill, /交互点最多 3 个/);
+  assert.match(skill, /交付物料即授权/);
+  assert.match(skill, /计划声明/);
+  // Demo 环境默认安装，内容统一走 arcane mirror，禁止混链校验
+  assert.match(skill, /Demo 环境默认安装/);
+  assert.match(skill, /不在 arcane mirror 选过的 mod\s+之内/s);
+  assert.match(skill, /arcanedesk\.bitterbebop\.cn/);
+  assert.match(skill, /禁止混链校验/);
+  // 路径纪律：完整形态路径与装后回读
+  assert.match(skill, /<数据目录>\/Data\/systems\/dnd5e/);
+  assert.match(skill, /回读/);
   assert.match(skill, /Node\.js distribution ZIP/);
   assert.match(skill, /references\/windows-install\.md/);
   assert.match(skill, /references\/macos-install\.md/);
-  assert.match(skill, /不使用代理池或第三方镜像/);
+  assert.match(skill, /不使用\s*代理池或第三方镜像/s);
   assert.match(skill, /Desktop 不打包 Demo world/);
-  assert.match(skill, /只询问一次/);
   assert.match(skill, /arcane-fvtt-mods/);
   assert.match(skill, /world-inspect/);
   assert.match(skill, /references\/demo-world\.md/);
@@ -122,4 +137,17 @@ test("module reader never pipes network responses to a shell and asks before clo
   assert.match(skill, /SHA256\/发布签名/);
   assert.match(skill, /每个新文档第一次调用 MinerU 前/);
   assert.match(skill, /取得用户明确同意/);
+});
+
+test("mods skill covers non-index packages with one plain-language risk warning", async () => {
+  const skill = await readFile(
+    path.join(desktopRoot, "skills", "prep", "arcane-fvtt-mods", "SKILL.md"),
+    "utf8",
+  );
+  // 未收录包：一次大白话风险提示 + 官网反馈渠道；不再有"展示哈希再次确认"的二次交互
+  assert.match(skill, /不在 arcane mirror 选过的 mod\s+之内/s);
+  assert.match(skill, /arcanedesk\.bitterbebop\.cn/);
+  assert.match(skill, /--accept-sha256/);
+  assert.match(skill, /禁止混链校验/);
+  assert.doesNotMatch(skill, /再次确认/);
 });

@@ -5,34 +5,37 @@
 确认真实 Foundry Data 目录后运行：
 
 ```text
-mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <Foundry Data 目录>
+mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <数据目录>
 ```
 
 解析 JSON 结果，向用户展示：id、title、目标版本、download URL、已知体积、SHA256 来源、现有
 版本与目录、Foundry compatibility，以及 `requiredModules` 中缺失或版本不足的依赖。若
 `kind` 不是 `module`、URL 非 HTTPS、manifest 字段不合法或本地有重复 id，停止。
 
-若 dependency 也在 Arcane 索引中，可分别 `inspect` 后把它加入同一安装计划；否则请用户提供
-依赖的官方 manifest。不要自动安装推荐项或可选项。
+若 dependency 也在 arcane mirror 索引中，可分别 `inspect` 后把它加入同一安装计划；未收录的
+依赖与主包一起走第 2 节的一次风险提示。不要自动安装推荐项或可选项。
 
-## 2. 说明并确认计划
+## 2. 说明计划（告知）与一次风险提示
 
-下载或提交前说明：
+下载或提交前向用户说明：
 
 - manifest 与 ZIP 的域名；
 - module id、当前版本 → 目标版本；
-- 目标 `Data/modules/<id>` 或已有同 id 目录；
+- 目标 `<数据目录>/Data/modules/<id>` 或已有同 id 目录；
 - 索引给出的体积与 SHA256（没有则明确说“发布方哈希不可用”）；
 - 已有目录将先备份；
 - 正在运行的 Foundry 将在 staging 成功后停服，提交后恢复原世界；
 - 新安装仍需用户在世界里手动启用。
 
-取得明确同意后再继续。用户原话已经明确要求安装准确的 URL 时，可把上述信息作为执行前告知
-并继续；遇到未声明哈希、依赖扩展或目标冲突仍要停下来确认。
+计划是执行前告知，不等待批准：用户明确要求安装即授权。唯一要停下来取得确认的情况：主包或
+任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个不在 arcane mirror 选过的
+mod 之内，安装可能产生不可知后果，确认要安装吗？如果你希望 arcane mirror 收录这个 mod，
+可以去官网 https://arcanedesk.bitterbebop.cn/ 反馈我们。”用户确认后继续，后续环节不再
+二次确认。
 
 ## 3. 下载并验证到 staging
 
-把 `inspect` 返回的稳定字段原样传回，防止确认后远端内容变化：
+把 `inspect` 返回的稳定字段原样传回，防止远端内容变化：
 
 ```text
 mod-manager stage --manifest-url <URL> --expected-id <id> --expected-version <version> --expected-download-url <URL>
@@ -44,8 +47,9 @@ archive 根 `module.json` 的 id/version。归档内的上游 manifest/download 
 `module.json`。检查返回的 `id`、`version`、`manifestSha256`、`archiveSha256`、`archiveBytes`、
 `trustedByMirrorIndex`、`stageDir` 和 `requiresSecondConfirmation`。
 
-- 镜像索引包：bytes 与 SHA256 必须匹配；匹配后可按已确认计划继续。
-- 非索引包：把计算 SHA256 和实际体积展示给用户，明确它只是本次下载指纹；用户确认后才提交。
+- 镜像索引包：bytes 与 SHA256 必须匹配；匹配后按已说明的计划继续。
+- 非索引包：第 2 节的一次风险提示已覆盖本次安装，`requiresSecondConfirmation` 不再触发新的
+  用户确认；把计算出的 SHA256 和实际体积写进最终报告，明确它只是本次下载指纹。
 
 ## 4. 停服并提交
 
@@ -53,7 +57,7 @@ archive 根 `module.json` 的 id/version。归档内的上游 manifest/download 
 精确停服。调用：
 
 ```text
-mod-manager commit --stage-dir <stageDir> --data-dir <Data目录> --expected-current-version <version-or-none>
+mod-manager commit --stage-dir <stageDir> --data-dir <数据目录> --expected-current-version <version-or-none>
 ```
 
 非索引包还必须追加：

@@ -21,9 +21,10 @@
 
 - Foundry Core 只能由用户提供官方购买下载或 timed URL；
 - 默认 system/module/world 列表全部为空；
-- 可选 dnd5e 只指向官方 GitHub release，并固定版本、许可证和 SHA256；
-- 没有代理池、Arcane 镜像或官方私有服务依赖；
-- 所有第三方下载都需要用户显式选择，下载后先校验再安装。
+- dnd5e 条目只保留上游出处与许可证记录，不充当安装来源或校验基准；
+- 没有代理池、第三方镜像或官方私有服务依赖；system/module/world 内容在运行时统一从
+  arcane mirror 的 OSS 索引解析安装；
+- mirror 未收录的第三方内容需用户确认一次风险提示后安装；所有下载先落盘校验再安装。
 
 ## Writable data
 

@@ -52,16 +52,13 @@
   "systems": [
     {
       "id": "dnd5e",
-      "version": "5.3.3",
-      "defaultInstall": false,
       "license": {
         "software": "MIT",
         "srdContent": "CC BY 4.0",
         "details": "https://github.com/foundryvtt/dnd5e/blob/release-5.3.3/LICENSE.txt"
       },
-      "manifest": "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/system.json",
-      "download": "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/dnd5e-release-5.3.3.zip",
-      "sha256": "d998061b7cc67d12a07dc93c7fb627c195974b59fd2e9b15fae19899c3f2f1be"
+      "note": "Upstream provenance and license record only; not an install source and not a verification baseline. dnd5e installs from the arcane mirror index like every other system.",
+      "upstream": "https://github.com/foundryvtt/dnd5e"
     }
   ],
   "modules": [],
