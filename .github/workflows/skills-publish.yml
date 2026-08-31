@@ -43,6 +43,9 @@ jobs:
       - name: Verify Desktop source
         run: npm run verify:source --workspace arcane-desktop
 
+      - name: Build Foundry SDK
+        run: npm run build:sdk
+
       - name: Run Desktop tests
         run: npm test --workspace arcane-desktop
 
