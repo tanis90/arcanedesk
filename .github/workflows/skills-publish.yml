@@ -43,6 +43,9 @@ jobs:
       - name: Verify Desktop source
         run: npm run verify:source --workspace arcane-desktop
 
+      - name: Run Desktop tests
+        run: npm test --workspace arcane-desktop
+
       - name: Publish skills bundle to arcane-package OSS
         env:
           OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}

@@ -117,7 +117,12 @@ for (const requiredFile of [
   if (!files.includes(requiredFile)) errors.push(`${requiredFile} is missing`);
 }
 
-const packageFiles = files.filter((file) => file === "package.json" || file.endsWith("/package.json"));
+// vendored 第三方包(如 skills bundle 内嵌的 node_modules)不是仓库自身的 package,
+// 不参与 license/依赖清单校验——其许可证随包内文件原样携带。
+const packageFiles = files.filter(
+  (file) =>
+    (file === "package.json" || file.endsWith("/package.json")) && !file.split("/").includes("node_modules"),
+);
 const packages = new Map();
 for (const file of packageFiles) {
   const pkg = JSON.parse(readFileSync(resolve(repositoryRoot, file), "utf8"));

@@ -9,7 +9,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
 
-import { extractArchiveFile } from "../../../../scripts/archive.mjs";
+import { extractZip } from "./archive-zip.mjs";
 
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
 
@@ -1060,7 +1060,7 @@ export async function stageModule({
   fetchImpl = fetch,
   indexUrl = MIRROR_INDEX_URL,
   tempRoot = os.tmpdir(),
-  archiveExtractor = extractArchiveFile,
+  archiveExtractor = extractZip,
 }) {
   const { manifest, document: manifestDocument } = await loadManifestDocument(fetchImpl, manifestUrl);
   assertExpected(manifest.id, expectedId, "module id");
@@ -1248,7 +1248,7 @@ export async function stageWorldEnvironment({
   fetchImpl = fetch,
   indexUrl = MIRROR_INDEX_URL,
   tempRoot = os.tmpdir(),
-  archiveExtractor = extractArchiveFile,
+  archiveExtractor = extractZip,
 }) {
   const id = requireString(worldId, "world id", 128);
   if (!ID_PATTERN.test(id)) throw new Error(`world id is unsafe: ${id}`);

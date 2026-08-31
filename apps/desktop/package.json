@@ -62,6 +62,7 @@
       "skills/**/*",
       "system-prompts/**/*",
       "scripts/archive.mjs",
+      "scripts/archive-zip.mjs",
       "distribution/community-distribution.json",
       "generated/desktop-release.json",
       "generated/renderer-assets/**/*",

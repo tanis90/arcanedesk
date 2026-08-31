@@ -13,6 +13,7 @@
 
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import { builtinModules } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -38,7 +39,7 @@ function parseArgs(argv) {
   return args;
 }
 
-export { parseArgs, collectSkillFiles, buildSkillsManifest };
+export { parseArgs, collectSkillFiles, buildSkillsManifest, assertSkillsSelfContained };
 
 function sha256Hex(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
@@ -64,6 +65,79 @@ async function collectSkillFiles(skillsDir) {
     throw new Error("skills directory has no SKILL.md; refusing to publish an empty skill set");
   }
   return files;
+}
+
+// skills bundle 会被激活到 userData 单独运行(脱离 app 树),所以包内脚本必须自包含:
+// 相对导入不许逃逸出 skills 目录,裸导入只允许 node builtins 或包内 vendored 依赖,
+// 无豁免、无惰性加载——所有依赖在模块加载期就必须可解析。
+const SPECIFIER_PATTERNS = [
+  /\bimport\s+(?:[^'"()\s][^'"]*?\s+from\s+)?["']([^"']+)["']/g,
+  /\bexport\s+(?:\*|\{[^}]*\})\s+from\s+["']([^"']+)["']/g,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+];
+
+function extractImportSpecifiers(source) {
+  const specifiers = [];
+  for (const pattern of SPECIFIER_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(source)) !== null) specifiers.push(match[1]);
+  }
+  return specifiers;
+}
+
+function isBuiltinSpecifier(specifier) {
+  const name = specifier.startsWith("node:") ? specifier.slice(5) : specifier;
+  return builtinModules.includes(name);
+}
+
+/** 裸导入只允许解析到 skills 目录内部的 node_modules( vendored 依赖);越过根即逃逸。 */
+function resolvesInsideSkills(files, fromFile, specifier) {
+  const segments = specifier.split("/");
+  const packageName = specifier.startsWith("@") ? segments.slice(0, 2).join("/") : segments[0];
+  let directory = path.posix.dirname(fromFile);
+  while (true) {
+    if (files.has(path.posix.join(directory, "node_modules", packageName, "package.json"))) return true;
+    if (directory === "." || directory === "") return false;
+    directory = path.posix.dirname(directory);
+  }
+}
+
+function assertSpecifierContained(files, fromFile, specifier) {
+  const reject = (reason) => {
+    throw new Error(`skills bundle is not self-contained: ${fromFile} imports "${specifier}" (${reason})`);
+  };
+  if (specifier.startsWith("node:")) {
+    if (!isBuiltinSpecifier(specifier)) reject("unknown node: builtin");
+    return;
+  }
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
+    if (resolved === ".." || resolved.startsWith("../") || path.posix.isAbsolute(resolved)) {
+      reject("relative import escapes the skills directory");
+    }
+    if (!files.has(resolved)) reject("relative import target is not part of the skills bundle");
+    return;
+  }
+  if (specifier.startsWith("/") || specifier.startsWith("\\") || /^[A-Za-z]:/.test(specifier)) {
+    reject("absolute import path");
+  }
+  if (specifier.includes(":")) reject("only node: import schemes are allowed");
+  if (!isBuiltinSpecifier(specifier) && !resolvesInsideSkills(files, fromFile, specifier)) {
+    reject("bare import is neither a node builtin nor a vendored dependency inside the skills bundle");
+  }
+}
+
+/** 发布前硬门禁:逐文件扫描 .mjs 导入,任何越界引用直接拒发。 */
+async function assertSkillsSelfContained(skillsDir, fileList) {
+  const files = new Set(fileList);
+  for (const name of fileList) {
+    if (!name.endsWith(".mjs")) continue;
+    const source = await fsp.readFile(path.join(skillsDir, ...name.split("/")), "utf8");
+    for (const specifier of extractImportSpecifiers(source)) {
+      assertSpecifierContained(files, name, specifier);
+    }
+  }
 }
 
 /** 生成 manifest:逐文件 sha256/bytes + 整包 sha256/bytes,minAppVersion 仅在有约束时携带。 */
@@ -118,6 +192,10 @@ async function main() {
     throw new Error(`skills/prep/bundle.json minAppVersion is not a three-part version: ${minAppVersion}`);
   }
 
+  // 本地静态门禁先行:bundle 必须自包含(可脱离 app 树运行),再谈网络与上传。
+  const entries = await collectSkillFiles(SKILLS_DIR);
+  await assertSkillsSelfContained(SKILLS_DIR, entries);
+
   const current = await remoteRevision({ tolerateFailure: args.dryRun });
   if (current != null && revision <= current) {
     throw new Error(`skills revision ${revision} is not newer than the published r${current}; bump skills/prep/bundle.json`);
@@ -126,7 +204,6 @@ async function main() {
   const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "arcane-skills-publish-"));
   try {
     const bundleFile = path.join(workDir, "bundle.tar.gz");
-    const entries = await collectSkillFiles(SKILLS_DIR);
     await tar.c({ file: bundleFile, cwd: SKILLS_DIR, gzip: true, portable: true }, entries);
     const publishedAt = new Date().toISOString().replace(/\.\d+Z$/, "Z");
     const manifest = await buildSkillsManifest({

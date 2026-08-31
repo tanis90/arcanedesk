@@ -32,6 +32,7 @@ const textExtensions = new Set([
 const policyFiles = new Set(["scripts/verify-package.mjs", "scripts/verify-source.mjs"]);
 const exactDirectories = new Map([
   ["scripts", [
+    "archive-zip.mjs",
     "archive.mjs",
     "audit-package-mirror.mjs",
     "check-skills-revision.mjs",

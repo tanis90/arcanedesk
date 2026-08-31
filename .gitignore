@@ -1,5 +1,8 @@
 # Dependencies and package manager output
 node_modules/
+# Vendored runtime dependencies shipped inside the self-contained skills bundle
+!apps/desktop/skills/prep/arcane-fvtt-mods/scripts/node_modules/
+!apps/desktop/skills/prep/arcane-fvtt-mods/scripts/node_modules/**
 *.tgz
 npm-debug.log*
 
