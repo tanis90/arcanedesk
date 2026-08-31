@@ -135,9 +135,24 @@ test("module reader never pipes network responses to a shell and asks before clo
   const skill = await readFile(moduleReaderSkill, "utf8");
   assert.match(skill, /不得把任何网络响应直接送入 shell/);
   assert.match(skill, /先下载到临时目录/);
-  assert.match(skill, /SHA256\/发布签名/);
-  assert.match(skill, /每个新文档第一次调用 MinerU 前/);
-  assert.match(skill, /取得用户明确同意/);
+  assert.match(skill, /无条件计算脚本与二进制的\s+SHA256/s);
+  assert.match(skill, /CDN 不提供发布方校验值/);
+  assert.match(skill, /未取得用户明确同意前不得上传/);
+  assert.match(skill, /不视为同意第三方云上传/);
+});
+
+test("module reader keeps a constant 1-question budget and persists the token for the user", async () => {
+  const skill = await readFile(moduleReaderSkill, "utf8");
+  assert.match(skill, /交互预算恒定 1 次/);
+  // 预算单位是"上下文里有没有回答记录"，不是"每份文档"
+  assert.match(skill, /已经有用户回答过「那一次提问」的记录/);
+  assert.match(skill, /之后的文档沿用这次回答/);
+  assert.doesNotMatch(skill, /每个新文档第一次调用/);
+  assert.match(skill, /auth --show/);
+  // 注册后由 agent 持久化 token（stdin 管道 + 备份既有配置 + 回读验证），不靠临时环境变量交付
+  assert.match(skill, /printf '<Token>\\n' \| mineru-open-api auth/);
+  assert.match(skill, /下次新对话直接用，不用再注册/);
+  assert.doesNotMatch(skill, /用户明确要求长期保存时/);
 });
 
 test("mods skill covers non-index packages with one plain-language risk warning", async () => {
