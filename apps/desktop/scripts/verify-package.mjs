@@ -21,6 +21,7 @@ export const requiredFiles = [
   "src/main/main.js",
   "src/main/fvtt-ops-runtime.mjs",
   "system-prompts/combat.md",
+  "system-prompts/prep.md",
   "skills/prep/bundle.json",
   "skills/prep/arcane-fvtt-ops/SKILL.md",
   "skills/prep/arcane-fvtt-setup/SKILL.md",

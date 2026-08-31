@@ -7,7 +7,6 @@ import {
   arcaneShellTool,
   builtinToolNamesForPlatform,
   pinArcaneNodeForShellSpawn,
-  PREP_PREAMBLE,
 } from "../src/main/agent-host.js";
 
 const TOOL_NAMES = [
@@ -453,7 +452,20 @@ test("structured tools fail closed when the page runtime is unavailable", async 
 });
 
 test("prep preamble forces reading the matching skill before install actions", () => {
-  assert.ok(PREP_PREAMBLE.includes("必须先 read 对应 skill 的 SKILL.md 全文"));
-  assert.ok(PREP_PREAMBLE.includes("arcane-fvtt-setup"));
-  assert.ok(PREP_PREAMBLE.includes("出错后再回头读 skill"));
+  const preamble = readFileSync(
+    new URL("../system-prompts/prep.md", import.meta.url),
+    "utf8"
+  );
+  assert.ok(preamble.includes("必须先 read 对应 skill 的 SKILL.md 全文"));
+  assert.ok(preamble.includes("arcane-fvtt-setup"));
+  assert.ok(preamble.includes("出错后再回头读 skill"));
+});
+
+test("prep preamble prefers mermaid diagrams rendered in chat", () => {
+  const preamble = readFileSync(
+    new URL("../system-prompts/prep.md", import.meta.url),
+    "utf8"
+  );
+  assert.ok(preamble.includes("```mermaid"));
+  assert.ok(preamble.includes("不要生成图片文件"));
 });

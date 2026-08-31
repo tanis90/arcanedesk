@@ -138,6 +138,9 @@ macOS DMG 或官方 timed URL；不要求系统 Node 或 Git Bash。App 启动�
 默认 prompt;安全边界、世界模型、回合循环纪律、四态回执处理、目标调用
 合同都在里面)。改战斗行为就改这个文件,重启生效。
 
+备团模式相反:保留 SDK 默认 coding prompt,把 `system-prompts/prep.md`
+追加在后面(角色、装机硬顺序、cwd 围栏、世界写入纪律、Mermaid 图示偏好)。
+
 | 工具 | 作用 |
 |------|------|
 | `foundry_open` | 按需打开/导航 Foundry 面板(幂等,同源不重导航) |

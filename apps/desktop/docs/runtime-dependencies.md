@@ -8,7 +8,7 @@
 - `@earendil-works/pi-coding-agent` 及生产依赖；
 - `@arcanedesk/foundry-sdk`；
 - 从 workspace 依赖准备的 marked、highlight.js、KaTeX 与 Mermaid 静态资源；
-- `system-prompts/combat.md` 与公开用户 skills；
+- `system-prompts/combat.md` 与 `system-prompts/prep.md`，以及公开用户 skills；
 - `community-distribution.json`；
 - 当前平台的官方 Node 22.23.2 归档、许可证说明与 SHA256 manifest。
 
