@@ -102,7 +102,7 @@ Start-Process -FilePath $arcaneNode `
 
 - `--world` 可省略:省略则停在 Setup 页,带上则启动后直接进世界。
 - 首次或切世界后启动要等 25-30 秒(migration + 世界加载),再检查 HTTP 和端口。
-- dmg 装的 GUI 版也能 headless：`main.js` 在 `.app/Contents/Resources/app/main.js`，用 `ARCANE_FVTT_NODE` 运行。若出现 quarantine 相关原生模块错误，先验签并确认准确 App 路径；只有用户明确授权后才按 setup skill 的 macOS 故障修复流程定点清除 quarantine。不要重签/去签包内文件，也不要用 `ELECTRON_RUN_AS_NODE`。
+- dmg 装的 GUI 版也能 headless：`main.js` 在 `.app/Contents/Resources/app/main.js`，用 `ARCANE_FVTT_NODE` 运行。若出现 quarantine 相关原生模块错误（经 setup 流程安装的副本已在首启前清除 quarantine，该错误只可能出现在未经 setup 流程的存量副本上），先验签并确认准确 App 路径；只有用户明确授权后才按 setup skill 的 macOS 流程定点清除 quarantine。不要重签/去签包内文件，也不要用 `ELECTRON_RUN_AS_NODE`。
 - `ARCANE_FVTT_NODE` 不可用时不要改用系统 Node。需要临时交互使用可 `open "/Applications/Foundry Virtual Tabletop.app"`，但应同时报告 Arcane runtime 异常。
 - 不要直接执行 `.app` 里的二进制做版本检查。Electron 会前台启动整个 app，stdout 管道关闭后可能因 EPIPE 崩溃；版本检查读取 `Contents/Resources/app/package.json`。
 

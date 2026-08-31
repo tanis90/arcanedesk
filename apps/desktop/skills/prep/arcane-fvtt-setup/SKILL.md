@@ -97,9 +97,10 @@ GitHub 上游，不使用代理池或第三方镜像。下载后必须逐字节�
 4. 用 Arcane Node 启动 `main.js --dataPath=<Data目录>`；需要时再加 `--world=<id>`。
 5. 日志出现 `Server started and listening on port 30000`，本机地址有响应。
 
-macOS 发生明确的 quarantine 原生模块错误时，先按参考流程验证应用签名与路径。只有用户
-明确授权后，才可把 `xattr -dr com.apple.quarantine` 用作定点故障修复；不得作为默认安装
-步骤，也不得重签、去签或替换 App 包内文件。
+macOS DMG 安装的 App 副本在首次启动前必须按 [references/macos-install.md](references/macos-install.md)
+处理 quarantine：核对本次工件的 SHA256、`codesign` 与 `spctl` 结果和准确 App 路径，向用户说明后
+用 `xattr -dr com.apple.quarantine` 清除该副本的 quarantine，再做首次启动。不得重签、去签或替换
+App 包内文件。
 
 最后报告实际路径、安装来源、版本、SHA256、安装了哪些可选内容，以及仍需用户在 Foundry
 页面完成的 EULA、license 激活或 GM 登录。不要打印 license key、完整 `options.json` 或凭据。

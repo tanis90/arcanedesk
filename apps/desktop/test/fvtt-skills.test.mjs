@@ -99,8 +99,8 @@ test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workfl
   const macosInstall = await readFile(setupSkillMacos, "utf8");
   assert.match(macosInstall, /macOS DMG/);
   assert.match(macosInstall, /xattr\s+-dr\s+com\.apple\.quarantine/);
-  assert.match(macosInstall, /用户明确授权/);
-  assert.match(macosInstall, /不得把清 quarantine 当成默认安装步骤/);
+  assert.match(macosInstall, /向用户说明/);
+  assert.match(macosInstall, /必须清掉拷贝带来的隔离属性/);
 });
 
 test("ops skill uses PowerShell on Windows without reviving the Git Bash prerequisite", async () => {
