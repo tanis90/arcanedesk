@@ -45,6 +45,25 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev
 
+  skills-revision:
+    name: Check skills bundle revision bump
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Check skills revision bump
+        run: node apps/desktop/scripts/check-skills-revision.mjs origin/${{ github.base_ref }}
+
   dependency-review:
     name: Review dependency changes
     if: github.event_name == 'pull_request'

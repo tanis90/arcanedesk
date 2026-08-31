@@ -93,7 +93,9 @@ an app release through the `Publish Arcane Skills` workflow. It packs
   `Cache-Control: no-cache` only after every immutable object passes the HEAD
   verification. `skip_latest=true` uploads without moving the pointer.
 - `skills/prep/bundle.json` owns the monotonic `revision`; any PR that changes
-  skills must increment it. The publisher refuses a revision that is not newer
+  skills must increment it, and CI enforces the bump on pull requests
+  (`skills-revision` job, `apps/desktop/scripts/check-skills-revision.mjs`).
+  The publisher refuses a revision that is not newer
   than the published pointer, so a bundle is never overwritten or rolled back.
 - `bundle.json` may carry `minAppVersion` when a skill depends on an app
   capability that has not shipped yet; older apps then keep their current
