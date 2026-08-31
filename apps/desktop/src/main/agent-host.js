@@ -81,7 +81,8 @@ const COMBAT_PROFILE = {
   getCwd: null, // main 必须注入稳定 cwd；禁止用随启动方式变化的 process.cwd()
   builtinTools: false, // false = tools allowlist 只放 custom tools,禁全部内置
   systemPrompt: "combat", // "combat" = combat.md 全文替换;"append" = pi 默认 prompt + PREP_PREAMBLE
-  skillPaths: [], // prep: [abs(skills/prep)]
+  skillPaths: [], // prep: 用 getSkillPaths() 现取(SkillsUpdater 激活副本优先于包内基线)
+  getSkillPaths: null,
   customToolNames: null, // null = 全部 desktop custom tools;prep 只启用界面/eval
   fence: false, // prep: true 挂 cwd 围栏
 };
@@ -356,7 +357,9 @@ export class AgentHost {
         cwd,
         agentDir: getAgentDir(),
         appendSystemPromptOverride: () => [PREP_PREAMBLE],
-        additionalSkillPaths: this.profile.skillPaths,
+        // skillPaths 每次建 session 现取:SkillsUpdater 刷新成功后,新 session
+        // 立即落到 userData 激活副本,老 session 保持建会话时的快照。
+        additionalSkillPaths: this.profile.getSkillPaths ? this.profile.getSkillPaths() : this.profile.skillPaths,
         extensionFactories: this.profile.fence
           ? [{ name: "arcane-cwd-fence", hidden: true, factory: makeCwdFence(this.profile.getCwd) }]
           : [],

@@ -5,7 +5,11 @@
 - Immutable objects:
   `desktop/arcane-desk/releases/<releaseId>/<platform>/<artifact>` and
   `desktop/arcane-desk/releases/<releaseId>/release.json`.
-- Mutable object: `desktop/arcane-desk/latest.json` only.
+  The skills channel follows the same rule:
+  `desktop/arcane-desk/skills/<revision>/bundle.tar.gz` and
+  `desktop/arcane-desk/skills/<revision>/manifest.json`.
+- Mutable objects: `desktop/arcane-desk/latest.json` and
+  `desktop/arcane-desk/skills/latest.json` only.
 - Supported platform directories: `macos-arm64`, `macos-x64`, `windows-x64`,
   and `windows-arm64`.
 - Every immutable object is checked for absence before upload. Existing objects

@@ -41,6 +41,7 @@ const exactDirectories = new Map([
     "prepare-renderer-assets.mjs",
     "prepare-world-profile.mjs",
     "publish-release.mjs",
+    "publish-skills.mjs",
     "verify-package.mjs",
     "verify-source.mjs",
     "write-sha256sums.mjs",

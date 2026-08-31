@@ -72,7 +72,7 @@ function parseArgs(argv) {
   return args;
 }
 
-export { parseArgs, platformForFile, uploadObject, verifyUrl };
+export { parseArgs, platformForFile, uploadObject, verifyUrl, createOssClient, BASE_URL };
 
 function loadCredentials() {
   if (process.env.OSS_RELEASE_KEY_ID && process.env.OSS_RELEASE_KEY_SECRET) {

@@ -1,0 +1,55 @@
+name: Publish Arcane Skills
+
+# 内置 skills 的独立下发入口:只打包并发布 apps/desktop/skills/prep,不构建、
+# 不发 app 版本。revision 来自 skills/prep/bundle.json 且必须严格大于远端指针,
+# 不可变对象全部 HEAD 验收通过后才切换 skills/latest.json。
+on:
+  workflow_dispatch:
+    inputs:
+      skip_latest:
+        description: "Upload and verify the immutable bundle without moving skills/latest.json"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arcane-skills-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish skills bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: desktop-release
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Verify Desktop source
+        run: npm run verify:source --workspace arcane-desktop
+
+      - name: Publish skills bundle to arcane-package OSS
+        env:
+          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
+          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ inputs.skip_latest }}" == "true" ]]; then args+=(--skip-latest); fi
+          node apps/desktop/scripts/publish-skills.mjs "${args[@]}"
