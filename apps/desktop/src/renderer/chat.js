@@ -777,6 +777,10 @@ function onEvent(event) {
       if (typeof event.gutter === "number") panelLayout.gutter = event.gutter;
       applyPanelLayout();
       break;
+    case "fullscreen":
+      // 真全屏(F11):main 告知状态,CSS 收起标题栏带、分隔条上沿回窗口顶
+      document.body.classList.toggle("is-fullscreen", Boolean(event.on));
+      break;
     case "model_info":
       updateModelLabels(event.label ?? "default");
       if (typeof event.supportsImages === "boolean") modelSupportsImages = event.supportsImages;

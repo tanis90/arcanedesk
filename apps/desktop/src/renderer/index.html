@@ -140,6 +140,8 @@
       -webkit-app-region: drag;
       z-index: 40;
     }
+    /* 真全屏(F11):overlay 三键不绘制,带子收起,Foundry 回满高(main 侧 topOffset=0) */
+    :root[data-frameless="1"] body.with-panel.is-fullscreen #panel-titlebar { display: none; }
     /* 法杖星芒 mark:透明底黑墨,暗色主题反白 */
     .brand .logo { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
     .brand .logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -1192,6 +1194,7 @@
     body.with-panel #splitter { display: block; }
     /* 标题栏带下移 Foundry view 后,分隔条上沿与视图对齐,不跨进标题栏带 */
     :root[data-frameless="1"] body.with-panel #splitter { top: 44px; }
+    :root[data-frameless="1"] body.with-panel.is-fullscreen #splitter { top: 0; }
 
     /* ---------- 会话侧栏(覆盖式抽屉,可收起) ---------- */
     #drawer-backdrop {

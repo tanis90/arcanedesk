@@ -127,8 +127,9 @@ function layoutViews() {
   }
   const chatWidth = effectiveChatWidth(width);
   // chat 居左,Foundry 主视觉从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
-  // 给贯穿全窗的标题栏带(overlay 三键落在带上),Foundry 从带下沿开始,不被压。
-  const topOffset = process.platform === "win32" ? TITLEBAR_HEIGHT : 0;
+  // 给贯穿全窗的标题栏带(overlay 三键落在带上),Foundry 从带下沿开始,不被压;
+  // 真全屏(F11)时三键与带子都消失,Foundry 回满高。
+  const topOffset = process.platform === "win32" && !mainWindow.isFullScreen() ? TITLEBAR_HEIGHT : 0;
   foundryView.setBounds({
     x: chatWidth + SPLITTER_GUTTER,
     y: topOffset,
@@ -295,6 +296,7 @@ async function openFoundryView(rawUrl) {
     });
     mainWindow.contentView.addChildView(foundryView);
     const panelWebContents = foundryView.webContents;
+    if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
     panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
       if (isMainFrame === false || isInPlace) return;
       foundryRuntime?.invalidate();
@@ -446,6 +448,16 @@ function syncTitleBarOverlay() {
   mainWindow.setTitleBarOverlay(titleBarOverlayFor(resolveTheme()));
 }
 
+/** F11 切换真全屏(浏览器式沉浸)。before-input-event 抢在页面前面拿到按键,
+    焦点在 chat 或 Foundry 视图里都生效;只绑 Win,mac 的 F11 是系统"显示桌面"。 */
+function bindFullScreenHotkey(webContents) {
+  webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || input.key !== "F11") return;
+    event.preventDefault();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  });
+}
+
 function createWindow() {
   // mac 不能摘菜单:macOS 的 Cmd+C/V/A/Z 靠菜单 role 承载,null 菜单 = 输入框
   // 复制粘贴全废。darwin 装最小骨架(应用菜单带 Cmd+Q + 预置 Edit 菜单);
@@ -492,11 +504,19 @@ function createWindow() {
     query: { theme, frameless: process.platform === "win32" ? "1" : "0", lang: resolveLocale() },
   });
   if (isDev) mainWindow.webContents.openDevTools({ mode: "detach" });
+  if (process.platform === "win32") bindFullScreenHotkey(mainWindow.webContents);
 
   const relayout = () => layoutViews();
   mainWindow.on("resize", relayout);
   mainWindow.on("maximize", relayout);
   mainWindow.on("unmaximize", relayout);
+  // 全屏进出:重排 Foundry 视图(topOffset 随全屏切换),并同步 renderer 收/展标题栏带
+  const syncFullScreen = () => {
+    relayout();
+    sendToRenderer({ type: "fullscreen", on: mainWindow.isFullScreen() });
+  };
+  mainWindow.on("enter-full-screen", syncFullScreen);
+  mainWindow.on("leave-full-screen", syncFullScreen);
 
   mainWindow.on("closed", () => {
     foundryRuntime?.invalidate();
