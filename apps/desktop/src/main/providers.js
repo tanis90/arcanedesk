@@ -79,8 +79,17 @@ export class ProviderStore {
           ...(apiKey && credentialTarget ? { credentialTarget } : {}),
         };
       });
+      const hasSelectedModel = Object.hasOwn(parsed, "selectedModel");
+      const legacyDefault = parsed.defaultModel ?? null;
+      // v3 及更早版本会在首次启动自动把 Spark 写进 defaultModel，无法与用户
+      // 显式选择区分。迁移时把 Spark 还原为“无显式选择”；实际模型仍由产品
+      // 默认回退解析为 Spark。非 Spark 旧选择则完整保留。
+      const selectedModel = hasSelectedModel
+        ? (parsed.selectedModel ?? null)
+        : (legacyDefault?.providerId === ARCANE_SPARK_PROVIDER_ID ? null : legacyDefault);
+      if (!hasSelectedModel && Object.hasOwn(parsed, "defaultModel")) needsMigration = true;
       return {
-        data: { providers, defaultModel: parsed.defaultModel ?? null },
+        data: { providers, defaultModel: selectedModel },
         needsMigration,
       };
     } catch {
@@ -90,20 +99,20 @@ export class ProviderStore {
 
   save() {
     const persisted = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       providers: this.data.providers.map(({ apiKey, credentialTarget, ...provider }) => ({
         ...provider,
         apiKeyProtected: this.secretStorage.protect(encodeBoundCredential(apiKey, credentialTarget)),
       })),
-      defaultModel: this.data.defaultModel,
+      selectedModel: this.data.defaultModel,
     };
     writeFileSync(this.filePath, JSON.stringify(persisted, null, 2));
   }
 
   /**
    * Arcane Spark 是内置 provider：首次安装即展示，但 Key 由用户自行填写，
-   * 或由安装程序/本地启动器通过环境变量注入。首次安装会把它设为默认模型；
-   * 已有用户手动选择的默认模型保持不变。
+   * 或由安装程序/本地启动器通过环境变量注入。它是没有显式模型选择时的
+   * 产品默认回退，不写进 defaultModel；已有用户手动选择保持不变。
    */
   provisionArcaneSparkProvider(env = process.env) {
     if (cleanEnvValue(env.ARCANE_SPARK_ENABLED) === "0") return false;
@@ -150,7 +159,7 @@ export class ProviderStore {
     const sparkDefaultNeedsMigration =
       this.data.defaultModel?.providerId === ARCANE_SPARK_PROVIDER_ID &&
       this.data.defaultModel.modelId !== ARCANE_SPARK_MODEL_ID;
-    if (!this.data.defaultModel || forceDefault || sparkDefaultNeedsMigration) {
+    if (forceDefault || sparkDefaultNeedsMigration) {
       const nextDefault = { providerId: ARCANE_SPARK_PROVIDER_ID, modelId: ARCANE_SPARK_MODEL_ID };
       if (JSON.stringify(this.data.defaultModel) !== JSON.stringify(nextDefault)) {
         this.data.defaultModel = nextDefault;
@@ -175,12 +184,34 @@ export class ProviderStore {
         models: (p.models ?? []).map((m) => ({ id: m.id, name: m.name ?? m.id, vision: Boolean(m.vision) })),
       })),
       defaultModel: this.data.defaultModel,
+      effectiveModel: this.effectiveModel(),
     };
   }
 
-  /** 当前默认模型属于自管 provider 且缺 Key 时，返回供 UI 拦截使用的信息。 */
-  missingApiKeyForDefault() {
-    const pref = this.data.defaultModel;
+  /** 产品默认模型：只有用户没有显式选择时才回退 Arcane Spark。 */
+  productDefaultModel() {
+    const provider = this.data.providers.find((p) => p.id === ARCANE_SPARK_PROVIDER_ID);
+    const model = provider?.models?.find((m) => m.id === ARCANE_SPARK_MODEL_ID);
+    return provider && model
+      ? { providerId: ARCANE_SPARK_PROVIDER_ID, modelId: ARCANE_SPARK_MODEL_ID }
+      : null;
+  }
+
+  /** 把显式选择解析成实际模型；null 表示使用产品默认，而不是没有模型。 */
+  modelForSelection(selection) {
+    if (selection?.providerId && selection?.modelId) {
+      return { providerId: String(selection.providerId), modelId: String(selection.modelId) };
+    }
+    return this.productDefaultModel();
+  }
+
+  /** 当前持久化选择对应的实际模型。 */
+  effectiveModel() {
+    return this.modelForSelection(this.data.defaultModel);
+  }
+
+  /** 指定模型属于自管 provider 且缺 Key 时，返回供 UI 拦截使用的信息。 */
+  missingApiKeyForModel(pref) {
     if (!pref?.providerId) return null;
     const provider = this.data.providers.find((p) => p.id === pref.providerId);
     if (!provider || usableCredential(provider)) return null;
@@ -189,6 +220,11 @@ export class ProviderStore {
       providerName: provider.name ?? provider.id,
       arcaneSpark: provider.id === ARCANE_SPARK_PROVIDER_ID,
     };
+  }
+
+  /** 兼容调用：检查显式选择解析后的实际模型。 */
+  missingApiKeyForDefault() {
+    return this.missingApiKeyForModel(this.effectiveModel());
   }
 
   /**

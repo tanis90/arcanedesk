@@ -37,6 +37,58 @@ function buildHarness({ call, sendToRenderer = () => {} } = {}) {
   };
 }
 
+test("model access follows the session's actual current model instead of the stored fallback", () => {
+  const checked = [];
+  const host = new AgentHost({
+    providerStore: {
+      effectiveModel: () => ({ providerId: "arcane-spark", modelId: "arcane-spark" }),
+      missingApiKeyForModel(model) {
+        checked.push(model);
+        return model?.providerId === "arcane-spark"
+          ? { providerId: "arcane-spark", providerName: "Arcane Spark", arcaneSpark: true }
+          : null;
+      },
+    },
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+
+  host.session = { model: { provider: "kimi", id: "kimi-for-coding" } };
+  assert.deepEqual(host.currentModelRef(), { providerId: "kimi", modelId: "kimi-for-coding" });
+  assert.equal(host.missingApiKeyForCurrentModel(), null);
+  assert.deepEqual(checked.at(-1), { providerId: "kimi", modelId: "kimi-for-coding" });
+
+  host.session = null;
+  assert.deepEqual(host.currentModelRef(), { providerId: "arcane-spark", modelId: "arcane-spark" });
+  assert.equal(host.missingApiKeyForCurrentModel().arcaneSpark, true);
+});
+
+test("an unconfigured model can be selected before its key activates the Agent session", async () => {
+  let missing = true;
+  let activated = null;
+  const host = new AgentHost({
+    providerStore: {
+      effectiveModel: () => ({ providerId: "arcane-spark", modelId: "arcane-spark" }),
+      missingApiKeyForModel: (model) => missing
+        ? { providerId: model.providerId, providerName: model.providerId, arcaneSpark: false }
+        : null,
+    },
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+  const model = { provider: "custom", id: "custom-model", input: ["text"] };
+  host.modelRuntime = { getModel: () => model };
+  host.session = { model: { provider: "old", id: "old-model" }, setModel: async (next) => { activated = next; } };
+
+  assert.deepEqual(await host.setCurrentModel("custom", "custom-model"), { ok: true, pendingKey: true });
+  assert.deepEqual(host.currentModelRef(), { providerId: "custom", modelId: "custom-model" });
+  assert.equal(activated, null);
+
+  missing = false;
+  assert.deepEqual(await host.setCurrentModel("custom", "custom-model"), { ok: true });
+  assert.equal(activated, model);
+});
+
 test("prep sessions select the native shell tool for each desktop platform", () => {
   assert.deepEqual(builtinToolNamesForPlatform("win32"), ["read", "powershell", "edit", "write"]);
   assert.deepEqual(builtinToolNamesForPlatform("darwin"), ["read", "bash", "edit", "write"]);

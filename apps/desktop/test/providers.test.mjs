@@ -12,11 +12,12 @@ function tempConfig() {
   return { dir, file: join(dir, "providers.json") };
 }
 
-test("creates Arcane Spark as the default provider without silently issuing a Key", () => {
+test("creates Arcane Spark as the product fallback without persisting an explicit selection", () => {
   const { file } = tempConfig();
   const store = new ProviderStore(file, () => {}, {}, testSecretStorage());
 
-  assert.deepEqual(store.data.defaultModel, {
+  assert.equal(store.data.defaultModel, null);
+  assert.deepEqual(store.effectiveModel(), {
     providerId: "arcane-spark",
     modelId: "arcane-spark",
   });
@@ -34,6 +35,10 @@ test("creates Arcane Spark as the default provider without silently issuing a Ke
     arcaneSpark: true,
   });
   assert.equal(store.toPublic().providers[0].hasKey, false);
+  assert.deepEqual(store.toPublic().effectiveModel, {
+    providerId: "arcane-spark",
+    modelId: "arcane-spark",
+  });
 });
 
 test("allows Arcane Spark provisioning to be disabled explicitly", () => {
@@ -48,7 +53,8 @@ test("provisions Arcane Spark from an injected Key", () => {
   const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_API_KEY: "restricted-token" }, testSecretStorage());
 
   assert.equal(store.data.providers.length, 1);
-  assert.deepEqual(store.data.defaultModel, {
+  assert.equal(store.data.defaultModel, null);
+  assert.deepEqual(store.effectiveModel(), {
     providerId: "arcane-spark",
     modelId: "arcane-spark",
   });
@@ -73,6 +79,57 @@ test("provisions Arcane Spark from an injected Key", () => {
   });
   assert.equal(store.missingApiKeyForDefault(), null);
   assert.equal(store.toPublic().providers[0].hasKey, true);
+});
+
+test("configuring a provider does not select it, but an explicit model selection controls access", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, {}, testSecretStorage());
+  assert.deepEqual(store.upsertProvider({
+    id: "kimi",
+    name: "Kimi",
+    api: "openai-completions",
+    baseUrl: "https://api.kimi.example/v1",
+    apiKey: "kimi-key",
+    models: [{ id: "kimi-for-coding" }],
+  }), { ok: true });
+
+  assert.equal(store.data.defaultModel, null);
+  assert.deepEqual(store.effectiveModel(), {
+    providerId: "arcane-spark",
+    modelId: "arcane-spark",
+  });
+  assert.equal(store.missingApiKeyForDefault().providerId, "arcane-spark");
+
+  store.setDefaultModel("kimi", "kimi-for-coding");
+  assert.deepEqual(store.effectiveModel(), {
+    providerId: "kimi",
+    modelId: "kimi-for-coding",
+  });
+  assert.equal(store.missingApiKeyForDefault(), null);
+
+  store.setDefaultModel("", "");
+  assert.equal(store.data.defaultModel, null);
+  assert.equal(store.missingApiKeyForDefault().providerId, "arcane-spark");
+});
+
+test("a selected unconfigured custom provider reports itself instead of Arcane Spark", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, {}, testSecretStorage());
+  store.upsertProvider({
+    id: "kimi",
+    name: "Kimi",
+    api: "openai-completions",
+    baseUrl: "https://api.kimi.example/v1",
+    apiKey: "",
+    models: [{ id: "kimi-for-coding" }],
+  });
+  store.setDefaultModel("kimi", "kimi-for-coding");
+
+  assert.deepEqual(store.missingApiKeyForDefault(), {
+    providerId: "kimi",
+    providerName: "Kimi",
+    arcaneSpark: false,
+  });
 });
 
 test("reads the restricted token from a local token file while keeping the stable model alias", () => {
@@ -114,7 +171,7 @@ test("keeps an explicit user default unless force-default is requested", () => {
   });
 });
 
-test("migrates a legacy Arcane Spark default to the stable alias", () => {
+test("migrates a legacy automatic Arcane Spark default into the product fallback", () => {
   const { file } = tempConfig();
   writeFileSync(
     file,
@@ -133,7 +190,8 @@ test("migrates a legacy Arcane Spark default to the stable alias", () => {
 
   const store = new ProviderStore(file, () => {}, {}, testSecretStorage());
 
-  assert.deepEqual(store.data.defaultModel, { providerId: "arcane-spark", modelId: "arcane-spark" });
+  assert.equal(store.data.defaultModel, null);
+  assert.deepEqual(store.effectiveModel(), { providerId: "arcane-spark", modelId: "arcane-spark" });
   assert.equal(store.data.providers[0].baseUrl, "https://llm.arcanedesk.bitterbebop.cn/v1");
   assert.deepEqual(store.data.providers[0].models, [
     { id: "arcane-spark", name: "Arcane Spark", vision: true },
@@ -141,7 +199,11 @@ test("migrates a legacy Arcane Spark default to the stable alias", () => {
   assert.equal(store.data.providers[0].apiKey, "restricted-token");
   const migrated = readFileSync(file, "utf8");
   assert.equal(migrated.includes("restricted-token"), false);
-  assert.equal(JSON.parse(migrated).providers[0].apiKey, undefined);
+  const parsed = JSON.parse(migrated);
+  assert.equal(parsed.providers[0].apiKey, undefined);
+  assert.equal(parsed.schemaVersion, 4);
+  assert.equal(parsed.selectedModel, null);
+  assert.equal(parsed.defaultModel, undefined);
 });
 
 test("saving the managed provider cannot replace the Arcane Spark contract", () => {

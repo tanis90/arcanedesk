@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld("arcane", {
   }),
   /** Settings: provider management + default model. */
   getSettings: () => ipcRenderer.invoke("settings:get"),
-  getModelAccess: () => ipcRenderer.invoke("settings:model-access"),
+  getModelAccess: (context) => ipcRenderer.invoke("settings:model-access", context),
   saveProvider: (provider) => ipcRenderer.invoke("settings:save-provider", provider),
   deleteProvider: (id) => ipcRenderer.invoke("settings:delete-provider", id),
   setDefaultModel: (providerId, modelId) =>
