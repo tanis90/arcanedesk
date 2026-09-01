@@ -141,9 +141,9 @@ test("module reader never pipes network responses to a shell and asks before clo
   assert.match(skill, /不视为同意第三方云上传/);
 });
 
-test("module reader keeps a constant 1-question budget and persists the token for the user", async () => {
+test("module reader keeps a constant 2-question budget and persists the token for the user", async () => {
   const skill = await readFile(moduleReaderSkill, "utf8");
-  assert.match(skill, /交互预算恒定 1 次/);
+  assert.match(skill, /交互预算恒定 2 次/);
   // 预算单位是"上下文里有没有回答记录"，不是"每份文档"
   assert.match(skill, /已经有用户回答过「那一次提问」的记录/);
   assert.match(skill, /之后的文档沿用这次回答/);
@@ -153,6 +153,15 @@ test("module reader keeps a constant 1-question budget and persists the token fo
   assert.match(skill, /printf '<Token>\\n' \| mineru-open-api auth/);
   assert.match(skill, /下次新对话直接用，不用再注册/);
   assert.doesNotMatch(skill, /用户明确要求长期保存时/);
+});
+
+test("module reader offers a few mermaid diagrams after the library is built", async () => {
+  const skill = await readFile(moduleReaderSkill, "utf8");
+  // 建库后的唯一新增交互是图解提议；skill 只约束产物质量，不教读法
+  assert.match(skill, /图解提议/);
+  assert.match(skill, /Mermaid/);
+  assert.match(skill, /每条边都要有原文依据/);
+  assert.match(skill, /不规定读法/);
 });
 
 test("mods skill covers non-index packages with one plain-language risk warning", async () => {
