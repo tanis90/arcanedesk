@@ -18,7 +18,7 @@ import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
 import { DisplayMediaController, installDevicePermissionDenials } from "./permissions/display-media.js";
 import { err, errorToIpc } from "./i18n-error.mjs";
 import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
-import { SkillsUpdater } from "./skills-updater.mjs";
+import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 
@@ -582,6 +582,8 @@ app.whenReady().then(async () => {
     // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback)。
     baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL,
     onActivated: (dir) => applyModManagerEnv(dir),
+    // 通道自身的运维遥测:各 revision 分布/失败率/minAppVersion 拦截全靠这条。
+    onRefreshResult: (report) => telemetry?.skillsUpdateCompleted(report),
   });
   function applyModManagerEnv(skillsDir) {
     process.env.ARCANE_FVTT_MOD_MANAGER = path.join(
@@ -592,6 +594,12 @@ app.whenReady().then(async () => {
     );
   }
   applyModManagerEnv(skillsUpdater.resolveSkillsDir());
+  // skill.loaded 的归因上下文:生效目录 + bundle revision,事件发生时现取,
+  // refresh 激活新 bundle 后自动跟随;telemetry 为 null 时整条 skill 遥测静默关闭。
+  telemetry?.setSkillsContext(() => {
+    const dir = skillsUpdater.resolveSkillsDir();
+    return { rootDir: dir, revision: bundleRevision(dir) };
+  });
   // 启动后后台刷新一次;失败静默保留现状,绝不阻塞启动。
   skillsUpdater.refresh().catch((error) => console.error("[skills] unexpected refresh failure:", error));
   const bundledNodeRoot = app.isPackaged

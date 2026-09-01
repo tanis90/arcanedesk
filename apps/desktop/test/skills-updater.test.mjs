@@ -88,7 +88,7 @@ function objectsFor({ bundle, manifest, pointer }) {
   ]);
 }
 
-function makeUpdater({ stateDir, calls, objects, appVersion = "0.1.7", onActivated, log }) {
+function makeUpdater({ stateDir, calls, objects, appVersion = "0.1.7", onActivated, onRefreshResult, log }) {
   return new SkillsUpdater({
     bundledSkillsDir: BUNDLED_SKILLS,
     stateDir,
@@ -96,6 +96,7 @@ function makeUpdater({ stateDir, calls, objects, appVersion = "0.1.7", onActivat
     baseUrl: BASE,
     fetchImpl: mockOss(objects, calls),
     onActivated,
+    onRefreshResult,
     log: log ?? (() => {}),
   });
 }
@@ -320,4 +321,106 @@ test("a network failure during refresh keeps startup usable", async (t) => {
   const result = await updater.refresh();
   assert.deepEqual(result, { updated: false, reason: "error" });
   assert.equal(updater.resolveSkillsDir(), BUNDLED_SKILLS);
+});
+
+// ---- onRefreshResult 运维遥测:每次 refresh 一条;回调失败绝不影响刷新语义 ----
+
+/** durationMs 抖动不可断言,剥掉后比对其余字段。 */
+function stripDuration({ durationMs, ...rest }) {
+  assert.ok(Number.isFinite(durationMs) && durationMs >= 0);
+  return rest;
+}
+
+test("every refresh reports exactly one outcome with from/to revisions", async (t) => {
+  const workDir = await makeTempDir(t);
+  const stateDir = path.join(workDir, "skills");
+  const published = await stagePublishedBundle(workDir, bundleRevision(BUNDLED_SKILLS) + 1, {
+    files: { "arcane-fvtt-ops/SKILL.md": "# updated ops skill\n" },
+  });
+  const reports = [];
+  const updater = makeUpdater({
+    stateDir,
+    calls: new Map(),
+    objects: objectsFor(published),
+    onRefreshResult: (report) => reports.push(report),
+  });
+
+  const first = await updater.refresh();
+  assert.equal(first.updated, true);
+  const second = await updater.refresh();
+  assert.equal(second.reason, "up-to-date");
+
+  assert.equal(reports.length, 2);
+  assert.deepEqual(stripDuration(reports[0]), {
+    outcome: "updated",
+    fromRevision: bundleRevision(BUNDLED_SKILLS),
+    toRevision: first.revision,
+    error: null,
+  });
+  assert.deepEqual(stripDuration(reports[1]), {
+    outcome: "up_to_date",
+    fromRevision: first.revision,
+    toRevision: first.revision,
+    error: null,
+  });
+});
+
+test("the minAppVersion gate reports the blocked target revision", async (t) => {
+  const workDir = await makeTempDir(t);
+  const stateDir = path.join(workDir, "skills");
+  const published = await stagePublishedBundle(workDir, bundleRevision(BUNDLED_SKILLS) + 1, {
+    files: { "arcane-fvtt-ops/SKILL.md": "# needs a newer app\n" },
+    minAppVersion: "9.9.9",
+  });
+  const reports = [];
+  const updater = makeUpdater({
+    stateDir,
+    calls: new Map(),
+    objects: objectsFor(published),
+    onRefreshResult: (report) => reports.push(report),
+  });
+  await updater.refresh();
+  assert.deepEqual(stripDuration(reports[0]), {
+    outcome: "min_app_version_blocked",
+    fromRevision: bundleRevision(BUNDLED_SKILLS),
+    toRevision: bundleRevision(BUNDLED_SKILLS) + 1,
+    error: null,
+  });
+});
+
+test("a failing refresh reports outcome=error with the error attached for classification", async (t) => {
+  const stateDir = path.join(await makeTempDir(t), "skills");
+  const reports = [];
+  const updater = makeUpdater({
+    stateDir,
+    calls: new Map(),
+    objects: new Map(), // latest.json 404
+    onRefreshResult: (report) => reports.push(report),
+  });
+  const result = await updater.refresh();
+  assert.deepEqual(result, { updated: false, reason: "error" });
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].outcome, "error");
+  assert.ok(reports[0].error instanceof Error);
+  assert.match(reports[0].error.message, /HTTP 404/);
+  assert.equal(reports[0].toRevision, 0); // 指针都没拿到,目标未知
+});
+
+test("a throwing onRefreshResult callback never changes refresh semantics", async (t) => {
+  const workDir = await makeTempDir(t);
+  const stateDir = path.join(workDir, "skills");
+  const published = await stagePublishedBundle(workDir, bundleRevision(BUNDLED_SKILLS) + 1, {
+    files: { "arcane-fvtt-ops/SKILL.md": "# telemetry must not break activation\n" },
+  });
+  const updater = makeUpdater({
+    stateDir,
+    calls: new Map(),
+    objects: objectsFor(published),
+    onRefreshResult: () => {
+      throw new Error("telemetry blew up");
+    },
+  });
+  const result = await updater.refresh();
+  assert.equal(result.updated, true);
+  assert.equal(updater.resolveSkillsDir(), path.join(stateDir, "active"));
 });

@@ -12,8 +12,10 @@ import {
   makeSummaryEvent,
   modelFamily,
   providerFamily,
+  skillsUpdateErrorClass,
   textLengthBucket,
 } from "./telemetry-events.js";
+import { matchSkillFile } from "./skill-usage.js";
 import { actionFamily, sideEffectClass, toolFamily } from "./task-taxonomy.js";
 import { TelemetryStore } from "./telemetry-store.js";
 import { TelemetryUploader } from "./telemetry-uploader.js";
@@ -60,6 +62,10 @@ export class TelemetryClient {
     this.toolStarts = new Map();
     /** @type {Map<string, { attempt: number, maxAttempts: number, errorClass: string }>} mode -> 当前 retry */
     this.pendingRetries = new Map();
+    /** skills 生效目录上下文 getter(main 注入,skill.loaded 归因用);null = 未接线。 */
+    this.getSkillsContext = null;
+    /** @type {Map<string, { skillName: string, fileKind: string, revision: number }>} toolCallId -> 待确认的 skill 读取 */
+    this.pendingSkillReads = new Map();
 
     this.store = new TelemetryStore(path.join(userDataDir, "config", "telemetry.json"), log);
     const telemetryDir = path.join(userDataDir, "telemetry");
@@ -155,6 +161,7 @@ export class TelemetryClient {
     this.activeTurns.clear();
     this.pendingRetries.clear();
     this.toolStarts.clear();
+    this.pendingSkillReads.clear();
     this.summarizer.reset();
     this.appStartedRecorded = false;
   }
@@ -273,7 +280,9 @@ export class TelemetryClient {
   }
 
   // ---- AgentHost 适配器(§16.2):在 forwardEvent 的 UI 转换之前消费原始 SDK 事件,
-  // 只读元数据,不碰 extractText/args/result ----
+  // 只读元数据,不碰 extractText/args/result。唯一例外:read 工具的 args.path 会被
+  // 瞬时用于 skill 目录归属判定(#noteSkillReadStart),只产出白名单 skill 名,
+  // 路径本身绝不留存——隐私禁列断言仍在每个事件落盘前兜底。 ----
 
   /** host attach 完成:记录会话与模型 family。providerId/modelId 原始值不落盘。 */
   sessionAttached(mode, providerId, modelId, builtinTools) {
@@ -358,6 +367,7 @@ export class TelemetryClient {
           toolFamily: toolFamily(name),
           sideEffectClass: sideEffectClass(name),
         });
+        this.#noteSkillReadStart(event);
         return;
       }
       case "tool_execution_end": {
@@ -370,6 +380,7 @@ export class TelemetryClient {
           status,
           durationMs: started != null ? Math.max(0, this.monotonicNow() - started) : 0,
         });
+        this.#noteSkillReadEnd(mode, event);
         return;
       }
       case "agent_settled": {
@@ -379,6 +390,32 @@ export class TelemetryClient {
       default:
         return;
     }
+  }
+
+  /**
+   * skill.loaded 的起点(§16.2 注释的唯一例外):tool_execution_start 才带 args,
+   * 瞬时判定 read 目标是否落在 skills 生效目录内,是则连同当时 revision 挂起,
+   * 等 end 确认读取成功;判定产物只有白名单 skill 名与类别,路径不入任何状态。
+   */
+  #noteSkillReadStart(event) {
+    if (!this.getSkillsContext || event.toolName !== "read") return;
+    const context = this.getSkillsContext();
+    if (!context?.rootDir) return;
+    const match = matchSkillFile(context.rootDir, event.args?.path);
+    if (match) this.pendingSkillReads.set(event.toolCallId, { ...match, revision: context.revision });
+  }
+
+  /** read 成功收尾才发 skill.loaded;失败/中止的读取不算"加载"。 */
+  #noteSkillReadEnd(mode, event) {
+    const pending = this.pendingSkillReads.get(event.toolCallId);
+    if (pending == null) return;
+    this.pendingSkillReads.delete(event.toolCallId);
+    if (event.isError) return;
+    this.#record("skill.loaded", mode, null, {
+      skillName: pending.skillName,
+      bundleRevision: pending.revision,
+      fileKind: pending.fileKind,
+    });
   }
 
   // ---- 回合生命周期(chat:prompt 是权威入口,§16.1) ----
@@ -491,6 +528,29 @@ export class TelemetryClient {
         receipt,
         durationMs,
         errorClass,
+      });
+    });
+  }
+
+  /**
+   * 注入 skills 生效目录上下文(skill.loaded 的归因来源)。getter 在事件发生时
+   * 现取,SkillsUpdater 刷新激活新 bundle 后自动跟随;getter 抛错只丢当次
+   * skill 归因(#safe 兜底),不影响工具事件本身。
+   */
+  setSkillsContext(getContext) {
+    this.getSkillsContext = typeof getContext === "function" ? getContext : null;
+  }
+
+  /** skills 自更新通道每次 refresh 一条结果事件;app 级运维信号,不归任何回合。 */
+  skillsUpdateCompleted(report = {}) {
+    return this.#safe("skillsUpdateCompleted", () => {
+      const { outcome, fromRevision, toRevision, error, durationMs } = report ?? {};
+      this.#record("skills.update_completed", null, null, {
+        outcome,
+        fromRevision,
+        toRevision,
+        errorClass: error ? skillsUpdateErrorClass(error) : "none",
+        durationMs,
       });
     });
   }

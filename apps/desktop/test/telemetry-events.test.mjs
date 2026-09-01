@@ -11,6 +11,7 @@ import {
   makeSummaryEvent,
   modelFamily,
   providerFamily,
+  skillsUpdateErrorClass,
   textLengthBucket,
 } from "../src/main/telemetry/telemetry-events.js";
 import { findForbiddenKey } from "../src/main/telemetry/telemetry-privacy.js";
@@ -115,6 +116,56 @@ test("summary events with forbidden or non-finite values are refused", () => {
   assert.throws(() => makeSummaryEvent({ task_category: "x", ratio: Infinity }, ENVELOPE));
 });
 
+test("skill.loaded enforces the shipped skill-name contract and file-kind enum", () => {
+  const data = buildEventData["skill.loaded"]({
+    skillName: "arcane-fvtt-ops",
+    bundleRevision: 2,
+    fileKind: "reference",
+  });
+  assert.deepEqual(data, { skill_name: "arcane-fvtt-ops", bundle_revision: 2, file_kind: "reference" });
+  // skill 名不符合发布约定 / 文件类别未知:fail closed,事件丢弃
+  assert.throws(() =>
+    buildEventData["skill.loaded"]({ skillName: "../../etc/passwd", bundleRevision: 2, fileKind: "skill_doc" })
+  );
+  assert.throws(() =>
+    buildEventData["skill.loaded"]({ skillName: "arcane-fvtt-ops", bundleRevision: 2, fileKind: "secret" })
+  );
+});
+
+test("skills.update_completed keeps outcomes and error classes inside their enums", () => {
+  const data = buildEventData["skills.update_completed"]({
+    outcome: "min_app_version_blocked",
+    fromRevision: 1,
+    toRevision: 4,
+    errorClass: "none",
+    durationMs: 830,
+  });
+  assert.equal(data.outcome, "min_app_version_blocked");
+  assert.equal(data.to_revision, 4);
+  assert.throws(() =>
+    buildEventData["skills.update_completed"]({
+      outcome: "result",
+      fromRevision: 1,
+      toRevision: 2,
+      errorClass: "none",
+      durationMs: 1,
+    })
+  );
+});
+
+test("skillsUpdateErrorClass maps update failures to a stable enum, dropping the message", () => {
+  assert.equal(skillsUpdateErrorClass(new Error("HTTP 403 for https://oss.example/x")), "http_error");
+  assert.equal(skillsUpdateErrorClass(new Error("The operation timed out")), "timeout");
+  assert.equal(skillsUpdateErrorClass(new Error("fetch failed (ENOTFOUND oss)")), "network");
+  assert.equal(
+    skillsUpdateErrorClass(new Error("skills bundle SHA256/size mismatch against the verified manifest")),
+    "integrity"
+  );
+  assert.equal(skillsUpdateErrorClass(new SyntaxError("Unexpected token < in JSON")), "invalid_response");
+  assert.equal(skillsUpdateErrorClass(new Error("EBUSY: resource busy or locked")), "io");
+  assert.equal(skillsUpdateErrorClass(new Error("whatever")), "unknown");
+});
+
 test("every P0 event builder output passes the privacy scan", () => {
   for (const [name, fields] of Object.entries(SAMPLE_FIELDS)) {
     const data = buildEventData[name](fields);
@@ -136,4 +187,6 @@ const SAMPLE_FIELDS = {
   "tool.completed": { toolFamily: "world.inspect", status: "completed", durationMs: 900 },
   "approval.resolved": { toolFamily: "combat.execute", outcome: "allowed", latencyBucket: "2-10s" },
   "foundry.runtime_completed": { actionFamily: "execute_turn", phase: "dispatched", status: "completed", receipt: "partial", durationMs: 2_000, errorClass: "none" },
+  "skill.loaded": { skillName: "arcane-fvtt-ops", bundleRevision: 3, fileKind: "skill_doc" },
+  "skills.update_completed": { outcome: "updated", fromRevision: 1, toRevision: 2, errorClass: "none", durationMs: 1_200 },
 };

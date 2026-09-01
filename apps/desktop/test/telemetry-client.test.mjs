@@ -282,6 +282,102 @@ test("each Agent attach gets a fresh boot-local agent_session_id", async () => {
   await client.close();
 });
 
+test("skill.loaded fires only for successful reads inside the active skills dir", async () => {
+  const { client, userDataDir } = tempClient({ packaged: false });
+  client.start();
+  await client.whenReady;
+  const root = join(tmpdir(), "arcane-skills-active-test");
+  client.setSkillsContext(() => ({ rootDir: root, revision: 7 }));
+
+  const turnId = client.turnStarted("prep");
+  const read = (id, target, isError = false, toolName = "read") => {
+    client.observeAgentEvent("prep", { type: "tool_execution_start", toolCallId: id, toolName, args: { path: target } });
+    client.observeAgentEvent("prep", { type: "tool_execution_end", toolCallId: id, toolName, isError });
+  };
+  read("s1", join(root, "arcane-fvtt-setup", "SKILL.md"));
+  read("s2", join(root, "arcane-fvtt-setup", "references", "windows-install.md"));
+  read("s3", join(root, "..", "outside.txt")); // 目录外:不发
+  read("s4", join(root, "arcane-fvtt-ops", "SKILL.md"), true); // 读取失败:不算加载
+  read("s5", join(root, "arcane-fvtt-ops", "SKILL.md"), false, "powershell"); // 非 read 工具:不发
+  client.observeAgentEvent("prep", { type: "agent_settled" });
+
+  const events = await readAllEvents(client, userDataDir);
+  await client.close();
+  const loaded = events.filter((e) => e.event === "skill.loaded");
+  assert.equal(loaded.length, 2);
+  assert.deepEqual(loaded[0].data, { skill_name: "arcane-fvtt-setup", bundle_revision: 7, file_kind: "skill_doc" });
+  assert.deepEqual(loaded[1].data, { skill_name: "arcane-fvtt-setup", bundle_revision: 7, file_kind: "reference" });
+  assert.equal(loaded[0].turn_id, turnId);
+  // 路径绝不进入任何事件
+  assert.ok(!JSON.stringify(events).includes("arcane-skills-active-test"));
+});
+
+test("skill.loaded stays silent without a skills context, and a throwing getter only drops attribution", async () => {
+  const { client, userDataDir } = tempClient({ packaged: false });
+  client.start();
+  await client.whenReady;
+  const root = join(tmpdir(), "arcane-skills-context-missing");
+  client.turnStarted("prep");
+  client.observeAgentEvent("prep", {
+    type: "tool_execution_start",
+    toolCallId: "n1",
+    toolName: "read",
+    args: { path: join(root, "arcane-fvtt-ops", "SKILL.md") },
+  });
+  client.observeAgentEvent("prep", { type: "tool_execution_end", toolCallId: "n1", toolName: "read", isError: false });
+  // getter 抛错:skill 归因丢失,但 tool.started/tool.completed 照常落盘
+  client.setSkillsContext(() => {
+    throw new Error("skills context exploded");
+  });
+  assert.doesNotThrow(() =>
+    client.observeAgentEvent("prep", {
+      type: "tool_execution_start",
+      toolCallId: "n2",
+      toolName: "read",
+      args: { path: join(root, "arcane-fvtt-ops", "SKILL.md") },
+    })
+  );
+  client.observeAgentEvent("prep", { type: "agent_settled" });
+
+  const events = await readAllEvents(client, userDataDir);
+  await client.close();
+  assert.equal(events.filter((e) => e.event === "skill.loaded").length, 0);
+  assert.ok(events.filter((e) => e.event.startsWith("tool.")).length >= 3);
+});
+
+test("skills.update_completed records outcome plus classified error, dropping hostile payloads", async () => {
+  const { client, userDataDir } = tempClient({ packaged: false });
+  client.start();
+  await client.whenReady;
+  client.skillsUpdateCompleted({ outcome: "updated", fromRevision: 1, toRevision: 2, error: null, durationMs: 450 });
+  client.skillsUpdateCompleted({
+    outcome: "error",
+    fromRevision: 2,
+    toRevision: 3,
+    error: new Error("HTTP 502 for https://oss.example/skills/latest.json"),
+    durationMs: 12_000,
+  });
+  // 枚举非法/负数的负载:事件丢弃,调用不抛
+  assert.doesNotThrow(() => client.skillsUpdateCompleted({ outcome: "pwned", fromRevision: -1, toRevision: 2 }));
+  assert.doesNotThrow(() => client.skillsUpdateCompleted(null));
+
+  const events = await readAllEvents(client, userDataDir);
+  await client.close();
+  const updates = events.filter((e) => e.event === "skills.update_completed");
+  assert.equal(updates.length, 2);
+  assert.deepEqual(updates[0].data, {
+    outcome: "updated",
+    from_revision: 1,
+    to_revision: 2,
+    error_class: "none",
+    duration_ms: 450,
+  });
+  assert.equal(updates[1].data.error_class, "http_error");
+  // app 级运维信号:不归回合、不归会话
+  assert.equal(updates[0].turn_id, null);
+  assert.equal(updates[0].mode, null);
+});
+
 test("public semantic entrypoints swallow collaborator failures", () => {
   const logs = [];
   const { client } = tempClient({ log: (...args) => logs.push(args) });

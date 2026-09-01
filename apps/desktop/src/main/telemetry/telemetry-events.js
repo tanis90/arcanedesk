@@ -20,6 +20,8 @@ export const EVENT_NAMES = new Set([
   "tool.completed",
   "approval.resolved",
   "foundry.runtime_completed",
+  "skill.loaded",
+  "skills.update_completed",
 ]);
 
 // ---- buckets ----
@@ -107,6 +109,39 @@ export const RUNTIME_STATUSES = new Set(["completed", "error", "aborted", "timeo
 export const RUNTIME_RECEIPTS = new Set(["none", "completed", "rejected", "partial", "indeterminate"]);
 export const INPUT_SOURCES = new Set(["unknown", "voice", "keyboard", "mixed", "image_only"]);
 export const SUBMIT_METHODS = new Set(["unknown", "enter", "click"]);
+
+// skills 通道:skill 名沿用 Agent Skills 命名规则(我们发布的目录名本身就是受控标识,
+// 不用硬编码白名单——bundle 走 OSS 带外更新,客户端名单必然滞后);文件类别只分三档。
+export const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+export const SKILL_FILE_KINDS = new Set(["skill_doc", "reference", "asset"]);
+export const SKILLS_UPDATE_OUTCOMES = new Set(["updated", "up_to_date", "min_app_version_blocked", "error"]);
+export const SKILLS_UPDATE_ERRORS = new Set([
+  "none",
+  "timeout",
+  "network",
+  "http_error",
+  "integrity",
+  "invalid_response",
+  "io",
+  "unknown",
+]);
+
+/**
+ * skills 自更新失败的稳定分类(§8 同思路):只映射为枚举,message 立即丢弃。
+ * 独立于 classifyError——那边是 model/foundry 命名空间,混用会污染既有看板。
+ */
+export function skillsUpdateErrorClass(error) {
+  const message = String(error?.message ?? error ?? "");
+  if (/\bHTTP \d{3}\b/.test(message)) return "http_error";
+  if (/abort|timeout|timed out/i.test(message)) return "timeout";
+  if (/fetch|network|ECONN|ENOTFOUND|EAI_AGAIN|socket|EPROTO|certificate/i.test(message)) return "network";
+  if (/SHA256|integrity|unlisted|missing a listed|does not match|malformed|self-contain/i.test(message)) {
+    return "integrity";
+  }
+  if (/JSON|parse|unexpected token/i.test(message)) return "invalid_response";
+  if (/EACCES|EPERM|ENOENT|ENOSPC|EMFILE|EBUSY/i.test(message)) return "io";
+  return "unknown";
+}
 
 const RELEASE_CHANNELS = new Set(["dev", "alpha", "beta", "stable", "canary"]);
 const FINISH_CLASSES = new Set(["stop", "length", "tool_use", "error", "aborted", "unknown"]);
@@ -273,6 +308,23 @@ export const buildEventData = {
     receipt: oneOf(receipt, RUNTIME_RECEIPTS, "receipt"),
     duration_ms: int(durationMs, "duration_ms"),
     error_class: oneOf(errorClass, ERROR_CLASSES, "error_class"),
+  }),
+  // skill_name 非法即抛错丢事件(fail closed):能落到这里的本应只有我们发布的目录名。
+  "skill.loaded": ({ skillName, bundleRevision, fileKind }) => {
+    const name = String(skillName ?? "");
+    if (!SKILL_NAME_RE.test(name)) throw new Error(`telemetry: invalid skill_name: ${name.slice(0, 64)}`);
+    return {
+      skill_name: name,
+      bundle_revision: int(bundleRevision, "bundle_revision"),
+      file_kind: oneOf(fileKind, SKILL_FILE_KINDS, "file_kind"),
+    };
+  },
+  "skills.update_completed": ({ outcome, fromRevision, toRevision, errorClass, durationMs }) => ({
+    outcome: oneOf(outcome, SKILLS_UPDATE_OUTCOMES, "outcome"),
+    from_revision: int(fromRevision, "from_revision"),
+    to_revision: int(toRevision, "to_revision"),
+    error_class: oneOf(errorClass, SKILLS_UPDATE_ERRORS, "error_class"),
+    duration_ms: int(durationMs, "duration_ms"),
   }),
 };
 

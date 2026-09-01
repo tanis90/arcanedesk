@@ -664,6 +664,8 @@ export class AgentHost {
   forwardEvent(event) {
     // 遥测适配器在 UI 转换、去重与 early return 之前消费原始 SDK 生命周期事件,
     // 只读元数据,不碰 extractText/event.args/event.result(§16.2);内部自吞错误。
+    // 例外:read 工具的 args.path 瞬时用于 skill.loaded 归属判定,路径不留存
+    // (见 telemetry-client.js #noteSkillReadStart)。
     if (this.telemetry) this.telemetry.observeAgentEvent(this.profile.mode, event);
     let out = null;
     switch (event.type) {

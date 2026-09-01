@@ -17,6 +17,9 @@
 //   state.json                 { schemaVersion, revision, activatedAt }
 //   active/                    当前生效 bundle(含 bundle.json 与 .arcane-manifest.json)
 //   .staging-<uuid>/ .incoming-<uuid>.tar.gz   刷新过程中的临时文件
+//
+// 运维遥测:每次 refresh 的结果(含失败)经 onRefreshResult 回调上报一条;
+// 回调自身抛错被吞掉,遥测永远不能改变 refresh 的返回值或时序。
 
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -113,6 +116,13 @@ export class SkillsUpdater {
    *   fetchImpl?: typeof fetch,
    *   extractArchive?: (archive: string, destination: string) => Promise<unknown>,
    *   onActivated?: (dir: string, revision: number) => void,
+   *   onRefreshResult?: (report: {
+   *     outcome: "updated" | "up_to_date" | "min_app_version_blocked" | "error",
+   *     fromRevision: number,
+   *     toRevision: number,
+   *     error: unknown,
+   *     durationMs: number,
+   *   }) => void,
    *   log?: (message: string) => void,
    *   requestTimeoutMs?: number,
    *   maxBundleBytes?: number,
@@ -126,6 +136,7 @@ export class SkillsUpdater {
     fetchImpl = globalThis.fetch?.bind(globalThis),
     extractArchive = extractArchiveFile,
     onActivated = null,
+    onRefreshResult = null,
     log = (message) => console.log(message),
     requestTimeoutMs = 15_000,
     maxBundleBytes = MAX_BUNDLE_BYTES,
@@ -141,6 +152,7 @@ export class SkillsUpdater {
     this.fetchImpl = fetchImpl;
     this.extractArchive = extractArchive;
     this.onActivated = onActivated;
+    this.onRefreshResult = onRefreshResult;
     this.log = log;
     this.requestTimeoutMs = requestTimeoutMs;
     this.maxBundleBytes = maxBundleBytes;
@@ -283,18 +295,65 @@ export class SkillsUpdater {
 
   /**
    * 启动时跑一次的后台刷新。永不抛出:任何失败都记录日志并保留现状。
+   * 每次刷新(含失败)在 finally 里经 onRefreshResult 报一条运维遥测。
    * @returns {Promise<{ updated: boolean, revision?: number, reason?: string }>}
    */
   async refresh() {
+    const report = {
+      outcome: "error",
+      fromRevision: this.peekCurrentRevision(),
+      toRevision: 0,
+      error: null,
+      startedAt: performance.now(),
+    };
     try {
-      return await this.refreshUnsafe();
+      const outcome = await this.refreshUnsafe(report);
+      report.error = null;
+      if (outcome.updated) {
+        report.outcome = "updated";
+        report.toRevision = outcome.revision;
+      } else if (outcome.reason === "up-to-date") {
+        report.outcome = "up_to_date";
+        report.toRevision = outcome.revision;
+      } else if (outcome.reason === "min-app-version") {
+        report.outcome = "min_app_version_blocked";
+        // toRevision 已由 refreshUnsafe 填成被门住的目标 revision。
+      }
+      // 未识别的 reason 保持 "error":让看板大声暴露遥测接线滞后,而不是静默丢信号。
+      return outcome;
     } catch (error) {
+      report.error = error;
       this.log(`[skills] skills refresh failed; keeping current skills: ${errorMessage(error)}`);
       return { updated: false, reason: "error" };
+    } finally {
+      this.reportRefreshResult(report);
     }
   }
 
-  async refreshUnsafe() {
+  /** 与 refreshUnsafe 相同的当前 revision 口径;resolveSkillsDir 内部 fail closed,永不抛出。 */
+  peekCurrentRevision() {
+    const currentDir = this.resolveSkillsDir();
+    return Math.max(
+      bundleRevision(this.bundledSkillsDir),
+      currentDir === this.activeDir ? bundleRevision(this.activeDir) : 0,
+    );
+  }
+
+  /** 遥测回调同属外部边界:回调抛错只丢这条遥测,不得改变 refresh 语义。 */
+  reportRefreshResult(report) {
+    if (!this.onRefreshResult) return;
+    try {
+      this.onRefreshResult({
+        outcome: report.outcome,
+        fromRevision: report.fromRevision,
+        toRevision: report.toRevision,
+        error: report.error,
+        durationMs: Math.max(0, performance.now() - report.startedAt),
+      });
+    } catch { /* 遥测通道静默失败,与 skills 通道的 fail-closed 语义无关 */ }
+  }
+
+  async refreshUnsafe(report = null) {
     const currentDir = this.resolveSkillsDir();
     const currentRevision = Math.max(
       bundleRevision(this.bundledSkillsDir),
@@ -306,6 +365,7 @@ export class SkillsUpdater {
       ? pointer.revision
       : null;
     if (!revision) throw new Error("skills latest.json is malformed");
+    if (report) report.toRevision = revision;
     if (revision <= currentRevision) {
       this.log(`[skills] skills check OK: r${currentRevision} is current`);
       return { updated: false, reason: "up-to-date", revision: currentRevision };
