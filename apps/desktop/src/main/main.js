@@ -728,14 +728,6 @@ app.whenReady().then(async () => {
 
   globalThis.__arcaneAgentHost = hosts.combat; // dom-dump 等调试脚本的既有入口
   globalThis.__arcaneHosts = hosts;
-  try {
-    await modeController.ensureStarted(modeController.snapshot().mode);
-    // renderer 可能在 agent 就绪前就加载完(或之后):双方都拉一次 sessions:current,
-    // 这个推送让早加载的 renderer 知道可以拉历史了。
-    sendToRenderer({ type: "agent_ready" });
-  } catch (error) {
-    console.log("[agent] start failed:", error.message);
-  }
 
   // ---- 模式切换 ----
   ipcMain.handle("mode:get", () => modeController.publicSnapshot());
@@ -1243,6 +1235,19 @@ app.whenReady().then(async () => {
     layoutViews();
     return { ok: true };
   });
+
+  // agent session 的首次启动(拉起子进程,慢则秒级)必须放在所有 ipcMain.handle
+  // 注册之后:await 会挂起 whenReady 回调,若注册被它截断,已加载的 renderer 的
+  // invoke(如 telemetry:consent-get)会撞上 "No handler registered"。
+  // handler 内部各自懒调 ensureStarted(共享同一 Promise),不会因顺序变化重复启动。
+  try {
+    await modeController.ensureStarted(modeController.snapshot().mode);
+    // renderer 可能在 agent 就绪前就加载完(或之后):双方都拉一次 sessions:current,
+    // 这个推送让早加载的 renderer 知道可以拉历史了。
+    sendToRenderer({ type: "agent_ready" });
+  } catch (error) {
+    console.log("[agent] start failed:", error.message);
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
