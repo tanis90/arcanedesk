@@ -202,22 +202,42 @@ function renderMarkdown(container, text) {
 
 // /skill:xxx 被 pi 展开成 <skill>...</skill> 全文存进历史;回显时折成小卡
 const SKILL_BLOCK_RE = /^<skill name="([^"]+)" location="[^"]*">\n[\s\S]*?\n<\/skill>(?:\n\n([\s\S]+))?$/;
+// 发送当时的本地回显还是 /skill: 原文(pi 的展开结果只存在于历史),同样折成小卡
+const SKILL_CMD_RE = /^\/skill:(\S+)(?:\s+([\s\S]+))?$/;
 // 备团贴图:main 追加的 inbox 路径注解读起来很吵,历史回显时折成一行小字
 const INBOX_NOTE_RE = /\n\n\[附带图片已存为本地文件:([^\]]+)\]$/;
+
+/** skill 回显小卡;bodyText 为 null 时(发送当时的本地回显)只渲染头,全文要等历史恢复。 */
+function buildSkillEchoCard(name, bodyText) {
+  const card = el("div", "skill-echo");
+  const head = el("div", "skill-echo-head");
+  head.append(document.createTextNode(`📖 skill: ${name}`));
+  if (bodyText == null) {
+    card.appendChild(head);
+    return card;
+  }
+  head.appendChild(el("span", "chevron", "▸"));
+  const body = el("div", "skill-echo-body");
+  body.textContent = bodyText;
+  head.addEventListener("click", () => card.classList.toggle("open"));
+  card.append(head, body);
+  return card;
+}
 
 function renderUserText(node, text) {
   const skill = text.match(SKILL_BLOCK_RE);
   if (skill) {
     const [, name, args] = skill;
-    const card = el("div", "skill-echo");
-    const head = el("div", "skill-echo-head");
-    head.append(document.createTextNode(`📖 skill: ${name}`), el("span", "chevron", "▸"));
-    const body = el("div", "skill-echo-body");
     // 全文从 history 取,展开才可见;去掉首行 References 说明噪音
-    body.textContent = text.replace(/^<skill[^>]*>\nReferences are relative to[^\n]*\n+/, "").replace(/\n<\/skill>[\s\S]*$/, "").trim();
-    head.addEventListener("click", () => card.classList.toggle("open"));
-    card.append(head, body);
-    node.appendChild(card);
+    const bodyText = text.replace(/^<skill[^>]*>\nReferences are relative to[^\n]*\n+/, "").replace(/\n<\/skill>[\s\S]*$/, "").trim();
+    node.appendChild(buildSkillEchoCard(name, bodyText));
+    if (args?.trim()) node.appendChild(el("div", "skill-echo-args", args.trim()));
+    return;
+  }
+  const cmd = text.match(SKILL_CMD_RE);
+  if (cmd) {
+    const [, name, args] = cmd;
+    node.appendChild(buildSkillEchoCard(name, null));
     if (args?.trim()) node.appendChild(el("div", "skill-echo-args", args.trim()));
     return;
   }
