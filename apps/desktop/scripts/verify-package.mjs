@@ -35,7 +35,7 @@ export const requiredFiles = [
   "skills/prep/arcane-fvtt-mods/scripts/archive-zip.mjs",
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/yauzl/package.json",
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/pend/package.json",
-  "skills/prep/arcane-actor-images/SKILL.md",
+  "skills/prep/arcane-actor-update/SKILL.md",
   "skills/prep/arcane-module-reader/SKILL.md",
   "scripts/archive-zip.mjs",
   "scripts/archive.mjs",
@@ -72,7 +72,7 @@ const forbiddenPaths = [
 
 export const exactDirectories = new Map([
   ["system-prompts", ["combat.md", "prep.md"]],
-  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
+  ["skills/prep", ["arcane-actor-update", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
