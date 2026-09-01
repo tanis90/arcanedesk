@@ -20,6 +20,8 @@
       /* 材质:夜空 / 桌布 / 书页 / 月光;accent = 黄铜烛台 */
       --bg: #0c0f16;
       --bg-soft: #10141d;
+      /* 天头/标题栏带共享高度:win 下要与 main 的 TITLEBAR_HEIGHT 同步 */
+      --titlebar-h: 36px;
       --panel: #151a24;
       --panel-2: #1b212e;
       --border: #283042;
@@ -112,7 +114,7 @@
       align-items: center;
       gap: 10px;
       padding: 0 14px;
-      height: 44px;
+      height: var(--titlebar-h);
       border-bottom: 1px solid var(--border-soft);
       background: var(--bg-soft);
       flex: none;
@@ -124,7 +126,7 @@
     :root[data-frameless="1"] .chat-header .chip,
     :root[data-frameless="1"] .chat-header .seg-switch { -webkit-app-region: no-drag; }
     /* Win 无标题栏 + 面板打开:右屏顶部的标题栏延伸带,与天头同色同高同发丝线,
-       拼成一整条 44px 标题栏;系统 overlay 三键落在带上。Foundry view 从带下沿
+       拼成一整条标题栏;系统 overlay 三键落在带上。Foundry view 从带下沿
        开始(main 侧 layoutViews 的 topOffset),右上 UI 不再被三键压住。
        带宽 = --panel-w(applyPanelLayout 维护 = Foundry view 宽度),整条可拖拽。 */
     #panel-titlebar { display: none; }
@@ -134,7 +136,7 @@
       top: 0;
       right: 0;
       width: var(--panel-w, 0);
-      height: 44px;
+      height: var(--titlebar-h);
       background: var(--bg-soft);
       border-bottom: 1px solid var(--border-soft);
       -webkit-app-region: drag;
@@ -1193,13 +1195,13 @@
     #splitter:hover, #splitter.dragging { background: var(--ring); }
     body.with-panel #splitter { display: block; }
     /* 标题栏带下移 Foundry view 后,分隔条上沿与视图对齐,不跨进标题栏带 */
-    :root[data-frameless="1"] body.with-panel #splitter { top: 44px; }
+    :root[data-frameless="1"] body.with-panel #splitter { top: var(--titlebar-h); }
     :root[data-frameless="1"] body.with-panel.is-fullscreen #splitter { top: 0; }
 
     /* ---------- 会话侧栏(覆盖式抽屉,可收起) ---------- */
     #drawer-backdrop {
       position: fixed;
-      top: 44px;
+      top: var(--titlebar-h);
       left: 0;
       bottom: 0;
       right: var(--panel-w, 0);
@@ -1210,7 +1212,7 @@
     :root[data-theme="light"] #drawer-backdrop { background: rgba(0, 0, 0, 0.18); }
     #session-drawer {
       position: fixed;
-      top: 44px;
+      top: var(--titlebar-h);
       left: 0;
       bottom: 0;
       width: 264px;

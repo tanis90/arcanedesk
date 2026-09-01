@@ -48,7 +48,7 @@ const SPLITTER_GUTTER = 6; // 分隔条占用的 chat 侧像素(归 chat 页面,
 // Win frameless 的天头高度:与 renderer .chat-header 同高。面板打开时 Foundry 视图
 // 整体下移这么多,顶部让出一条贯穿全窗的标题栏带,系统 overlay 三键落在带上,
 // 不再压 Foundry 右上 UI。index.html 的 #panel-titlebar 高度改动要同步这里。
-const TITLEBAR_HEIGHT = 44;
+const TITLEBAR_HEIGHT = 36;
 
 // 应用身份:userData 目录由 app 名决定(~/Library/Application Support/<name>)。
 // 打包版用 productName "ArcaneDesk";dev(npm start)保持 "arcane-desktop",
@@ -435,7 +435,7 @@ function resolveLocale() {
     面板打开时 Foundry 视图已下移出天头区(layoutViews 的 topOffset),三键落在
     渲染层的标题栏带上,不再压 FVTT 右上 UI,故配色无需再随面板状态切换。
     height 是 overlay 唯一能调尺寸的旋钮(width 由 Windows 画死、按钮钉在窗口顶边,
-    挪不下来):恒 44,与 44px 天头/标题栏带垂直对齐。 */
+    挪不下来):恒 TITLEBAR_HEIGHT,与天头/标题栏带垂直对齐。 */
 function titleBarOverlayFor(theme) {
   return theme === "light"
     ? { color: "#eae2cc", symbolColor: "#2b2416", height: TITLEBAR_HEIGHT }
@@ -483,7 +483,7 @@ function createWindow() {
     icon: ARCANE_APP_ICON,
     backgroundColor: theme === "light" ? "#f0e9d6" : "#0c0f16",
     // Win 下摘原生标题栏:天头即标题栏,右上三键用系统 overlay(随主题换色);
-    // 面板打开时 Foundry 视图下移 44px,三键落在标题栏带上(见 layoutViews)。
+    // 面板打开时 Foundry 视图下移 TITLEBAR_HEIGHT,三键落在标题栏带上(见 layoutViews)。
     // renderer 靠 query.frameless 切可拖拽形态;mac 保留原生红绿灯,不动。
     ...(process.platform === "win32"
       ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlayFor(theme) }
