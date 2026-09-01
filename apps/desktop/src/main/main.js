@@ -45,6 +45,10 @@ const CHAT_MIN_WIDTH = 320;
 const CHAT_MAX_RATIO = 0.65;
 const FOUNDRY_MIN_WIDTH = 640;
 const SPLITTER_GUTTER = 6; // 分隔条占用的 chat 侧像素(归 chat 页面,接收拖拽事件)
+// Win frameless 的天头高度:与 renderer .chat-header 同高。面板打开时 Foundry 视图
+// 整体下移这么多,顶部让出一条贯穿全窗的标题栏带,系统 overlay 三键落在带上,
+// 不再压 Foundry 右上 UI。index.html 的 #panel-titlebar 高度改动要同步这里。
+const TITLEBAR_HEIGHT = 44;
 
 // 应用身份:userData 目录由 app 名决定(~/Library/Application Support/<name>)。
 // 打包版用 productName "ArcaneDesk";dev(npm start)保持 "arcane-desktop",
@@ -122,12 +126,14 @@ function layoutViews() {
     return;
   }
   const chatWidth = effectiveChatWidth(width);
-  // chat 居左,Foundry 主视觉从右侧弹出。
+  // chat 居左,Foundry 主视觉从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
+  // 给贯穿全窗的标题栏带(overlay 三键落在带上),Foundry 从带下沿开始,不被压。
+  const topOffset = process.platform === "win32" ? TITLEBAR_HEIGHT : 0;
   foundryView.setBounds({
     x: chatWidth + SPLITTER_GUTTER,
-    y: 0,
+    y: topOffset,
     width: Math.max(0, width - chatWidth - SPLITTER_GUTTER),
-    height,
+    height: Math.max(0, height - topOffset),
   });
   // chat 页面是整窗的,告诉 renderer 把内容让出右屏(margin-right),
   // 否则 chat 内容被 Foundry view 直接盖住。
@@ -307,7 +313,6 @@ async function openFoundryView(rawUrl) {
     if (isDev) foundryView.webContents.openDevTools({ mode: "detach" });
     sendToRenderer({ type: "panel_status", open: true });
     layoutViews(); // 立刻让出左屏,不等首次 load 完成
-    syncTitleBarOverlay(); // 右上 overlay 三键换深色,融进 FVTT 区
     // 有记住的登录态:先回填 cookie,直接进 /game,跳过 /join
     const restored = await restoreSessionCookie(foundryView, origin);
     const initialUrl = restored ? new URL("/game", origin).href : target;
@@ -424,22 +429,21 @@ function resolveLocale() {
   return /^zh/i.test(primary) ? "zh-CN" : "en-US";
 }
 
-/** Win 隐藏标题栏的 overlay 三键配色:FVTT 面板打开时融进右侧深色区,否则随主题(底色 = header 的 --bg-soft)。
-    height 是 overlay 唯一能调尺寸的旋钮(width 由 Windows 画死、按钮钉在窗口顶边,挪不下来):
-    面板关 = 44,与 44px 天头的图标垂直对齐;面板开 = 32,矮一档少压 FVTT 右上 UI
-    (此时三键和天头图标隔着整块面板,高差看不出来)。 */
-function titleBarOverlayFor(theme, panelOpen) {
-  if (panelOpen) return { color: "#10141d", symbolColor: "#e9ecf3", height: 32 };
+/** Win 隐藏标题栏的 overlay 三键配色:随主题,底色 = 天头/标题栏带的 --bg-soft。
+    面板打开时 Foundry 视图已下移出天头区(layoutViews 的 topOffset),三键落在
+    渲染层的标题栏带上,不再压 FVTT 右上 UI,故配色无需再随面板状态切换。
+    height 是 overlay 唯一能调尺寸的旋钮(width 由 Windows 画死、按钮钉在窗口顶边,
+    挪不下来):恒 44,与 44px 天头/标题栏带垂直对齐。 */
+function titleBarOverlayFor(theme) {
   return theme === "light"
-    ? { color: "#eae2cc", symbolColor: "#2b2416", height: 44 }
-    : { color: "#10141d", symbolColor: "#e9ecf3", height: 44 };
+    ? { color: "#eae2cc", symbolColor: "#2b2416", height: TITLEBAR_HEIGHT }
+    : { color: "#10141d", symbolColor: "#e9ecf3", height: TITLEBAR_HEIGHT };
 }
 
-/** 面板开/关、主题切换后重刷 overlay 配色。 */
+/** 主题切换后重刷 overlay 配色。 */
 function syncTitleBarOverlay() {
   if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed()) return;
-  const theme = resolveTheme();
-  mainWindow.setTitleBarOverlay(titleBarOverlayFor(theme, Boolean(foundryView)));
+  mainWindow.setTitleBarOverlay(titleBarOverlayFor(resolveTheme()));
 }
 
 function createWindow() {
@@ -466,10 +470,11 @@ function createWindow() {
     title: "ArcaneDesk",
     icon: ARCANE_APP_ICON,
     backgroundColor: theme === "light" ? "#f0e9d6" : "#0c0f16",
-    // Win 下摘原生标题栏:天头即标题栏,右上三键用系统 overlay(随主题换色)。
+    // Win 下摘原生标题栏:天头即标题栏,右上三键用系统 overlay(随主题换色);
+    // 面板打开时 Foundry 视图下移 44px,三键落在标题栏带上(见 layoutViews)。
     // renderer 靠 query.frameless 切可拖拽形态;mac 保留原生红绿灯,不动。
     ...(process.platform === "win32"
-      ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlayFor(theme, false) }
+      ? { titleBarStyle: "hidden", titleBarOverlay: titleBarOverlayFor(theme) }
       : {}),
     webPreferences: {
       preload: path.join(__dirname, "..", "..", "preload.cjs"),
@@ -1179,7 +1184,6 @@ app.whenReady().then(async () => {
     mainWindow?.contentView.removeChildView(foundryView);
     if (!foundryView.webContents.isDestroyed()) foundryView.webContents.close();
     foundryView = null;
-    syncTitleBarOverlay(); // 面板关闭,overlay 三键回到主题色
     sendToRenderer({ type: "panel_status", open: false });
     sendToRenderer({ type: "panel_layout", open: false });
     return { ok: true };

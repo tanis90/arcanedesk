@@ -123,6 +123,23 @@
     :root[data-frameless="1"] .chat-header button,
     :root[data-frameless="1"] .chat-header .chip,
     :root[data-frameless="1"] .chat-header .seg-switch { -webkit-app-region: no-drag; }
+    /* Win 无标题栏 + 面板打开:右屏顶部的标题栏延伸带,与天头同色同高同发丝线,
+       拼成一整条 44px 标题栏;系统 overlay 三键落在带上。Foundry view 从带下沿
+       开始(main 侧 layoutViews 的 topOffset),右上 UI 不再被三键压住。
+       带宽 = --panel-w(applyPanelLayout 维护 = Foundry view 宽度),整条可拖拽。 */
+    #panel-titlebar { display: none; }
+    :root[data-frameless="1"] body.with-panel #panel-titlebar {
+      display: block;
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: var(--panel-w, 0);
+      height: 44px;
+      background: var(--bg-soft);
+      border-bottom: 1px solid var(--border-soft);
+      -webkit-app-region: drag;
+      z-index: 40;
+    }
     /* 法杖星芒 mark:透明底黑墨,暗色主题反白 */
     .brand .logo { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
     .brand .logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -1173,6 +1190,8 @@
     }
     #splitter:hover, #splitter.dragging { background: var(--ring); }
     body.with-panel #splitter { display: block; }
+    /* 标题栏带下移 Foundry view 后,分隔条上沿与视图对齐,不跨进标题栏带 */
+    :root[data-frameless="1"] body.with-panel #splitter { top: 44px; }
 
     /* ---------- 会话侧栏(覆盖式抽屉,可收起) ---------- */
     #drawer-backdrop {
@@ -1557,6 +1576,7 @@
       </button>
     </span>
   </header>
+  <div id="panel-titlebar" aria-hidden="true"></div>
   <div id="permission-center" aria-live="polite"></div>
   <section id="telemetry-consent-card" hidden aria-labelledby="telemetry-consent-title">
     <div class="telemetry-consent-head">
