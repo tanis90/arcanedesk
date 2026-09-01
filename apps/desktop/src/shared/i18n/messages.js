@@ -43,10 +43,10 @@ globalThis.ARCANE_MESSAGES = {
     "welcome.remote.prompt": "打开我已部署好了的 FVTT，网址是 ",
     "welcome.example2.label": "读取当前战斗的战场态势",
     "welcome.example2.prompt": "读取当前战斗的战场态势",
-    "welcome.example3.label": "当前回合是谁?它可以做什么?",
-    "welcome.example3.prompt": "当前回合是谁?它可以做什么?",
+    "welcome.example3.label": "阅读并理解这个模组,帮我组织一个知识库",
+    "welcome.example3.prompt": "/skill:arcane-module-reader 阅读并理解这个模组,帮我组织一个知识库,然后和我聊聊。模组 PDF 在 ",
     "welcome.install.label": "帮我安装 FVTT,我把安装包放在 …",
-    "welcome.install.prompt": "帮我安装 FVTT,我把安装包放在 ",
+    "welcome.install.prompt": "/skill:arcane-fvtt-setup 帮我安装 FVTT,我把安装包放在 ",
 
     // ---------- composer / 滚动 / 分栏 ----------
     "composer.placeholder": "和 Agent 对话…(可粘贴/拖入图片)",
@@ -375,10 +375,10 @@ globalThis.ARCANE_MESSAGES = {
     "welcome.remote.prompt": "Open my deployed FVTT at ",
     "welcome.example2.label": "Read the current battle situation",
     "welcome.example2.prompt": "Read the current battle situation",
-    "welcome.example3.label": "Whose turn is it? What can it do?",
-    "welcome.example3.prompt": "Whose turn is it? What can it do?",
+    "welcome.example3.label": "Read and understand this module; build me a knowledge base",
+    "welcome.example3.prompt": "/skill:arcane-module-reader Read and understand this module, organize a knowledge base for me, then chat with me about it. The module PDF is at ",
     "welcome.install.label": "Help me install FVTT; my installer is in …",
-    "welcome.install.prompt": "Help me install FVTT; my installer is in ",
+    "welcome.install.prompt": "/skill:arcane-fvtt-setup Help me install FVTT; my installer is in ",
 
     // ---------- composer / scroll / splitter ----------
     "composer.placeholder": "Talk to the Agent… (paste or drag images in)",

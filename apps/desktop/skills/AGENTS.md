@@ -15,3 +15,6 @@
 - skill 文本变更后把 `prep/bundle.json` 的 `revision` 单调递增（PR 上由 CI 的
   `skills-revision` job 强制检查，见 `../../scripts/check-skills-revision.mjs`），并在
   `apps/desktop` 跑 `npm run verify:source && npm test`。
+- skill 的 `name` 是稳定标识：欢迎页 chip 以 `/skill:<name>` 形式引用了
+  `arcane-fvtt-setup` 和 `arcane-module-reader`（见 `../src/shared/i18n/messages.js` 的
+  `welcome.*.prompt`）。改名或删除 skill 必须同步这些引用，否则 chip 的显式加载会落空。
