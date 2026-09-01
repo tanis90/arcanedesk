@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld("arcane", {
   fetchProviderModels: (input) => ipcRenderer.invoke("providers:fetch-models", input),
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite: () => ipcRenderer.invoke("app:open-arcane-website"),
+  /** Packaged app version shown in Settings → General. */
+  getAppVersion: () => ipcRenderer.invoke("app:get-version"),
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
   getVoiceConfig: () => ipcRenderer.invoke("voice:get-config"),
   saveVoiceConfig: (cfg) => ipcRenderer.invoke("voice:save-config", cfg),

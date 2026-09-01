@@ -1534,6 +1534,7 @@ document.getElementById("session-new").addEventListener("click", async () => {
 // ---------- settings:provider 管理 + 默认模型 ----------
 const settingsBackdrop = document.getElementById("settings-backdrop");
 const webPermissionList = document.getElementById("web-permission-list");
+const appVersion = document.getElementById("app-version");
 const telemetryConsentCard = document.getElementById("telemetry-consent-card");
 const telemetryConsentAccept = /** @type {HTMLButtonElement} */ (document.getElementById("telemetry-consent-accept"));
 const telemetryConsentDecline = /** @type {HTMLButtonElement} */ (document.getElementById("telemetry-consent-decline"));
@@ -1755,6 +1756,12 @@ async function refreshSettings() {
   refreshWebPermissions();
   refreshLocaleSetting();
   refreshTelemetryConsent();
+  // 通用页版本号:每次打开设置顺手刷新一次,代价可忽略
+  if (appVersion) {
+    window.arcane.getAppVersion?.().then((v) => {
+      appVersion.textContent = v || "";
+    }).catch(() => {});
+  }
   const providers = settings.providers ?? [];
   const providerById = Object.fromEntries(providers.map((p) => [p.id, p]));
   // 默认模型下拉:label = provider/modelId(model id 本身可能带 /,按第一个切)

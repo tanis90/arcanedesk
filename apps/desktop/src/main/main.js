@@ -965,6 +965,7 @@ app.whenReady().then(async () => {
     await shell.openExternal(ARCANE_WEBSITE_URL);
     return { ok: true };
   });
+  ipcMain.handle("app:get-version", () => app.getVersion());
 
   // ---- 语音输入:ASR 配置 + 识别(智谱直连 / Arcane 中转,上游都是 GLM-ASR-2512) ----
   // 单 Key:relay 模式默认复用内置 arcane-spark provider 的 Key/地址(方案文档第 9 节)

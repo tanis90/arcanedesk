@@ -65,6 +65,8 @@ interface ArcaneBridge {
   fetchProviderModels(input: any): Promise<any>;
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite(): Promise<any>;
+  /** Packaged app version shown in Settings → General. */
+  getAppVersion(): Promise<string>;
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
   getVoiceConfig(): Promise<any>;
   saveVoiceConfig(cfg: any): Promise<any>;
