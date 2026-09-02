@@ -38,7 +38,7 @@ interface ArcaneBridge {
   deleteSession(path: string, context?: ArcaneModeContext): Promise<any>;
   /** Settings: provider management + default model. */
   getSettings(): Promise<any>;
-  getModelAccess(): Promise<any>;
+  getModelAccess(context?: ArcaneModeContext): Promise<any>;
   saveProvider(provider: any): Promise<any>;
   deleteProvider(id: string): Promise<any>;
   setDefaultModel(providerId: string, modelId: string): Promise<any>;

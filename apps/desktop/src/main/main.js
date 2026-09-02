@@ -842,31 +842,71 @@ app.whenReady().then(async () => {
     }
     return { ...settings, models };
   });
-  ipcMain.handle("settings:model-access", (event) => (
-    isTrustedChatIpc(event)
-      ? { missingKey: providerStore.missingApiKeyForDefault() }
-      : { missingKey: null }
-  ));
-  ipcMain.handle("settings:save-provider", (event, input) => {
+  ipcMain.handle("settings:model-access", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { missingKey: null };
+    const validated = validateModeRequest(request);
+    if (!validated.ok) return { ...validated, missingKey: null };
+    await modeController.ensureStarted(validated.context.mode);
+    const model = validated.context.host.currentModelRef();
+    return { model, missingKey: validated.context.host.missingApiKeyForCurrentModel() };
+  });
+
+  async function switchHostsToModel(target) {
+    let results;
+    try {
+      results = await Promise.all(
+        Object.values(hosts).map((host) => host.setCurrentModel(target.providerId, target.modelId)),
+      );
+    } catch (error) {
+      return { ok: false, error: errorToIpc(error) };
+    }
+    return results.find((result) => !result?.ok) ?? { ok: true };
+  }
+
+  ipcMain.handle("settings:save-provider", async (event, input) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const result = providerStore.upsertProvider(input ?? {});
     if (result.ok) {
       for (const host of Object.values(hosts)) {
         if (host.modelRuntime) providerStore.applyToRuntime(host.modelRuntime);
       }
+      const providerId = String(input?.id ?? "").trim();
+      const effective = providerStore.effectiveModel();
+      if (
+        effective?.providerId === providerId &&
+        !providerStore.missingApiKeyForModel(effective)
+      ) {
+        const activated = await switchHostsToModel(effective);
+        if (!activated.ok) return { ...activated, saved: true };
+      }
     }
     return result;
   });
-  ipcMain.handle("settings:delete-provider", (event, id) => {
+  ipcMain.handle("settings:delete-provider", async (event, id) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
-    return providerStore.removeProvider(String(id ?? ""));
+    const providerId = String(id ?? "");
+    const wasCurrent = providerStore.effectiveModel()?.providerId === providerId;
+    const result = providerStore.removeProvider(providerId);
+    if (result.ok && wasCurrent) {
+      const fallback = providerStore.effectiveModel();
+      if (fallback) {
+        const switched = await switchHostsToModel(fallback);
+        if (!switched.ok) return { ...switched, deleted: true };
+      }
+    }
+    return result;
   });
-  ipcMain.handle("settings:default-model", (event, pref) => {
+  ipcMain.handle("settings:default-model", async (event, pref) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const pid = String(pref?.providerId ?? "");
     const mid = String(pref?.modelId ?? "");
-    for (const host of Object.values(hosts)) void host.setDefaultModel(pid, mid);
-    return { ok: true };
+    const selection = pid && mid ? { providerId: pid, modelId: mid } : null;
+    const target = providerStore.modelForSelection(selection);
+    if (!target) return { ok: false, error: "no default model available" };
+    const switched = await switchHostsToModel(target);
+    if (!switched.ok) return switched;
+    providerStore.setDefaultModel(pid, mid);
+    return { ok: true, model: target };
   });
   // ---- 隐私:正式版首次明确选择 + 设置页随时撤回 ----
   const unavailableTelemetryStatus = () => ({
@@ -1078,17 +1118,17 @@ app.whenReady().then(async () => {
     if (!validated.ok) return validated;
     const context = validated.context;
     const { mode, host } = context;
-    const missingKey = providerStore.missingApiKeyForDefault();
-    if (missingKey) {
-      return {
-        ok: false,
-        code: "MODEL_PROVIDER_KEY_REQUIRED",
-        error: err("err.chat.modelNotConfigured"),
-        ...missingKey,
-      };
-    }
     try {
       await modeController.ensureStarted(mode);
+      const missingKey = host.missingApiKeyForCurrentModel();
+      if (missingKey) {
+        return {
+          ok: false,
+          code: "MODEL_PROVIDER_KEY_REQUIRED",
+          error: err("err.chat.modelNotConfigured"),
+          ...missingKey,
+        };
+      }
       if (images.length > 0 && mode === "prep") {
         try {
           const files = savePrepInboxImages(host, images);
@@ -1129,10 +1169,12 @@ app.whenReady().then(async () => {
       telemetry?.turnFailed(mode, error);
       const message = String(error?.message ?? error);
       if (/No API key found/i.test(message)) {
+        const missingKey = host.missingApiKeyForCurrentModel();
         return {
           ok: false,
           code: "MODEL_PROVIDER_KEY_REQUIRED",
           error: err("err.chat.modelNotConfigured"),
+          ...(missingKey ?? {}),
         };
       }
       return { ok: false, error: message };

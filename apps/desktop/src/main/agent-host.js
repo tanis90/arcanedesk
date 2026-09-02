@@ -207,6 +207,9 @@ export class AgentHost {
     this.runtimeReady = runtimeReady ?? Promise.resolve(null);
     this.fvttOpsNode = null;
     this.modelRuntime = null;
+    // 用户当前选择的模型。缺 key 时它可以先于 AgentSession.model 生效，
+    // 让 UI/发送守卫准确指向待配置 provider，而不是继续误认旧会话模型。
+    this._currentModelRef = null;
     this.log = log;
     this.session = null;
     this.sessionManager = null;
@@ -331,9 +334,9 @@ export class AgentHost {
       options.tools = [...builtinToolNamesForPlatform(), ...customTools.map((tool) => tool.name)];
     }
     // 设置页的默认模型偏好:直接传 model 对象,绕过 settings.json 的默认
-    const pref = this.providerStore?.data.defaultModel;
-    if (pref && this.modelRuntime) {
-      const preferred = this.modelRuntime.getModel(pref.providerId, pref.modelId);
+    const preferredModelRef = this.providerStore?.effectiveModel();
+    if (preferredModelRef && this.modelRuntime) {
+      const preferred = this.modelRuntime.getModel(preferredModelRef.providerId, preferredModelRef.modelId);
       if (preferred) options.model = preferred;
     }
     if (this.profile.systemPrompt === "combat") {
@@ -375,8 +378,18 @@ export class AgentHost {
     this.sessionManager = sessionManager;
     this.unsubscribe = session.subscribe((event) => this.forwardEvent(event));
     const model = session.model;
-    this.modelLabel = model ? [model.provider, model.id ?? model.name].filter(Boolean).join("/") : null;
-    this.supportsImages = model?.input?.includes("image") ?? true;
+    this._currentModelRef = preferredModelRef ?? (
+      model?.provider && (model.id ?? model.name)
+        ? { providerId: model.provider, modelId: model.id ?? model.name }
+        : null
+    );
+    const selectedModel = preferredModelRef
+      ? this.modelRuntime?.getModel(preferredModelRef.providerId, preferredModelRef.modelId)
+      : model;
+    this.modelLabel = this._currentModelRef
+      ? `${this._currentModelRef.providerId}/${this._currentModelRef.modelId}`
+      : null;
+    this.supportsImages = selectedModel?.input?.includes("image") ?? true;
     this.log(`[agent:${this.profile.mode}] session ready (${customTools.length} custom tools, builtin ${this.profile.builtinTools ? "ON" : "off"}, approvals ${APPROVALS_ENABLED ? "ON" : "off"}, id=${sessionManager.getSessionId?.()?.slice(0, 8) ?? "?"})`);
     this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
     // 遥测只拿 provider/model 的 family 映射,原始 id 不落盘(§7.2)
@@ -389,6 +402,7 @@ export class AgentHost {
     this.session?.dispose();
     this.session = null;
     this.sessionManager = null;
+    this._currentModelRef = null;
   }
 
   // ---- 多会话管理 ----
@@ -554,17 +568,45 @@ export class AgentHost {
     }
   }
 
-  /** 设置默认模型:持久化偏好,并立即切当前会话的模型。 */
-  async setDefaultModel(providerId, modelId) {
-    this.providerStore?.setDefaultModel(providerId, modelId);
-    if (this.modelRuntime && this.session && providerId && modelId) {
-      const model = this.modelRuntime.getModel(providerId, modelId);
-      if (!model) return { ok: false, error: `model not found: ${providerId}/${modelId}` };
-      await this.session.setModel(model);
-      this.modelLabel = `${providerId}/${modelId}`;
-      this.supportsImages = model.input?.includes("image") ?? true;
-      this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
+  /** 当前会话真正持有的模型；会话尚未启动时退回持久化选择的有效模型。 */
+  currentModelRef() {
+    if (this._currentModelRef?.providerId && this._currentModelRef?.modelId) {
+      return { ...this._currentModelRef };
     }
+    const model = this.session?.model;
+    const providerId = String(model?.provider ?? "");
+    const modelId = String(model?.id ?? model?.name ?? "");
+    if (providerId && modelId) return { providerId, modelId };
+    return this.providerStore?.effectiveModel?.() ?? null;
+  }
+
+  /** 发送前只检查本 host 当前模型，不再读取可能与会话脱节的默认偏好。 */
+  missingApiKeyForCurrentModel() {
+    return this.providerStore?.missingApiKeyForModel?.(this.currentModelRef()) ?? null;
+  }
+
+  /** 立即切当前会话模型；持久化由 main 在所有活动 host 切换成功后统一提交。 */
+  async setCurrentModel(providerId, modelId) {
+    const ref = { providerId, modelId };
+    const model = this.modelRuntime?.getModel(providerId, modelId) ?? null;
+    if (this.modelRuntime && !model) {
+      return { ok: false, error: `model not found: ${providerId}/${modelId}` };
+    }
+    const missingKey = this.providerStore?.missingApiKeyForModel?.(ref) ?? null;
+    if (missingKey) {
+      this._currentModelRef = ref;
+      this.modelLabel = `${providerId}/${modelId}`;
+      this.supportsImages = model?.input?.includes("image") ?? true;
+      this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
+      return { ok: true, pendingKey: true };
+    }
+    if (model && this.session) {
+      await this.session.setModel(model);
+    }
+    this._currentModelRef = ref;
+    this.modelLabel = `${providerId}/${modelId}`;
+    this.supportsImages = model?.input?.includes("image") ?? true;
+    this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
     return { ok: true };
   }
 

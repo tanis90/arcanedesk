@@ -1499,6 +1499,29 @@
     .pf-row textarea { resize: vertical; }
     .pf-row:has(textarea) { align-items: flex-start; }
     .pf-row:has(textarea) > span { padding-top: 8px; }
+    .pf-use-model-list {
+      flex: 1;
+      min-width: 0;
+      max-height: 136px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--bg-soft);
+      padding: 4px;
+    }
+    .pf-use-model-option {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 7px;
+      border-radius: 5px;
+      color: var(--text);
+      font-size: var(--fs-ui);
+      cursor: pointer;
+    }
+    .pf-use-model-option:hover { background: var(--panel-2); }
+    .pf-use-model-option input { width: auto; margin: 0; flex: none; }
+    .pf-use-model-option code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .voice-access-state {
       min-height: 20px;
       margin: -2px 0 10px 74px;
@@ -1693,8 +1716,10 @@
           <label class="pf-row"><span data-i18n="sm.form.models">模型</span><textarea id="pf-models" rows="3" placeholder="每行一个模型 id,支持图片输入的行尾加 (vision),如:&#10;qwen3.7-plus (vision)&#10;qwen3.7-max" data-i18n-placeholder="sm.form.modelsPlaceholder"></textarea></label>
           <div class="pf-row"><span></span><button class="btn" id="pf-fetch-models" type="button" data-i18n="sm.form.fetchModels">用上面的 key 拉取模型列表</button></div>
           <p class="settings-note" data-i18n="sm.form.visionNote">已知模型的 (vision) 后缀会自动带出(内置能力表,实测校准);拉取/模板填充后仍可手改。</p>
+          <div class="pf-row" id="pf-use-model-row" hidden><span data-i18n="sm.form.useModel">用于聊天</span><div class="pf-use-model-list" id="pf-use-model-list" role="radiogroup"></div></div>
           <div class="pf-actions">
-            <button class="btn primary" id="pf-save" data-i18n="sm.form.save">保存</button>
+            <button class="btn" id="pf-save" data-i18n="sm.form.save">仅保存配置</button>
+            <button class="btn primary" id="pf-save-use" data-i18n="sm.form.saveAndUse">保存并使用此模型</button>
             <button class="btn" id="pf-cancel" data-i18n="sm.form.cancel">取消</button>
           </div>
           <div class="pf-error" id="pf-error"></div>
@@ -1707,7 +1732,7 @@
           <div class="pf-row"><span data-i18n="sv.mode">接入方式</span>
             <select id="vs-mode">
               <option value="arcane-relay" data-i18n="sv.mode.spark">Arcane Spark</option>
-              <option value="zhipu" data-i18n="sv.mode.zhipu">自己的智谱 API</option>
+              <option value="zhipu" data-i18n="sv.mode.zhipu">智谱</option>
               <option value="off" data-i18n="sv.mode.off">关闭语音</option>
             </select>
           </div>

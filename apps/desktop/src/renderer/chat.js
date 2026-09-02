@@ -718,12 +718,15 @@ function addModelSetupCard(info = {}) {
   const configure = el("button", "primary", t("setup.configure"));
   configure.addEventListener("click", () => openProviderSettings(info.providerId));
   actions.appendChild(configure);
-  const foot = el("div", "setup-foot");
-  foot.appendChild(document.createTextNode(t("setup.noKey")));
-  const apply = el("button", "setup-link", t("setup.getTrialKey"));
-  apply.addEventListener("click", () => window.arcane.openArcaneWebsite());
-  foot.appendChild(apply);
-  card.append(head, body, actions, foot);
+  card.append(head, body, actions);
+  if (info.arcaneSpark) {
+    const foot = el("div", "setup-foot");
+    foot.appendChild(document.createTextNode(t("setup.noKey")));
+    const apply = el("button", "setup-link", t("setup.getTrialKey"));
+    apply.addEventListener("click", () => window.arcane.openArcaneWebsite());
+    foot.appendChild(apply);
+    card.appendChild(foot);
+  }
   messages.appendChild(card);
   modelSetupCard = card;
   scrollToEnd(true);
@@ -1149,7 +1152,7 @@ async function submit() {
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if (!text && images.length === 0) return;
   try {
-    const access = await window.arcane.getModelAccess();
+    const access = await window.arcane.getModelAccess(modeContext());
     if (access?.missingKey) {
       addModelSetupCard(access.missingKey);
       return;
@@ -1573,6 +1576,10 @@ const pfError = document.getElementById("pf-error");
 const pfPreset = /** @type {HTMLInputElement} */ (document.getElementById("pf-preset"));
 const pfPresetList = document.getElementById("pf-preset-list");
 const pfFetchModels = /** @type {HTMLButtonElement} */ (document.getElementById("pf-fetch-models"));
+const pfUseModelRow = document.getElementById("pf-use-model-row");
+const pfUseModelList = document.getElementById("pf-use-model-list");
+const pfSave = /** @type {HTMLButtonElement} */ (document.getElementById("pf-save"));
+const pfSaveUse = /** @type {HTMLButtonElement} */ (document.getElementById("pf-save-use"));
 
 /** @type {ArcaneTelemetryConsentStatus | null} */
 let telemetryConsentState = null;
@@ -1660,6 +1667,42 @@ async function ensureProviderPresets() {
 
 const visionSuffix = (m) => `${m.id}${m.vision ? " (vision)" : ""}`;
 
+function providerFormModels() {
+  return pfModels.value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const vision = /\(vision\)\s*$/i.test(line);
+      return { id: line.replace(/\s*\(vision\)\s*$/i, ""), vision };
+    })
+    .filter((m) => m.id);
+}
+
+let pfUseModelId = "";
+
+function renderProviderUseModels(preferredModelId = pfUseModelId) {
+  const models = providerFormModels();
+  const ids = new Set(models.map((model) => model.id));
+  pfUseModelId = ids.has(preferredModelId) ? preferredModelId : (models[0]?.id ?? "");
+  pfUseModelList.textContent = "";
+  pfUseModelRow.hidden = models.length === 0;
+  pfSaveUse.disabled = models.length === 0;
+  for (const model of models) {
+    const option = el("label", "pf-use-model-option");
+    const radio = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    radio.type = "radio";
+    radio.name = "pf-use-model";
+    radio.value = model.id;
+    radio.checked = model.id === pfUseModelId;
+    radio.addEventListener("change", () => {
+      if (radio.checked) pfUseModelId = model.id;
+    });
+    option.append(radio, el("code", null, model.id));
+    pfUseModelList.appendChild(option);
+  }
+}
+
 // 预设显示名按语言取:en 用 nameEn(缺失回退 name),zh 用 name。
 const presetDisplayName = (p) =>
   window.ArcaneI18n.getLocale() === "en-US" ? (p.nameEn ?? p.name) : p.name;
@@ -1675,7 +1718,10 @@ function applyPreset(preset) {
   pfName.value = presetDisplayName(preset);
   pfApi.value = preset.api;
   pfBaseUrl.value = preset.baseUrl;
-  if (preset.models.length > 0) pfModels.value = preset.models.map(visionSuffix).join("\n");
+  if (preset.models.length > 0) {
+    pfModels.value = preset.models.map(visionSuffix).join("\n");
+    renderProviderUseModels();
+  }
 }
 
 function renderPresetList() {
@@ -1759,6 +1805,7 @@ pfFetchModels.addEventListener("click", async () => {
       return;
     }
     pfModels.value = result.models.map(visionSuffix).join("\n");
+    renderProviderUseModels();
   } finally {
     pfFetchModels.disabled = false;
     pfFetchModels.textContent = t("sm.form.fetchModels");
@@ -1900,6 +1947,10 @@ function fillProviderForm(p) {
   pfBaseUrl.value = p.baseUrl;
   pfApiKey.value = ""; // 留空 = 保持原值
   pfModels.value = p.models.map((m) => `${m.id}${m.vision ? " (vision)" : ""}`).join("\n");
+  const selectedModelId = currentModelLabel?.startsWith(`${p.id}/`)
+    ? currentModelLabel.slice(p.id.length + 1)
+    : "";
+  renderProviderUseModels(selectedModelId);
   pfApiKey.placeholder = p.hasKey
     ? t("sm.form.apikeyKeep", { key: p.apiKey })
     : p.managed ? t("sm.form.apikeyPlaceholderSpark") : t("sm.form.apikeyPlaceholder");
@@ -1964,6 +2015,21 @@ function updateModelLabels(label) {
   const slash = label.indexOf("/");
   modelPickerLabel.textContent = arcaneSpark ? "Arcane Spark" : slash > 0 ? label.slice(slash + 1) : label;
   modelPicker.title = t("modelPicker.titleCurrent", { model: display });
+}
+
+async function selectChatModel(providerId, modelId) {
+  const result = await window.arcane.setDefaultModel(providerId, modelId);
+  if (!result?.ok) {
+    addStatus(t("sm.form.useFailed", {
+      error: result?.error ? fmtIpc(result.error) : t("common.unknownError"),
+    }));
+    return result;
+  }
+  const model = result.model ?? { providerId, modelId };
+  updateModelLabels(`${model.providerId}/${model.modelId}`);
+  const access = await window.arcane.getModelAccess(modeContext());
+  if (!access?.missingKey) clearModelSetupCard();
+  return result;
 }
 
 function renderModelList() {
@@ -2038,8 +2104,7 @@ function markModelActive() {
 
 async function pickModel(m) {
   modelPopup.hidden = true;
-  updateModelLabels(m.label); // 乐观更新;model_info 事件回来再校准
-  await window.arcane.setDefaultModel(m.providerId, m.modelId);
+  await selectChatModel(m.providerId, m.modelId);
 }
 
 modelPicker.addEventListener("click", async () => {
@@ -2105,6 +2170,7 @@ document.getElementById("provider-add").addEventListener("click", () => {
   pfApiKey.value = "";
   pfApiKey.placeholder = t("sm.form.apikeyPlaceholder");
   pfModels.value = "";
+  renderProviderUseModels("");
   pfError.textContent = "";
   resetPresetCombo();
   setProviderFormManaged(false);
@@ -2114,18 +2180,20 @@ document.getElementById("provider-add").addEventListener("click", () => {
 document.getElementById("pf-cancel").addEventListener("click", () => {
   providerFormWrap.hidden = true;
 });
-document.getElementById("pf-save").addEventListener("click", async () => {
-  const models = pfModels.value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const vision = /\(vision\)\s*$/i.test(line);
-      return { id: line.replace(/\s*\(vision\)\s*$/i, ""), vision };
-    })
-    .filter((m) => m.id);
+pfModels.addEventListener("input", () => renderProviderUseModels());
+
+async function saveProviderForm(useAfterSave) {
+  const models = providerFormModels();
+  if (useAfterSave && !pfUseModelId) {
+    pfError.textContent = t("sm.form.noModelToUse");
+    return;
+  }
+  pfError.textContent = "";
+  pfSave.disabled = true;
+  pfSaveUse.disabled = true;
+  const providerId = pfId.value.trim();
   const result = await window.arcane.saveProvider({
-    id: pfId.value.trim(),
+    id: providerId,
     name: pfName.value.trim(),
     api: pfApi.value,
     baseUrl: pfBaseUrl.value.trim(),
@@ -2134,21 +2202,43 @@ document.getElementById("pf-save").addEventListener("click", async () => {
   });
   if (!result?.ok) {
     pfError.textContent = result?.error ? fmtIpc(result.error) : t("sm.form.saveFailed");
+    pfSave.disabled = false;
+    pfSaveUse.disabled = models.length === 0;
     return;
+  }
+  if (useAfterSave) {
+    const selected = await window.arcane.setDefaultModel(providerId, pfUseModelId);
+    if (!selected?.ok) {
+      pfError.textContent = t("sm.form.useFailed", {
+        error: selected?.error ? fmtIpc(selected.error) : t("common.unknownError"),
+      });
+      pfSave.disabled = false;
+      pfSaveUse.disabled = false;
+      return;
+    }
+    const model = selected.model ?? { providerId, modelId: pfUseModelId };
+    updateModelLabels(`${model.providerId}/${model.modelId}`);
   }
   providerFormWrap.hidden = true;
   await refreshSettings();
-  const access = await window.arcane.getModelAccess();
+  const access = await window.arcane.getModelAccess(modeContext());
   if (!access?.missingKey) clearModelSetupCard();
-});
+  pfSave.disabled = false;
+  pfSaveUse.disabled = models.length === 0;
+}
+
+pfSave.addEventListener("click", () => saveProviderForm(false));
+pfSaveUse.addEventListener("click", () => saveProviderForm(true));
 defaultModelSelect.addEventListener("change", async () => {
   const value = defaultModelSelect.value;
   if (!value) {
-    await window.arcane.setDefaultModel("", ""); // 清除偏好,回到 SDK 默认(下个会话生效)
+    const result = await selectChatModel("", ""); // 清除显式选择,立即回到产品默认
+    if (!result?.ok) refreshSettings();
     return;
   }
   const slash = value.indexOf("/");
-  await window.arcane.setDefaultModel(value.slice(0, slash), value.slice(slash + 1));
+  const result = await selectChatModel(value.slice(0, slash), value.slice(slash + 1));
+  if (!result?.ok) refreshSettings();
 });
 
 // ---------- settings:语音识别(Arcane Spark / 自有智谱 API / 关闭) ----------
