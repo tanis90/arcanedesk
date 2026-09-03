@@ -27,9 +27,9 @@
     "commander": "14.0.2"
   },
   "devDependencies": {
-    "@types/node": "24.13.3",
+    "@types/node": "26.4.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.6"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=24 <25"
