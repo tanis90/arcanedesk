@@ -7,7 +7,7 @@ WebMCP module registers tools directly in Foundry's authenticated `/game` page,
 where Codex can discover and invoke them through its **built-in browser**.
 
 If you are looking for **Foundry MCP**, **FVTT MCP**, or **Foundry VTT WebMCP**,
-see [`@arcanedesk/foundry-webmcp`](apps/foundry-webmcp/README.md). Unlike a
+see [`@arcanedesk/foundry-webmcp`](foundry-modules/arcane-webmcp/README.md). Unlike a
 separate Chrome automation bridge, it runs inside the visible Foundry page, so
 the Agent and user operate the same browser view and signed-in session.
 
@@ -31,7 +31,7 @@ one protocol implementation shared by all consumers.
   transport-neutral TypeScript SDK with no runtime dependencies.
 - [`@arcanedesk/fvtt-cli`](packages/fvtt-cli/README.md) — a typed direct-CDP
   command-line adapter for automation, diagnostics, and authorized QA.
-- [`@arcanedesk/foundry-webmcp`](apps/foundry-webmcp/README.md) — a Foundry VTT
+- [`@arcanedesk/foundry-webmcp`](foundry-modules/arcane-webmcp/README.md) — a Foundry VTT
   module that exposes guarded Arcane SDK tools to Codex in the built-in browser.
 - [`arcane-desktop`](apps/desktop/README.md) — the Electron application for
   Windows and macOS.

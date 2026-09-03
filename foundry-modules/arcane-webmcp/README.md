@@ -57,7 +57,8 @@ npm run check --workspace @arcanedesk/foundry-webmcp
 ```
 
 The build produces a Foundry module directory at
-`apps/foundry-webmcp/dist`. Generated files are not the source of truth.
+`foundry-modules/arcane-webmcp/dist`. Generated files are not the source of
+truth.
 
 For a local Foundry installation:
 

@@ -33,6 +33,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/tanis90/arcanedesk.git",
-    "directory": "apps/foundry-webmcp"
+    "directory": "foundry-modules/arcane-webmcp"
   }
 }
