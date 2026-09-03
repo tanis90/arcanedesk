@@ -21,9 +21,19 @@ const MAX_ATTEMPTS = 40;
 const RETRY_DELAY_MS = 250;
 let writeProbeStore;
 let turnExecutor;
-const BRIDGE_SESSION_ID =
-  globalThis.crypto?.randomUUID?.() ??
-  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+function createBridgeSessionId() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID();
+  }
+  if (cryptoApi?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    cryptoApi.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  throw new Error("Web Crypto API is required to establish a bridge session");
+}
+const BRIDGE_SESSION_ID = createBridgeSessionId();
 const PAGE_LOADED_AT = new Date().toISOString();
 
 function delay(milliseconds) {
