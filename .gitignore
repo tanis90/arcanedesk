@@ -9,6 +9,9 @@ npm-debug.log*
 # Build and test output
 dist/
 build/
+# electron-builder signing resources are source, not output
+!apps/desktop/build/
+!apps/desktop/build/**
 coverage/
 generated/
 artifacts/

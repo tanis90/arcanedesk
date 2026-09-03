@@ -92,9 +92,10 @@ test("chat receives audio only, never camera or unknown media", () => {
   let audio;
   policy.request(chat, "media", (granted) => { audio = granted; }, { mediaTypes: ["audio"] });
   assert.equal(audio, true);
+  // video 在策略层被统一剥离,chat 请求 audio+video 实际只获得 audio
   let combined;
   policy.request(chat, "media", (granted) => { combined = granted; }, { mediaTypes: ["audio", "video"] });
-  assert.equal(combined, false);
+  assert.equal(combined, true);
   let unknown;
   policy.request(chat, "media", (granted) => { unknown = granted; }, {});
   assert.equal(unknown, false);
@@ -126,28 +127,31 @@ test("Foundry media prompt grants a session without asking again", () => {
   let granted;
   policy.request(foundry, "media", (value) => { granted = value; }, requestDetails({ mediaTypes: ["audio", "video"] }));
   assert.equal(granted, undefined);
-  assert.deepEqual(events.at(-1).mediaTypes, ["audio", "video"]);
+  assert.deepEqual(events.at(-1).mediaTypes, ["audio"]); // video 不进弹窗:策略层直接剥离
   assert.equal(policy.check(foundry, "media", "https://foundry.example", checkDetails({ mediaType: "audio" })), false);
 
   assert.deepEqual(policy.respond(events.at(-1).requestId, "allow-session"), { ok: true, granted: true });
   assert.equal(granted, true);
   assert.equal(policy.check(foundry, "media", "https://foundry.example", checkDetails({ mediaType: "audio" })), true);
-  assert.equal(policy.check(foundry, "media", "https://foundry.example", checkDetails({ mediaType: "video" })), true);
+  // 即使弹窗允许过,摄像头也永远不会被授予
+  assert.equal(policy.check(foundry, "media", "https://foundry.example", checkDetails({ mediaType: "video" })), false);
 
   let second;
   policy.request(foundry, "media", (value) => { second = value; }, requestDetails({ mediaTypes: ["audio"] }));
   assert.equal(second, true);
 });
 
-test("concurrent audio and video requests merge and resolve every callback once", () => {
+test("video requests are denied outright; audio prompts on its own", () => {
   const { foundry, events, policy } = policyFixture();
   const results = [];
   policy.request(foundry, "media", (value) => results.push(["audio", value]), requestDetails({ mediaTypes: ["audio"] }));
   policy.request(foundry, "media", (value) => results.push(["video", value]), requestDetails({ mediaTypes: ["video"] }));
+  // video 同步被拒(不进弹窗、不发事件);audio 仍在等待用户选择
+  assert.deepEqual(results, [["video", false]]);
   const prompt = events.filter((event) => event.type === "permission_request").at(-1);
-  assert.deepEqual(prompt.mediaTypes, ["audio", "video"]);
+  assert.deepEqual(prompt.mediaTypes, ["audio"]);
   policy.respond(prompt.requestId, "deny");
-  assert.deepEqual(results, [["audio", false], ["video", false]]);
+  assert.deepEqual(results, [["video", false], ["audio", false]]);
   assert.equal(events.filter((event) => event.type === "permission_resolved").length, 1);
 });
 
@@ -165,6 +169,10 @@ test("persistent allow survives policy recreation and persistent deny is silent"
   policy.request(foundry, "media", (value) => { video = value; }, requestDetails({ mediaTypes: ["video"] }));
   assert.equal(video, false);
   assert.equal(events.some((event) => event.type === "permission_request"), false);
+
+  // 历史遗留的 media:video allow 也不再生效:策略层根本不查 video 的授权
+  store.set("https://foundry.example", "media:video", "allow");
+  assert.equal(policy.check(foundry, "media", "https://foundry.example", checkDetails({ mediaType: "video" })), false);
 });
 
 test("same-origin navigation can cancel pending requests without clearing grants", () => {

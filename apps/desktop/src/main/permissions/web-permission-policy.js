@@ -14,9 +14,12 @@ function exactOrigin(value) {
   }
 }
 
+// 产品决策:本应用不使用摄像头(签名版 entitlements 只含 audio-input;
+// hardened runtime 下无 camera entitlement 时请求摄像头会被系统直接杀进程,
+// 所以 video 必须在策略层就被拒掉,不能走到系统授权)。
 function mediaTypesFromRequest(details) {
   if (!Array.isArray(details?.mediaTypes)) return [];
-  return [...new Set(details.mediaTypes.filter((type) => type === "audio" || type === "video"))];
+  return [...new Set(details.mediaTypes.filter((type) => type === "audio"))];
 }
 
 function keysForRequest(permission, details) {
@@ -28,7 +31,7 @@ function keysForRequest(permission, details) {
 function keyForCheck(permission, details) {
   if (permission !== "media") return permission;
   const type = details?.mediaType;
-  return type === "audio" || type === "video" ? `media:${type}` : null;
+  return type === "audio" ? `media:${type}` : null;
 }
 
 function originMatches(value, expected) {
@@ -156,7 +159,7 @@ export class WebPermissionPolicy {
   }
 
   enqueue({ webContents, origin, permission, missingKeys, callback, denialKey }) {
-    // Merge concurrent audio/video requests into one understandable prompt. Other
+    // Merge concurrent audio requests into one understandable prompt. Other
     // duplicate permission requests share the same answer and callback lifecycle.
     const pendingKey = `${webContents.id}|${origin}|${permission}`;
     let request = this.pendingByKey.get(pendingKey);

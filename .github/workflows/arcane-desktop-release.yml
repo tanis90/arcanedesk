@@ -56,7 +56,6 @@ jobs:
       attestations: write
       artifact-metadata: write
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
       ARCANE_RELEASE_ID: ${{ inputs.release_id }}
       ARCANE_SOURCE_COMMIT: ${{ github.sha }}
     strategy:
@@ -104,10 +103,64 @@ jobs:
       - name: Verify Desktop source
         run: npm run typecheck --workspace arcane-desktop
 
+      - name: Import Apple signing certificate (macOS)
+        if: ${{ startsWith(matrix.platform, 'macos') }}
+        env:
+          ARCANE_MAC_CERT_P12: ${{ secrets.ARCANE_MAC_CERT_P12 }}
+          ARCANE_MAC_CERT_PASSWORD: ${{ secrets.ARCANE_MAC_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert_path="$RUNNER_TEMP/arcane-developer-id.p12"
+          keychain="$RUNNER_TEMP/arcane-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 16)"
+          echo "$ARCANE_MAC_CERT_P12" | base64 --decode > "$cert_path"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$cert_path" -k "$keychain" -P "$ARCANE_MAC_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychain -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$cert_path"
+          security find-identity -v -p codesigning "$keychain"
+
+      - name: Configure Apple notarization credentials (macOS)
+        if: ${{ startsWith(matrix.platform, 'macos') }}
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "APPLE_API_KEY=$key_path"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+          } >> "$GITHUB_ENV"
+
       - name: Build package (${{ matrix.platform }})
         env:
           ARCANE_BUNDLED_NODE_PLATFORM: ${{ matrix.node_platform }}
+          # Windows has no signing certificate configured; macOS uses the Developer ID pinned in package.json
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(matrix.platform, 'windows') && 'false' || 'true' }}
         run: npm run ${{ matrix.builder }} --workspace arcane-desktop -- --${{ matrix.arch }}
+
+      - name: Notarize and staple DMG (macOS)
+        if: ${{ startsWith(matrix.platform, 'macos') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/desktop/dist
+          for dmg in *.dmg; do
+            # electron-builder notarizes only the .app; the dmg container needs its own submission and ticket
+            xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          done
 
       - name: Verify packaged resources
         shell: bash
@@ -284,8 +337,8 @@ jobs:
           printf -v release_notes '%s\n\n%s\n\n%s\n\n%s' \
             "Automated release." \
             "Manifest: https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/$release_id/release.json" \
-            "Installation notice: These builds are unsigned. Windows may display a Microsoft Defender SmartScreen warning. macOS builds are ad-hoc signed but not notarized, so the first launch reports that the developer cannot be verified: open via right-click > Open (macOS 13/14) or System Settings > Privacy & Security > Open Anyway (macOS 15+)." \
-            "If macOS reports the app as damaged, clear the download quarantine flag once: xattr -dr com.apple.quarantine /Applications/ArcaneDesk.app"
+            "macOS: signed with a Developer ID certificate and notarized by Apple. Drag ArcaneDesk into Applications and launch it normally." \
+            "Windows: these builds are unsigned, so Microsoft Defender SmartScreen may warn on first launch; choose More info > Run anyway."
           gh release create "$release_id" \
             --title "Arcane Desk $release_id" \
             --notes "$release_notes" \

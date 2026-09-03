@@ -148,9 +148,9 @@ function verifyBundledNode(appRoot, releaseManifest, distribution, expectedPlatf
   return errors;
 }
 
-// macOS 分发未走 Developer ID 签名/公证，但包内签名必须"有效"：签名失效时
-// Gatekeeper 报"已损坏"且无 GUI 绕过；有效的 ad-hoc 签名则回落为可绕过的
-// "无法验证开发者"提示（accepted 为将来签名+公证后的形态）。
+// macOS 包必须带"有效"签名:发布走 Developer ID + 公证(spctl accepted),
+// 本地 dev 回落 ad-hoc(spctl rejected)。签名彻底失效时 Gatekeeper 报"已损坏"
+// 且无 GUI 绕过,所以这里只挡无效签名,两种有效形态都接受。
 function verifyMacBundleSignature(bundlePath) {
   const errors = [];
   const verify = spawnSync("codesign", ["--verify", "--deep", "--strict", bundlePath], { encoding: "utf8" });
