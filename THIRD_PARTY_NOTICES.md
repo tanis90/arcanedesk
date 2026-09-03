@@ -28,6 +28,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | `ali-oss` | MIT | <https://github.com/ali-sdk/ali-oss> |
 | `electron` | MIT | <https://github.com/electron/electron> |
 | `electron-builder` | MIT | <https://github.com/electron-userland/electron-builder> |
+| `esbuild` | MIT | <https://github.com/evanw/esbuild> |
 | `typescript` | Apache-2.0 | <https://www.typescriptlang.org/> |
 | `vitest` | MIT | <https://vitest.dev/> |
 

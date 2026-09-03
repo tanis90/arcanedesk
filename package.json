@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "build:sdk": "npm run build --workspace @arcanedesk/foundry-sdk",
-    "build": "npm run build:sdk && npm run build --workspace @arcanedesk/fvtt-cli",
+    "build:webmcp": "npm run build --workspace @arcanedesk/foundry-webmcp",
+    "build": "npm run build:sdk && npm run build --workspace @arcanedesk/fvtt-cli && npm run build:webmcp",
     "pretest": "npm run build:sdk",
     "test": "npm test --workspaces --if-present",
     "pretypecheck": "npm run build:sdk",
