@@ -1,0 +1,6 @@
+Arcane WebMCP for Foundry VTT
+Copyright 2026 Arcane Desk
+
+This module includes the @arcanedesk/foundry-sdk runtime from the same
+Arcane Desk source repository. Both components are licensed under the
+Apache License 2.0.

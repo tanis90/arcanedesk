@@ -152,6 +152,7 @@ const rootPackage = packages.get("arcane-desk-monorepo")?.pkg;
 const sdkPackage = packages.get("@arcanedesk/foundry-sdk")?.pkg;
 const cliPackage = packages.get("@arcanedesk/fvtt-cli")?.pkg;
 const desktopPackage = packages.get("arcane-desktop")?.pkg;
+const webMcpPackage = packages.get("@arcanedesk/foundry-webmcp")?.pkg;
 
 if (rootPackage?.private !== true) errors.push("root package must remain private");
 if (JSON.stringify(rootPackage?.workspaces) !== JSON.stringify(["apps/*", "packages/*"])) {
@@ -160,6 +161,7 @@ if (JSON.stringify(rootPackage?.workspaces) !== JSON.stringify(["apps/*", "packa
 if (!sdkPackage) errors.push("@arcanedesk/foundry-sdk package is missing");
 if (!cliPackage) errors.push("@arcanedesk/fvtt-cli package is missing");
 if (!desktopPackage) errors.push("arcane-desktop package is missing");
+if (!webMcpPackage) errors.push("@arcanedesk/foundry-webmcp package is missing");
 
 if (sdkPackage) {
   if (Object.keys(sdkPackage.dependencies ?? {}).length) {
@@ -176,6 +178,7 @@ if (sdkPackage) {
 for (const [name, consumer] of [
   ["@arcanedesk/fvtt-cli", cliPackage],
   ["arcane-desktop", desktopPackage],
+  ["@arcanedesk/foundry-webmcp", webMcpPackage],
 ]) {
   if (consumer && consumer.dependencies?.["@arcanedesk/foundry-sdk"] !== sdkPackage?.version) {
     errors.push(`${name} must depend on the current exact SDK version`);
@@ -188,6 +191,7 @@ if (JSON.stringify(cliPackage?.exports) !== JSON.stringify({ "./package.json": "
   errors.push("CLI must remain bin-only and export only ./package.json");
 }
 if (desktopPackage?.private !== true) errors.push("Desktop package must remain npm-private");
+if (webMcpPackage?.private !== true) errors.push("WebMCP package must remain npm-private");
 
 const result = {
   ok: errors.length === 0,

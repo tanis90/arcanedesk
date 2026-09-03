@@ -1,14 +1,16 @@
 # Contributing to Arcane Desk
 
 Thank you for helping improve Arcane Desk. This repository is organized around
-the Foundry SDK: the CLI and Desktop application consume the SDK and must not
-maintain divergent copies of its contracts or in-page runtime.
+the Foundry SDK: the CLI, Foundry WebMCP module, and Desktop application consume
+the SDK and must not maintain divergent copies of its contracts or in-page
+runtime.
 
 ## Project layout
 
 - `packages/foundry-sdk`: transport-independent contracts, client behavior,
   and the in-page Foundry runtime.
 - `packages/fvtt-cli`: CLI and Chrome DevTools Protocol transport.
+- `apps/foundry-webmcp`: Foundry VTT module and WebMCP Site tool transport.
 - `apps/desktop`: Electron transport, application policy, and user interface.
 
 Changes to a shared action, receipt, error, or runtime behavior belong in the
@@ -38,6 +40,7 @@ Use workspace commands when iterating on one component, for example:
 ```shell
 npm test --workspace packages/foundry-sdk
 npm run build --workspace packages/fvtt-cli
+npm run check --workspace @arcanedesk/foundry-webmcp
 ```
 
 Do not edit generated runtime bundles directly. Change their TypeScript source

@@ -1,0 +1,38 @@
+{
+  "name": "@arcanedesk/foundry-webmcp",
+  "version": "0.4.0",
+  "description": "Foundry VTT WebMCP module that exposes Arcane SDK tools to the Codex built-in browser",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "keywords": [
+    "foundry-vtt",
+    "fvtt",
+    "mcp",
+    "webmcp",
+    "codex",
+    "ai-agent"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "npm test && npm run typecheck && npm run build",
+    "install:local": "node scripts/install-local.mjs",
+    "pretest": "npm run build --workspace @arcanedesk/foundry-sdk",
+    "test": "node --test",
+    "typecheck": "node --check src/module.js && node --check src/webmcp.js && node --check src/turn-execution.js && node --check src/write-probe.js"
+  },
+  "dependencies": {
+    "@arcanedesk/foundry-sdk": "0.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanis90/arcanedesk.git",
+    "directory": "apps/foundry-webmcp"
+  }
+}
