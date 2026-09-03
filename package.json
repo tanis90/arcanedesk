@@ -9,7 +9,8 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "foundry-modules/*"
   ],
   "scripts": {
     "build:sdk": "npm run build --workspace @arcanedesk/foundry-sdk",

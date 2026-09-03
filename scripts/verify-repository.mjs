@@ -155,8 +155,8 @@ const desktopPackage = packages.get("arcane-desktop")?.pkg;
 const webMcpPackage = packages.get("@arcanedesk/foundry-webmcp")?.pkg;
 
 if (rootPackage?.private !== true) errors.push("root package must remain private");
-if (JSON.stringify(rootPackage?.workspaces) !== JSON.stringify(["apps/*", "packages/*"])) {
-  errors.push("root workspaces must be exactly apps/* and packages/*");
+if (JSON.stringify(rootPackage?.workspaces) !== JSON.stringify(["apps/*", "packages/*", "foundry-modules/*"])) {
+  errors.push("root workspaces must be exactly apps/*, packages/*, and foundry-modules/*");
 }
 if (!sdkPackage) errors.push("@arcanedesk/foundry-sdk package is missing");
 if (!cliPackage) errors.push("@arcanedesk/fvtt-cli package is missing");

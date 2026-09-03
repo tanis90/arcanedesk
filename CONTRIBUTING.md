@@ -10,7 +10,8 @@ runtime.
 - `packages/foundry-sdk`: transport-independent contracts, client behavior,
   and the in-page Foundry runtime.
 - `packages/fvtt-cli`: CLI and Chrome DevTools Protocol transport.
-- `apps/foundry-webmcp`: Foundry VTT module and WebMCP Site tool transport.
+- `foundry-modules/arcane-webmcp`: Foundry VTT module and WebMCP Site tool
+  transport.
 - `apps/desktop`: Electron transport, application policy, and user interface.
 
 Changes to a shared action, receipt, error, or runtime behavior belong in the
