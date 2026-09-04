@@ -39,6 +39,62 @@ and list access plus Put/Get under `desktop/arcane-desk/*`; it grants no Delete
 permission. Secrets must never be printed, persisted in repository files, or
 shared with the legacy release identity.
 
+## macOS signing and notarization
+
+macOS builds are signed with a Developer ID Application certificate (team
+`2VQK9HQ5AZ`) and notarized by Apple. Configuration lives in
+`apps/desktop/package.json` under `build.mac`:
+
+- `identity` pins the certificate by SHA-1
+  (`AE4865DBC4A663E90902131977AC43B79321B7A2`) so electron-builder never picks
+  an unrelated identity from the keychain.
+- `hardenedRuntime` is on, with `build/entitlements.mac.plist` for the main
+  process and `build/entitlements.mac.inherit.plist` for helpers. The main
+  process adds only `com.apple.security.device.audio-input` to the
+  electron-builder defaults. There is deliberately no camera entitlement: the
+  app does not use the camera, and a hardened-runtime process without that
+  entitlement is killed by the system on camera access, so
+  `web-permission-policy.js` denies `video` media requests before they reach
+  the system prompt.
+- `notarize: true` makes electron-builder notarize the `.app` itself (this
+  covers the zip artifact). The DMG container is notarized and stapled by a
+  separate workflow step; both DMGs are stapled and validated before checksums
+  are computed.
+
+The build job reads five repository secrets (not the `desktop-release`
+Environment, which only the publish job uses):
+
+- `ARCANE_MAC_CERT_P12`: base64 of a p12 containing only the Developer ID
+  identity (leaf + private key + Apple Developer ID G2 intermediate). Never
+  export the login keychain wholesale: unrelated corporate identities in the
+  same p12 break or confuse signing.
+- `ARCANE_MAC_CERT_PASSWORD`: password of that p12.
+- `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`: App Store
+  Connect API key used by `notarytool` (electron-builder also accepts these
+  exact variable names).
+
+The workflow imports the p12 into a temporary keychain, runs
+`set-key-partition-list`, and appends it to the user search list so headless
+`codesign` never blocks on a keychain prompt.
+
+For a local signed build, the certificate must be in the login keychain and
+the three `APPLE_API_*` variables exported, then:
+
+```bash
+npm run dist:mac --workspace arcane-desktop -- --arm64
+```
+
+Verify the result before shipping anything built by hand:
+
+```bash
+codesign --verify --deep --strict dist/mac-arm64/ArcaneDesk.app
+spctl -a -vv dist/mac-arm64/ArcaneDesk.app      # accepted, Notarized Developer ID
+xcrun stapler validate dist/Arcane-Desk-*-mac-arm64.dmg
+```
+
+When the certificate or API key is rotated, re-export a clean p12 (Developer
+ID identity only) and update the five secrets; no workflow change is needed.
+
 ## Build-only verification
 
 Dispatch `Release Arcane Desktop` with:
@@ -71,14 +127,10 @@ A formal release uses the same workflow with `create_github_release=true` and,
 only after every object is verified, `update_latest=true`. Non-`stable` channels
 create a GitHub prerelease. Do not enable either option merely to test CI.
 
-Current Desktop artifacts are unsigned. Windows can trigger SmartScreen, and
-macOS builds are only ad-hoc signed (re-signed after packaging so the signature
-is valid): Gatekeeper shows a bypassable "developer cannot be verified" prompt
-instead of the dead-end "damaged" dialog. Users open the app via right-click >
-Open (macOS 13/14) or System Settings > Privacy & Security > Open Anyway
-(macOS 15+); clearing the quarantine attribute with `xattr -dr
-com.apple.quarantine` remains the documented fallback. This must remain visible
-in release notes until Developer ID signing and notarization are implemented.
+Current Desktop artifacts: macOS builds are Developer ID signed and notarized
+(see the next section), so Gatekeeper opens them without any prompt. Windows
+builds remain unsigned and can trigger SmartScreen; the documented path is
+More info > Run anyway.
 
 ## Skills bundle publish
 

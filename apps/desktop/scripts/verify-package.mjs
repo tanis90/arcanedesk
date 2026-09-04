@@ -35,7 +35,7 @@ export const requiredFiles = [
   "skills/prep/arcane-fvtt-mods/scripts/archive-zip.mjs",
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/yauzl/package.json",
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/pend/package.json",
-  "skills/prep/arcane-actor-images/SKILL.md",
+  "skills/prep/arcane-actor-update/SKILL.md",
   "skills/prep/arcane-module-reader/SKILL.md",
   "scripts/archive-zip.mjs",
   "scripts/archive.mjs",
@@ -72,7 +72,7 @@ const forbiddenPaths = [
 
 export const exactDirectories = new Map([
   ["system-prompts", ["combat.md", "prep.md"]],
-  ["skills/prep", ["arcane-actor-images", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
+  ["skills/prep", ["arcane-actor-update", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
@@ -148,9 +148,9 @@ function verifyBundledNode(appRoot, releaseManifest, distribution, expectedPlatf
   return errors;
 }
 
-// macOS 分发未走 Developer ID 签名/公证，但包内签名必须"有效"：签名失效时
-// Gatekeeper 报"已损坏"且无 GUI 绕过；有效的 ad-hoc 签名则回落为可绕过的
-// "无法验证开发者"提示（accepted 为将来签名+公证后的形态）。
+// macOS 包必须带"有效"签名:发布走 Developer ID + 公证(spctl accepted),
+// 本地 dev 回落 ad-hoc(spctl rejected)。签名彻底失效时 Gatekeeper 报"已损坏"
+// 且无 GUI 绕过,所以这里只挡无效签名,两种有效形态都接受。
 function verifyMacBundleSignature(bundlePath) {
   const errors = [];
   const verify = spawnSync("codesign", ["--verify", "--deep", "--strict", bundlePath], { encoding: "utf8" });

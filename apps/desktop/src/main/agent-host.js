@@ -59,6 +59,20 @@ function loadPrepPreamble(log) {
 }
 
 /**
+ * 系统提示正文是中文(战斗回执模板也是中文),界面语言为英文时模型容易被
+ * prompt 语言带跑。补一条回复语言指令;zh-CN 不需要(默认行为已是中文)。
+ * 指令在建 session 时快照:运行中切语言只影响之后新建的 session。
+ */
+export function languageDirectiveForLocale(locale) {
+  if (locale !== "en-US") return null;
+  return (
+    "Language: the app interface is set to English. Always respond in English — " +
+    "including combat receipts and status lines — unless the user's latest message " +
+    "is clearly written in another language; in that case follow the user's language."
+  );
+}
+
+/**
  * cwd 围栏(M3):备团模式下 edit/write 的目标路径必须 resolve 到 cwd 内。
  * block 时 agent 收到 reason,自行向用户解释;这就是全部"审批 UX"。
  */
@@ -195,9 +209,10 @@ export class AgentHost {
    *   runtimeReady?: Promise<unknown>,
    *   log?: (...data: any[]) => void,
    *   profile?: Record<string, any>,
+   *   getLocale?: () => string,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale } = {}) {
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
@@ -205,6 +220,7 @@ export class AgentHost {
     this.providerStore = providerStore ?? null;
     this.telemetry = telemetry ?? null;
     this.runtimeReady = runtimeReady ?? Promise.resolve(null);
+    this.getLocale = getLocale ?? null;
     this.fvttOpsNode = null;
     this.modelRuntime = null;
     // 用户当前选择的模型。缺 key 时它可以先于 AgentSession.model 生效，
@@ -345,10 +361,11 @@ export class AgentHost {
       // appendSystemPromptOverride 必须显式置空,挡掉 ~/.pi 的 APPEND_SYSTEM.md。
       const systemPrompt = loadCombatSystemPrompt(this.log);
       if (systemPrompt) {
+        const languageDirective = languageDirectiveForLocale(this.getLocale?.());
         const loader = new DefaultResourceLoader({
           cwd,
           agentDir: getAgentDir(),
-          systemPromptOverride: () => systemPrompt,
+          systemPromptOverride: () => [systemPrompt, languageDirective].filter(Boolean).join("\n\n"),
           appendSystemPromptOverride: () => [],
         });
         await loader.reload();
@@ -359,10 +376,11 @@ export class AgentHost {
       // skills 走原生渐进披露(<available_skills> 清单,read 按需加载);
       // fence 挂 cwd 围栏 extension。
       const prepPreamble = loadPrepPreamble(this.log);
+      const languageDirective = languageDirectiveForLocale(this.getLocale?.());
       const loader = new DefaultResourceLoader({
         cwd,
         agentDir: getAgentDir(),
-        appendSystemPromptOverride: () => (prepPreamble ? [prepPreamble] : []),
+        appendSystemPromptOverride: () => [prepPreamble, languageDirective].filter(Boolean),
         // skillPaths 每次建 session 现取:SkillsUpdater 刷新成功后,新 session
         // 立即落到 userData 激活副本,老 session 保持建会话时的快照。
         additionalSkillPaths: this.profile.getSkillPaths ? this.profile.getSkillPaths() : this.profile.skillPaths,

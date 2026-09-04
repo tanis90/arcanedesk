@@ -21,4 +21,4 @@ AgentHost profile，但共享会话、ProviderStore 和 Foundry panel。
 - `arcane-fvtt-ops`：既有实例的启停、日志与端口排障；
 - `arcane-fvtt-mods`：从 `module.json` 安装 mod，并把本地版本与 Arcane OSS 全局索引对比后按用户选择升级；
 - `arcane-module-reader`：在明确云上传同意后整理用户有权处理的 PDF；
-- `arcane-actor-images`：把用户图片写入世界 Data 的稳定相对路径。
+- `arcane-actor-update`：新建/修改人物；法术与职业能力优先取自 arcane-dnd5e-2014-automation 模块的合集包，用户图片写入世界 Data 的稳定相对路径。

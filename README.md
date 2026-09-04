@@ -1,20 +1,29 @@
-# Arcane Desk
+# Arcane Desk — Foundry VTT MCP, WebMCP, SDK, CLI and Desktop
 
 Arcane Desk is an open-source, agent-native desktop companion and developer
-toolkit for lawfully licensed Foundry Virtual Tabletop installations.
+toolkit for lawfully licensed Foundry Virtual Tabletop installations. It
+includes an **FVTT MCP / Foundry VTT MCP integration for Codex**: the Arcane
+WebMCP module registers tools directly in Foundry's authenticated `/game` page,
+where Codex can discover and invoke them through its **built-in browser**.
+
+If you are looking for **Foundry MCP**, **FVTT MCP**, or **Foundry VTT WebMCP**,
+see [`@arcanedesk/foundry-webmcp`](foundry-modules/arcane-webmcp/README.md). Unlike a
+separate Chrome automation bridge, it runs inside the visible Foundry page, so
+the Agent and user operate the same browser view and signed-in session.
 
 This repository is an SDK-first npm workspace:
 
 ```text
 @arcanedesk/foundry-sdk
 ├── @arcanedesk/fvtt-cli   (Chrome DevTools Protocol transport)
-└── arcane-desktop         (Electron WebContents transport)
+├── @arcanedesk/foundry-webmcp (Codex built-in browser / WebMCP transport)
+└── arcane-desktop             (Electron WebContents transport)
 ```
 
 The SDK owns the typed safe-action contracts, complete action registry, exact
-in-page runtime, runtime client, and failure semantics. The CLI and Desktop own
-only their transports and product-specific policy. This keeps one protocol
-implementation shared by all consumers.
+in-page runtime, runtime client, and failure semantics. The CLI, WebMCP module,
+and Desktop own only their transports and product-specific policy. This keeps
+one protocol implementation shared by all consumers.
 
 ## Packages
 
@@ -22,6 +31,8 @@ implementation shared by all consumers.
   transport-neutral TypeScript SDK with no runtime dependencies.
 - [`@arcanedesk/fvtt-cli`](packages/fvtt-cli/README.md) — a typed direct-CDP
   command-line adapter for automation, diagnostics, and authorized QA.
+- [`@arcanedesk/foundry-webmcp`](foundry-modules/arcane-webmcp/README.md) — a Foundry VTT
+  module that exposes guarded Arcane SDK tools to Codex in the built-in browser.
 - [`arcane-desktop`](apps/desktop/README.md) — the Electron application for
   Windows and macOS.
 
@@ -33,6 +44,7 @@ The project is pre-release. Public APIs and package names may change before
 - Node.js 24
 - npm 11
 - a Foundry VTT installation and content you are legally entitled to use
+- Codex with built-in-browser WebMCP Site tool support for the WebMCP module
 - Windows or macOS when building the Desktop application
 
 Foundry VTT itself, license keys, commercial content, private worlds, and
@@ -48,13 +60,15 @@ npm run verify
 ```
 
 The verification gate scans the repository boundary, type-checks and tests all
-workspaces, builds the SDK and CLI, and performs dry-run npm package checks.
+workspaces, builds the SDK, CLI, and Foundry WebMCP module, and performs dry-run
+npm package checks.
 
 Common focused commands:
 
 ```shell
 npm test --workspace @arcanedesk/foundry-sdk
 npm test --workspace @arcanedesk/fvtt-cli
+npm run check --workspace @arcanedesk/foundry-webmcp
 npm test --workspace arcane-desktop
 npm run dist:dir --workspace arcane-desktop
 ```
@@ -72,6 +86,8 @@ runtime write as a real side effect:
 - the SDK defaults to a narrow safe action allowlist;
 - the CLI exposes broader operations for explicitly authorized automation and
   QA;
+- the WebMCP module binds writes to the current page, world, battle, turn, and
+  durable request ID instead of exposing a generic raw SDK call;
 - Desktop retains its own IPC, permission, and tool allowlists; and
 - Desktop API keys are protected with the operating system's Electron
   `safeStorage` facility and are masked before reaching the renderer.

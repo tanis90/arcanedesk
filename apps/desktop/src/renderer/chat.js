@@ -174,6 +174,9 @@ function dismissWelcome() {
 function showWelcome() {
   if (!welcome.isConnected) messages.appendChild(welcome);
   welcome.style.display = "";
+  // resetConversation 的 innerHTML="" 会把 welcome 摘出文档,语言热切换的
+  // 全量回填扫不到脱节的它;重新上树时补翻一次(连带 chip 的 data-prompt)。
+  window.ArcaneI18n?.apply(welcome);
   conversationEmpty = true;
   syncDirChip();
 }

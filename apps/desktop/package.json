@@ -1,7 +1,7 @@
 {
   "name": "arcane-desktop",
   "productName": "ArcaneDesk",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "license": "Apache-2.0",
   "description": "Arcane Desk — an agent-native desktop companion for Foundry VTT.",
@@ -81,12 +81,14 @@
       "artifactName": "Arcane-Desk-${version}-mac-${arch}.${ext}",
       "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
-      "identity": null,
-      "hardenedRuntime": false,
+      "identity": "AE4865DBC4A663E90902131977AC43B79321B7A2",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
       "icon": "src/renderer/logo-icon.png",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Arcane Desk uses the microphone only when you choose voice input or allow Foundry voice chat.",
-        "NSCameraUsageDescription": "Arcane Desk uses the camera only when you allow Foundry video chat."
+        "NSMicrophoneUsageDescription": "Arcane Desk uses the microphone only when you choose voice input or allow Foundry voice chat."
       }
     },
     "win": {

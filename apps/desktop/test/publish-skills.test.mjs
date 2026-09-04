@@ -26,7 +26,7 @@ test("collectSkillFiles lists the real skill set sorted, including the bundle ba
   const files = await collectSkillFiles(SKILLS_DIR);
   assert.deepEqual(files, [...files].sort());
   assert.ok(files.includes("bundle.json"));
-  for (const skill of ["arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-fvtt-mods", "arcane-actor-images", "arcane-module-reader"]) {
+  for (const skill of ["arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-fvtt-mods", "arcane-actor-update", "arcane-module-reader"]) {
     assert.ok(files.includes(`${skill}/SKILL.md`), `missing ${skill}/SKILL.md`);
   }
 });

@@ -29,7 +29,8 @@ const REQUIRED_MARKERS = new Map([
     "EPIPE",
     "用户明确授权",
   ]],
-  ["skills/prep/arcane-actor-images/SKILL.md", [
+  ["skills/prep/arcane-actor-update/SKILL.md", [
+    "arcane-dnd5e-2014-automation",
     "prototypeToken.texture.src",
     "ring.subject.texture",
     "已在场景里的存量 token",

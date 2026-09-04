@@ -666,6 +666,7 @@ app.whenReady().then(async () => {
       providerStore,
       telemetry,
       runtimeReady: fvttOpsRuntimeReady,
+      getLocale: resolveLocale,
       profile: {
         getCwd: () => combatWorkspace,
       },
@@ -678,6 +679,7 @@ app.whenReady().then(async () => {
       providerStore,
       telemetry,
       runtimeReady: fvttOpsRuntimeReady,
+      getLocale: resolveLocale,
       profile: {
         mode: "prep",
         getCwd: () => prepStore.data.lastCwd ?? prepFallbackWorkspace,
