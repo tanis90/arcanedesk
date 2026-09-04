@@ -10,6 +10,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { I18nError, err, errorToIpc } from "../src/main/i18n-error.mjs";
+import { languageDirectiveForLocale } from "../src/main/agent-host.js";
 import "../src/shared/i18n/messages.js";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -267,4 +268,34 @@ test("renderer classic scripts declare no colliding top-level names", () => {
     }
   }
   assert.deepEqual(collisions, [], "classic script top-level declaration collision");
+});
+
+// welcome 节点会被 resetConversation 的 innerHTML="" 摘出文档,错过语言热切换的
+// 全量回填;showWelcome 重新上树时必须补翻,否则主界面停在旧语言。
+test("showWelcome re-applies i18n to the possibly detached welcome node", () => {
+  const chat = readFileSync(path.join(appRoot, "src/renderer/chat.js"), "utf8");
+  assert.match(chat, /messages\.innerHTML = ""/, "welcome detachment path should still exist");
+  assert.match(
+    chat,
+    /function showWelcome\(\) \{[\s\S]*?ArcaneI18n\?\.apply\(welcome\)/,
+    "showWelcome must re-translate the welcome subtree on re-attach",
+  );
+});
+
+// 系统提示正文是中文:界面语言为英文时必须给 agent 补回复语言指令,
+// 否则模型被中文 prompt 带跑,用户用英文聊天也收到中文回复。
+test("agent system prompts carry a reply-language directive for en-US UI", () => {
+  const directive = languageDirectiveForLocale("en-US");
+  assert.ok(directive && /respond in English/.test(directive));
+  assert.equal(languageDirectiveForLocale("zh-CN"), null);
+  assert.equal(languageDirectiveForLocale(null), null);
+  assert.equal(languageDirectiveForLocale(undefined), null);
+  const main = readFileSync(path.join(appRoot, "src/main/main.js"), "utf8");
+  const hostInits = main.match(/new AgentHost\(\{/g) ?? [];
+  const localeWiring = main.match(/getLocale: resolveLocale/g) ?? [];
+  assert.ok(hostInits.length >= 2 && localeWiring.length >= hostInits.length,
+    "every AgentHost must receive getLocale: resolveLocale");
+  const agentHost = readFileSync(path.join(appRoot, "src/main/agent-host.js"), "utf8");
+  assert.match(agentHost, /systemPromptOverride: \(\) => \[systemPrompt, languageDirective\]/);
+  assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[prepPreamble, languageDirective\]/);
 });
