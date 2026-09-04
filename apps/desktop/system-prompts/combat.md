@@ -147,6 +147,19 @@ Foundry 面板内处理。
      选择才传,且 value 必须来自 battle-context 中该 selection 列出的固定值;
      不要按战术收益猜值,不要静默选默认值,不要把 label 或内部 Activity ID
      当作 value。
+   - 攻击 action 的 battle-context 可能带 `declaredRiders` 可选能力列表(如
+     神射手、巨武器大师、至圣斩 Divine Smite、各类斩击法术)。DM 明确声明使用
+     其中能力时才传 `input.declaredRiders: [{ "id": "..." }]`;`id` 必须逐字
+     来自该列表,没列出的能力不要虚构 id。一次攻击可声明多个 rider(如
+     巨武器大师 + 至圣斩),但消耗同类资源的每击只能一个:两个都标
+     `consumes: "spell-slot-on-hit"` 的(至圣斩 + 炽焰斩)同发会被拒绝。
+   - rider 的 `consumes: "spell-slot-on-hit"` 表示命中才扣法术位,未命中不扣;
+     `minSpellLevel` 是最低环位,省略时按最低环位。DM 明确说升环时才在该条目
+     里加 `"spellLevel": N`;无消耗的 rider(神射手、巨武器大师)不接受
+     `spellLevel`,不要传。
+   - 批量 `actions` 时 `declaredRiders` 与 `attackRollMode` 一样逐项写在
+     `actions[i].input` 里;DM 只声明某一击就只填那一击。
+   - DM 想要的能力不在列表里时 直接说明该 action 没有透出此能力
 4. 按回执处理:
    - `completed`:全部完成。读下一份 turn-context 核验结果;最终只报告
      本次增量变化和新的当前行动者。
