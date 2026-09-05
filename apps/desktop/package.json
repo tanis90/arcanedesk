@@ -41,10 +41,10 @@
     "yauzl": "3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.4.1",
     "@types/yauzl": "3.4.0",
-    "ali-oss": "^6.21.0",
-    "electron": "44.0.0",
+    "ali-oss": "^6.23.0",
+    "electron": "44.1.1",
     "electron-builder": "26.15.3",
     "typescript": "7.0.2"
   },
