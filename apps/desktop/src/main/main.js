@@ -826,7 +826,7 @@ app.whenReady().then(async () => {
     return result;
   });
 
-  // ---- 设置:LLM provider 管理 + 默认模型(两 host 共享偏好,各自切换) ----
+  // ---- 设置:LLM provider 管理 + 默认模型(默认只影响新会话;会话内切换走 chat:set-model) ----
   ipcMain.handle("settings:get", async (event) => {
     if (!isTrustedChatIpc(event)) return { providers: [], defaultModel: null, models: [] };
     const settings = providerStore.toPublic();
@@ -853,15 +853,32 @@ app.whenReady().then(async () => {
     return { model, missingKey: validated.context.host.missingApiKeyForCurrentModel() };
   });
 
-  async function switchHostsToModel(target) {
-    let results;
-    try {
-      results = await Promise.all(
-        Object.values(hosts).map((host) => host.setCurrentModel(target.providerId, target.modelId)),
-      );
-    } catch (error) {
-      return { ok: false, error: errorToIpc(error) };
-    }
+  // 全局默认只落到"尚未开始对话"的会话(两模式的空会话);进行中/有历史的
+  // 会话各自持有模型,绝不被动切换 —— 模型按会话生效。
+  async function applyDefaultModelToEmptySessions(target) {
+    const results = await Promise.all(
+      Object.values(hosts).map(async (host) =>
+        host.sessionHasMessages()
+          ? { ok: true, skipped: true }
+          : host.setCurrentModel(target.providerId, target.modelId)
+      ),
+    );
+    return results.find((result) => !result?.ok) ?? { ok: true };
+  }
+
+  /** 删除 provider 后的定向回退:只切"正在用被删 provider"或"尚无模型"的会话。 */
+  async function fallbackSessionsOffProvider(providerId) {
+    const fallback = providerStore.effectiveModel();
+    if (!fallback) return { ok: true };
+    const results = await Promise.all(
+      Object.values(hosts).map(async (host) => {
+        const sessionModel = host.session?.model;
+        if (sessionModel && host.currentModelRef()?.providerId !== providerId) {
+          return { ok: true, skipped: true };
+        }
+        return host.setCurrentModel(fallback.providerId, fallback.modelId);
+      }),
+    );
     return results.find((result) => !result?.ok) ?? { ok: true };
   }
 
@@ -878,7 +895,7 @@ app.whenReady().then(async () => {
         effective?.providerId === providerId &&
         !providerStore.missingApiKeyForModel(effective)
       ) {
-        const activated = await switchHostsToModel(effective);
+        const activated = await applyDefaultModelToEmptySessions(effective);
         if (!activated.ok) return { ...activated, saved: true };
       }
     }
@@ -887,14 +904,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:delete-provider", async (event, id) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const providerId = String(id ?? "");
-    const wasCurrent = providerStore.effectiveModel()?.providerId === providerId;
     const result = providerStore.removeProvider(providerId);
-    if (result.ok && wasCurrent) {
-      const fallback = providerStore.effectiveModel();
-      if (fallback) {
-        const switched = await switchHostsToModel(fallback);
-        if (!switched.ok) return { ...switched, deleted: true };
-      }
+    if (result.ok) {
+      const switched = await fallbackSessionsOffProvider(providerId);
+      if (!switched.ok) return { ...switched, deleted: true };
     }
     return result;
   });
@@ -905,10 +918,25 @@ app.whenReady().then(async () => {
     const selection = pid && mid ? { providerId: pid, modelId: mid } : null;
     const target = providerStore.modelForSelection(selection);
     if (!target) return { ok: false, error: "no default model available" };
-    const switched = await switchHostsToModel(target);
-    if (!switched.ok) return switched;
+    const applied = await applyDefaultModelToEmptySessions(target);
+    if (!applied.ok) return applied;
     providerStore.setDefaultModel(pid, mid);
     return { ok: true, model: target };
+  });
+
+  // 会话内模型切换(输入框旁的选择器):只作用于当前模式的当前会话,
+  // model_change 落进该会话自己的 JSONL;不影响其他会话,也不改全局默认。
+  ipcMain.handle("chat:set-model", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
+    const validated = validateModeRequest(request);
+    if (!validated.ok) return validated;
+    const providerId = String(request?.providerId ?? "");
+    const modelId = String(request?.modelId ?? "");
+    if (!providerId || !modelId) return { ok: false, error: "invalid model selection" };
+    await modeController.ensureStarted(validated.context.mode);
+    const result = await validated.context.host.setCurrentModel(providerId, modelId);
+    if (!result?.ok) return { ...result, ...modeController.publicSnapshot(validated.context) };
+    return { ok: true, model: { providerId, modelId }, ...modeController.publicSnapshot(validated.context) };
   });
   // ---- 隐私:正式版首次明确选择 + 设置页随时撤回 ----
   const unavailableTelemetryStatus = () => ({

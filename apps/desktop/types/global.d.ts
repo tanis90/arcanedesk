@@ -42,6 +42,8 @@ interface ArcaneBridge {
   saveProvider(provider: any): Promise<any>;
   deleteProvider(id: string): Promise<any>;
   setDefaultModel(providerId: string, modelId: string): Promise<any>;
+  /** Switch the model of the current session only (composer picker). */
+  setChatModel(context: ArcaneModeContext, providerId: string, modelId: string): Promise<any>;
   /** Privacy: inspect and explicitly change packaged-build telemetry consent. */
   getTelemetryConsent(): Promise<ArcaneTelemetryConsentStatus>;
   setTelemetryConsent(enabled: boolean): Promise<{

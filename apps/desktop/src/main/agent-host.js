@@ -59,6 +59,18 @@ function loadPrepPreamble(log) {
 }
 
 /**
+ * 模型按会话生效:会话自身有可恢复模型(JSONL 里的 model_change/assistant
+ * provider)时返回 null,让 SDK 在建 session 时恢复会话自己的模型;只有
+ * 尚无可恢复模型的会话(全新或只有用户消息)才用设置页全局默认兜底。
+ * 这里一旦把全局默认传进 options.model,SDK 就不再恢复会话模型 ——
+ * 这是"在 A 切模型导致 B 也跟着变"的第二层机制。
+ */
+export function initialModelRefForAttach(sessionContextModel, providerStore) {
+  if (sessionContextModel?.provider && sessionContextModel?.modelId) return null;
+  return providerStore?.effectiveModel?.() ?? null;
+}
+
+/**
  * 系统提示正文是中文(战斗回执模板也是中文),界面语言为英文时模型容易被
  * prompt 语言带跑。补一条回复语言指令;zh-CN 不需要(默认行为已是中文)。
  * 指令在建 session 时快照:运行中切语言只影响之后新建的 session。
@@ -349,9 +361,11 @@ export class AgentHost {
       // 传了 customTools 也不会自动激活它们,所以一并放进 allowlist。
       options.tools = [...builtinToolNamesForPlatform(), ...customTools.map((tool) => tool.name)];
     }
-    // 设置页的默认模型偏好:直接传 model 对象,绕过 settings.json 的默认
-    const preferredModelRef = this.providerStore?.effectiveModel();
-    if (preferredModelRef && this.modelRuntime) {
+    // 模型按会话生效:已有会话恢复自己的模型,新会话才吃全局默认(见
+    // initialModelRefForAttach)。传 model 对象是为了绕过 pi settings.json
+    // 的默认,而不是覆盖会话选择。
+    const sessionContextModel = sessionManager.buildSessionContext?.().model ?? null;
+    const preferredModelRef = initialModelRefForAttach(sessionContextModel, this.providerStore);    if (preferredModelRef && this.modelRuntime) {
       const preferred = this.modelRuntime.getModel(preferredModelRef.providerId, preferredModelRef.modelId);
       if (preferred) options.model = preferred;
     }
@@ -395,15 +409,13 @@ export class AgentHost {
     this.session = session;
     this.sessionManager = sessionManager;
     this.unsubscribe = session.subscribe((event) => this.forwardEvent(event));
+    // ref/label 一律以会话实际持有的模型为准:恢复出的会话模型或 SDK 兜底
+    // 结果都直接读 session.model,preferred 只在新会话上与它一致。
     const model = session.model;
-    this._currentModelRef = preferredModelRef ?? (
-      model?.provider && (model.id ?? model.name)
-        ? { providerId: model.provider, modelId: model.id ?? model.name }
-        : null
-    );
-    const selectedModel = preferredModelRef
-      ? this.modelRuntime?.getModel(preferredModelRef.providerId, preferredModelRef.modelId)
-      : model;
+    this._currentModelRef = model?.provider && (model.id ?? model.name)
+      ? { providerId: model.provider, modelId: model.id ?? model.name }
+      : (preferredModelRef ?? null);
+    const selectedModel = model;
     this.modelLabel = this._currentModelRef
       ? `${this._currentModelRef.providerId}/${this._currentModelRef.modelId}`
       : null;
@@ -603,13 +615,19 @@ export class AgentHost {
     return this.providerStore?.missingApiKeyForModel?.(this.currentModelRef()) ?? null;
   }
 
-  /** 立即切当前会话模型；持久化由 main 在所有活动 host 切换成功后统一提交。 */
+  /**
+   * 立即切当前会话模型;model_change 由 Pi 写进本会话 JSONL,重开/重启后
+   * 自然恢复。只作用于本 host 当前会话,不广播、不改全局默认。
+   */
   async setCurrentModel(providerId, modelId) {
     const ref = { providerId, modelId };
     const model = this.modelRuntime?.getModel(providerId, modelId) ?? null;
     if (this.modelRuntime && !model) {
       return { ok: false, error: `model not found: ${providerId}/${modelId}` };
     }
+    // 会话已在该模型上:不重复写 model_change,只同步 UI 状态
+    const current = this.session?.model;
+    const sameModel = current?.provider === providerId && (current.id ?? current.name) === modelId;
     const missingKey = this.providerStore?.missingApiKeyForModel?.(ref) ?? null;
     if (missingKey) {
       this._currentModelRef = ref;
@@ -618,14 +636,20 @@ export class AgentHost {
       this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
       return { ok: true, pendingKey: true };
     }
-    if (model && this.session) {
+    if (!sameModel && model && this.session) {
       await this.session.setModel(model);
     }
     this._currentModelRef = ref;
     this.modelLabel = `${providerId}/${modelId}`;
     this.supportsImages = model?.input?.includes("image") ?? true;
     this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
-    return { ok: true };
+    return { ok: true, ...(sameModel ? { noop: true } : null) };
+  }
+
+  /** 会话是否已开始对话(有消息条目);空会话才允许被全局默认接管。 */
+  sessionHasMessages() {
+    const entries = this.sessionManager?.getEntries?.() ?? [];
+    return entries.some((entry) => entry?.type === "message");
   }
 
   /** slash 候选:当前会话加载出的 skills + prompt 模板,供输入框弹窗。 */

@@ -56,6 +56,13 @@ contextBridge.exposeInMainWorld("arcane", {
   deleteProvider: (id) => ipcRenderer.invoke("settings:delete-provider", id),
   setDefaultModel: (providerId, modelId) =>
     ipcRenderer.invoke("settings:default-model", { providerId, modelId }),
+  /** 会话内切换当前会话的模型(输入框旁的选择器);只影响当前模式的当前会话。 */
+  setChatModel: (context, providerId, modelId) => ipcRenderer.invoke("chat:set-model", {
+    mode: context?.mode,
+    generation: context?.generation,
+    providerId,
+    modelId,
+  }),
   /** Privacy: inspect and explicitly change packaged-build telemetry consent. */
   getTelemetryConsent: () => ipcRenderer.invoke("telemetry:consent-get"),
   setTelemetryConsent: (enabled) => ipcRenderer.invoke("telemetry:consent-set", enabled),

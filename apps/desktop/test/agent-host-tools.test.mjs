@@ -6,6 +6,7 @@ import {
   AgentHost,
   arcaneShellTool,
   builtinToolNamesForPlatform,
+  initialModelRefForAttach,
   pinArcaneNodeForShellSpawn,
 } from "../src/main/agent-host.js";
 
@@ -87,6 +88,52 @@ test("an unconfigured model can be selected before its key activates the Agent s
   missing = false;
   assert.deepEqual(await host.setCurrentModel("custom", "custom-model"), { ok: true });
   assert.equal(activated, model);
+});
+
+test("attach keeps a session's own model by refusing the global default", () => {
+  const providerStore = { effectiveModel: () => ({ providerId: "arcane-spark", modelId: "arcane-spark" }) };
+  // 已有会话:JSONL 里可恢复出模型,不能再让全局默认进 options.model
+  assert.equal(
+    initialModelRefForAttach({ provider: "kimi", modelId: "kimi-for-coding" }, providerStore),
+    null,
+  );
+  // 新会话/纯用户消息会话:没有可恢复模型,用全局默认兜底
+  assert.deepEqual(
+    initialModelRefForAttach(null, providerStore),
+    { providerId: "arcane-spark", modelId: "arcane-spark" },
+  );
+  assert.equal(initialModelRefForAttach(null, null), null);
+});
+
+test("sessionHasMessages reports whether the attached session already started", () => {
+  const host = new AgentHost({ sendToRenderer: () => {}, log: () => {} });
+  assert.equal(host.sessionHasMessages(), false); // 未挂载 sessionManager
+  host.sessionManager = { getEntries: () => [{ type: "custom", customType: "arcane.session" }] };
+  assert.equal(host.sessionHasMessages(), false); // 只有模式标记,还没对话
+  host.sessionManager = { getEntries: () => [{ type: "message" }, { type: "custom" }] };
+  assert.equal(host.sessionHasMessages(), true);
+});
+
+test("setCurrentModel skips a redundant model_change when the session already holds the model", async () => {
+  const emitted = [];
+  const setCalls = [];
+  const host = new AgentHost({
+    providerStore: { missingApiKeyForModel: () => null },
+    sendToRenderer: (payload) => emitted.push(payload),
+    log: () => {},
+  });
+  const model = { provider: "kimi", id: "k2", input: ["text", "image"] };
+  host.modelRuntime = { getModel: () => model };
+  host.session = { model: { provider: "kimi", id: "k2" }, setModel: async (next) => setCalls.push(next) };
+
+  assert.deepEqual(await host.setCurrentModel("kimi", "k2"), { ok: true, noop: true });
+  assert.deepEqual(setCalls, []); // 同模型不重复写 model_change
+  assert.equal(host.modelLabel, "kimi/k2");
+  assert.equal(emitted.at(-1).type, "model_info");
+  assert.equal(emitted.at(-1).supportsImages, true);
+
+  assert.deepEqual(await host.setCurrentModel("kimi", "k3"), { ok: true });
+  assert.equal(setCalls.length, 1); // 换模型仍然落到 session.setModel
 });
 
 test("prep sessions select the native shell tool for each desktop platform", () => {

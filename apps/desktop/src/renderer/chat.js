@@ -2021,7 +2021,9 @@ function updateModelLabels(label) {
 }
 
 async function selectChatModel(providerId, modelId) {
-  const result = await window.arcane.setDefaultModel(providerId, modelId);
+  // 会话内切换:只作用于当前模式的当前会话(model_change 落该会话 JSONL),
+  // 不再走全局默认通道,避免 A 会话换模型把 B 也带走。
+  const result = await window.arcane.setChatModel(modeContext(), providerId, modelId);
   if (!result?.ok) {
     addStatus(t("sm.form.useFailed", {
       error: result?.error ? fmtIpc(result.error) : t("common.unknownError"),
@@ -2210,7 +2212,8 @@ async function saveProviderForm(useAfterSave) {
     return;
   }
   if (useAfterSave) {
-    const selected = await window.arcane.setDefaultModel(providerId, pfUseModelId);
+    // 保存并使用 = 在当前会话立即启用,走会话内切换;不影响其他会话
+    const selected = await window.arcane.setChatModel(modeContext(), providerId, pfUseModelId);
     if (!selected?.ok) {
       pfError.textContent = t("sm.form.useFailed", {
         error: selected?.error ? fmtIpc(selected.error) : t("common.unknownError"),
@@ -2233,15 +2236,19 @@ async function saveProviderForm(useAfterSave) {
 pfSave.addEventListener("click", () => saveProviderForm(false));
 pfSaveUse.addEventListener("click", () => saveProviderForm(true));
 defaultModelSelect.addEventListener("change", async () => {
+  // 设置页默认模型 = 新会话的初始模型(全局持久化);当前会话不受影响,
+  // 是否换 label 由 host 发出的 model_info 事件决定(空会话会被接管)。
   const value = defaultModelSelect.value;
-  if (!value) {
-    const result = await selectChatModel("", ""); // 清除显式选择,立即回到产品默认
-    if (!result?.ok) refreshSettings();
-    return;
-  }
   const slash = value.indexOf("/");
-  const result = await selectChatModel(value.slice(0, slash), value.slice(slash + 1));
-  if (!result?.ok) refreshSettings();
+  const providerId = slash >= 0 ? value.slice(0, slash) : "";
+  const modelId = slash >= 0 ? value.slice(slash + 1) : "";
+  const result = await window.arcane.setDefaultModel(providerId, modelId);
+  if (!result?.ok) {
+    addStatus(t("sm.form.useFailed", {
+      error: result?.error ? fmtIpc(result.error) : t("common.unknownError"),
+    }));
+  }
+  refreshSettings();
 });
 
 // ---------- settings:语音识别(Arcane Spark / 自有智谱 API / 关闭) ----------

@@ -148,7 +148,7 @@ globalThis.ARCANE_MESSAGES = {
 
     // ---------- 设置:模型 ----------
     "sm.defaultModel": "默认模型",
-    "sm.defaultModelNote": "新会话与当前会话都会立即切换。",
+    "sm.defaultModelNote": "只作为新会话的初始模型；当前会话请用输入框旁的选择器切换。",
     "sm.defaultModelPlaceholder": "使用产品默认（Arcane Spark）",
     "sm.providerUnconfigured": "{name}(尚未配置)",
     "sm.providers": "模型服务商",
@@ -484,7 +484,7 @@ globalThis.ARCANE_MESSAGES = {
 
     // ---------- settings: models ----------
     "sm.defaultModel": "Default Model",
-    "sm.defaultModelNote": "Applies to new and current sessions immediately.",
+    "sm.defaultModelNote": "Initial model for new conversations only; switch the current one via the composer picker.",
     "sm.defaultModelPlaceholder": "Use product default (Arcane Spark)",
     "sm.providerUnconfigured": "{name} (not configured)",
     "sm.providers": "Model Providers",
