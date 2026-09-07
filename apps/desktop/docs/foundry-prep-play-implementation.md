@@ -56,12 +56,23 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
 - 修正后完整 npm run verify 返回 exit 0：源码/文档检查、全仓类型检查、Desktop 437 项、SDK 74 项、
   CLI 232 项、WebMCP 24 项测试、构建，以及安装 tarball 后的 consumer/runtime/CLI 验证通过。
   该结果证明当前自动化门禁通过，不代表下列审计项或真实世界/性能验收已经完成。
-- 仍需关闭的审计项：结构指纹目前包含整个 Item/Activity flags，可能被运行记录影响；
-  Activity 名称/伤害等合同变化也需纳入。普通状态、资源消耗不能因此导致反复重读。
-- 既有 declaredRiderOptionsV2 会按当前 active buff 效果过滤目录，须核查新一次性静态快照在
-  后续效果变化时能否保持完整合同；不要为了修复此项扩大职业动作范围或修改 auto pack。
-- 还需核查步骤回执 not_started 的合同拼写和 summary 字段、重投在 readRef/actionRef 失效后
-  是否仍返回原操作结果，以及叙事法术独立动画入口的包侧依赖。现有测试不能替代这些证明。
+- 结构指纹改为已有合同实际使用的 flags 白名单，补齐 Activity 名称、伤害、使用次数上限等结构字段，
+  Set/Map 内容也参与判定。测试证明运行回执、spent、HP/slots/状态不使快照失效，合同变化会失效。
+- 新静态目录提前列出已有 active buff rider 和 requiresArtifactId；轻量读只返回 activeBuffRiderIds。
+  测试证明先读目录、后激活/结束效果不需重建；未激活时声明 rider 仍在写前拒绝。
+  旧 battleContext/executeTurn 使用原默认行为，不新增职业动作，也不改 auto pack。
+- 操作日志新增原始模型输入摘要；写服务先查同 task/toolCall 的历史结果，再解析引用和申请资源。
+  重启丢失 readRef/连接身份后仍返回原结果，同 ID 改参数拒绝。旧日志缺少摘要时保守返回原 operationRef
+  的不确定提示，绝不派发。日志仍不保存原始输入或图片数据。
+- Desktop 持久化前统一步骤 not_started/summary，并适配旧原生执行四态；完成仅代表原生执行确认，
+  不把它写成命中/伤害后状态，战斗后 turn 读取保留。上传路径独立放 dataPaths，不冒充文档 UUID。
+- 叙事消耗现拒绝 Item/Activity 的公式或非零有限次数；新增测试证明未知消耗不会进入目录或扣位。
+  独立动画入口的包侧依赖仍需按真实模块组合核查；
+  当前 auto pack 导出的 API 未找到纯视觉入口，不调用可能产生游戏效果的脚本来伪装动画。
+- 本轮上下文/重投/回执修正后完整 verify 通过：Desktop 441 项、SDK 76 项、CLI 232 项、WebMCP 24 项，
+  构建和 packed consumer 均通过。随后补充有限次数公式的守卫，SDK 构建及 16 项上下文/执行定向测试通过。
+- 下一项环境审计：conditionsSet 在异步 UUID 解析和多对象写入之间，还需重新核对绑定 world/当前关注范围，
+  并确认预检过的可移除效果未变成来源管理效果；补竞态测试后再关闭本项。
 - 真实环境记录中的 test001 隔离副本仍在，但本次检查 loopback 30219 没有监听、modules 目录为空，
   尚未定位 Foundry 安装目录。已向用户询问安装目录或可写的隔离测试世界地址；不读取密码，
   不修改/安装 auto pack。真实世界与固定模型的性能验收尚未完成。

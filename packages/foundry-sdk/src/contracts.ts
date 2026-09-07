@@ -521,6 +521,7 @@ export interface PlayDynamicContext extends PlayContextBase {
     visible: boolean;
     defeated: boolean;
     availableActionIds: string[];
+    activeBuffRiderIds: string[];
   }>;
 }
 

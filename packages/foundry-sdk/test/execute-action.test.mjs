@@ -82,6 +82,15 @@ test("reaction spells and unknown extra resource consumption are not offered as 
   assert.equal((await f.call("staticContext")).combatants[0].actions.length, 0);
   f.item.system.activation = { type: "action" }; f.item.system.uses = { max: 2 };
   assert.equal((await f.call("staticContext")).combatants[0].actions.length, 0);
+  f.item.system.uses.max = "@prof";
+  assert.equal((await f.call("staticContext")).combatants[0].actions.length, 0);
+  f.item.system.uses.max = "0";
+  assert.equal((await f.call("staticContext")).combatants[0].actions.length, 1);
+  const known = await f.resolve();
+  f.item.system.uses.max = "@prof";
+  known.contextRef = (await f.call("playContext")).contextRef;
+  assert.equal((await f.call("executeAction",known)).code,"CONSUMPTION_UNSUPPORTED");
+  assert.equal(f.writes(),0);
 });
 
 test("noncombat attacks use the existing execution pipeline with an explicit source, without creating combat", async () => {
@@ -128,4 +137,30 @@ test("narrative advance failure reports partial and never repeats consumption", 
   f.game.combats = [combat]; f.game.combat = combat;
   const result = await f.call("executeAction", { ...await f.resolve(), advance: true });
   assert.equal(result.status, "partial"); assert.equal(result.retry, false); assert.equal(f.writes(), 1);
+});
+
+test("the first static manual includes existing buff riders; dynamic state tracks activation without rebuilding it", async () => {
+  let nativeCalls = 0;
+  const f = fixture(async args => { nativeCalls++; args.factSink.started = true; return { status: "completed" }; });
+  f.item.type = "weapon";
+  f.item.system.activities = [{ id: "attack", type: "attack", activation: { type: "action" },
+    target: { affects: { type: "self" }, override: true }, range: { units: "self", override: true } }];
+  const moduleId = "arcane-dnd5e-2014-automation";
+  f.actor.items.set("buff", { id: "buff", name: "Existing buff", type: "spell", system: { method: "atwill", level: 1 },
+    flags: { [moduleId]: { declaredActiveBuff: { identifier: "existing-buff", requiredArtifactId: "buff-artifact" } } } });
+  const heavy = await f.call("staticContext"), input = await f.resolve();
+  assert.deepEqual(heavy.combatants[0].actions[0].declaredRiders.map(rider => [rider.id,rider.requiresArtifactId]),[["existing-buff","buff-artifact"]]);
+  const before = await f.call("playContext");
+  assert.deepEqual(before.combatants[0].activeBuffRiderIds,[]);
+  input.resolvedActions[0].input = { declaredRiders: [{ id: "existing-buff" }] };
+  assert.equal((await f.call("executeAction",input)).status,"rejected"); assert.equal(nativeCalls,0);
+  f.actor.effects.push({ disabled: false, flags: { [moduleId]: { compilerArtifactIds: ["buff-artifact"] } } });
+  const after = await f.call("playContext");
+  assert.equal(after.contextRef,heavy.contextRef);
+  assert.deepEqual(after.combatants[0].activeBuffRiderIds,["existing-buff"]);
+  assert.equal(JSON.stringify(after).includes("requiresArtifactId"),false);
+  assert.equal((await f.call("executeAction",input)).status,"completed"); assert.equal(nativeCalls,1);
+  f.actor.effects[0].disabled = true;
+  const ended = await f.call("playContext");
+  assert.equal(ended.contextRef,heavy.contextRef); assert.deepEqual(ended.combatants[0].activeBuffRiderIds,[]);
 });

@@ -68,6 +68,8 @@ export class FoundryServices {
   async writeContent(action, params, binding, toolCallId, signal) {
     const reject = (code, message) => ({ status: "rejected", code, message });
     if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "sceneApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
+    const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action, input: params });
+    if (replay) return replay;
     const { readRef, ...values } = params;
     const readState = readRef ? this.readRefs.get(readRef) : null;
     const sceneAction = action === "sceneApply";
@@ -96,7 +98,7 @@ export class FoundryServices {
       } catch (error) { return reject(String(error.message).split(":")[0], String(error.message)); }
       if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
       // Only the digest enters the journal. Base64 exists inside the runtime dispatch, never model output.
-      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action,
+      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action, input: params,
         args: { ...args, ...(prepared ? { imageHash: prepared.hash } : {}) } }, ({ requestId }) => {
         let runtimeArgs = { ...args, requestId };
         if (prepared) {
@@ -133,6 +135,8 @@ export class FoundryServices {
   }
 
   async setConditions(params, binding, toolCallId, signal) {
+    const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action: "conditionsSet", input: params });
+    if (replay) return replay;
     const metadata = await binding.metadata;
     if (!metadata?.world) return { status: "rejected", code: "INPUT_WORLD_UNAVAILABLE",
       message: "No ready world was bound when this message was submitted. Connect and submit a new instruction." };
@@ -142,11 +146,13 @@ export class FoundryServices {
     return this.withPage(signal, async () => {
       if (signal?.aborted) return { status: "rejected", code: "ABORTED", message: "Cancelled before dispatch" };
       return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world,
-        action: "conditionsSet", args }, () => this.call("conditionsSet", args, { signal, executionTimeoutMs: 30_000 }));
+        action: "conditionsSet", args, input: params }, () => this.call("conditionsSet", args, { signal, executionTimeoutMs: 30_000 }));
     });
   }
 
   async executeAction(params, binding, toolCallId, signal) {
+    const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action: "executeAction", input: params });
+    if (replay) return replay;
     // Snapshot handles before awaits; later reads/steering cannot replace this call's provenance.
     const snapshot = this.staticSnapshot, turn = this.turnSnapshot;
     const reject = (code, message) => ({ status: "rejected", code, message });
@@ -176,7 +182,7 @@ export class FoundryServices {
     return this.withPage(signal, async () => {
       if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
       const result = await this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world,
-        action: "executeAction", args }, () => this.call("executeAction", args, { signal, executionTimeoutMs: 120_000 }));
+        action: "executeAction", args, input: params }, () => this.call("executeAction", args, { signal, executionTimeoutMs: 120_000 }));
       // Every combat execution needs a new turn read, including a failed or interrupted one.
       if (snapshot.scope.combatId) this.turnSnapshot = null;
       return result;

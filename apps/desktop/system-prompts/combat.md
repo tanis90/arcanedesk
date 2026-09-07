@@ -34,6 +34,7 @@
 - 批量攻击的模式写在 actions[i].input.attackRollMode；只有明确针对所有攻击才复制。作用域不清楚时先问 DM。
 - selections 值必须来自手册所列选项；不得根据收益替 DM 选择。
 - declaredRiders 仅沿用手册已列出的能力，逐击声明；同类消耗冲突由工具拒绝。命中才扣位的 rider 不预扣；升环只按 DM 明确要求填写 spellLevel。
+- 手册中带 requiresArtifactId 的既有增益 rider 会提前列出；当前是否生效看轻量现场的 activeBuffRiderIds。效果变化不需要重读手册，未生效时不能声明该 rider。
 - 不新增职业动作、反应/插入流程、仪式计时、世界时间或自主专注清理。DM 明确说结束专注时调用 conditions_set。
 - 长休/短休本轮不提供接口，由 DM 在 Foundry 界面操作；不能用属性修改模拟。
 

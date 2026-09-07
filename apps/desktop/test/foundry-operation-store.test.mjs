@@ -64,3 +64,13 @@ test("changed arguments under the same identity and invalid committed history re
   writeFileSync(f.file, '{"kind":"bad"}\n');
   assert.throws(f.create, /Invalid Foundry operation history/);
 });
+
+test("replay uses original model arguments across lost handles and rejects changed input", async t => {
+  const f = fixture(t), input = { actorUuid: "Actor.a", readRef: "old-handle", changes: { name: "New" } };
+  const record = { ...f.input, action: "actorEdit", input, args: { world: f.input.world, readState: { fields: { name: "Old" } } } };
+  const result = await f.store.execute(record, async () => ({ status: "completed", steps: [] }));
+  const identity = { taskId: record.taskId, toolCallId: record.toolCallId, action: record.action, input };
+  assert.deepEqual(f.create().replay(identity),result);
+  assert.equal(f.create().replay({ ...identity, input: { ...input, changes: { name: "Different" } } }).code,"TOOL_CALL_CONFLICT");
+  assert.deepEqual(await f.create().execute({ ...record, args: { readState: null } }, () => { throw Error("must never dispatch"); }),result);
+});

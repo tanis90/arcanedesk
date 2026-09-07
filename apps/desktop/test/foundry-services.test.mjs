@@ -158,3 +158,22 @@ test("Scene reads and writes share document services but cannot reuse Actor hand
   assert.equal((await f.service.writeActor("actorEdit",{ actorUuid: "Actor.a", readRef: read.readRef, changes: { name: "Wrong" } },f.binding,"bad")).code,"READ_REF_INVALID");
   assert.equal(calls.length,2);
 });
+
+test("restarted content service returns the original result before resolving expired readRef or world", async t => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-replay-service-"));
+  t.after(() => rmSync(directory,{ recursive: true, force: true }));
+  let writes = 0;
+  const options = { sessionId: "replay", directory, mode: "prep", withPage: async (_signal,fn) => fn(),
+    call: async () => { writes++; return { status: "completed", steps: [], verification: [], warnings: [] }; } };
+  const first = new FoundryServices(options);
+  first.readRefs.set("read",{ actorUuid: "Actor.a", fields: { name: "Old" } });
+  const params = { actorUuid: "Actor.a", readRef: "read", changes: { name: "New" } };
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "world" } }) };
+  const result = await first.writeActor("actorEdit",params,binding,"call");
+  const restarted = new FoundryServices({ ...options, withPage: () => { throw Error("replay must not acquire page"); } });
+  const noWorld = { taskId: "task", metadata: Promise.resolve(null) };
+  assert.deepEqual(await restarted.writeActor("actorEdit",params,noWorld,"call"),result);
+  assert.equal(writes,1);
+  assert.equal((await restarted.writeActor("actorEdit",{ ...params, changes: { name: "Other" } },noWorld,"call")).code,"TOOL_CALL_CONFLICT");
+  assert.equal((await restarted.writeActor("actorEdit",params,noWorld,"different-call")).code,"READ_REF_INVALID");
+});

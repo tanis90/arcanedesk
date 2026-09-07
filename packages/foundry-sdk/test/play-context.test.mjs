@@ -93,3 +93,29 @@ test("world status reports module versions and entry availability without claimi
   assert.equal(result.capabilities.summonPlacement,false);
   assert.equal(result.capabilities.summonDependency,"AUTO-001");
 });
+
+test("runtime flags and spent uses preserve the context while supported contract changes invalidate it", async () => {
+  const f = fixture(1), actor = f.tokens.get("t0").actor;
+  const moduleId = "arcane-dnd5e-2014-automation";
+  const activity = { id: "attack", name: "Strike", type: "attack", activation: { type: "action" },
+    damage: { parts: [{ formula: "1d6" }] }, uses: { max: "3", spent: 0 }, flags: { [moduleId]: { interaction: { version: 1, input: "selected-targets" } } } };
+  const item = { id: "weapon", name: "Sword", type: "weapon", flags: {}, system: { properties: new Set(["ver"]), uses: { max: "3", spent: 0 }, activities: new Map([[activity.id,activity]]) } };
+  actor.items.set(item.id,item);
+  const initial = (await f.read("playContext")).contextRef;
+  item.flags.arcanedesk = { requestId: "operation" };
+  item.flags[moduleId] = { latestReceipt: { operation: "one", completed: true } };
+  activity.flags[moduleId].latestReceipt = { operation: "two" };
+  item.system.uses.spent = 1; activity.uses.spent = 1;
+  actor.statuses.add("prone"); actor.system.spells.spell1.value = 1;
+  assert.equal((await f.read("playContext")).contextRef,initial);
+  item.system.properties.add("thr");
+  assert.notEqual((await f.read("playContext")).contextRef,initial);
+  item.system.properties.delete("thr");
+  for (const [target,key,value] of [[activity,"name","Heavy strike"], [activity,"damage",{ parts: [{ formula: "2d6" }] }],
+    [activity.uses,"max","4"], [activity.flags[moduleId],"interaction",{ version: 1, input: "self" }]]) {
+    const before = target[key]; target[key] = value;
+    assert.notEqual((await f.read("playContext")).contextRef,initial,key);
+    target[key] = before;
+    assert.equal((await f.read("playContext")).contextRef,initial);
+  }
+});

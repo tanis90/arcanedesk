@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { InputJournal } from "./tasks/input-journal.js";
+import { normalizeFoundryWriteReceipt } from "./foundry-write-receipt.js";
 
 /** One instance per resident session. Never replay a dispatched operation after restart. */
 export class FoundryOperationStore {
@@ -34,21 +35,37 @@ export class FoundryOperationStore {
     return record ? structuredClone(record.result ?? this.uncertain(operationRef)) : null;
   }
 
+  /** Replay lookup uses immutable model input, before resolving session-local handles again. */
+  replay({ taskId, toolCallId, action, input }) {
+    const key = JSON.stringify([taskId, toolCallId]);
+    const prior = this.operations.get(key);
+    if (!prior) return null;
+    const inputDigest = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+    if (prior.action !== action || (prior.inputDigest && prior.inputDigest !== inputDigest)) {
+      return { status: "rejected", code: "TOOL_CALL_CONFLICT", operationRef: prior.operationRef,
+        message: "This tool call identity already belongs to a different request; nothing was dispatched." };
+    }
+    if (!prior.inputDigest) return this.uncertain(prior.operationRef, "An older operation exists for this call; inspect its operationRef. It will not be replayed.");
+    return this.inflight.get(key) ?? structuredClone(prior.result ?? this.uncertain(prior.operationRef));
+  }
+
   /** Caller admits resources and validates before invoking this dispatch boundary. */
-  execute({ taskId, toolCallId, world, action, args }, dispatch) {
+  execute({ taskId, toolCallId, world, action, args, input = args }, dispatch) {
     if (!taskId || !toolCallId || !world?.origin || !world?.id || typeof dispatch !== "function") {
       return Promise.reject(new TypeError("Foundry writes require task, tool call and bound world identities"));
     }
     const key = JSON.stringify([taskId, toolCallId]);
     const digest = createHash("sha256").update(JSON.stringify({ world, action, args })).digest("hex");
+    const inputDigest = createHash("sha256").update(JSON.stringify(input)).digest("hex");
     const prior = this.operations.get(key);
     if (prior) {
-      if (prior.digest !== digest) return Promise.reject(new Error("TOOL_CALL_CONFLICT: same call has different arguments"));
+      if (prior.action !== action || (prior.inputDigest ? prior.inputDigest !== inputDigest : prior.digest !== digest)) return Promise.reject(new Error("TOOL_CALL_CONFLICT: same call has different arguments"));
       return this.inflight.get(key) ?? Promise.resolve(structuredClone(prior.result ?? this.uncertain(prior.operationRef)));
     }
     const operationRef = randomUUID();
     const record = { kind: "dispatch", sessionId: this.sessionId, key, operationRef,
-      requestId: operationRef, world, action, digest };
+      requestId: operationRef, world, action, digest,
+      inputDigest };
     // A failed append must prevent dispatch; no in-memory success can conceal a disk failure.
     try { this.journal.append(record); }
     catch (error) { return Promise.reject(error); }
@@ -56,7 +73,7 @@ export class FoundryOperationStore {
     const pending = Promise.resolve().then(async () => {
       let result;
       try {
-        const value = await dispatch({ requestId: operationRef });
+        const value = normalizeFoundryWriteReceipt(await dispatch({ requestId: operationRef }), { action, args });
         if (!value || !["completed", "rejected", "partial", "indeterminate"].includes(value.status)) {
           result = this.uncertain(operationRef, "Runtime returned no valid completion receipt. Do not retry.");
         } else {
