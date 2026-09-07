@@ -13,6 +13,7 @@ const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
 const nativeReview = process.argv.includes("--native-review");
 const metadataScenario = process.argv.includes("--metadata-scenario");
+const foundryScenario = process.argv.includes("--foundry-scenario");
 let delayedReply = null;
 if (navigationScenario) {
   const handle = ipcMain.handle.bind(ipcMain);
@@ -52,7 +53,7 @@ Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; re
 if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
-  if (!nativeReview) { value.hide(); value.on("show", () => value.hide()); }
+  if (!nativeReview && !foundryScenario) { value.hide(); value.on("show", () => value.hide()); }
   value.webContents.setBackgroundThrottling(false);
 });
 const streams = new Map();
@@ -82,6 +83,19 @@ const server = http.createServer(async (req, res) => {
   res.on("close", () => { entry.closed = true; });
   streams.set(tag, entry);
   write({ role: "assistant", content: `${tag} partial` });
+  if (foundryScenario) {
+    const result = data.messages.find(row => row.role === "tool" && row.tool_call_id === `world-${tag}`);
+    if (result) {
+      assert.ok(JSON.stringify(result.content).includes("arcane-resource-verified"), "actual world write/read result reaches SDK");
+      entry.finish();
+    } else {
+      const code = tag === "A"
+        ? '(async () => { if (!game.ready || !game.user.isGM || game.world.id !== "test001") throw Error("Wrong test world"); globalThis.arcaneWriteEntered = true; await globalThis.arcaneWriteGate; const doc = await JournalEntry.create({name: "Arcane resource acceptance " + globalThis.arcaneProbeId, flags: {world: {arcaneProbe: globalThis.arcaneProbeId}}}); globalThis.arcaneCreatedId = doc.id; return {verified:"arcane-resource-verified", id:doc.id}; })()'
+        : '(async () => { globalThis.arcaneCancelledRan = true; throw Error("Cancelled resource waiter must never run"); })()';
+      write({ tool_calls: [{ index: 0, id: `world-${tag}`, type: "function", function: { name: "browser_evaluate", arguments: JSON.stringify({ code }) } }] });
+      write({}, "tool_calls"); res.end("data: [DONE]\n\n");
+    }
+  }
   if (longTool && tag === "B") {
     const toolResult = data.messages.find(row => row.role === "tool" && row.tool_call_id === "long-tool");
     if (toolResult) {
@@ -106,6 +120,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (foundryScenario) {
+      assert.deepEqual(requests, ["A", "B", "A"]);
+      assert.equal(hostB.tasks.task.state, "stopped");
+      console.log("PASS production Foundry: actual Document write, queued task cancellation and single execution");
+      return;
+    }
     if (metadataScenario) {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
@@ -162,6 +182,40 @@ app.on("will-quit", () => {
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (foundryScenario) {
+    const a = globalThis.__arcaneHosts.prep.activeHost;
+    assert.equal((await a.openFoundry("http://127.0.0.1:30219")).ok, true);
+    window.setTitle("ArcaneDesk — Isolated Foundry acceptance"); window.show();
+    const wc = a.getFoundryView().webContents;
+    console.log("READY Foundry login: isolated test001 at port 30219; log in as its test GM in the panel");
+    const loginDeadline = Date.now() + 600000;
+    while (Date.now() < loginDeadline) {
+      if (await wc.executeJavaScript('Boolean(globalThis.game?.ready && game.user?.isGM)').catch(() => false)) break;
+      await sleep(500);
+    }
+    assert.equal(await wc.executeJavaScript('game.ready && game.user.isGM && game.world.id === "test001"'), true, "isolated GM world must be ready");
+    await wc.executeJavaScript('globalThis.arcaneProbeId = crypto.randomUUID(); globalThis.arcaneWriteGate = new Promise(resolve => globalThis.arcaneReleaseWrite = resolve); true');
+    await evaluate('input.value = "production-A"; submit()');
+    await until(() => wc.executeJavaScript('Boolean(globalThis.arcaneWriteEntered)'), "real world operation enters its controlled gate");
+    await evaluate('document.getElementById("session-new").click()');
+    await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('input.value = "production-B"; submit()');
+    await until(() => hostB.tasks.task.state === "waiting_resource", "B waits for A's actual page operation");
+    await ui('displayedTask.state === "waiting_resource"');
+    await evaluate('stop.click()');
+    await until(() => hostB.tasks.task.state === "stopped", "queued B cancellation settles");
+    assert.ok(a.busy);
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    await openHost(a);
+    await wc.executeJavaScript('arcaneReleaseWrite(); true');
+    await ui('!busy && messages.textContent.includes("A final result")');
+    const documents = await wc.executeJavaScript('game.journal.filter(doc => doc.getFlag("world", "arcaneProbe") === globalThis.arcaneProbeId).map(doc=>doc.id)');
+    assert.equal(documents.length, 1, "exactly one real document created");
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    await wc.executeJavaScript(`(async () => { const doc = game.journal.get(${JSON.stringify(documents[0])}); if (doc.getFlag("world", "arcaneProbe") !== globalThis.arcaneProbeId) throw Error("Unexpected document"); await doc.delete(); return true; })()`);
+    finalExit = true; app.quit(); return;
+  }
   if (metadataScenario) {
     const a = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('refreshSessions()');

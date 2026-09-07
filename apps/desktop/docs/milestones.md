@@ -376,3 +376,11 @@
 - 新增生产 metadata runner，验证 A/B 首轮未完成时标题和计数正确、后台 A 完成更新为 2 条、当前 B 完成更新为 2 条；保存并逐项比较原 DOM 节点，确认可见抽屉在输入及前后台结束后身份与顺序不变。真实 SDK 请求严格 A/B 各一次。
 - 注册表回归覆盖内存日志优先、跨分支计数和原修改时间不变。生产 metadata、普通会话 Electron 回归、类型/源码边界检查通过，全量 408 项测试通过；Markdown 链接及 diff 检查通过。
 - 实际 Foundry、G7 剩余系统交互/多尺寸布局及最终性能/规格复核仍待完成；合并元数据读取的最终性能随全体验收复核，整体目标未完成。
+
+### M8m5 — 实际 Foundry 世界写入与资源等待取消 — 2026-09-07
+
+- 关闭 G6。使用本机已授权 Foundry 13.351、Node 22.23.2，将 test001/dnd5e 5.3.3 复制到独立临时数据目录，端口 30219；未修改原 E2E 或用户世界。许可证正常校验，测试 GM 登录后验收自动运行。
+- 新增 `review-production-foundry.mjs`，生产 main/IPC/renderer/真实 SDK/browser_evaluate 执行完整调用链。A 在页面内的可控 Promise 前持有资源，B 调用同一资源后进入 waiting_resource，页面显示等待；停止 B 后其代码没有执行，A 继续持有执行现场。
+- 返回 A 释放等待，公开 JournalEntry.create 创建唯一带随机 probe 标记的文档，工具结果回到 SDK 并产生终稿。查询验证恰好一个文档，随后用 Document.delete 清理；服务端日志确认同一文档创建/删除。模型调用严格 A/B/A，runner exit 0。
+- 本次测试进程已正常退出，独立 Foundry 服务也已结束；副本保留在临时目录供诊断。环境、复现与范围见 [实际 Foundry 验收](foundry-resource-acceptance.md)。不据此宣称所有系统/模块和平台均通过；G7 与最终性能/规格审计继续。
+- 共享 production fixture 的 metadata 回归、类型/源码边界检查通过，51 个 Markdown 文件链接检查通过。本阶段新增集成测试与记录，不修改资源协调器或工具执行代码。
