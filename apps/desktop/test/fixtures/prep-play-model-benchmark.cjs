@@ -44,14 +44,16 @@ app.whenReady().then(async () => {
   socket.addEventListener("message", event => {
     const m = JSON.parse(event.data), p = pending.get(m.id); if (!p) return;
     pending.delete(m.id); clearTimeout(p.timer);
-    if (m.error || m.result?.exceptionDetails) p.reject(Error("QA CDP evaluation failed")); else p.resolve(m.result?.result?.value);
+    if (m.error || m.result?.exceptionDetails) p.reject(Error(String(m.error?.message ?? m.result.exceptionDetails.exception?.description ?? m.result.exceptionDetails.text).replace(/sk-[A-Za-z0-9_-]+/g,"[redacted]"))); else p.resolve(m.result?.result?.value);
   });
   const guard = `if(location.origin!==${JSON.stringify(origin)}||game.world.id!=="cos-a"||!game.ready||!game.user.isGM||canvas.scene?.id!==${JSON.stringify(sceneId)})throw Error("QA-A fixture guard failed");`;
   const evaluate = expression => new Promise((resolve, reject) => {
     const id = ++seq;
     const timer = setTimeout(() => { pending.delete(id); reject(Error("QA CDP timeout; do not retry write")); }, 60000);
     pending.set(id, { resolve, reject, timer });
-    const guarded = `(async()=>{${guard}return await (${expression});})()`;
+    // Preserve WebContents.executeJavaScript semantics, including trailing
+    // semicolons and multi-statement scripts. Parenthesizing changes valid JS.
+    const guarded = `(()=>{${guard}})();\n${expression}`;
     socket.send(JSON.stringify({ id, method: "Runtime.evaluate", params: { expression: guarded, returnByValue: true, awaitPromise: true } }));
   });
   const page = new EventEmitter();
@@ -75,6 +77,10 @@ app.whenReady().then(async () => {
   if (option("scenarios", "false") === "true") {
     await require("./prep-play-model-scenarios.cjs")({ evaluate, sourceId, targetId, combatId, sceneId, fixtureNames,
       fixture, report, save, root, runId, store, page, origin, revision: revisions.candidate, setHost: value => { host = value; } });
+    socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
+  }
+  if (option("prep-benchmark", "false") === "true") {
+    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; } });
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("edge-cases", "false") === "true") {
