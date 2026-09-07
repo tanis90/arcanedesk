@@ -233,6 +233,7 @@ export class AgentHost {
    */
   constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler, resources } = {}) {
     this.scheduler = scheduler;
+    this.closing = false;
     this.resources = resources;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
@@ -773,6 +774,7 @@ export class AgentHost {
   }
 
   submitInput(text, images, commandId, prepare = null) {
+    if (this.closing) return { ok: false, code: "APP_STOPPING" };
     if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
     if (!this.session) throw new Error("agent session not started");
     const result = this.taskCoordinator().submit({ commandId, text, images, prepare });

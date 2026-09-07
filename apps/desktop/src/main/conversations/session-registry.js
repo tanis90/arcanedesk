@@ -9,6 +9,7 @@ export class SessionRegistry {
   constructor({ createHost, deletions }) {
     this.createHost = createHost;
     this.deletions = deletions;
+    this.closing = false;
     this.hosts = new Map();
     this.activeHost = null;
     this.pending = new Map();
@@ -71,6 +72,7 @@ export class SessionRegistry {
   }
 
   async select(sessionPath, fresh = false, selection = ++this.selection) {
+    if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
     const requestedKey = sessionPath ? pathKey(sessionPath) : null;
     if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey) || this.deletions?.isDeleted(requestedKey))) throw unavailable();
     let host = requestedKey ? this.allHosts().find(h => pathKey(h.describeCurrent().path) === requestedKey) : null;
@@ -82,6 +84,7 @@ export class SessionRegistry {
           const created = this.createHost();
           try {
             await created.start({ sessionPath, fresh });
+            if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
             if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey))) throw unavailable();
             const id = created.describeCurrent()?.id;
             if (!id) throw new Error("Session has no stable identity");

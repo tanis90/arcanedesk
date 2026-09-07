@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
 import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
 import { PanelCommands } from "./scheduling/panel-commands.js";
 import { SessionDeletions } from "./conversations/session-deletions.js";
+import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
 import "../shared/i18n/messages.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
@@ -87,6 +88,42 @@ let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设�
 let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
+let shutdown = null, backgroundTray = null, exitPrompt = false, quitAllowed = false;
+let hasLiveWork = () => false;
+function restoreMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show(); mainWindow.focus();
+}
+function enableBackgroundEntry() {
+  if (backgroundTray) return true;
+  try {
+    backgroundTray = new Tray(ARCANE_APP_ICON);
+    backgroundTray.setToolTip("ArcaneDesk");
+    const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
+    backgroundTray.setContextMenu(Menu.buildFromTemplate([
+      { label: text("lifecycle.open"), click: restoreMainWindow },
+      { label: text("lifecycle.quit"), click: () => app.quit() },
+    ]));
+    backgroundTray.on("click", restoreMainWindow);
+    return true;
+  } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
+}
+async function requestExit(reason) {
+  if (!shutdown || quitAllowed) { app.quit(); return; }
+  if (exitPrompt || shutdown.state.state === "stopping") { restoreMainWindow(); return; }
+  if (!hasLiveWork()) { void shutdown.stop(); return; }
+  exitPrompt = true;
+  try {
+    const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
+    const background = reason === "close" && enableBackgroundEntry();
+    const buttons = [text("lifecycle.cancel"), text("lifecycle.stopExit"), ...(background ? [text("lifecycle.background")] : [])];
+    const answer = await dialog.showMessageBox(mainWindow, { type: "question", title: text("lifecycle.quit"),
+      message: text("lifecycle.confirm"), buttons, defaultId: 0, cancelId: 0, noLink: true });
+    if (answer.response === 2 && background) mainWindow.hide();
+    else if (answer.response === 1) { restoreMainWindow(); void shutdown.stop(); }
+  } finally { exitPrompt = false; }
+}
 let desktopNotifications = null;
 
 function sendToRenderer(event) {
@@ -540,6 +577,9 @@ function createWindow() {
     clearFoundryPermissionState("main-window-closed");
     mainWindow = null;
     foundryView = null;
+  });
+  mainWindow.on("close", event => {
+    if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("close"); }
   });
 }
 
@@ -1445,6 +1485,34 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  shutdown = new ShutdownCoordinator({ registries: Object.values(hosts),
+    emit: state => sendToRenderer({ type: "shutdown_state", ...state }),
+    gate: closing => {
+      for (const registry of Object.values(hosts)) {
+        registry.closing = closing;
+        for (const host of registry.allHosts()) host.closing = closing;
+      }
+      panelCommands.closing = closing;
+    },
+    quiesce: async () => {
+      if (panelCommands.state?.state === "queued") panelCommands.cancel(panelCommands.state.id);
+      await panelCommands.run;
+      await Promise.all(Object.values(hosts).flatMap(registry => [...registry.deleting.values()]));
+      while (resources.active.size) await Promise.all([...resources.active.values()].map(entry => entry.finished));
+    },
+    finish: () => {
+      activityCenter.flush();
+      for (const host of allSessionHosts()) {
+        try { host.dispose(); } catch (error) { console.error("[quit] host disposal failed after task settlement", error); }
+      }
+      quitAllowed = true; app.quit();
+    },
+  });
+  hasLiveWork = () => allSessionHosts().some(host => host.busy) || resources.active.size > 0 || Boolean(panelCommands.run) ||
+    Object.values(hosts).some(registry => registry.pending.size || registry.deleting.size);
+  ipcMain.handle("lifecycle:get", event => isTrustedChatIpc(event) ? shutdown.snapshot() : null);
+  ipcMain.handle("lifecycle:cancel-exit", event => { if (isTrustedChatIpc(event)) shutdown.cancel(); return shutdown.snapshot(); });
+
   // agent session 的首次启动(拉起子进程,慢则秒级)必须放在所有 ipcMain.handle
   // 注册之后:await 会挂起 whenReady 回调,若注册被它截断,已加载的 renderer 的
   // invoke(如 telemetry:consent-get)会撞上 "No handler registered"。
@@ -1459,7 +1527,7 @@ app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    restoreMainWindow();
   });
 });
 
@@ -1467,7 +1535,9 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", event => {
+  if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("quit"); return; }
+  backgroundTray?.destroy(); backgroundTray = null;
   activityCenter?.flush();
   clearFoundryPermissionState("app-quit");
   void telemetry?.close(); // best-effort flush,最多 500ms(§4.2)

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 export class PanelCommands {
   constructor({ resources, operations, emit = (_state) => {} }) {
     this.resources = resources; this.operations = operations; this.emit = emit;
+    this.closing = false;
     this.state = null; this.controller = null; this.run = null; this.revision = 0; this.recovering = false;
   }
   snapshot() { return { revision: this.revision, command: this.state ? structuredClone(this.state) : null }; }
@@ -12,6 +13,7 @@ export class PanelCommands {
     this.emit(this.snapshot());
   }
   request(action) {
+    if (this.closing) return { ok: false, code: "APP_STOPPING" };
     if (!Object.hasOwn(this.operations, action)) return { ok: false, code: "INVALID_ACTION" };
     if (this.run || this.recovering) return { ok: true, ...this.snapshot(), existing: true };
     const id = randomUUID(), controller = new AbortController(); this.controller = controller;

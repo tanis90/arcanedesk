@@ -26,6 +26,14 @@ app.whenReady().then(async () => {
   const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
   let recoveryApproved = false, finishOldPage;
   const deletedIds = [];
+  const { ShutdownCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/shutdown-coordinator.js")));
+  let finishExitStop, didQuit = false, exitAdmission = false;
+  const exitHost = { busy: true, task: { id: "exit-test" }, async abort() {
+    await new Promise(resolve => { finishExitStop = resolve; }); this.busy = false;
+  } };
+  const shutdown = new ShutdownCoordinator({ registries: [{ allHosts: () => [exitHost], pending: new Map() }],
+    gate: value => { exitAdmission = value; }, quiesce: async () => {}, finish: () => { didQuit = true; },
+    emit: state => emit({ type: "shutdown_state", ...state }) });
   const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
     operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
   let notificationBroker;
@@ -57,6 +65,8 @@ app.whenReady().then(async () => {
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
     if (channel === "sessions:deleted") return { ok: true, sessionIds: deletedIds };
+    if (channel === "lifecycle:get") return shutdown.snapshot();
+    if (channel === "lifecycle:cancel-exit") { shutdown.cancel(); return shutdown.snapshot(); }
     if (channel === "panel:open") return panelCommands.request("open");
     if (channel === "panel:command-state") return panelCommands.snapshot();
     if (channel === "panel:cancel-command") return panelCommands.cancel(input);
@@ -245,6 +255,15 @@ app.whenReady().then(async () => {
     window.reload(); await deletionReload;
     await until('deletedSessions.has("offline-session") && selectedSessionId === "B"');
     assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("offline-session")'), {});
+    const exiting = shutdown.stop();
+    await until('!document.getElementById("shutdown-status").hidden');
+    assert.equal(exitAdmission, true);
+    const exitReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await exitReload;
+    await until('!document.getElementById("shutdown-status").hidden');
+    await evaluate('document.getElementById("cancel-exit").click()');
+    await until('document.getElementById("shutdown-status").hidden');
+    finishExitStop(); await exiting; assert.equal(didQuit, false); assert.equal(exitAdmission, false);
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

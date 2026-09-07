@@ -11,6 +11,13 @@ const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
 let panelCommandSnapshot = { revision: -1, command: null };
+function showShutdown(state) {
+  const bar = document.getElementById("shutdown-status");
+  bar.hidden = !["stopping", "failed"].includes(state?.state);
+  if (bar.hidden) return;
+  bar.querySelector("span").textContent = t(`lifecycle.${state.state}`, state);
+  document.getElementById("cancel-exit").hidden = state.state !== "stopping";
+}
 function showPanelCommand(snapshot) {
   if (!Number.isInteger(snapshot?.revision) || snapshot.revision < panelCommandSnapshot.revision) return;
   panelCommandSnapshot = snapshot;
@@ -310,6 +317,7 @@ async function resyncSelected() {
 }
 
 function receiveEvent(event, replay = false) {
+  if (event.type === "shutdown_state") { showShutdown(event); return; }
   if (event.type === "activity_removed") forgetSession(event.sessionId);
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
@@ -2891,6 +2899,8 @@ refreshTelemetryConsent();
 
 input.focus();
 window.arcane.onEvent(receiveEvent);
+window.arcane.lifecycleState?.().then(showShutdown).catch(() => {});
+document.getElementById("cancel-exit").addEventListener("click", async () => showShutdown(await window.arcane.cancelExit()));
 window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);

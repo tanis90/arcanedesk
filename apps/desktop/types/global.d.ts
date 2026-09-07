@@ -17,6 +17,8 @@ interface ArcaneBridge {
   cancelPanelCommand(id: string): Promise<any>;
   recoverPanel(): Promise<any>;
   deletedSessions(): Promise<any>;
+  lifecycleState(): Promise<any>;
+  cancelExit(): Promise<any>;
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth(px: number): Promise<any>;
   /** While dragging the splitter, let mouse events pass through the Foundry view. */

@@ -43,3 +43,8 @@ body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync
 #panel-command button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
 #panel-command[hidden], #panel-command [hidden] { display: none; }
 body.sidebar-pinned #panel-command { margin-left: 264px; }
+#shutdown-status { padding: 10px 18px; background: var(--panel); font-size: var(--fs-meta); display: flex; align-items: center; gap: 10px; }
+#shutdown-status span { flex: 1; }
+#shutdown-status button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+#shutdown-status[hidden], #shutdown-status [hidden] { display: none; }
+body.sidebar-pinned #shutdown-status { margin-left: 264px; }
