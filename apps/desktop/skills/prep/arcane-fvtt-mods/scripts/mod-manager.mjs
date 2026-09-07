@@ -9,7 +9,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
 
-import { extractZip } from "./archive-zip.mjs";
+import { extractZip, listZipEntries, readZipEntryText } from "./archive-zip.mjs";
 
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
 
@@ -987,6 +987,89 @@ async function sha256File(file) {
     bytes += chunk.length;
   }
   return { sha256: hash.digest("hex"), bytes };
+}
+
+async function inspectLocalArchive(archivePath) {
+  const archive = path.resolve(requireString(archivePath, "local module archive path"));
+  const stat = await fsp.lstat(archive);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_ARCHIVE_BYTES) {
+    throw new Error("local module archive must be a regular file within the archive size limit");
+  }
+  const identity = await sha256File(archive);
+  const entries = await listZipEntries(archive);
+  const names = new Set();
+  for (const entry of entries) {
+    const folded = entry.name.toLowerCase();
+    if (names.has(folded)) throw new Error(`duplicate local archive path: ${entry.name}`);
+    names.add(folded);
+  }
+  const candidates = entries.filter(entry => !entry.directory && /^(?:[^/]+\/)?module\.json$/.test(entry.name));
+  if (candidates.length !== 1) throw new Error("local module ZIP must contain exactly one root or single-directory module.json");
+  const manifestEntry = candidates[0].name;
+  const prefix = manifestEntry === "module.json" ? "" : manifestEntry.slice(0, -"module.json".length);
+  if (prefix && entries.some(entry => entry.name !== prefix.slice(0, -1) && !entry.name.startsWith(prefix))) {
+    throw new Error("local module ZIP has content outside its single module directory");
+  }
+  const text = await readZipEntryText(archive, manifestEntry, MAX_JSON_BYTES);
+  const manifest = manifestShape(JSON.parse(text), { requireDownload: false });
+  const after = await sha256File(archive);
+  if (identity.sha256 !== after.sha256 || identity.bytes !== after.bytes) throw new Error("local module ZIP changed during inspection");
+  return { archive, ...identity, manifest };
+}
+
+export async function inspectLocalModule({ archivePath, dataDir }) {
+  const source = await inspectLocalArchive(archivePath);
+  const installed = await listInstalledModules(dataDir);
+  const matches = installed.modules.filter(entry => entry.id === source.manifest.id);
+  return {
+    kind: "module", sourceKind: "local-archive", archivePath: source.archive,
+    id: source.manifest.id, title: source.manifest.title, version: source.manifest.version,
+    archiveBytes: source.bytes, archiveSha256: source.sha256, integrity: "local-file-sha256",
+    compatibility: source.manifest.compatibility ?? null,
+    local: matches.length === 1 ? { version: matches[0].version, directory: matches[0].directory } : null,
+    localConflict: matches.length > 1 ? matches.map(entry => ({ version: entry.version, directory: entry.directory })) : null,
+    target: matches.length === 1 ? matches[0].directory : path.join(installed.modulesRoot, source.manifest.id),
+    requiredModules: requiredModuleRows(source.manifest, installed.modules),
+  };
+}
+
+export async function stageLocalModule({ archivePath, expectedId, expectedVersion, expectedSha256, expectedBytes }) {
+  const source = await inspectLocalArchive(archivePath);
+  assertExpected(source.manifest.id, expectedId, "local module id");
+  assertExpected(source.manifest.version, expectedVersion, "local module version");
+  assertExpected(source.sha256, expectedSha256, "local module SHA256");
+  assertExpected(source.bytes, expectedBytes, "local module bytes");
+  const stageDir = await fsp.mkdtemp(path.join(os.tmpdir(), STAGE_PREFIX));
+  try {
+    const archive = path.join(stageDir, "package.zip");
+    await fsp.copyFile(source.archive, archive, fs.constants.COPYFILE_EXCL);
+    const copied = await sha256File(archive);
+    assertExpected(copied.sha256, source.sha256, "copied local module SHA256");
+    assertExpected(copied.bytes, source.bytes, "copied local module bytes");
+    const extracted = path.join(stageDir, "extracted");
+    await extractZip(archive, extracted);
+    const payload = await findModulePayload(extracted);
+    const manifestFile = path.join(payload, "module.json");
+    const manifest = manifestShape(await readJsonFile(manifestFile, "local module manifest"), { requireDownload: false });
+    assertExpected(manifest.id, expectedId, "staged local module id");
+    assertExpected(manifest.version, expectedVersion, "staged local module version");
+    const manifestIdentity = await sha256File(manifestFile);
+    const record = {
+      schemaVersion: 2, createdAt: new Date().toISOString(), sourceKind: "local-archive",
+      sourceArchivePath: source.archive, id: manifest.id, title: manifest.title, version: manifest.version,
+      manifestUrl: manifest.manifest, downloadUrl: manifest.download, finalDownloadUrl: null,
+      archive: "package.zip", payload: path.relative(stageDir, payload),
+      archiveBytes: copied.bytes, archiveSha256: copied.sha256,
+      manifestBytes: manifestIdentity.bytes, manifestSha256: manifestIdentity.sha256,
+      trustedByMirrorIndex: false, mirrorGenerated: null, indexError: null,
+    };
+    await fsp.writeFile(path.join(stageDir, "stage.json"), `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    return { ...record, stageDir, requiresSecondConfirmation: false };
+  } catch (error) {
+    // mkdtemp created this exact directory; existing user paths are never removed.
+    await fsp.rm(stageDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function downloadArchive(fetchImpl, url, file, label = "module ZIP") {
@@ -1967,6 +2050,8 @@ function parseCli(argv) {
 function usage() {
   return [
     "Usage:",
+    "  mod-manager local-inspect --archive <zip> --data-dir <dir>",
+    "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
     "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir]",
     "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir]",
     "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url>",
@@ -1981,6 +2066,13 @@ function usage() {
 export async function runCli(argv = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   switch (command) {
+    case "local-inspect":
+      return inspectLocalModule({ archivePath: options.archive, dataDir: options["data-dir"] });
+    case "local-stage":
+      return stageLocalModule({
+        archivePath: options.archive, expectedId: options["expected-id"], expectedVersion: options["expected-version"],
+        expectedSha256: options["expected-sha256"], expectedBytes: Number(options["expected-bytes"]),
+      });
     case "inspect":
       return inspectModule({
         manifestUrl: options["manifest-url"],
