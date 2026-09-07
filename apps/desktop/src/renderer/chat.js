@@ -112,12 +112,12 @@ function showTaskState(task) {
     });
     taskIndicator.appendChild(recover);
   }
-  if (task?.state === "waiting_resource" && task.waitingFor) {
+  if (["waiting_resource", "stopping"].includes(task?.state) && task.waitingFor) {
     const holder = task.waitingFor.holders?.[0];
     const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
     const name = resource?.slice(3).split("/").filter(Boolean).at(-1)
       ?? (task.waitingFor.resources?.includes("foundry:page") ? "Foundry" : t("activity.resource"));
-    taskIndicator.textContent = t("activity.resourceWait", { resource: name,
+    taskIndicator.textContent = t(task.state === "stopping" ? "chat.task.stoppingOperation" : "activity.resourceWait", { resource: name,
       owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
   }
   updateComposerAction();

@@ -26,7 +26,30 @@ exports.verify = async ({ hostA, hostB, streams, scratch, window, evaluate, ui, 
   await until(() => !streams.get("B").closed && !streams.get("B").recover, "SDK continues after successful recovery tool");
   assert.equal(hostB.tasks.task.id, taskId);
   assert.equal(readFileSync(path.join(scratch, artifactName), "utf8"), "confirmed result");
+  let heldPage;
+  if (process.argv.includes("--slow-stop")) {
+    const { WebContentsView } = require("electron");
+    const { pathToFileURL } = require("node:url");
+    const { evaluateNavigationSafe } = await import(pathToFileURL(path.resolve(__dirname, "../../src/main/foundry-web.js")));
+    heldPage = new WebContentsView({ webPreferences: { backgroundThrottling: false } });
+    await heldPage.webContents.loadURL("data:text/html,<title>Isolated pending operation</title>");
+    const result = await hostB.resources.run(["foundry:page"], { sessionId: hostB.describeCurrent().id, taskId }, null, () => {}, () =>
+      evaluateNavigationSafe(heldPage.webContents, "new Promise(resolve => { window.finishOperation = () => { document.body.textContent = 'operation finished'; resolve(true); }; })", { timeoutMs: 30 }));
+    assert.equal(result.status, "timeout");
+  }
   await evaluate('stop.click()');
+  if (heldPage) {
+    await ui('busy && displayedTask.state === "stopping" && taskIndicator.textContent === t("chat.task.stoppingOperation", {resource:"Foundry"})');
+    assert.equal(hostB.tasks.task.state, "stopping");
+    const restored = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await restored;
+    await ui('busy && displayedTask?.state === "stopping" && taskIndicator.textContent === t("chat.task.stoppingOperation", {resource:"Foundry"})');
+    assert.ok(hostA.busy && !streams.get("A").closed);
+    await heldPage.webContents.executeJavaScript("finishOperation(); true");
+    assert.equal(await heldPage.webContents.executeJavaScript("document.body.textContent"), "operation finished");
+    heldPage.webContents.close();
+    console.log("PASS production slow stop: actual pending page operation, resource explanation and reload before release");
+  }
   await ui('!busy && displayedTask.state === "stopped"');
   assert.ok(hostA.busy && !streams.get("A").closed);
   assert.equal(readFileSync(path.join(scratch, artifactName), "utf8"), "confirmed result");

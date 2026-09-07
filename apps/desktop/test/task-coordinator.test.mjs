@@ -15,13 +15,22 @@ test("stopping retains execution capacity and waits for actual tool settlement",
   let settling = false;
   const c = new TaskCoordinator({ sessionId: "A", scheduler, adapter: {
     prompt: () => prompt.promise, abort: async () => prompt.resolve(),
-    settleTask: async () => { settling = true; await raw.promise; },
+    settleTask: async id => {
+      settling = true;
+      c.resourceWaiting(`settle:${id}`, { resources: ["foundry:page"], holders: [{ sessionId: "A", taskId: id }] });
+      await raw.promise;
+      c.resourceWaiting(`settle:${id}`, null);
+    },
   } });
   c.submit({ text: "run" }); await tick();
   const stop = c.stop(c.task.id); await tick();
   assert.equal(settling, true); assert.equal(c.task.state, "stopping");
   assert.equal(scheduler.active.size, 1);
+  assert.deepEqual(c.task.waitingFor.resources, ["foundry:page"]);
+  c.resourceWaiting("cancelled-request", { resources: ["fs:unowned"], holders: [] });
+  assert.deepEqual(c.task.waitingFor.resources, ["foundry:page"], "stopping only describes operations still owned by this task");
   raw.resolve(); await stop; assert.equal(c.task.state, "stopped"); assert.equal(scheduler.active.size, 0);
+  assert.equal(c.task.waitingFor, null);
 });
 
 test("supplement received while actual tools settle continues the same task", async () => {

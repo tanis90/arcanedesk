@@ -149,12 +149,17 @@ export class TaskCoordinator {
   }
   resourceWaiting(id, details) {
     if (details) this.resourceWaits.set(id, details); else this.resourceWaits.delete(id);
+    if (this.task?.state === "stopping" && id === `settle:${this.task.id}`) {
+      this.setTaskState("stopping");
+      return;
+    }
     if (!this.busy || ["stopping", "waiting_user", "queued"].includes(this.task.state)) return;
     if (this.resourceWaits.size) this.setTaskState("waiting_resource");
     else if (this.task.state === "waiting_resource") this.setTaskState("running");
   }
   setTaskState(state, error = null) {
-    this.task = { ...this.task, state, error, waitingFor: state === "waiting_resource" ? this.resourceWaits.values().next().value : null,
+    this.task = { ...this.task, state, error, waitingFor: state === "waiting_resource" ? this.resourceWaits.values().next().value
+      : state === "stopping" ? this.resourceWaits.get(`settle:${this.task.id}`) ?? null : null,
       endedAt: activeStates.has(state) ? null : Date.now() };
     this.journal.append({ type: "task_state", task: this.task });
     this.emit({ type: "task_state", task: { ...this.task } });

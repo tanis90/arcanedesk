@@ -421,3 +421,12 @@
 - 新增 production tool recovery runner。真实 PowerShell 先输出受控错误并 exit 1；SDK 下一请求实际携带失败结果，页面工具卡失败而任务仍运行。
 - 同一 taskId 再执行 PowerShell 写入隔离文件，结果进入 SDK 后停止任务。文件内容在停止和刷新后保持，两张工具卡分别恢复为失败/成功。A 全程继续并完成；HTTP 请求严格 A/B/B/B。
 - runner 通过；仅测试和文档变更，未改产品状态机。Markdown 链接及 diff 检查通过。G10 剩余真实慢停止说明，G7 系统交互与 G8 最终复核继续。
+
+
+### M8o4 — 停止期间的真实操作说明 — 2026-09-07
+
+- 发现任务进入 stopping 后 resourceWaiting 直接返回，且 setTaskState 清除了 waitingFor；执行侧虽等残留操作，页面无法说明等待对象。现在 stopping 仅发布该任务 settle 操作的资源详情，不把尚未执行的资源请求误称为正在退出的操作。
+- renderer 共用实时/快照状态展示，增加中英文“正在停止，等待资源操作退出”。释放后清除说明，终态仍由执行侧确认。
+- 新增 slow-stop runner：真实 WebContentsView 页面 Promise 超时后继续持有生产资源，停止 SDK 并刷新页面，确认 stopping 及 Foundry 等待说明持续；实际页面释放后才 stopped。页面操作由夹具登记到任务资源，证据范围见 E22。
+- 初次使用额外 BrowserWindow 覆盖了共享夹具的主窗口引用，改为 WebContentsView 后最终验收通过；不计初次失败为产品行为证据。
+- 生产慢停止、普通会话回归、类型/源码边界检查及全量 408 项测试通过，Markdown 链接及 diff 检查通过。G10 已关闭；G7 系统托盘/通知真实交互与 G8 最终复核未完成。
