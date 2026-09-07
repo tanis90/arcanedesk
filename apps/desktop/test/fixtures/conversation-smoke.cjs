@@ -15,11 +15,13 @@ let sendTestEvent = () => {};
 let epochA = "test";
 let migratedHistory = false;
 let interrupted = false;
+let taskOverride = null;
+const abortRequests = [];
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
-    busy: id === "A" && (!finished || question?.state === "pending"),
-    task: id === "A" ? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
+    busy: id === "A" && (taskOverride ? ["running", "stopping"].includes(taskOverride.state) : !finished || question?.state === "pending"),
+    task: id === "A" ? taskOverride ?? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
     attentions: id === "A" && question ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
@@ -36,6 +38,7 @@ const submittedCommands = new Set();
 let submitAttempts = 0;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "chat:abort") return new Promise(resolve => abortRequests.push({ input, resolve }));
   if (channel === "tasks:respond") {
     lastAnswer = input;
     question = { ...question, state: "answered", response: input.response };
@@ -166,7 +169,62 @@ app.whenReady().then(async () => {
     await until('selectedSessionId === "A" && !!document.querySelector(".recover-task") && pendingImages.length === 1');
     assert.equal(await evaluate('input.value'), recoveryDraft);
     assert.equal(submitAttempts, 2, "reloading recovery does not replay an input");
-    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, scoped answer, reloaded cursor and explicit interruption recovery");
+    taskOverride = { id: "stop-task", state: "running" };
+    await evaluate('resyncSelected()');
+    await until('selectedTaskId === "stop-task" && busy && !send.disabled');
+    assert.equal(await evaluate('send.getAttribute("aria-label")'), await evaluate('t("composer.supplement")'));
+    await evaluate('input.value = "keep while stopping"; input.dispatchEvent(new Event("input")); stop.click(); send.click(); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); submit();');
+    await until('send.disabled && stop.disabled');
+    await evaluate('sendSubmission({context: {...modeContext(), commandId: "blocked-retry"}, text: "retry", images: []})');
+    assert.equal(await evaluate('input.value'), "keep while stopping");
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    assert.equal(submitAttempts, 2);
+    assert.equal(abortRequests.length, 1);
+    assert.equal(abortRequests[0].input.sessionId, "A");
+    assert.equal(abortRequests[0].input.taskId, "stop-task");
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B" && !send.disabled');
+    assert.equal(await evaluate('send.getAttribute("aria-label")'), await evaluate('t("composer.newTask")'));
+    const bDraft = await evaluate('input.value');
+    abortRequests[0].resolve({ ok: false, code: "STOP_FAILED" });
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(await evaluate('input.value'), bDraft);
+    assert.equal(await evaluate('document.getElementById("composer-stop-feedback").hidden'), true);
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && !send.disabled && !document.getElementById("composer-stop-feedback").hidden');
+    assert.equal(await evaluate('input.value'), "keep while stopping");
+    await evaluate('stop.click()');
+    await until('send.disabled');
+    taskOverride.state = "stopping";
+    await evaluate('saveWorkspace(); resyncSelected()');
+    const stopReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await stopReloaded;
+    await until('selectedSessionId === "A" && send.disabled && pendingImages.length === 1');
+    await evaluate('submit()');
+    assert.equal(await evaluate('input.value'), "keep while stopping");
+    assert.equal(submitAttempts, 2);
+    taskOverride.state = "stopped";
+    abortRequests[1].resolve({ ok: true, task: taskOverride });
+    await evaluate('resyncSelected()');
+    await until('!busy && !send.disabled');
+    assert.equal(await evaluate('input.value'), "keep while stopping");
+    assert.equal(await evaluate('send.getAttribute("aria-label")'), await evaluate('t("composer.newTask")'));
+    taskOverride = { id: "finishing-stop-task", state: "running" };
+    await evaluate('resyncSelected()');
+    await until('selectedTaskId === "finishing-stop-task" && !stop.disabled');
+    await evaluate('stop.click()');
+    await until('send.disabled');
+    taskOverride.state = "completed";
+    await evaluate('resyncSelected()');
+    await until('!send.disabled && !busy');
+    taskOverride = { id: "later-task", state: "running" };
+    await evaluate('resyncSelected()');
+    await until('selectedTaskId === "later-task"');
+    abortRequests.at(-1).resolve({ ok: false, code: "STALE_TASK" });
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(await evaluate('document.getElementById("composer-stop-feedback").hidden'), true);
+    assert.equal(await evaluate('send.disabled'), false, "old stop receipt cannot block the next task");
+    console.log("PASS Electron: conversation restore, scoped input, recovery and stopping draft protection");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

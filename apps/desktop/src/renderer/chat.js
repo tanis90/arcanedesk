@@ -10,6 +10,29 @@ const pendingModelIndicator = document.getElementById("conversation-model-pendin
 const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
+let displayedTask = null;
+const stopRequests = new Map();
+const activeTaskStates = new Set(["running", "queued", "waiting_user", "waiting_resource", "stopping"]);
+function reconcileStopRequest(id, task) {
+  const request = stopRequests.get(id);
+  if (request && (request.taskId !== task?.id || !activeTaskStates.has(task?.state))) stopRequests.delete(id);
+}
+function composerStopping() {
+  return displayedTask?.state === "stopping" ||
+    (stopRequests.get(selectedSessionId)?.taskId === selectedTaskId && stopRequests.get(selectedSessionId)?.state === "pending");
+}
+function updateComposerAction() {
+  const stopping = composerStopping();
+  const key = stopping ? "composer.stopping" : activeTaskStates.has(displayedTask?.state) ? "composer.supplement" : "composer.newTask";
+  const label = t(key);
+  document.getElementById("composer-action").textContent = label;
+  send.title = label; send.setAttribute("aria-label", label);
+  send.toggleAttribute("disabled", stopping || !selectedSessionId);
+  stop.toggleAttribute("disabled", stopping);
+  const feedback = document.getElementById("composer-stop-feedback");
+  feedback.hidden = stopRequests.get(selectedSessionId)?.state !== "failed";
+  feedback.textContent = feedback.hidden ? "" : t("composer.stopFailed");
+}
 let panelCommandSnapshot = { revision: -1, command: null };
 function showShutdown(state) {
   const bar = document.getElementById("shutdown-status");
@@ -39,6 +62,8 @@ function showPendingModel(model) {
   pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
 }
 function showTaskState(task) {
+  displayedTask = task;
+  reconcileStopRequest(selectedSessionId, task);
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
     queued: "activity.capacityQueue", waiting_resource: "activity.waitingResource", cancelled: "activity.cancelled",
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
@@ -64,6 +89,7 @@ function showTaskState(task) {
     taskIndicator.textContent = t("activity.resourceWait", { resource: name,
       owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
   }
+  updateComposerAction();
 }
 
 function renderAttention(attention) {
@@ -176,6 +202,7 @@ const snapshotCache = new BoundedCache();
 const deletedSessions = new Set();
 function forgetSession(id) {
   if (!id) return;
+  stopRequests.delete(id);
   for (const attention of snapshotCache.get(id)?.attentions ?? []) {
     attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id);
   }
@@ -434,6 +461,10 @@ function receiveEvent(event, replay = false) {
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
   if (!replay && eventInbox.record(event) === false) return;
+  if (event.type === "task_state" && event.sessionId &&
+    (stopRequests.get(event.sessionId)?.taskId === event.task.id || ["running", "queued"].includes(event.task.state))) {
+    reconcileStopRequest(event.sessionId, event.task);
+  }
   if (event.sessionId && event.sessionId === selectedSessionId && Number.isInteger(event.seq)) {
     if (restoringView) return;
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
@@ -1173,6 +1204,7 @@ function clearModelSetupCard() {
 function setBusy(next) {
   busy = next;
   composerWrap.classList.toggle("busy", busy);
+  updateComposerAction();
 }
 
 // ---------- events ----------
@@ -1657,6 +1689,7 @@ function submissionNode(submission) {
 }
 async function sendSubmission(submission) {
   const id = submission.context.sessionId;
+  if ((selectedSessionId === id && composerStopping()) || stopRequests.get(id)?.state === "pending") return;
   if (submission.sending) return;
   submission.sending = true;
   if (selectedSessionId === id) {
@@ -1696,6 +1729,7 @@ async function sendSubmission(submission) {
 }
 
 async function submit() {
+  if (composerStopping()) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
@@ -1710,9 +1744,24 @@ async function submit() {
 }
 
 send.addEventListener("click", submit);
-stop.addEventListener("click", () => {
-  window.arcane.abort(modeContext());
-  addStatus(t("chat.status.abortRequested"));
+stop.addEventListener("click", async () => {
+  if (!selectedSessionId || !selectedTaskId || composerStopping()) return;
+  const context = modeContext();
+  const request = { taskId: context.taskId, state: "pending" };
+  stopRequests.set(context.sessionId, request);
+  updateComposerAction();
+  try {
+    const result = await window.arcane.abort(context);
+    if (stopRequests.get(context.sessionId) !== request) return;
+    if (result?.ok) stopRequests.delete(context.sessionId);
+    else request.state = "failed";
+  } catch {
+    if (stopRequests.get(context.sessionId) === request) request.state = "failed";
+  } finally {
+    if (selectedSessionId === context.sessionId && selectedTaskId === context.taskId) {
+      updateComposerAction(); void resyncSelected();
+    }
+  }
 });
 togglePanelBtn.addEventListener("click", async () => {
   showPanelCommand(await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel()));
@@ -3020,6 +3069,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
 // 语言热切换:静态文案由 i18n.js 的 applyI18n 回填,状态派生标签在这里重跑。
 // 已渲染的聊天记录/会话标题是用户与 LLM 的数据,刻意不回翻。
 window.ArcaneI18n.onLocaleChange(() => {
+  updateComposerAction();
   if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();

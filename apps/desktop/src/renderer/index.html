@@ -1669,11 +1669,13 @@
       <input type="file" id="attach-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       <div class="composer-bar">
         <button id="plus" title="更多操作(添加图片…)" data-i18n-title="composer.more.title">+</button>
+        <span id="composer-action" class="status-line" aria-live="polite"></span>
         <button id="mic" title="按住说话(或按住 F9)" data-i18n-title="composer.mic.title" data-i18n-dynamic>🎙</button>
         <button id="stop" title="中止当前任务" data-i18n-title="composer.stop.title">■</button>
-        <button id="send" title="发送(Enter)" data-i18n-title="composer.send.title">↑</button>
+        <button id="send" title="发送(Enter)" data-i18n-dynamic>↑</button>
       </div>
     </div>
+    <div id="composer-stop-feedback" class="status-line" role="status" hidden></div>
     <div id="plus-menu" hidden>
       <button class="plus-item" id="attach" title="添加图片(也可直接粘贴 Ctrl+V 或拖入)" data-i18n-title="composer.attach.title"><span class="pi">📎</span><span data-i18n="composer.attach.label">添加图片</span></button>
     </div>

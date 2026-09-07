@@ -57,6 +57,10 @@ globalThis.ARCANE_MESSAGES = {
     "composer.mic.titleWithKey": "按住说话(或按住 {key})",
     "composer.stop.title": "中止当前任务",
     "composer.send.title": "发送(Enter)",
+    "composer.newTask": "开始新任务",
+    "composer.supplement": "补充当前任务",
+    "composer.stopping": "正在停止，草稿已保留",
+    "composer.stopFailed": "停止请求未确认，正在核对状态；如仍在运行，可再次点击停止。",
     "scrollBottom.title": "回到底部",
     "splitter.title": "拖拽调整左右宽度",
 
@@ -481,6 +485,10 @@ globalThis.ARCANE_MESSAGES = {
     "composer.mic.titleWithKey": "Hold to talk (or hold {key})",
     "composer.stop.title": "Abort the current task",
     "composer.send.title": "Send (Enter)",
+    "composer.newTask": "Start a new task",
+    "composer.supplement": "Add to the current task",
+    "composer.stopping": "Stopping — draft retained",
+    "composer.stopFailed": "Stop was not confirmed. Checking status; if still running, you can try Stop again.",
     "scrollBottom.title": "Back to bottom",
     "splitter.title": "Drag to resize the columns",
 
