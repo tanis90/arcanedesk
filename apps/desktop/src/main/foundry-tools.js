@@ -11,10 +11,34 @@ const source = Type.Union([
   exact({ kind: Type.Literal("name"), name: ref(), scope: Type.Union([Type.Literal("focus"), Type.Literal("actors")]) }),
 ]);
 const textResult = data => ({ content: [{ type: /** @type {const} */ ("text"), text: JSON.stringify(data) }], details: data });
+const activityInput = exact({
+  spellLevel: Type.Optional(Type.Integer({ minimum: 1, maximum: 9 })),
+  attackRollMode: Type.Optional(Type.Union([Type.Literal("normal"), Type.Literal("advantage"), Type.Literal("disadvantage")])),
+  selections: Type.Optional(Type.Record(Type.String({ maxLength: 256 }), Type.Union([ref(), Type.Number(), Type.Boolean()]))),
+  allocation: Type.Optional(Type.Array(Type.Record(Type.String(), Type.Unknown()), { maxItems: 100 })),
+  declaredRiders: Type.Optional(Type.Array(Type.Record(Type.String(), Type.Unknown()), { maxItems: 20 })),
+  targetSpec: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+});
+const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Array(ref(), { maxItems: 100 })), input: Type.Optional(activityInput) };
 
 /** Definitions are mode-independent; activation belongs to the host's explicit allowlist. */
 export function createFoundryTools(host) {
   return [
+    defineTool({
+      name: "foundry_execute_action", label: "Execute Action",
+      description: "Use a discovered action reference. Outside combat execute one spell or attack; during combat execute only the current actor and read current turn first. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
+      parameters: Type.Union([
+        exact({ ...actionFields, resolution: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("narrative")])), advance: Type.Optional(Type.Boolean()) }),
+        exact({ actions: Type.Array(exact(actionFields), { minItems: 1, maxItems: 20 }), advance: Type.Optional(Type.Boolean()) }),
+      ]),
+      executionMode: "sequential",
+      execute: async (id, params, signal) => {
+        const binding = host.taskCoordinator().currentInputBinding();
+        const approved = await host.maybeRequestApproval({ tool: "foundry_execute_action", summary: "Execute the requested spell or attack", args: params });
+        if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
+        return textResult(await host.foundryServices().executeAction(params, binding, id, signal));
+      },
+    }),
     defineTool({
       name: "foundry_static_context", label: "Static Context",
       description: "Read the full static manual once per combat or Scene: all focused Tokens and their complete supported abilities. During combat focus is its participants; otherwise every current Scene Token. Refresh only when the scope or capability structure changes.",

@@ -25,6 +25,7 @@ export const ALL_DIRECT_ACTIONS = [
   "staticContext",
   "playContext",
   "conditionsSet",
+  "executeAction",
   "doctor",
   "worldInfo",
   "sceneSnapshot",
@@ -68,6 +69,7 @@ export const DIRECT_ACTION_EFFECTS = {
   staticContext: "read",
   playContext: "read",
   conditionsSet: "write",
+  executeAction: "write",
   doctor: "read",
   worldInfo: "read",
   sceneSnapshot: "read",
@@ -316,6 +318,7 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
   conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
   staticContext: FoundryActionContract<Record<string, never>, PlayStaticContext>;
   playContext: FoundryActionContract<Record<string, never>, PlayDynamicContext>;
@@ -326,6 +329,27 @@ export interface FoundryActionMap {
 }
 
 export type TypedDirectAction = keyof FoundryActionMap;
+
+/** Resolved from the host's static snapshot, never supplied as a second model source selector. */
+export interface PlayResolvedAction {
+  actionRef: string;
+  actionId: string;
+  sourceTokenUuid: string;
+  actorUuid: string;
+  itemId: string;
+  activityId: string | null;
+  targetTokenUuids?: string[];
+  input?: ExecuteTurnActionInput;
+}
+
+export interface PlayExecuteInput {
+  world: { origin: string; id: string };
+  contextRef: string;
+  turn?: PlayContextBase["turn"];
+  resolvedActions: PlayResolvedAction[];
+  resolution?: "auto" | "narrative";
+  advance?: boolean;
+}
 
 export type FoundrySource =
   | { kind: "actor"; actorUuid: string }
@@ -372,7 +396,7 @@ export interface PlayStaticContext extends PlayContextBase {
   combatants: Array<PlayTokenIdentity & {
     side: CombatantSide;
     static: BattleCombatant["static"] | null;
-    actions: Array<BattleActionDefinition & { actionRef: string; activityId: string; resolution: "auto" | "narrative" }>;
+    actions: Array<BattleActionDefinition & { actionRef: string; activityId: string | null; resolution: "auto" | "narrative" }>;
     warnings?: string[];
   }>;
 }

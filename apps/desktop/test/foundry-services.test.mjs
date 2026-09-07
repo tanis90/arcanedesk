@@ -50,3 +50,35 @@ test("dynamic reads signal invalidation without returning cached definitions", a
   assert.equal((await f.service.readPlay()).staticContextValid, false);
   assert.equal((await f.service.readPlay({ view: "operation", operationRef: "other" })).code, "OPERATION_NOT_FOUND");
 });
+
+test("execution resolves references from the session snapshot and requires fresh combat turn evidence", async t => {
+  const f = fixture(t);
+  const params = { actionRef: "ref" };
+  assert.equal((await f.service.executeAction(params, f.binding, "one")).code, "STATIC_CONTEXT_REQUIRED");
+  f.service.staticSnapshot = { contextRef: "first", scope: { combatId: "combat" }, combatants: [{
+    tokenUuid: "Scene.s.Token.t", actorUuid: "Actor.a", actions: [{ actionRef: "ref", id: "action", itemId: "item", activityId: "activity" }] }] };
+  assert.equal((await f.service.executeAction({ actionRef: "other" }, f.binding, "one")).code, "ACTION_REFERENCE_UNKNOWN");
+  assert.equal((await f.service.executeAction(params, f.binding, "one")).code, "TURN_CONTEXT_REQUIRED");
+  f.service.turnSnapshot = { contextRef: "first", turn: { tokenId: "t", round: 1, index: 0 } };
+  await f.service.executeAction(params, f.binding, "one");
+  const sent = f.calls[0];
+  assert.equal(sent.action, "executeAction");
+  assert.equal(sent.args.resolvedActions[0].sourceTokenUuid, "Scene.s.Token.t");
+  assert.equal(sent.args.resolvedActions[0].actionId, "action");
+  assert.equal(f.service.turnSnapshot, null);
+});
+
+test("light context maps current IDs to stable references and narrative availability without leaking schemas", async t => {
+  const f = fixture(t);
+  f.service.staticSnapshot = { contextRef: "first", combatants: [{ tokenUuid: "Token.t", actions: [
+    { id: "native", actionRef: "ref-native", resolution: "auto", input: { heavy: "definition" } },
+    { id: "spell", actionRef: "ref-spell", resolution: "narrative", resource: { kind: "spellSlot", key: "spell1" } },
+  ] }] };
+  let slots = 1;
+  f.service.call = async () => ({ contextRef: "first", combatants: [{ tokenUuid: "Token.t", availableActionIds: ["native"], resources: { spell1: slots } }] });
+  const live = await f.service.readPlay();
+  assert.deepEqual(live.combatants[0].availableActionIds, ["ref-native", "ref-spell"]);
+  assert.equal(JSON.stringify(live).includes("definition"), false);
+  slots = 0;
+  assert.deepEqual((await f.service.readPlay()).combatants[0].availableActionIds, ["ref-native"]);
+});

@@ -16,12 +16,14 @@ export class FoundryServices {
     this.call = call;
     this.store = new FoundryOperationStore({ directory, sessionId });
     this.staticSnapshot = null;
+    this.turnSnapshot = null;
   }
 
   async readStatic(signal) {
     return this.withPage(signal, async () => {
       const data = await this.call("staticContext", {}, { signal, executionTimeoutMs: 30_000 });
       this.staticSnapshot = structuredClone(data);
+      this.turnSnapshot = null;
       return data;
     });
   }
@@ -34,7 +36,16 @@ export class FoundryServices {
     }
     return this.withPage(signal, async () => {
       const data = await this.call("playContext", {}, { signal, executionTimeoutMs: 30_000 });
-      return { ...data, staticContextValid: !!this.staticSnapshot && data.contextRef === this.staticSnapshot.contextRef };
+      if (view === "turn") this.turnSnapshot = structuredClone(data);
+      const valid = !!this.staticSnapshot && data.contextRef === this.staticSnapshot.contextRef;
+      const combatants = data.combatants.map(token => {
+        const definitions = valid ? this.staticSnapshot.combatants.find(value => value.tokenUuid === token.tokenUuid)?.actions ?? [] : [];
+        const available = new Set(token.availableActionIds ?? []);
+        return { ...token, availableActionIds: definitions.filter(action => action.resolution === "narrative"
+          ? action.resource?.kind === "none" || Number(token.resources?.[action.resource?.key] ?? 0) > 0
+          : available.has(action.id)).map(action => action.actionRef) };
+      });
+      return { ...data, combatants, staticContextValid: valid };
     });
   }
 
@@ -49,6 +60,43 @@ export class FoundryServices {
       if (signal?.aborted) return { status: "rejected", code: "ABORTED", message: "Cancelled before dispatch" };
       return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world,
         action: "conditionsSet", args }, () => this.call("conditionsSet", args, { signal, executionTimeoutMs: 30_000 }));
+    });
+  }
+
+  async executeAction(params, binding, toolCallId, signal) {
+    // Snapshot handles before awaits; later reads/steering cannot replace this call's provenance.
+    const snapshot = this.staticSnapshot, turn = this.turnSnapshot;
+    const reject = (code, message) => ({ status: "rejected", code, message });
+    if (!snapshot) return reject("STATIC_CONTEXT_REQUIRED", "Read static context once before using abilities");
+    const specs = params.actions ?? (params.actionRef ? [params] : []);
+    if (!specs.length || specs.length > 20 || (params.actions && params.actionRef)) return reject("INPUT_INVALID", "Specify a single action or a sequence");
+    const resolvedActions = [];
+    for (const spec of specs) {
+      let match;
+      for (const token of snapshot.combatants) {
+        const action = token.actions.find(value => value.actionRef === spec.actionRef);
+        if (action) { match = { token, action }; break; }
+      }
+      if (!match) return reject("ACTION_REFERENCE_UNKNOWN", "Reference is not in this session's current static context");
+      const { token, action } = match;
+      resolvedActions.push({ actionRef: action.actionRef, actionId: action.id, sourceTokenUuid: token.tokenUuid,
+        actorUuid: token.actorUuid, itemId: action.itemId, activityId: action.activityId,
+        ...(spec.targetTokenUuids ? { targetTokenUuids: spec.targetTokenUuids } : {}), ...(spec.input ? { input: spec.input } : {}) });
+    }
+    const metadata = await binding.metadata;
+    if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
+    if (snapshot.scope.combatId && (!turn || turn.contextRef !== snapshot.contextRef)) {
+      return reject("TURN_CONTEXT_REQUIRED", "Read current turn state before this combat action");
+    }
+    const args = { world: metadata.world, contextRef: snapshot.contextRef,
+      turn: turn?.turn ?? null, resolvedActions, resolution: params.resolution ?? "auto", advance: params.advance === true };
+    return this.withPage(signal, async () => {
+      if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
+      const result = await this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world,
+        action: "executeAction", args }, () => this.call("executeAction", args, { signal, executionTimeoutMs: 120_000 }));
+      // Every combat execution needs a new turn read, including a failed or interrupted one.
+      if (snapshot.scope.combatId) this.turnSnapshot = null;
+      return result;
     });
   }
 }
