@@ -21,6 +21,11 @@ app.whenReady().then(async () => {
     projection: new SessionProjection({ sessionId: id, epoch: "activity-test" }) });
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
+  const { ResourceCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/resource-coordinator.js")));
+  const { PanelCommands } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/panel-commands.js")));
+  const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
+  const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
+    operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
   let notificationBroker;
   const nativeNotifications = [];
   const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
@@ -49,6 +54,9 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+    if (channel === "panel:open") return panelCommands.request("open");
+    if (channel === "panel:command-state") return panelCommands.snapshot();
+    if (channel === "panel:cancel-command") return panelCommands.cancel(input);
     if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };
     if (channel === "notifications:set") return notificationBroker.setEnabled(input);
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
@@ -189,6 +197,19 @@ app.whenReady().then(async () => {
     await until('busy && taskIndicator.textContent.includes("Session A") && taskIndicator.textContent.includes("shared")');
     send("B", { type: "task_state", task: { id: "task-B-resource", state: "completed" } });
     await until('!busy');
+    const heldPage = await panelResources.acquire(["foundry:page"], { taskId: "page-owner", name: "Session A" });
+    await evaluate('document.getElementById("toggle-panel").click()');
+    await until('!document.getElementById("panel-command").hidden && document.getElementById("panel-command").textContent.includes("Session A")');
+    assert.equal(panelNavigations, 0);
+    const panelReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await panelReloaded;
+    await until('!document.getElementById("panel-command").hidden && document.getElementById("panel-command").textContent.includes("Session A")');
+    await evaluate('document.getElementById("panel-command-cancel").click()');
+    await until('panelCommandSnapshot.command?.state === "cancelled"');
+    heldPage.release(); assert.equal(panelNavigations, 0);
+    await evaluate('document.getElementById("toggle-panel").click()');
+    await until('panelCommandSnapshot.command?.state === "completed"');
+    assert.equal(panelNavigations, 1);
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

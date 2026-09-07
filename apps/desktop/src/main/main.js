@@ -15,6 +15,7 @@ import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
 import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
+import { PanelCommands } from "./scheduling/panel-commands.js";
 import "../shared/i18n/messages.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
@@ -1345,27 +1346,31 @@ app.whenReady().then(async () => {
   });
 
   // 顶栏"面板"开关:用户手动打开/关闭 Foundry 面板,不必经过 agent。
-  ipcMain.handle("panel:open", async () => {
-    return await openFoundryView(); // 默认地址(ARCANE_FOUNDRY_URL / localhost:30000)
-  });
-  ipcMain.handle("panel:close", () => {
-    if (!foundryView) return { ok: true };
-    foundryRuntime.invalidate();
-    clearFoundryPermissionState("panel-closed");
-    mainWindow?.contentView.removeChildView(foundryView);
-    if (!foundryView.webContents.isDestroyed()) foundryView.webContents.close();
-    foundryView = null;
-    sendToRenderer({ type: "panel_status", open: false });
-    sendToRenderer({ type: "panel_layout", open: false });
-    return { ok: true };
-  });
+  const panelCommands = new PanelCommands({ resources, emit: state => sendToRenderer({ type: "panel_command", ...state }), operations: {
+    open: () => openFoundryView(),
+    close: () => {
+      if (!foundryView) return { ok: true };
+      foundryRuntime.invalidate();
+      clearFoundryPermissionState("panel-closed");
+      mainWindow?.contentView.removeChildView(foundryView);
+      if (!foundryView.webContents.isDestroyed()) foundryView.webContents.close();
+      foundryView = null;
+      sendToRenderer({ type: "panel_status", open: false });
+      sendToRenderer({ type: "panel_layout", open: false });
+      return { ok: true };
+    },
 
-  // F5:玩家手动刷新右侧 Foundry 页面(卡渲染/丢帧时自救)。面板没开时不动作。
-  ipcMain.handle("panel:reload", () => {
-    if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
-    foundryView.webContents.reload();
-    return { ok: true };
-  });
+    // Await navigation and inspection before reporting that reload finished.
+    reload: async () => {
+      if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
+      return loadFoundryPage(foundryView.webContents.getURL());
+    },
+  } });
+  for (const action of ["open", "close", "reload"]) {
+    ipcMain.handle(`panel:${action}`, event => isTrustedChatIpc(event) ? panelCommands.request(action) : { ok: false });
+  }
+  ipcMain.handle("panel:command-state", event => isTrustedChatIpc(event) ? panelCommands.snapshot() : null);
+  ipcMain.handle("panel:cancel-command", (event, id) => isTrustedChatIpc(event) ? panelCommands.cancel(id) : { ok: false });
 
   // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整 Foundry view 宽度。
   ipcMain.handle("panel:set-chat-width", (_event, px) => {

@@ -10,6 +10,21 @@ const pendingModelIndicator = document.getElementById("conversation-model-pendin
 const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
+let panelCommandSnapshot = { revision: -1, command: null };
+function showPanelCommand(snapshot) {
+  if (!Number.isInteger(snapshot?.revision) || snapshot.revision < panelCommandSnapshot.revision) return;
+  panelCommandSnapshot = snapshot;
+  const bar = document.getElementById("panel-command"), command = snapshot.command;
+  if (!bar) return;
+  bar.hidden = !command;
+  if (!command) return;
+  bar.querySelector("span").textContent = t(`panel.${command.state}`, {
+    action: t(`panel.${command.action}`), owner: command.waitingFor?.holders?.[0]?.name || t("activity.otherTask"),
+    error: command.error || (command.result?.error ? fmtIpc(command.result.error) : command.result?.summary) || t("common.unknown"),
+  });
+  document.getElementById("panel-command-cancel").hidden = command.state !== "queued";
+  document.getElementById("panel-command-dismiss").hidden = ["queued", "running"].includes(command.state);
+}
 
 function showPendingModel(model) {
   pendingModelIndicator.hidden = !model;
@@ -1078,6 +1093,9 @@ function onEvent(event) {
       panelDot.classList.toggle("on", panelOpen);
       togglePanelBtn.classList.toggle("open", panelOpen);
       break;
+    case "panel_command":
+      showPanelCommand(event);
+      break;
     case "panel_layout":
       panelLayout.open = Boolean(event.open);
       if (typeof event.chatWidth === "number") panelLayout.chatWidth = event.chatWidth;
@@ -1539,17 +1557,13 @@ stop.addEventListener("click", () => {
   addStatus(t("chat.status.abortRequested"));
 });
 togglePanelBtn.addEventListener("click", async () => {
-  if (panelOpen) {
-    await window.arcane.closePanel();
-    return;
-  }
-  const result = await window.arcane.openPanel();
-  if (result && result.ok === false) {
-    addStatus(t("chat.status.panelOpenFailed", {
-      error: result.error ? fmtIpc(result.error) : result.summary ?? t("common.unknown"),
-    }));
-  }
+  showPanelCommand(await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel()));
 });
+document.getElementById("panel-command-cancel")?.addEventListener("click", async () => {
+  await window.arcane.cancelPanelCommand(panelCommandSnapshot.command?.id);
+  showPanelCommand(await window.arcane.getPanelCommand());
+});
+document.getElementById("panel-command-dismiss")?.addEventListener("click", () => { document.getElementById("panel-command").hidden = true; });
 input.addEventListener("input", () => {
   autosize();
   renderSlash();
@@ -2812,13 +2826,14 @@ window.ArcaneShortcuts?.register("panel.reload", {
   chords: ["F5"],
   onTap: async () => {
     const result = await window.arcane.reloadPanel?.();
-    if (result?.ok) addStatus(t("chat.status.panelReloaded"));
+    showPanelCommand(result);
   },
 });
 
 // 语言热切换:静态文案由 i18n.js 的 applyI18n 回填,状态派生标签在这里重跑。
 // 已渲染的聊天记录/会话标题是用户与 LLM 的数据,刻意不回翻。
 window.ArcaneI18n.onLocaleChange(() => {
+  if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();
   if (currentModelLabel) updateModelLabels(currentModelLabel);
@@ -2835,6 +2850,7 @@ refreshTelemetryConsent();
 
 input.focus();
 window.arcane.onEvent(receiveEvent);
+window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });

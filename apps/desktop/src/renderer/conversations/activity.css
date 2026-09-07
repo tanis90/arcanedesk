@@ -38,3 +38,8 @@ body.sidebar-pinned #drawer-close { visibility: hidden; }
 body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
 #session-drawer { max-width: calc(100% - var(--panel-w, 0px)); }
 #activity-bar [hidden], #activity-jump[hidden], #activity-empty[hidden] { display: none; }
+#panel-command { display: flex; align-items: center; gap: 8px; padding: 8px 18px; background: var(--panel); font-size: var(--fs-meta); }
+#panel-command > span { flex: 1; overflow-wrap: anywhere; }
+#panel-command button { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+#panel-command[hidden], #panel-command [hidden] { display: none; }
+body.sidebar-pinned #panel-command { margin-left: 264px; }
