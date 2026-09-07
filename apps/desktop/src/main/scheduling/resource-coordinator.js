@@ -99,7 +99,7 @@ export class ResourceCoordinator {
         let finish;
         entry.finished = new Promise(resolve => { finish = resolve; });
         const token = Symbol("resource"); this.active.set(token, entry);
-        entry.resolve({ release: () => {
+        entry.resolve({ detached: () => { entry.detached = true; }, release: () => {
           if (this.active.delete(token)) { finish(); this.drain(); }
         } });
       }
@@ -107,6 +107,19 @@ export class ResourceCoordinator {
       this.draining = false;
       if (this.redrain) { this.redrain = false; this.drain(); }
     }
+  }
+
+  /** Fence new requests while recovering only operations whose tool call already returned. */
+  recoveryBarrier(resources) {
+    const held = [...this.active.values()].filter(entry => overlap(resources, entry.resources));
+    if (held.some(entry => !entry.detached)) throw new Error("PAGE_OPERATION_RUNNING");
+    let finish;
+    const finished = new Promise(resolve => { finish = resolve; });
+    const token = Symbol("recovery");
+    this.active.set(token, { resources, owner: { name: "Foundry recovery" }, finished });
+    this.drain();
+    return { owners: held.map(entry => structuredClone(entry.owner)), drained: Promise.all(held.map(entry => entry.finished)),
+      release: () => { if (this.active.delete(token)) { finish(); this.drain(); } } };
   }
 
   /** Wait for actual operations owned by this task, including deferred page execution. */
@@ -138,6 +151,7 @@ export class ResourceCoordinator {
         finally {
           lifetime.closed = true;
           if (lifetime.pending.size) {
+            lease.detached();
             void Promise.allSettled([...lifetime.pending]).then(() => lease.release());
           } else lease.release();
         }

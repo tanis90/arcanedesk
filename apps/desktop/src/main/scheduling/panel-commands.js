@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 export class PanelCommands {
   constructor({ resources, operations, emit = (_state) => {} }) {
     this.resources = resources; this.operations = operations; this.emit = emit;
-    this.state = null; this.controller = null; this.run = null; this.revision = 0;
+    this.state = null; this.controller = null; this.run = null; this.revision = 0; this.recovering = false;
   }
   snapshot() { return { revision: this.revision, command: this.state ? structuredClone(this.state) : null }; }
   publish(changes) {
@@ -13,7 +13,7 @@ export class PanelCommands {
   }
   request(action) {
     if (!Object.hasOwn(this.operations, action)) return { ok: false, code: "INVALID_ACTION" };
-    if (this.run) return { ok: true, ...this.snapshot(), existing: true };
+    if (this.run || this.recovering) return { ok: true, ...this.snapshot(), existing: true };
     const id = randomUUID(), controller = new AbortController(); this.controller = controller;
     this.state = { id, action, state: "queued", waitingFor: null };
     // Defer publication and work until run is assigned, so reentrant requests cannot replace it.
@@ -36,5 +36,27 @@ export class PanelCommands {
     if (id !== this.state?.id) return { ok: false, code: "STALE_COMMAND", ...this.snapshot() };
     if (this.state.state !== "queued") return { ok: false, code: "ALREADY_STARTED", ...this.snapshot() };
     this.controller?.abort(); return { ok: true };
+  }
+
+  async recover({ stopOwners, destroyPage, reopen }) {
+    if (this.recovering) return { ok: false, code: "RECOVERY_RUNNING" };
+    let barrier;
+    try { barrier = this.resources.recoveryBarrier(["foundry:page"]); }
+    catch (error) { return { ok: false, code: error.message }; }
+    this.recovering = true;
+    try {
+      if (this.run) { this.controller?.abort(); await this.run; }
+      this.state = { id: randomUUID(), action: "recover", state: "running", waitingFor: null };
+      this.publish({});
+      stopOwners(barrier.owners);
+      await destroyPage();
+      await barrier.drained;
+      const result = await reopen();
+      this.publish({ state: result?.ok === false ? "failed" : "completed", result });
+      return { ok: result?.ok !== false, ...this.snapshot() };
+    } catch (error) {
+      this.publish({ state: "failed", error: error.message });
+      return { ok: false, ...this.snapshot() };
+    } finally { barrier.release(); this.recovering = false; }
   }
 }

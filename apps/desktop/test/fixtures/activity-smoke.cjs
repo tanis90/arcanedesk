@@ -21,9 +21,10 @@ app.whenReady().then(async () => {
     projection: new SessionProjection({ sessionId: id, epoch: "activity-test" }) });
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
-  const { ResourceCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/resource-coordinator.js")));
+  const { ResourceCoordinator, retainResourceUntil } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/resource-coordinator.js")));
   const { PanelCommands } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/panel-commands.js")));
   const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
+  let recoveryApproved = false, finishOldPage;
   const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
     operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
   let notificationBroker;
@@ -57,6 +58,9 @@ app.whenReady().then(async () => {
     if (channel === "panel:open") return panelCommands.request("open");
     if (channel === "panel:command-state") return panelCommands.snapshot();
     if (channel === "panel:cancel-command") return panelCommands.cancel(input);
+    if (channel === "panel:recover") return recoveryApproved ? panelCommands.recover({
+      stopOwners() {}, destroyPage() { finishOldPage(); }, reopen: async () => { panelNavigations++; return { ok: true }; },
+    }) : { ok: true, cancelled: true };
     if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };
     if (channel === "notifications:set") return notificationBroker.setEnabled(input);
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
@@ -210,6 +214,18 @@ app.whenReady().then(async () => {
     await evaluate('document.getElementById("toggle-panel").click()');
     await until('panelCommandSnapshot.command?.state === "completed"');
     assert.equal(panelNavigations, 1);
+    await panelResources.run(["foundry:page"], { sessionId: "A", taskId: "hung-page", name: "Session A" }, null, () => {}, () => {
+      retainResourceUntil(new Promise(resolve => { finishOldPage = resolve; }));
+    });
+    await evaluate('document.getElementById("toggle-panel").click()');
+    await until('panelCommandSnapshot.command?.state === "queued" && !document.getElementById("panel-command-recover").hidden');
+    await evaluate('document.getElementById("panel-command-recover").click()');
+    await until('!document.getElementById("panel-command-recover").disabled');
+    assert.equal(panelResources.active.size, 1); assert.equal(panelNavigations, 1);
+    recoveryApproved = true;
+    await evaluate('document.getElementById("panel-command-recover").click()');
+    await until('panelCommandSnapshot.command?.action === "recover" && panelCommandSnapshot.command?.state === "completed"');
+    assert.equal(panelNavigations, 2); assert.equal(panelResources.active.size, 0);
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

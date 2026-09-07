@@ -24,6 +24,7 @@ function showPanelCommand(snapshot) {
   });
   document.getElementById("panel-command-cancel").hidden = command.state !== "queued";
   document.getElementById("panel-command-dismiss").hidden = ["queued", "running"].includes(command.state);
+  document.getElementById("panel-command-recover").hidden = !["queued", "failed"].includes(command.state);
 }
 
 function showPendingModel(model) {
@@ -1564,6 +1565,14 @@ document.getElementById("panel-command-cancel")?.addEventListener("click", async
   showPanelCommand(await window.arcane.getPanelCommand());
 });
 document.getElementById("panel-command-dismiss")?.addEventListener("click", () => { document.getElementById("panel-command").hidden = true; });
+document.getElementById("panel-command-recover")?.addEventListener("click", async event => {
+  const button = /** @type {HTMLButtonElement} */ (event.currentTarget); button.disabled = true;
+  try {
+    const result = await window.arcane.recoverPanel();
+    showPanelCommand(result);
+    if (result?.code === "PAGE_OPERATION_RUNNING") document.querySelector("#panel-command > span").textContent = t("panel.recoveryBusy");
+  } finally { button.disabled = false; }
+});
 input.addEventListener("input", () => {
   autosize();
   renderSlash();
