@@ -22,6 +22,9 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  * their own allowlist. The SDK client defaults to SAFE_DIRECT_ACTIONS.
  */
 export const ALL_DIRECT_ACTIONS = [
+  "staticContext",
+  "playContext",
+  "conditionsSet",
   "doctor",
   "worldInfo",
   "sceneSnapshot",
@@ -62,6 +65,9 @@ export type DirectActionEffect = "read" | "write";
  * writes, including maintenance actions that also expose a dry-run mode.
  */
 export const DIRECT_ACTION_EFFECTS = {
+  staticContext: "read",
+  playContext: "read",
+  conditionsSet: "write",
   doctor: "read",
   worldInfo: "read",
   sceneSnapshot: "read",
@@ -310,16 +316,83 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
+  staticContext: FoundryActionContract<Record<string, never>, PlayStaticContext>;
+  playContext: FoundryActionContract<Record<string, never>, PlayDynamicContext>;
   worldInfo: FoundryActionContract<Record<string, never>, WorldInfo>;
   battleContext: FoundryActionContract<Record<string, never>, BattleContext>;
   turnContext: FoundryActionContract<Record<string, never>, TurnContext>;
   executeTurn: FoundryActionContract<ExecuteTurnInput, ExecuteTurnReceipt>;
 }
 
-export type FoundryActionInput<Action extends SafeDirectAction> =
+export type TypedDirectAction = keyof FoundryActionMap;
+
+export type FoundrySource =
+  | { kind: "actor"; actorUuid: string }
+  | { kind: "token"; tokenUuid: string }
+  | { kind: "selected" }
+  | { kind: "name"; name: string; scope: "focus" | "actors" };
+
+/** Host binds world, mode and the submitted selection; Runtime resolves actual Actors. */
+export interface ConditionsSetInput {
+  targets: FoundrySource[];
+  selectedTokenUuids?: string[];
+  conditions: Array<{ key: string; active: boolean }>;
+  world: { origin: string; id: string };
+  mode: "prep" | "combat";
+}
+
+export type PlayWriteReceipt =
+  | { status: "rejected"; code: string; message: string }
+  | { status: "completed"; steps: RuntimeArguments[]; verification: RuntimeArguments[]; warnings: string[] }
+  | { status: "partial" | "indeterminate"; retry: false; steps: RuntimeArguments[]; message: string };
+
+export interface PlayScope {
+  world: { origin: string | null; id: string | null };
+  sceneUuid: string | null;
+  combatId: string | null;
+}
+
+export interface PlayTokenIdentity {
+  tokenUuid: string;
+  tokenId: string;
+  actorUuid: string | null;
+  actorId: string | null;
+  name: string | null;
+}
+
+export interface PlayContextBase {
+  schema: "arcane.play.v1";
+  scope: PlayScope;
+  contextRef: string;
+  turn: { round: number; index: number | null; tokenId: string | null; actorId: string | null } | null;
+}
+
+export interface PlayStaticContext extends PlayContextBase {
+  combatants: Array<PlayTokenIdentity & {
+    side: CombatantSide;
+    static: BattleCombatant["static"] | null;
+    actions: Array<BattleActionDefinition & { actionRef: string; activityId: string; resolution: "auto" | "narrative" }>;
+    warnings?: string[];
+  }>;
+}
+
+export interface PlayDynamicContext extends PlayContextBase {
+  combatants: Array<PlayTokenIdentity & {
+    hp: { value: number | null; temp: number };
+    resources: Record<string, number>;
+    conditions: string[];
+    concentration: string | null;
+    visible: boolean;
+    defeated: boolean;
+    availableActionIds: string[];
+  }>;
+}
+
+export type FoundryActionInput<Action extends TypedDirectAction> =
   FoundryActionMap[Action]["input"];
 
-export type FoundryActionOutput<Action extends SafeDirectAction> =
+export type FoundryActionOutput<Action extends TypedDirectAction> =
   FoundryActionMap[Action]["output"];
 
 export const FOUNDRY_SDK_ERROR_CODES = {

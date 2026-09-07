@@ -1,5 +1,8 @@
 # Arcane Desk (MVP)
 
+备团／跑团工具升级正在按[唯一技术方案](./docs/foundry-prep-play-technical-plan.md)实施；
+当前进度与待验收项见[实施记录](./docs/foundry-prep-play-implementation.md)。以下工具说明仍描述已接入的行为。
+
 Agent-native desktop for Foundry VTT DMing — agent loop 是窗口本体:
 启动即纯 chat;agent 调 `foundry_open` 后 Foundry 主视觉从右侧弹出,
 chat 收缩为左栏(combat-only 工具白名单,无 shell)。左右分栏宽度可拖

@@ -1,5 +1,8 @@
 # Prep Mode
 
+本文件说明既有备团行为；新增工具与跑团升级以[唯一技术方案](./foundry-prep-play-technical-plan.md)为准，
+实施状态见[实施记录](./foundry-prep-play-implementation.md)。
+
 Prep mode 为 DM 提供本地文件、平台 shell 与受控 Foundry 页面能力。它和战斗模式使用不同的
 AgentHost profile，但共享会话、ProviderStore 和 Foundry panel。
 
