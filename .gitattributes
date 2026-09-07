@@ -2,3 +2,4 @@
 
 *.ico binary
 *.png binary
+apps/desktop/skills/prep/arcane-fvtt-mods/scripts/node_modules/@arcanedesk/foundry-pack-builder/** -text
