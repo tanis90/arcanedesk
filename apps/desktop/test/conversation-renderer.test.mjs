@@ -11,6 +11,14 @@ function stateClasses() {
   return context.ArcaneConversationState;
 }
 
+test("deleted session events cannot recreate an inbox entry", () => {
+  const { EventInbox } = stateClasses();
+  const inbox = new EventInbox();
+  inbox.record({ sessionId: "A", runtimeEpoch: "old", seq: 1 });
+  inbox.remove("A"); inbox.record({ sessionId: "A", runtimeEpoch: "new", seq: 2 });
+  assert.equal(inbox.sessions.has("A"), false); assert.equal(inbox.retiredEpochs.has("A"), false);
+});
+
 test("events arriving before snapshot installation replay once in order", () => {
   const { EventInbox } = stateClasses();
   const inbox = new EventInbox();

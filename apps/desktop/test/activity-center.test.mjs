@@ -22,6 +22,14 @@ function fixture(options = {}) {
   return { center, notices, updates, send, read, projections };
 }
 
+test("deleting an unloaded session still publishes the frontend cleanup signal", () => {
+  const f = fixture();
+  f.center.remove("unloaded");
+  assert.equal(f.updates.at(-1).type, "activity_removed");
+  assert.equal(f.updates.at(-1).sessionId, "unloaded");
+  assert.equal(f.notices.length, 0);
+});
+
 test("same-mode and cross-mode activity are independent; read never erases task state", () => {
   const f = fixture();
   f.send("A", { type: "task_state", task: { id: "a", state: "running" } });

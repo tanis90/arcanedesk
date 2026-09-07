@@ -154,6 +154,23 @@ let navigationRequest = 0;
 const workspaceReady = new Set();
 const syncingSessions = new Set();
 const snapshotCache = new Map();
+const deletedSessions = new Set();
+function forgetSession(id) {
+  if (!id) return;
+  for (const attention of snapshotCache.get(id)?.attentions ?? []) {
+    attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id);
+  }
+  deletedSessions.add(id); eventInbox.remove(id); snapshotCache.delete(id);
+  workspaceReady.delete(id); syncingSessions.delete(id); outboxBySession.delete(id);
+  for (const [mode, selected] of lastSessionByMode) if (selected === id) lastSessionByMode.delete(mode);
+  void workspaceStore.remove(id).catch(() => {});
+  if (selectedSessionId === id) {
+    snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
+    resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
+    attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
+    document.getElementById("conversation-title").textContent = "";
+  }
+}
 const lastSessionByMode = new Map();
 let workspaceSaveTimer;
 let activityView = null;
@@ -182,7 +199,7 @@ function saveWorkspace() {
 
 async function installSnapshot(payload) {
   const id = payload.session?.id;
-  if (!id) return;
+  if (!id || deletedSessions.has(id)) return;
   const token = ++snapshotRequest;
   const changed = selectedSessionId !== id;
   activityReady = false;
@@ -288,6 +305,8 @@ async function resyncSelected() {
 }
 
 function receiveEvent(event, replay = false) {
+  if (event.type === "activity_removed") forgetSession(event.sessionId);
+  else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
   if (!replay) eventInbox.record(event);
@@ -1480,6 +1499,7 @@ const inputStateKeys = {
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
 function outboxFor(id) {
+  if (deletedSessions.has(id)) return new Map();
   if (!outboxBySession.has(id)) outboxBySession.set(id, new Map());
   return outboxBySession.get(id);
 }
@@ -1877,6 +1897,7 @@ async function refreshSessions() {
         }));
         return;
       }
+      forgetSession(s.id);
       refreshSessions();
     });
     item.append(body, del);

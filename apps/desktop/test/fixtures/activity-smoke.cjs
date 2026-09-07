@@ -226,6 +226,17 @@ app.whenReady().then(async () => {
     await evaluate('document.getElementById("panel-command-recover").click()');
     await until('panelCommandSnapshot.command?.action === "recover" && panelCommandSnapshot.command?.state === "completed"');
     assert.equal(panelNavigations, 2); assert.equal(panelResources.active.size, 0);
+    const deletedSnapshot = snapshot("A");
+    await evaluate('workspaceStore.save("A", { draft: "private draft", images: [{ data: "private image" }], outbox: [{ text: "pending" }] })');
+    center.remove("A"); sessions.delete("A");
+    await until('deletedSessions.has("A") && !snapshotCache.has("A") && !eventInbox.sessions.has("A")');
+    const beforeDeletedInstall = await evaluate('selectedSessionId');
+    await evaluate(`installSnapshot(${JSON.stringify(deletedSnapshot)})`);
+    assert.equal(await evaluate('selectedSessionId'), beforeDeletedInstall);
+    assert.deepEqual(await evaluate('workspaceStore.load("A")'), {});
+    assert.deepEqual(await evaluate('(async () => { const fresh = new ArcaneConversationState.WorkspaceStore(); await fresh.save("A", { draft: "late resurrection" }); return fresh.load("A"); })()'), {});
+    await evaluate('Promise.all([workspaceStore.save("delete-race", { images: [{ data: "secret" }] }), workspaceStore.remove("delete-race")])');
+    assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("delete-race")'), {});
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

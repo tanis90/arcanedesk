@@ -196,7 +196,7 @@ export class ActivityCenter {
 
   /** Remove only after the owner has actually deleted the session. */
   remove(sessionId) {
-    if (!this.rows.delete(sessionId)) return;
+    this.rows.delete(sessionId);
     this.dirty.delete(sessionId);
     this.flush();
     this.publish({ type: "activity_removed", sessionId });
