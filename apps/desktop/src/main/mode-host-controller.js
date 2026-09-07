@@ -29,7 +29,7 @@ export class ModeHostController {
   /** 当前模式的不可变请求快照；跨 await 后用 matches() 判断是否仍然有效。 */
   snapshot() {
     const mode = this.#activeMode;
-    return Object.freeze({ mode, generation: this.#generation, host: this.#hosts[mode] });
+    return Object.freeze({ mode, generation: this.#generation, host: this.#hosts[mode].activeHost ?? this.#hosts[mode] });
   }
 
   /** 只给 IPC 响应的模式字段，不把 host 对象泄露给 renderer。 */
@@ -42,7 +42,7 @@ export class ModeHostController {
       context &&
       context.mode === this.#activeMode &&
       context.generation === this.#generation &&
-      context.host === this.#hosts[this.#activeMode]
+      context.host === (this.#hosts[this.#activeMode].activeHost ?? this.#hosts[this.#activeMode])
     );
   }
 

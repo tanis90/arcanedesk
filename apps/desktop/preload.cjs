@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("arcane", {
     images,
     mode: context?.mode,
     generation: context?.generation,
+    sessionId: context?.sessionId,
+    taskId: context?.taskId,
   }),
   /** Slash 候选:app 命令 + 当前会话的 skills / prompt 模板(按活动模式路由)。 */
   listSlash: (context) => ipcRenderer.invoke("slash:list", context),
@@ -43,11 +45,13 @@ contextBridge.exposeInMainWorld("arcane", {
     path,
     mode: context?.mode,
     generation: context?.generation,
+    sessionId: context?.sessionId,
   }),
   deleteSession: (path, context) => ipcRenderer.invoke("sessions:delete", {
     path,
     mode: context?.mode,
     generation: context?.generation,
+    sessionId: context?.sessionId,
   }),
   /** Settings: provider management + default model. */
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -60,6 +64,7 @@ contextBridge.exposeInMainWorld("arcane", {
   setChatModel: (context, providerId, modelId) => ipcRenderer.invoke("chat:set-model", {
     mode: context?.mode,
     generation: context?.generation,
+    sessionId: context?.sessionId,
     providerId,
     modelId,
   }),

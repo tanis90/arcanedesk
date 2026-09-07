@@ -83,6 +83,8 @@ interface ArcaneBridge {
 }
 
 interface ArcaneModeContext {
+  sessionId?: string;
+  taskId?: string;
   mode: "combat" | "prep";
   generation: number;
 }

@@ -244,6 +244,7 @@ export class AgentHost {
     this.sessionManager = null;
     this.unsubscribe = null;
     this.projection = new SessionProjection();
+    this.task = null;
     this.approvals = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
@@ -298,7 +299,7 @@ export class AgentHost {
       this.sendToRenderer({ ...payload, mode: this.profile.mode });
       return;
     }
-    this.sendToRenderer(this.projection.publish({ ...payload, mode: this.profile.mode }));
+    this.sendToRenderer(this.projection.publish({ ...payload, mode: this.profile.mode, taskId: this.task?.id ?? null }));
   }
 
   /**
@@ -306,7 +307,7 @@ export class AgentHost {
    * 会话本体分别存在 Pi 原生 arcane-desktop-combat / prep sessionDir；
    * cwd 仍写进 header，让备团目录继续按项目过滤。
    */
-  async start() {
+  async start({ sessionPath = null, fresh = false } = {}) {
     // A clean machine may have another Node on PATH, or none at all. Do not
     // create Pi's shell tools until the packaged FVTT Ops Node has been
     // installed, verified, and injected into the inherited environment.
@@ -322,6 +323,13 @@ export class AgentHost {
     this.providerStore?.applyToRuntime(this.modelRuntime);
 
     let manager;
+    if (sessionPath) {
+      manager = this.openSessionManager(sessionPath);
+      const restoredCwd = manager.getCwd();
+      this.profile = { ...this.profile, getCwd: () => restoredCwd };
+    }
+    else if (fresh) manager = this.createSessionManager();
+    else {
     try {
       const existing = await this.listOwnedSessionInfos();
       const recent = existing
@@ -331,6 +339,7 @@ export class AgentHost {
     } catch (error) {
       this.log(`[agent:${this.profile.mode}] session discovery failed, starting clean: ${error.message}`);
       manager = this.createSessionManager();
+    }
     }
     await this.attach(manager);
     return this.session;
@@ -540,6 +549,8 @@ export class AgentHost {
 
   currentPayload() {
     return {
+      busy: this.busy,
+      task: this.task ? { ...this.task } : null,
       inFlight: this.projection.snapshot(),
       session: this.describeCurrent(),
       history: this.buildHistory(),
@@ -695,10 +706,24 @@ export class AgentHost {
     return { ok: true, tokensBefore: result?.tokensBefore };
   }
 
+  get busy() { return this.task?.state === "running" || this.task?.state === "stopping"; }
+
   async prompt(text, images) {
     if (!this.session) throw new Error("agent session not started");
+    if (this.busy) throw new Error("Task already running");
+    const task = this.task = { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null };
+    this.emit({ type: "task_state", task: { ...task } });
     const opts = images?.length ? { images } : undefined;
-    await this.session.prompt(text, opts);
+    try {
+      await this.session.prompt(text, opts);
+      task.state = task.state === "stopping" ? "stopped" : this._lastError ? "failed" : "completed";
+    } catch (error) {
+      task.state = task.state === "stopping" ? "stopped" : "failed";
+      throw error;
+    } finally {
+      task.endedAt = Date.now();
+      this.emit({ type: "task_state", task: { ...task } });
+    }
     // 首轮结束后用首条用户消息做会话标题(best-effort;侧栏展示用)
     try {
       if (this.sessionManager && !this.sessionManager.getSessionName()) {
@@ -715,9 +740,15 @@ export class AgentHost {
     await this.session.steer(text, images?.length ? images : undefined);
   }
 
-  async abort() {
+  async abort(taskId = null) {
     if (!this.session) return;
+    if (taskId && taskId !== this.task?.id) return { ok: false, code: "STALE_TASK" };
+    if (this.busy) {
+      this.task.state = "stopping";
+      this.emit({ type: "task_state", task: { ...this.task } });
+    }
     await this.session.abort();
+    return { ok: true };
   }
 
   dispose() {

@@ -39,6 +39,8 @@ let displaySourceRequest = null;
 /** @type {"combat" | "prep"} */
 let currentMode = "prep";
 let currentModeGeneration = 0;
+let selectedSessionId = null;
+let selectedTaskId = null;
 /** @type {"combat" | "prep"} */
 let requestedMode = currentMode;
 let modeSwitchRequest = 0;
@@ -46,11 +48,13 @@ let lastPrepCwd = null;
 
 /** @returns {ArcaneModeContext} */
 function modeContext() {
-  return { mode: currentMode, generation: currentModeGeneration };
+  return { mode: currentMode, generation: currentModeGeneration,
+    sessionId: selectedSessionId, taskId: selectedTaskId };
 }
 
 function sameModeContext(context) {
-  return context.mode === currentMode && context.generation === currentModeGeneration;
+  return context.mode === currentMode && context.generation === currentModeGeneration
+    && context.sessionId === selectedSessionId;
 }
 
 /** 拒绝比当前 UI 更旧的 main 快照，避免迟到响应把界面切回去。 */
@@ -115,6 +119,8 @@ async function switchMode(next) {
   requestedMode = currentMode;
   invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
   renderHistory(result.history ?? []);
+  selectedSessionId = result.session?.id ?? null;
+  selectedTaskId = result.task?.id ?? null;
   setBusy(Boolean(result.busy)); // 后台模式可能还在跑:恢复真实 busy 态
   if (result.modelLabel) updateModelLabels(result.modelLabel);
   if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
@@ -753,7 +759,15 @@ function setBusy(next) {
 function onEvent(event) {
   // 双模式:带 mode 标签的事件只渲染活动模式;无标签的 panel 等全局事件放行
   if (event.mode && event.mode !== currentMode) return;
+  if (event.type !== "session_switched" && event.sessionId && event.sessionId !== selectedSessionId) return;
+  if (event.taskId && selectedTaskId && event.taskId !== selectedTaskId
+    && event.type !== "session_switched"
+    && !(event.type === "task_state" && event.task.state === "running")) return;
   switch (event.type) {
+    case "task_state":
+      selectedTaskId = event.task.id;
+      setBusy(event.task.state === "running" || event.task.state === "stopping");
+      break;
     case "message": {
       // 终稿:替换对应流式草稿气泡(同 key),否则新建消息。
       // textI18n:主进程结构化文案(如模型调用失败),显示前本地化。
@@ -838,6 +852,9 @@ function onEvent(event) {
     case "session_switched":
       // 切换/新建会话:整体重置后按历史重渲染(含工具卡片四态)
       renderHistory(event.history ?? []);
+      selectedSessionId = event.session?.id ?? null;
+      selectedTaskId = event.task?.id ?? null;
+      setBusy(Boolean(event.busy));
       if (event.modelLabel) updateModelLabels(event.modelLabel);
       if (typeof event.supportsImages === "boolean") modelSupportsImages = event.supportsImages;
       refreshSessions();
@@ -848,12 +865,12 @@ function onEvent(event) {
       break;
     case "agent_settled":
       closeWorkBlock();
-      setBusy(false);
+      if (!selectedTaskId) setBusy(false);
       addStatus(t("chat.status.agentReady"));
       break;
     case "agent_end":
       closeWorkBlock();
-      setBusy(false);
+      if (!selectedTaskId) setBusy(false);
       // 首轮结束后 main 会给会话起名;抽屉开着时刷新列表
       if (drawer.classList.contains("open")) refreshSessions();
       break;
@@ -1458,6 +1475,8 @@ async function pullCurrentSession() {
     if (requestedMode === previousMode) requestedMode = currentMode;
   }
   if (!payload?.session) return;
+  selectedSessionId = payload.session.id;
+  selectedTaskId = payload.task?.id ?? null;
   if (typeof payload.busy === "boolean") setBusy(payload.busy);
   // 启动竞态:world/model 的推送可能早于 renderer 订阅,这里一并补齐
   const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
@@ -1471,6 +1490,7 @@ async function pullCurrentSession() {
   // 用户已经在本地输入/收到过消息时不覆盖对话区(启动竞态保护)
   if (messages.querySelector(".msg, .card")) return;
   renderHistory(payload.history ?? []);
+  setBusy(Boolean(payload.busy));
 }
 
 const drawer = document.getElementById("session-drawer");

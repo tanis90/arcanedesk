@@ -10,6 +10,7 @@ import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
+import { SessionRegistry } from "./conversations/session-registry.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
@@ -656,9 +657,9 @@ app.whenReady().then(async () => {
   // 尚未选目录时也有稳定 cwd 的内部实现细节，不能冒充用户的备团项目。
   const prepUiCwd = () => prepStore.data.lastCwd ?? undefined;
 
-  // ---- 双模式 host(M1):并存常驻,切模式不杀 session;IPC 全部路由到活动 host ----
+  // Each mode owns a registry; command contexts capture an actual session host.
   const hosts = {
-    combat: new AgentHost({
+    combat: new SessionRegistry({ createHost: () => new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
       openFoundry: openFoundryView,
@@ -670,8 +671,10 @@ app.whenReady().then(async () => {
       profile: {
         getCwd: () => combatWorkspace,
       },
-    }),
-    prep: new AgentHost({
+    }) }),
+    prep: new SessionRegistry({ createHost: () => {
+      const cwd = prepStore.data.lastCwd ?? prepFallbackWorkspace;
+      return new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
       openFoundry: openFoundryView,
@@ -682,21 +685,21 @@ app.whenReady().then(async () => {
       getLocale: resolveLocale,
       profile: {
         mode: "prep",
-        getCwd: () => prepStore.data.lastCwd ?? prepFallbackWorkspace,
+        getCwd: () => cwd,
         builtinTools: true,
         systemPrompt: "append",
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate"],
         fence: true,
       },
-    }),
+    }); } }),
   };
   const modeController = new ModeHostController({
     hosts,
     initialMode: readUiState().mode,
   });
-  // 每模式各一个 busy 标志:两 host 可各跑各的 turn,steer 语义归请求快照。
-  const busyByMode = { combat: false, prep: false };
+  // Global provider changes visit resident sessions; task state stays on each host.
+  const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
 
   function staleModeResponse() {
     const context = modeController.snapshot();
@@ -708,7 +711,13 @@ app.whenReady().then(async () => {
     };
   }
 
-  function validateModeRequest(request) {
+  async function validateModeRequest(request) {
+    if (request?.sessionId) {
+      const host = allSessionHosts().find(host => host.describeCurrent()?.id === request.sessionId);
+      if (!host) return { ok: false, code: "SESSION_NOT_FOUND", error: "Session not found" };
+      return { ok: true, context: { mode: host.profile.mode, generation: request.generation, host } };
+    }
+    await modeController.ensureStarted(modeController.snapshot().mode);
     const result = modeController.validateRequest(request);
     if (result.ok) return result;
     const key = "code" in result && result.code === "INVALID_MODE_CONTEXT"
@@ -722,13 +731,13 @@ app.whenReady().then(async () => {
     return {
       ...context.host.currentPayload(),
       ...modeController.publicSnapshot(context),
-      busy: busyByMode[context.mode],
-      cwd: context.mode === "prep" ? prepUiCwd() : undefined,
+      busy: context.host.busy,
+      cwd: context.mode === "prep" ? context.host.cwd() : undefined,
       worldInfo: foundryRuntime.lastWorldInfo,
     };
   }
 
-  globalThis.__arcaneAgentHost = hosts.combat; // dom-dump 等调试脚本的既有入口
+  Object.defineProperty(globalThis, "__arcaneAgentHost", { get: () => hosts.combat.activeHost });
   globalThis.__arcaneHosts = hosts;
 
   // ---- 模式切换 ----
@@ -747,16 +756,16 @@ app.whenReady().then(async () => {
       ...context,
       requestedMode,
       stale,
-      busy: busyByMode[context.mode], // 后台模式的运行态:切回时恢复 busy 指示
+      busy: host.busy,
       ...host.currentPayload(),
-      cwd: context.mode === "prep" ? prepUiCwd() : undefined,
+      cwd: context.mode === "prep" ? host.cwd() : undefined,
     };
   });
 
   // ---- 备团:工作目录 ----
   ipcMain.handle("prep:get-dir", () => ({ cwd: prepUiCwd() }));
   ipcMain.handle("prep:choose-dir", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok || validated.context.mode !== "prep") return staleModeResponse();
     const context = validated.context;
     await modeController.ensureStarted(context.mode);
@@ -770,17 +779,18 @@ app.whenReady().then(async () => {
     } catch (error) {
       return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
     }
-    await context.host.newSession(); // pi 无运行时切 cwd API:换目录 = 新 session
+    const nextHost = await hosts.prep.select(null, true);
+    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
   // ---- 会话管理(按活动模式路由；模式由 Pi sessionDir + JSONL marker 固有隔离) ----
   ipcMain.handle("sessions:list", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     await modeController.ensureStarted(context.mode);
-    const list = await context.host.listSessions();
+    const list = await hosts[context.mode].listSessions();
     return {
       ok: true,
       ...modeController.publicSnapshot(context),
@@ -792,37 +802,39 @@ app.whenReady().then(async () => {
     return currentModePayload();
   });
   ipcMain.handle("sessions:new", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     await modeController.ensureStarted(context.mode);
-    const result = await context.host.newSession();
-    return { ...result, ...modeController.publicSnapshot(context) };
+    const nextHost = await hosts[context.mode].select(null, true);
+    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
+    return { ok: true, ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     const sessionPath = String(request?.path ?? "");
     await modeController.ensureStarted(context.mode);
-    const list = await context.host.listSessions();
+    const list = await hosts[context.mode].listSessions();
     if (!list.some((s) => s.path === sessionPath)) {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
-    const result = await context.host.openSession(sessionPath);
-    return { ...result, ...modeController.publicSnapshot(context) };
+    const nextHost = await hosts[context.mode].select(sessionPath);
+    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
+    return { ok: true, ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:delete", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     const sessionPath = String(request?.path ?? "");
     await modeController.ensureStarted(context.mode);
-    const list = await context.host.listSessions();
+    const list = await hosts[context.mode].listSessions();
     if (!list.some((s) => s.path === sessionPath)) {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
-    const result = await context.host.deleteSession(sessionPath);
+    const result = await hosts[context.mode].deleteSession(sessionPath);
     return result;
   });
 
@@ -830,7 +842,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:get", async (event) => {
     if (!isTrustedChatIpc(event)) return { providers: [], defaultModel: null, models: [] };
     const settings = providerStore.toPublic();
-    const models = await hosts.combat.listModels();
+    await modeController.ensureStarted("combat");
+    const models = await hosts.combat.activeHost.listModels();
     const known = new Set(models.map((model) => model.label));
     // Pi only reports models with usable auth. Settings must still show an unconfigured
     // Arcane Spark so a first-run user can select it and reach its Key field.
@@ -846,7 +859,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("settings:model-access", async (event, request) => {
     if (!isTrustedChatIpc(event)) return { missingKey: null };
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return { ...validated, missingKey: null };
     await modeController.ensureStarted(validated.context.mode);
     const model = validated.context.host.currentModelRef();
@@ -857,7 +870,7 @@ app.whenReady().then(async () => {
   // 会话各自持有模型,绝不被动切换 —— 模型按会话生效。
   async function applyDefaultModelToEmptySessions(target) {
     const results = await Promise.all(
-      Object.values(hosts).map(async (host) =>
+      allSessionHosts().map(async (host) =>
         host.sessionHasMessages()
           ? { ok: true, skipped: true }
           : host.setCurrentModel(target.providerId, target.modelId)
@@ -871,7 +884,7 @@ app.whenReady().then(async () => {
     const fallback = providerStore.effectiveModel();
     if (!fallback) return { ok: true };
     const results = await Promise.all(
-      Object.values(hosts).map(async (host) => {
+      allSessionHosts().map(async (host) => {
         const sessionModel = host.session?.model;
         if (sessionModel && host.currentModelRef()?.providerId !== providerId) {
           return { ok: true, skipped: true };
@@ -886,7 +899,7 @@ app.whenReady().then(async () => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
     const result = providerStore.upsertProvider(input ?? {});
     if (result.ok) {
-      for (const host of Object.values(hosts)) {
+      for (const host of allSessionHosts()) {
         if (host.modelRuntime) providerStore.applyToRuntime(host.modelRuntime);
       }
       const providerId = String(input?.id ?? "").trim();
@@ -928,7 +941,7 @@ app.whenReady().then(async () => {
   // model_change 落进该会话自己的 JSONL;不影响其他会话,也不改全局默认。
   ipcMain.handle("chat:set-model", async (event, request) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const providerId = String(request?.providerId ?? "");
     const modelId = String(request?.modelId ?? "");
@@ -1094,7 +1107,7 @@ app.whenReady().then(async () => {
     { name: "compact", descriptionKey: "slashCmd.compact.desc", argumentHintKey: "slashCmd.compact.hint" },
   ];
   ipcMain.handle("slash:list", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     await modeController.ensureStarted(context.mode);
@@ -1144,7 +1157,7 @@ app.whenReady().then(async () => {
     const telemetryInputText = message;
     const images = sanitizeImages(typeof payload === "string" ? null : payload?.images);
     if (!message && images.length === 0) return { ok: false, error: "empty message" };
-    const validated = validateModeRequest(typeof payload === "string" ? null : payload);
+    const validated = await validateModeRequest(typeof payload === "string" ? null : payload);
     if (!validated.ok) return validated;
     const context = validated.context;
     const { mode, host } = context;
@@ -1169,7 +1182,7 @@ app.whenReady().then(async () => {
       }
       // app 级命令:/compact [instructions] → pi 手动压缩;compaction 期间禁止并发 prompt
       if (message === "/compact" || message.startsWith("/compact ")) {
-        if (busyByMode[mode]) return { ok: false, error: err("err.chat.busyCompact"), compacted: true };
+        if (host.busy) return { ok: false, error: err("err.chat.busyCompact"), compacted: true };
         const instructions = message.slice("/compact".length).trim();
         try {
           const result = await host.compact(instructions);
@@ -1179,7 +1192,8 @@ app.whenReady().then(async () => {
           return { ok: false, error: error.message, compacted: true };
         }
       }
-      if (busyByMode[mode]) {
+      if (host.busy) {
+        if (host.task.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
         telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
         telemetry?.turnSteered(mode);
         await host.steer(message, images);
@@ -1187,15 +1201,9 @@ app.whenReady().then(async () => {
       }
       telemetry?.turnStarted(mode);
       telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
-      busyByMode[mode] = true;
-      try {
-        await host.prompt(message, images);
-      } finally {
-        busyByMode[mode] = false;
-      }
+      await host.prompt(message, images);
       return { ok: true, ...modeController.publicSnapshot(context) };
     } catch (error) {
-      busyByMode[mode] = false;
       telemetry?.turnFailed(mode, error);
       const message = String(error?.message ?? error);
       if (/No API key found/i.test(message)) {
@@ -1213,18 +1221,18 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("approval:respond", (_event, payload) => {
     // 审批只有战斗模式会发;两个 host 各自查自己的 approvals map,天然路由
-    for (const host of Object.values(hosts)) {
+    for (const host of allSessionHosts()) {
       host.respondApproval(payload?.approvalId, payload?.approved);
     }
     return { ok: true };
   });
 
   ipcMain.handle("chat:abort", async (_event, request) => {
-    const validated = validateModeRequest(request);
+    const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     telemetry?.turnAborted(validated.context.mode);
-    await validated.context.host.abort();
-    return { ok: true, ...modeController.publicSnapshot(validated.context) };
+    const result = await validated.context.host.abort(request?.taskId);
+    return { ...result, ...modeController.publicSnapshot(validated.context) };
   });
 
   // 主题持久化:renderer 切换主题时写 userData/config/ui.json,
