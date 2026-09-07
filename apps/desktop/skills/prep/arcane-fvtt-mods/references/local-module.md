@@ -12,8 +12,8 @@ local-inspect --archive <ZIP绝对路径> --data-dir <Foundry数据目录绝对�
 
 这是只读检查，不解压、不访问网络。工具读取包内 `module.json`，检查 ZIP 路径、大小和结构，
 计算哈希，返回版本、安装目标、现有版本与依赖。包必须有完整模块文件；原始数据、单独内容
-JSON 或 `module-assembly-bundle.json` 不是可安装 ZIP，不能改后缀或伪造清单。当前入口负责
-安装已装配产物，不代替 Auto 2014 内容编译。
+JSON 或 `module-assembly-bundle.json` 不是可安装 ZIP，不能改后缀或伪造清单。已准备的 module
+bundle 先走 [prepared-module.md](prepared-module.md) 生成安装包；任意原始内容仍不能直接编译。
 
 展示名称、旧/新版本、大小、目标和自动备份安排，并说明：“这是你提供的本地包，Arcane 会
 检查文件是否完整并备份旧版本，但不代表镜像已审核其内容。”依赖缺失或版本不兼容列入同一

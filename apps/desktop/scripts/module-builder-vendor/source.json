@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/tanis90/arcanedesk-fvtt-mods",
+  "commit": "b1292ca6e6e873af3fd9079d7f67f432bad71e19",
+  "packagePath": "packages/foundry-pack-builder",
+  "nativePlatforms": [
+    "darwin-x64+arm64",
+    "linux-x64",
+    "win32-x64"
+  ]
+}

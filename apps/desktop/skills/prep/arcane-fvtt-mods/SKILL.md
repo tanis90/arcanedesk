@@ -1,6 +1,6 @@
 ---
 name: arcane-fvtt-mods
-description: 安装、升级或检查本机 Foundry VTT 模组、游戏 system 与 Arcane Demo world。当用户提供 module.json manifest URL、本地模块 ZIP、说“安装/升级这个 mod”或“安装 dnd5e 等 system”，要求检查“Arcane 包/国内镜像有什么更新”，要求安装、更新、重置 arcane-demo，或 Foundry Core 装完后继续 Demo 环境时使用。远端内容统一走 arcane mirror；用户提供的本地模块包离线检查安装。Foundry Core 本身的安装不属于本 skill。
+description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或 Arcane Demo world 时使用。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
 ---
 
 # Foundry VTT 模组管理
@@ -39,6 +39,9 @@ macOS Bash 调用形态：
 
 ## 路由
 
+- 用户提供模块构建文件并要求生成安装包：读取
+  [references/prepared-module.md](references/prepared-module.md)。只接受已准备的 module bundle，
+  不把任意原始法术/职业 JSON 当成已完成自动化的内容。
 - 用户提供本地模块 ZIP，或要求安装本地生成的 Auto 2014 完整包：读取
   [references/local-module.md](references/local-module.md)。该路径全程离线，不上传包或描述。
 - 用户给出 `module.json` manifest URL，或点名安装/升级一个 mod：读取
@@ -48,7 +51,8 @@ macOS Bash 调用形态：
 - 用户要求安装、检查、更新或重置 Arcane Demo world，安装 FVTT 后继续 Demo 环境，或点名
   安装 dnd5e 等 system：读取 [references/demo-world.md](references/demo-world.md)。
 
-只读的 `local-inspect` / `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
+只读的 `bundle-inspect` 可检查构建输入，无需 Foundry 目录；其他只读的
+`local-inspect` / `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
 Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
 `arcane-fvtt-setup` 全新安装流程在计划确认前传 `--allow-missing-data-dir`，输出带 `dataDirExists`
 标记；stage/commit 不接受该旗标，永远严格。下载前说明来源、

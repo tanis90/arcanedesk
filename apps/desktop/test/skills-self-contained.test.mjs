@@ -129,8 +129,11 @@ test("materialized bundle passes syntax check and its entry script imports stand
   for (const name of scripts) {
     await execFileAsync(process.execPath, ["--check", path.join(tree, ...name.split("/"))]);
   }
-  const modManager = await import(pathToFileURL(path.join(tree, ...MOD_MANAGER.split("/"))).href);
-  assert.equal(typeof modManager.buildCatalog, "function");
+  // Native builder DLLs stay loaded for a process lifetime on Windows. Import in
+  // a child so the materialized tree is released before test cleanup.
+  await execFileAsync(process.execPath, ["--input-type=module", "-e",
+    "const api=await import(process.argv[1]); if(typeof api.buildCatalog!=='function')throw Error('Missing standalone API');",
+    pathToFileURL(path.join(tree, ...MOD_MANAGER.split("/"))).href], { env: { ...process.env, NODE_PATH: "" } });
 });
 
 test("vendored archive-zip.mjs stays byte-identical to scripts/archive-zip.mjs", async () => {

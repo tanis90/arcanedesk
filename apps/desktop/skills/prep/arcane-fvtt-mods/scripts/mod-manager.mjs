@@ -10,6 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
 
 import { extractZip, listZipEntries, readZipEntryText } from "./archive-zip.mjs";
+import { writeModuleBundle, writeModuleArchive } from "@arcanedesk/foundry-pack-builder";
 
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
 
@@ -1015,6 +1016,36 @@ async function inspectLocalArchive(archivePath) {
   const after = await sha256File(archive);
   if (identity.sha256 !== after.sha256 || identity.bytes !== after.bytes) throw new Error("local module ZIP changed during inspection");
   return { archive, ...identity, manifest };
+}
+
+async function readPreparedBundle(inputPath) {
+  const input = path.resolve(requireString(inputPath, "prepared bundle path"));
+  const stat = await fsp.lstat(input);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024 * 1024) throw new Error("prepared bundle must be a regular file of at most 512 MiB");
+  const bytes = await fsp.readFile(input);
+  if (bytes.length !== stat.size) throw new Error("prepared bundle changed during inspection");
+  const bundle = JSON.parse(bytes.toString("utf8"));
+  if (bundle?.format !== "arcane-module-bundle" || bundle.schemaVersion !== 1) throw new Error("input is not a supported prepared module bundle");
+  const id = requireString(bundle.manifest?.id, "prepared module id", 128);
+  if (!ID_PATTERN.test(id)) throw new Error("prepared module id is unsafe");
+  const version = requireString(bundle.manifest?.version, "prepared module version", 128);
+  return { input, bundle, id, version, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+export async function inspectPreparedModule({ inputPath }) {
+  const source = await readPreparedBundle(inputPath);
+  return { sourceKind: "prepared-module-bundle", inputPath: source.input, id: source.id, version: source.version,
+    inputBytes: source.bytes, inputSha256: source.sha256, validation: "metadata-only; full validation occurs during build" };
+}
+
+export async function buildPreparedModule({ inputPath, directory, archive, expectedSha256 }) {
+  const source = await readPreparedBundle(inputPath);
+  assertExpected(source.sha256, expectedSha256, "prepared module input SHA256");
+  const output = path.resolve(requireString(directory, "prepared module output directory"));
+  const zip = path.resolve(requireString(archive, "prepared module archive path"));
+  const result = await writeModuleBundle({ directory: output, bundle: source.bundle });
+  const receipt = await writeModuleArchive({ directory: result.directory, archive: zip });
+  return { ...result, inputSha256: source.sha256, archive: receipt, installed: false };
 }
 
 export async function inspectLocalModule({ archivePath, dataDir }) {
@@ -2050,6 +2081,8 @@ function parseCli(argv) {
 function usage() {
   return [
     "Usage:",
+    "  mod-manager bundle-inspect --input <prepared-bundle.json>",
+    "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
     "  mod-manager local-inspect --archive <zip> --data-dir <dir>",
     "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
     "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir]",
@@ -2066,6 +2099,10 @@ function usage() {
 export async function runCli(argv = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   switch (command) {
+    case "bundle-inspect":
+      return inspectPreparedModule({ inputPath: options.input });
+    case "bundle-build":
+      return buildPreparedModule({ inputPath: options.input, directory: options.out, archive: options.zip, expectedSha256: options["expected-sha256"] });
     case "local-inspect":
       return inspectLocalModule({ archivePath: options.archive, dataDir: options["data-dir"] });
     case "local-stage":
