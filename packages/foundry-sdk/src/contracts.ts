@@ -129,6 +129,13 @@ export interface WorldInfo {
   foundryVersion: string | null;
   user: { id: string; name: string; isGM: boolean };
   modules: Record<string, boolean>;
+  ready?: boolean;
+  moduleVersions?: Record<string, string | null>;
+  capabilities?: {
+    nativeActionEntryAvailable: boolean; narrativeSpellConsumption: boolean; conditionSetEntryAvailable: boolean;
+    prepActorDocuments: boolean; prepSceneDocuments: boolean; imageUploadEntryAvailable: boolean;
+    summonPlacement: false; summonDependency: "AUTO-001";
+  };
 }
 
 export type CombatantSide = "party" | "hostile" | "neutral";

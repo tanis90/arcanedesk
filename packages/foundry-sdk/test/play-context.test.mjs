@@ -78,3 +78,18 @@ test("ambiguous combats reject and SDK defaults remain the original four actions
   assert.equal(DIRECT_ACTION_EFFECTS.playContext, "read");
   assert.equal(DIRECT_ACTION_EFFECTS.staticContext, "read");
 });
+
+test("world status reports module versions and entry availability without claiming summon support", async () => {
+  const f = fixture();
+  f.game.system = { id: "dnd5e", title: "D&D 5e", version: "5.3.3" };
+  f.game.version = "13.351";
+  f.game.modules = new Map([["arcane-dnd5e-2014-automation", { active: true, version: "legacy" }]]);
+  const result = await f.read("worldInfo");
+  assert.equal(result.ready,true);
+  assert.equal(result.moduleVersions["arcane-dnd5e-2014-automation"],"legacy");
+  assert.equal(result.modules["arcane-dnd5e-2014-automation"],true);
+  assert.equal(result.capabilities.nativeActionEntryAvailable,false);
+  assert.equal(result.capabilities.narrativeSpellConsumption,true);
+  assert.equal(result.capabilities.summonPlacement,false);
+  assert.equal(result.capabilities.summonDependency,"AUTO-001");
+});

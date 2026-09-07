@@ -10,6 +10,8 @@ test("new schemas reject unknown keys, unbounded selectors and operation view wi
   assert.equal(valid("foundry_static_context", { source: "actor" }), false);
   assert.equal(valid("foundry_play_context", { view: "operation" }), false);
   assert.equal(valid("foundry_play_context", { view: "operation", operationRef: "known" }), true);
+  assert.equal(valid("foundry_play_context", { view: "current" }), true);
+  assert.equal(valid("foundry_play_context", { view: "scene" }), false);
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected" }], conditions: [{ key: "prone", active: false }] }), true);
   assert.equal(valid("foundry_conditions_set", { targets: Array(21).fill({ kind: "selected" }), conditions: [{ key: "prone", active: false }] }), false);
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected", code: "x" }], conditions: [{ key: "prone", toggle: true }] }), false);

@@ -136,7 +136,7 @@ export function createFoundryTools(host) {
       name: "foundry_play_context", label: "Play Context",
       description: "Read lightweight current HP, resources, conditions and available action IDs for the same focus as static context. Use turn before and after combat actions. Status instructions need no preliminary read. Operation view inspects a known receipt without retrying it.",
       parameters: Type.Union([
-        exact({ view: Type.Optional(Type.Union([Type.Literal("scene"), Type.Literal("turn")])) }),
+        exact({ view: Type.Optional(Type.Union([Type.Literal("current"), Type.Literal("turn")])) }),
         exact({ view: Type.Literal("operation"), operationRef: ref() }),
       ]),
       execute: async (_id, params, signal) => textResult(await host.foundryServices().readPlay(params, signal)),

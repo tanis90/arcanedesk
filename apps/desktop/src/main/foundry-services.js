@@ -111,8 +111,8 @@ export class FoundryServices {
     });
   }
 
-  /** @param {{view?: "scene" | "turn" | "operation", operationRef?: string}} [params] @param {AbortSignal} [signal] */
-  async readPlay({ view = "scene", operationRef } = {}, signal) {
+  /** @param {{view?: "current" | "turn" | "operation", operationRef?: string}} [params] @param {AbortSignal} [signal] */
+  async readPlay({ view = "current", operationRef } = {}, signal) {
     if (view === "operation") {
       const result = this.store.lookup(operationRef);
       return result ?? { status: "rejected", code: "OPERATION_NOT_FOUND", message: "Unknown operation in this session" };

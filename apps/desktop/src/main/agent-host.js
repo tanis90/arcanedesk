@@ -1186,7 +1186,7 @@ export class AgentHost {
       name: "world_status",
       label: "World Status",
       description:
-        "Read current world info through the fixed runtime in the controlled Foundry page: world id/title, system, Foundry version and current user (GM). " +
+        "Read current world info through the fixed runtime in the controlled Foundry page: world id/title, system, Foundry version, current user (GM), module versions and available entry points. Summon placement remains deferred under AUTO-001. " +
         "When an authenticated /game page is still initializing or reloading, waits up to 90 seconds for readiness. Read-only.",
       parameters: Type.Object({}),
       promptGuidelines: [
