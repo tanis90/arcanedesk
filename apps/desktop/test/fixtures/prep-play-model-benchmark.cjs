@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("prep-benchmark", "false") === "true") {
-    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; } });
+    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; }, resumePath: option("prep-resume") });
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("edge-cases", "false") === "true") {

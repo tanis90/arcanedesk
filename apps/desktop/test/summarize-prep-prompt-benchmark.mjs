@@ -10,10 +10,12 @@ const groups=r.experiment.cases.map(caseId=>{
     return {n:all.length,success:ok.length,successRate:ok.length/all.length,failed:all.filter(t=>!t.success).map(t=>t.sample),
       latencyMs:stats(ok.map(t=>t.ms)),allAttemptsMs:stats(all.map(t=>t.ms)),firstEventMs:stats(ok.map(t=>t.firstEventMs)),
       calls:stats(ok.map(t=>t.tools.length)),inputTokens:stats(ok.map(t=>t.usage.reduce((n,u)=>n+(u.input??0)+(u.cacheRead??0)+(u.cacheWrite??0),0))),
+      modelResponses:stats(ok.map(t=>t.usage.length)),
       outputTokens:stats(ok.map(t=>t.usage.reduce((n,u)=>n+(u.output??0),0))),
       javascriptChars:stats(ok.map(t=>t.tools.reduce((n,tool)=>n+(tool.javascriptChars??0),0))),
       reasoningTokens:ok.every(t=>t.usage.every(u=>Number.isFinite(u.reasoning)))?stats(ok.map(t=>t.usage.reduce((n,u)=>n+u.reasoning,0))):null,
       queueWaitMs:stats(all.map(t=>t.waits.reduce((a,b)=>a+b,0))),jsFallbacks:all.filter(t=>t.jsFallback).length,humanWaits:all.filter(t=>t.waitingUser).length,
+      uncertainReceipts:all.filter(t=>t.tools.some(tool=>tool.status==="indeterminate")).length,reviewedAfterPause:all.filter(t=>t.uncertainReceiptReviewed).length,
       toolSequences:all.map(t=>({sample:t.sample,success:t.success,names:t.tools.map(t=>t.name)}))};};
   const js=arm("js"),tools=arm("tools");
   const pairs=[];for(let sample=0;sample<r.experiment.samplesPerCase;sample++){

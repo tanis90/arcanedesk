@@ -1,6 +1,6 @@
 // Same-revision tool ablation. Both arms run the real Prep AgentHost/Pi/model.
 // Only the exposed tools and their matching routing instructions differ.
-module.exports = async function benchmark({ evaluate, report, save, root, runId, store, page, origin, revision, samples, setHost }) {
+module.exports = async function benchmark({ evaluate, report, save, root, runId, store, page, origin, revision, samples, setHost, resumePath }) {
   const assert=require("node:assert/strict"), path=require("node:path"), fs=require("node:fs"), crypto=require("node:crypto");
   const productionPrep=fs.readFileSync(path.resolve(__dirname,"../../system-prompts/prep.md"),"utf8").trim();
   const common="你是 ArcaneDesk 备团助手。遵循 DM 的明确要求。QA-A 世界已经连接且 GM 就绪。使用精确世界对象和合集来源，避免重复创建。只用公开 Foundry Document API，等待每次写入完成，返回紧凑结果并确认实际变化。不确定写入不能重放。只操作用户指定的测试对象，不修改模块文件或包。缺少必要信息才提问。成功回复简洁，用中文。";
@@ -10,6 +10,14 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     promptPolicy:"same neutral Prep instructions; arm-specific route; Pi generates the matching active-tool preamble",newTools:[...newTools],connection:"warm authenticated QA-A",humanWait:"recorded; no automatic answers"};
   report.experiment.candidateCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:path.resolve(__dirname,"../../../.."),encoding:"utf8"}).trim();
   report.prepTrials=[];
+  if(resumePath){
+    const previous=JSON.parse(fs.readFileSync(resumePath,"utf8"));
+    assert.equal(previous.status,"failed");assert.equal(previous.error,"Ambiguous run retained for inspection; no automatic retry/cleanup");
+    assert.equal(previous.fixtureRun,report.fixtureRun);assert.equal(previous.experiment.samplesPerCase,samples);
+    report.prepTrials=previous.prepTrials;report.experiment=previous.experiment;
+    report.continuations=[...(previous.continuations??[]),{sourceReport:resumePath,reason:"Explicit continuation after read-only QA inspection; prior tasks are not replayed",at:new Date().toISOString()}];
+    runId=previous.fixtureLabelRun??previous.runId;report.fixtureLabelRun=runId;
+  }
   const source=await evaluate('(async()=>{const p=game.packs.get("dnd5e.monsters");const wolf=(await p.getIndex()).find(e=>e.name==="Wolf");const w=game.packs.get("arcane-dnd5e-2014-automation.basicweapons");const index=await w.getIndex();return {wolf:wolf._id,rapier:index.find(e=>/Rapier/.test(e.name))._id,bow:index.find(e=>/Longbow/.test(e.name))._id};})()');
   const setup=async label=>evaluate(`(async()=>{
     const actors=[];for(let i=0;i<3;i++)actors.push(await Actor.create({name:${JSON.stringify(label)}+" 角色"+(i+1),type:"npc",flags:{arcanedesk:{prepBenchmark:${JSON.stringify(runId)}}},prototypeToken:{name:${JSON.stringify(label)}+" Token"+(i+1),actorLink:true},system:{attributes:{hp:{value:10,max:10},ac:{calc:"flat",flat:12}}}}));
@@ -33,7 +41,14 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     if(kind==="conditions"){details=f.actorIds.map(id=>({id,statuses:[...game.actors.get(id).statuses]}));ok=details.slice(0,2).every(a=>a.statuses.includes("prone")&&a.statuses.includes("poisoned"))&&!details[2].statuses.includes("prone")&&!details[2].statuses.includes("poisoned");}
     return {ok,details};})()`);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
+  for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
+    assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
+    trial.verification=await verify(trial.caseId,trial.fixture);trial.success=trial.verification.ok;
+    trial.uncertainReceiptReviewed=true;trial.jsFallback=trial.arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
+    await cleanup(trial.fixture);trial.cleaned=true;save();
+  }
   for(let sample=0;sample<samples;sample++)for(const caseId of cases)for(const arm of sample%2?["tools","js"]:["js","tools"]){
+    if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
     const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}`;const f=await setup(label);
     const trial={sample,caseId,arm,fixture:f,prompt:prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
