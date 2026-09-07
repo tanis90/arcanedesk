@@ -16,7 +16,23 @@
 
 先保持 Electron 主进程与 Pi SDK 的现有运行方式，不引入独立服务、消息中间件或全量事件溯源系统。模块边界允许将来迁移执行进程，但本轮不以此为前提。
 
-本文中的模块名、路径和接口是建议结构，不代表已有代码。已确认的源码事实与待验证假设分别列在第 11 节。
+本文主体保留实施前的职责设计与接口示意；§1.1 记录当前落地方式，第 11 节保留实施前调查。接口示意不应直接用作调用文档，实际调用以 preload 和主进程 handler 为准。验收仍以 spec 的行为契约为准。
+
+### 1.1 当前实现对应关系（M8o4 后复核）
+
+| 设计职责 | 当前实现与边界 |
+| --- | --- |
+| 会话管理 | [SessionRegistry](../src/main/conversations/session-registry.js) 按会话持有 resident AgentHost；每模式保留 activeHost 作为导航/默认选择指针，该指针不拥有后台任务的生命周期。运行命令按明确会话路由 |
+| 任务与 SDK 适配 | [TaskCoordinator](../src/main/tasks/task-coordinator.js) 拥有任务、输入和等待状态；[AgentHost](../src/main/agent-host.js) 提供 SDK adapter，没有另建 PiSessionAdapter 服务。停止时保留实际残留资源等待详情 |
+| 同步与工作区 | [SessionProjection](../src/main/sync/session-projection.js) 保存权威现场和事件版本；[session-state](../src/renderer/conversations/session-state.js) 管理事件收件箱、有界缓存及 IndexedDB 工作区；[chat](../src/renderer/chat.js) 负责导航、快照校准和渲染 |
+| 活动与生命周期 | [ActivityCenter](../src/main/conversations/activity-center.js)、[DesktopNotifications](../src/main/conversations/desktop-notifications.js)、[ShutdownCoordinator](../src/main/conversations/shutdown-coordinator.js) 位于 conversations 目录，由 [main](../src/main/main.js) 组合 |
+| 调度与资源 | [ExecutionScheduler](../src/main/scheduling/execution-scheduler.js) 管理额度；[ResourceCoordinator](../src/main/scheduling/resource-coordinator.js) 独立管理租约，不能把取消请求当成实际操作退出 |
+
+当前 IPC 名称及参数见 [preload](../preload.cjs)：提交为 chat:prompt，停止为 chat:abort，打开/删除沿用经过主进程模式归属校验的会话路径，快照以 sessionId 查询。§4 的点号命令是职责示意，不是现有 IPC 的逐字段 schema；提交和回答有 commandId 幂等记录，不能据此宣称全部导航和设置操作都使用同一幂等协议。
+
+后台事件当前通过 arcane:event 发往聊天 renderer，再由前端按会话缓存和按当前选择渲染；尚未实现 §5.3 描述的按会话正文订阅裁剪。已有缓存上限、流片合并与性能测量，不能将它们写成已实现的订阅服务。附件在工作区中保存可序列化内容，而非必须采用 §7 原建议的独立文件引用。
+
+会话身份复用原生 SessionManager 稳定 ID；第一轮持久化、消息身份及分支历史已经实际验收，无须新增第二套 ID 映射。具体证据、平台限制和未完成项见 [验收审计](acceptance-audit.md)，尤其系统托盘与通知的真实点击仍未通过。
 
 ## 2. 模块及职责
 
