@@ -18,6 +18,8 @@ let interrupted = false;
 let taskOverride = null;
 let overrideSeq = 0;
 const abortRequests = [];
+let deferSnapshots = false;
+const snapshotRequests = [];
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
@@ -54,7 +56,10 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
     return { ok: true, status: "accepted", commandId: input.commandId, inputId: "accepted-input", taskId: "retry-task", sessionId: input.sessionId, duplicate: true };
   }
   if (channel === "sessions:current") return { ...snapshot(mode), generation };
-  if (channel === "sessions:snapshot") return snapshot(input === "A" ? "prep" : "combat");
+  if (channel === "sessions:snapshot") {
+    if (deferSnapshots) return new Promise(resolve => snapshotRequests.push({ input, resolve }));
+    return snapshot(input === "A" ? "prep" : "combat");
+  }
   if (channel === "mode:set") { mode = input; return { ...snapshot(mode), generation: ++generation }; }
   if (channel === "sessions:list") return { sessions: [] };
   if (channel === "voice:get-config") return { enabled: false };
@@ -259,7 +264,54 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     assert.equal(submitAttempts, 2, "terminal recovery prepares a draft without executing work");
-    console.log("PASS Electron: conversation restore, scoped input, stopping protection and durable terminal details");
+    const lastConfirmation = await evaluate('confirmedAt.get("A")');
+    await evaluate('installSnapshot(snapshotCache.get("A"), null, true)');
+    assert.equal(await evaluate('confirmedAt.get("A")'), lastConfirmation, "rendering a cache is not new execution confirmation");
+    assert.equal(await evaluate('syncIndicator.dataset.status'), "chat.syncCached");
+    assert.equal(await evaluate('syncIndicator.hidden'), false);
+    await evaluate('resyncSelected()');
+    deferSnapshots = true;
+    await evaluate('void resyncSelected()');
+    await until('!syncIndicator.hidden && syncIndicator.dataset.status === "chat.syncing"');
+    assert.equal(await evaluate('busy'), true, "sync delay does not change execution state");
+    assert.ok(await evaluate('syncIndicator.textContent.includes(t("chat.syncLastConfirmed", {time: new Date(confirmedAt.get("A")).toLocaleTimeString()}))'));
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && !restoringView');
+    await evaluate('void resyncSelected()');
+    await until('snapshotRequest === syncingSessions.get("A")?.token');
+    assert.equal(snapshotRequests.length, 2, "return navigation may start a fresh sync while the old request is pending");
+    snapshotRequests[0].resolve({ ok: false, code: "OLD_FAILURE" });
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(await evaluate('syncingSessions.has("A")'), true, "old completion does not unlock the new request");
+    assert.notEqual(await evaluate('syncIndicator.dataset.status'), "chat.syncFailed");
+    snapshotRequests[1].resolve({ ok: false, code: "NEW_FAILURE" });
+    await until('syncIndicator.dataset.status === "chat.syncFailed" && !syncIndicator.hidden');
+    assert.equal(await evaluate('busy'), true);
+    const keptDraft = await evaluate('input.value');
+    deferSnapshots = false;
+    await evaluate('syncIndicator.click()');
+    await until('syncIndicator.hidden && !syncingSessions.has("A")');
+    assert.equal(await evaluate('input.value'), keptDraft);
+    // Force only the diagnostic clock stale, then let the real interval probe.
+    deferSnapshots = true;
+    await evaluate('confirmedAt.set("A", Date.now() - 30000); syncAttemptAt.delete("A")');
+    await until('syncingSessions.has("A")');
+    assert.equal(snapshotRequests.length, 3, "silence triggers a read-only execution probe");
+    // A hung invoke must not permanently keep the single-flight gate locked.
+    await new Promise(resolve => setTimeout(resolve, 10500));
+    assert.equal(await evaluate('syncIndicator.dataset.status'), "chat.syncFailed");
+    assert.equal(await evaluate('syncingSessions.has("A")'), false);
+    assert.equal(await evaluate('busy'), true);
+    deferSnapshots = false;
+    await evaluate('syncIndicator.click()');
+    await until('syncIndicator.hidden && !syncingSessions.has("A")');
+    snapshotRequests[2].resolve({ ok: false, code: "LATE_TIMEOUT_RESULT" });
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(await evaluate('syncIndicator.hidden'), true);
+    assert.equal(submitAttempts, 2, "sync probes never submit model work");
+    console.log("PASS Electron: conversation restore, scoped input, terminal details and bounded synchronization recovery");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

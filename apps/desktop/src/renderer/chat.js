@@ -12,6 +12,24 @@ const attentionDrafts = new Map();
 const attentionAttempts = new Map();
 let displayedTask = null;
 const stopRequests = new Map();
+const confirmedAt = new Map();
+const syncAttemptAt = new Map();
+function showSyncStatus(key, id = selectedSessionId) {
+  if (id !== selectedSessionId) return;
+  const at = confirmedAt.get(id);
+  const time = at ? new Date(at).toLocaleTimeString() : t("chat.syncNeverConfirmed");
+  syncIndicator.textContent = t(key) + " · " + t("chat.syncLastConfirmed", { time });
+  syncIndicator.dataset.status = key;
+  syncIndicator.hidden = false;
+}
+async function fetchSessionSnapshot(id, query = {}) {
+  let timer;
+  try {
+    return await Promise.race([window.arcane.sessionSnapshot(id, query), new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Snapshot timed out")), 10000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
 const activeTaskStates = new Set(["running", "queued", "waiting_user", "waiting_resource", "stopping"]);
 function reconcileStopRequest(id, task) {
   const request = stopRequests.get(id);
@@ -202,12 +220,13 @@ let followLatest = true;
 let draftRevision = 0;
 let navigationRequest = 0;
 const workspaceReady = new Set();
-const syncingSessions = new Set();
+const syncingSessions = new Map();
 const snapshotCache = new BoundedCache();
 const deletedSessions = new Set();
 function forgetSession(id) {
   if (!id) return;
   stopRequests.delete(id);
+  confirmedAt.delete(id); syncAttemptAt.delete(id);
   for (const attention of snapshotCache.get(id)?.attentions ?? []) {
     attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id);
   }
@@ -254,7 +273,7 @@ async function showHistoryPage(query = {}, intent = "latest") {
   document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
   try {
     const observedEpoch = eventInbox.epoch(id);
-    const payload = await window.arcane.sessionSnapshot(id, query);
+    const payload = await fetchSessionSnapshot(id, query);
     if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
     if (!payload.ok) throw new Error(payload.code);
     if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("Stale history snapshot");
@@ -262,7 +281,7 @@ async function showHistoryPage(query = {}, intent = "latest") {
   } catch {
     if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
       historyRetry = { id, query, intent };
-      syncIndicator.textContent = t("chat.historyFailed"); syncIndicator.hidden = false;
+      showSyncStatus("chat.historyFailed", id);
     }
   } finally {
     if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
@@ -308,7 +327,7 @@ function saveWorkspace() {
     expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
 }
 
-async function installSnapshot(payload, pageIntent = null) {
+async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   const id = payload.session?.id;
   if (!id || deletedSessions.has(id)) return;
   const token = ++snapshotRequest;
@@ -320,6 +339,8 @@ async function installSnapshot(payload, pageIntent = null) {
   restoringView = true;
   syncIndicator.hidden = true;
   selectedSessionId = id;
+  if (!fromCache) confirmedAt.set(id, Date.now());
+  else showSyncStatus("chat.syncCached", id);
   workspaceStore.setActive(id);
   selectedTaskId = payload.task?.id ?? null;
   document.getElementById("conversation-title").textContent = payload.session.name || "";
@@ -331,7 +352,7 @@ async function installSnapshot(payload, pageIntent = null) {
   if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
   const revision = draftRevision;
   setTimeout(() => {
-    if (token === snapshotRequest && restoringView) { syncIndicator.textContent = t("chat.syncing"); syncIndicator.hidden = false; }
+    if (token === snapshotRequest && restoringView) showSyncStatus("chat.syncing", id);
   }, 1000);
   let saved;
   try { saved = await workspaceStore.load(id); } catch { saved = {}; }
@@ -343,11 +364,11 @@ async function installSnapshot(payload, pageIntent = null) {
     && !snapshotContainsAnchor(payload, saved.anchor.key)) {
     const observedEpoch = eventInbox.epoch(id);
     try {
-      const around = await window.arcane.sessionSnapshot(id, { around: saved.anchor.key });
+      const around = await fetchSessionSnapshot(id, { around: saved.anchor.key });
       if (token !== snapshotRequest || selectedSessionId !== id) return;
       if (around.code === "HISTORY_CURSOR_NOT_FOUND") { saved = { ...saved, anchor: null, followLatest: true }; anchorUnavailable = true; }
       else if (!around.ok || !eventInbox.acceptSnapshot(id, around.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("History restore failed");
-      else payload = around;
+      else { payload = around; fromCache = false; confirmedAt.set(id, Date.now()); }
     } catch {
       if (token !== snapshotRequest || selectedSessionId !== id) return;
       pendingHistoryAnchor = saved.anchor; restoreError = true;
@@ -419,9 +440,10 @@ async function installSnapshot(payload, pageIntent = null) {
   }
   updateScrollButton();
   activityReady = true;
-  syncIndicator.hidden = !restoreError && !anchorUnavailable;
-  if (restoreError) syncIndicator.textContent = t("chat.historyFailed");
-  else if (anchorUnavailable) syncIndicator.textContent = t("chat.historyMoved");
+  syncIndicator.hidden = !restoreError && !anchorUnavailable && !fromCache;
+  if (restoreError) showSyncStatus("chat.historyFailed", id);
+  else if (anchorUnavailable) showSyncStatus("chat.historyMoved", id);
+  else if (fromCache) showSyncStatus("chat.syncCached", id);
   activityView?.render();
   pruneOutboxes();
   if (changed) refreshSessions();
@@ -430,12 +452,16 @@ async function installSnapshot(payload, pageIntent = null) {
 async function resyncSelected() {
   const id = selectedSessionId;
   const token = snapshotRequest;
-  if (!id || syncingSessions.has(id)) return;
-  syncingSessions.add(id);
+  const navigation = navigationRequest;
+  if (!id) return;
+  const previous = syncingSessions.get(id);
+  if (previous?.navigation === navigation) return;
+  const request = { token, navigation };
+  syncingSessions.set(id, request);
+  syncAttemptAt.set(id, Date.now());
+  const stillCurrent = () => selectedSessionId === id && snapshotRequest === token && navigationRequest === navigation;
   const indicatorTimer = setTimeout(() => {
-    if (selectedSessionId === id) {
-      syncIndicator.textContent = t("chat.syncing"); syncIndicator.hidden = false;
-    }
+    if (stillCurrent()) showSyncStatus("chat.syncing", id);
   }, 1000);
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -443,9 +469,10 @@ async function resyncSelected() {
       saveWorkspace();
       const saved = workspaceStore.cache.get(id);
       const query = saved?.followLatest === false && saved.anchor ? { around: saved.anchor.key } : {};
-      let payload = await window.arcane.sessionSnapshot(id, query);
-      if (payload.code === "HISTORY_CURSOR_NOT_FOUND") payload = await window.arcane.sessionSnapshot(id, {});
-      if (id !== selectedSessionId || token !== snapshotRequest) return;
+      let payload = await fetchSessionSnapshot(id, query);
+      if (!stillCurrent()) return;
+      if (payload.code === "HISTORY_CURSOR_NOT_FOUND") payload = await fetchSessionSnapshot(id, {});
+      if (!stillCurrent()) return;
       if (!payload.ok) throw new Error(payload.code);
       if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) continue;
       await installSnapshot(payload);
@@ -453,10 +480,12 @@ async function resyncSelected() {
     }
     throw new Error("Session runtime changed during synchronization");
   } catch {
-    if (selectedSessionId === id) {
-      syncIndicator.textContent = t("chat.syncFailed"); syncIndicator.hidden = false;
-    }
-  } finally { clearTimeout(indicatorTimer); syncingSessions.delete(id); activityView?.scheduleRead(); }
+    if (stillCurrent()) showSyncStatus("chat.syncFailed", id);
+  } finally {
+    clearTimeout(indicatorTimer);
+    if (syncingSessions.get(id) === request) syncingSessions.delete(id);
+    activityView?.scheduleRead();
+  }
 }
 
 function receiveEvent(event, replay = false) {
@@ -475,6 +504,7 @@ function receiveEvent(event, replay = false) {
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
     if (event.seq <= viewSeq) return;
     viewSeq = event.seq;
+    if (!replay) confirmedAt.set(event.sessionId, Date.now());
     if (historyPage?.hasNewer && ["message", "message_delta", "tool_start", "tool_end", "agent_settled", "compaction_start", "compaction_end"].includes(event.type)
       && !toolCards.has(event.toolCallId) && !streamBubbles.has(event.key) && !thinkBlocks.has(event.key)) {
       updateScrollButton(); activityView?.scheduleRead(); return;
@@ -540,7 +570,7 @@ async function switchMode(next) {
   requestedMode = next;
   const navigation = ++navigationRequest;
   const cached = snapshotCache.get(lastSessionByMode.get(next));
-  if (cached) void installSnapshot(cached);
+  if (cached) void installSnapshot(cached, null, true);
   const requestId = ++modeSwitchRequest;
   let result;
   try {
@@ -2110,7 +2140,7 @@ async function refreshSessions() {
       if (!s.active && sameModeContext(context)) {
         const navigation = ++navigationRequest;
         const cached = snapshotCache.get(s.id);
-        if (cached) void installSnapshot(cached);
+        if (cached) void installSnapshot(cached, null, true);
         const result = await window.arcane.openSession(s.path, context);
         if (navigation !== navigationRequest) return;
         if (result?.ok) { await installSnapshot(result); refreshSessions(); }
@@ -3074,6 +3104,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
 // 已渲染的聊天记录/会话标题是用户与 LLM 的数据,刻意不回翻。
 window.ArcaneI18n.onLocaleChange(() => {
   showTaskState(displayedTask);
+  if (!syncIndicator.hidden && syncIndicator.dataset.status) showSyncStatus(syncIndicator.dataset.status);
   if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();
@@ -3097,6 +3128,14 @@ window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });
+// Silence may be a legitimate long tool, or a missed event. Ask the execution
+// side for a read-only snapshot; never infer completion or issue a new prompt.
+setInterval(() => {
+  const id = selectedSessionId;
+  if (!id || restoringView || !activeTaskStates.has(displayedTask?.state)) return;
+  const lastContact = Math.max(confirmedAt.get(id) ?? 0, syncAttemptAt.get(id) ?? 0);
+  if (Date.now() - lastContact >= 15000) void resyncSelected();
+}, 5000);
 syncIndicator.addEventListener("click", () => {
   if (historyRetry?.id === selectedSessionId) void showHistoryPage(historyRetry.query, historyRetry.intent);
   else void resyncSelected();

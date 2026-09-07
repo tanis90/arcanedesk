@@ -52,7 +52,8 @@ app.whenReady().then(async () => {
   async function until(code) {
     const limit = Date.now() + 7000;
     while (Date.now() < limit) { if (await evaluate(code)) return; await new Promise(resolve => setTimeout(resolve, 25)); }
-    throw new Error("Timed out: " + code);
+    const state = await evaluate('({activityReady, restoringView, historyPage, draft: input.value, saved: workspaceStore.cache.get(selectedSessionId), sync: syncIndicator.textContent})');
+    throw new Error("Timed out: " + code + "\n" + JSON.stringify(state));
   }
   try {
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
