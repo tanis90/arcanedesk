@@ -13,6 +13,7 @@ app.whenReady().then(async () => {
   const { SessionProjection } = await load("sync/session-projection.js");
   const { ExecutionScheduler } = await load("scheduling/execution-scheduler.js");
   const { ActivityCenter } = await load("conversations/activity-center.js");
+  const { SessionRegistry } = await load("conversations/session-registry.js");
   const { SessionManager } = await import("@earendil-works/pi-coding-agent");
   const scheduler = new ExecutionScheduler({ capacity: 16 }), hosts = [], releases = [];
   let window, mode = "prep", generation = 0, tick = 0, timer, snapshotSerial = 0;
@@ -54,17 +55,34 @@ app.whenReady().then(async () => {
     hosts.push(host);
   }
   const selected = { prep: hosts[0], combat: hosts[8] };
+  const registries = {}, metadataDurations = [];
+  for (const registryMode of ["prep", "combat"]) {
+    const resident = hosts.filter(host => host.profile.mode === registryMode);
+    const registry = registries[registryMode] = new SessionRegistry({ createHost() { throw Error("Benchmark cannot create unseeded hosts"); } });
+    registry.activeHost = resident[0];
+    for (const host of resident) {
+      registry.hosts.set(host.describeCurrent().id, host);
+      // Cached discovery only; production registry still scans every resident's native journal.
+      host.listSessions = async () => resident.map(h => ({ ...h.describeCurrent(), modified: 1, firstMessage: "", messageCount: 0 }));
+    }
+  }
   const payload = (host, query) => {
     const result = { ok: true, mode: host.profile.mode, generation, benchmarkSnapshot: ++snapshotSerial, ...host.currentPayload(query) };
     center.reconcile(result, host.profile.mode); return result;
   };
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
-  for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input, query) => {
+  for (const channel of new Set(channels)) ipcMain.handle(channel, async (_event, input, query) => {
     if (channel === "sessions:current") return payload(selected[mode]);
     if (channel === "sessions:snapshot") return payload(hosts.find(host => host.describeCurrent().id === input), query);
     if (channel === "sessions:open") { const host = hosts.find(host => host.describeCurrent().path === input.path); selected[mode] = host; return payload(host); }
     if (channel === "mode:set") { mode = input; generation++; return payload(selected[mode]); }
-    if (channel === "sessions:list") return { ok: true, sessions: hosts.filter(host => host.profile.mode === mode).map(host => ({ ...host.describeCurrent(), active: host === selected[mode], activity: center.get(host.describeCurrent().id) })) };
+    if (channel === "sessions:list") {
+      const targetMode = input?.mode ?? mode, start = performance.now(), registry = registries[targetMode];
+      registry.activeHost = selected[targetMode];
+      const sessions = await registry.listSessions();
+      metadataDurations.push(performance.now() - start);
+      return { ok: true, sessions: sessions.map(row => ({ ...row, activity: center.get(row.id) })) };
+    }
     if (channel === "activity:snapshot") return center.snapshot();
     if (channel === "activity:read") return center.markRead(input, true);
     if (channel === "voice:get-config") return { enabled: false };
@@ -99,7 +117,7 @@ app.whenReady().then(async () => {
           const measure = () => {
             if (event.sessionId !== selectedSessionId) return;
             const rendered = event.type === "message_delta"
-              ? streamBubbles.get(event.key)?.querySelector(".body")?.textContent.startsWith(event.text)
+              ? (streamBubbles.get(event.key) ?? messageNode(event.key))?.querySelector(".body")?.textContent.startsWith(event.text)
               : taskIndicator.textContent.startsWith(t(event.task.state === "running" ? "chat.task.running" : "activity.waitingResource"));
             const elapsed = Date.now() - event.benchmarkAt;
             if ((activityReady && viewEpoch === event.runtimeEpoch && viewSeq >= event.seq && rendered) || elapsed > 10000) bench[event.type === "message_delta" ? "progress" : "states"].push(elapsed);
@@ -124,6 +142,12 @@ app.whenReady().then(async () => {
     timer = setInterval(() => {
       tick++;
       for (const host of hosts) {
+        if (tick % 10 === 0) {
+          host.sessionManager.appendMessage(host.stream);
+          host.forwardEvent({ type: "message_end", message: { ...host.stream, stopReason: "stop" } });
+          host.stream = { role: "assistant", timestamp: Date.now(), content: [{ type: "text", text: "" }] };
+          host.forwardEvent({ type: "message_start", message: host.stream });
+        }
         host.benchmarkAt = Date.now();
         host.stream.content[0].text += `Update ${tick}: ongoing work. `;
         host.forwardEvent({ type: "message_update", message: structuredClone(host.stream) });
@@ -142,6 +166,7 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 60; i++) await evaluate(`measureSwitch(${JSON.stringify(i % 2 ? a : c)}, ${JSON.stringify(i % 2 ? "prep" : "combat")})`);
     await new Promise(resolve => setTimeout(resolve, 16000));
     const samples = await evaluate('bench');
+    const progressDiagnostic = await evaluate('({selectedSessionId, viewSeq, viewEpoch, activityReady, restoringView, historyPage, followLatest, streamKeys:[...streamBubbles.keys()], tail:messages.textContent.slice(-400)})');
     const summarize = values => {
       const sorted = [...values].sort((a, b) => a - b);
       return { samples: sorted.length, p50Ms: sorted[Math.max(0, Math.ceil(sorted.length * .5) - 1)], p95Ms: sorted[Math.max(0, Math.ceil(sorted.length * .95) - 1)], maxMs: sorted.at(-1) };
@@ -152,13 +177,15 @@ app.whenReady().then(async () => {
       cpu: os.cpus()[0].model, logicalCpus: os.cpus().length, totalMemoryGiB: os.totalmem() / 1024 ** 3, electron: process.versions.electron, node: process.versions.node },
       workload: { sessions: 16, activeTasks: scheduler.active.size, historyMessagesPerSession: 10000, historicalInputReceiptsPerSession: 5000, historyWindow: 100, progressEventsPerSecond: 160,
         stateEventsPerSecond: 32, activityPersistence: true, taskJournalPersistence: true, viewport: [1200, 850], offscreen: true, hardwareAcceleration: false, sameModeSwitches: 60, crossModeSwitches: 60 },
-      metrics, uncachedSwitches: samples.switches.filter(row => !row.cached).length,
+      metrics, progressDiagnostic, metadataReads: summarize(metadataDurations), completedMessagesPerSecond: 16,
+      metadataScope: "Production SessionRegistry scans native resident journals; discovery is cached, cold disk enumeration excluded. Full messages trigger coalesced renderer row updates while tasks remain active.",
+      uncachedSwitches: samples.switches.filter(row => !row.cached).length,
       allSwitches: Object.fromEntries(["selection", "content", "calibration"].map(key => [key, summarize(samples.switches.map(row => row[key]))])),
       byNavigation: Object.fromEntries(["sameMode", "crossMode"].map(kind => [kind, Object.fromEntries(["selection", "content", "calibration"].map(key => [key, summarize(samples.switches.filter(row => row.navigation === kind).map(row => row[key]))]))])),
       memory: app.getAppMetrics().map(({ type, memory }) => ({ type, workingSetMiB: memory.workingSetSize / 1024, peakWorkingSetMiB: memory.peakWorkingSetSize / 1024 })),
       limitsMs: { selection: 100, content: 300, calibration: 1000, progress: 500, states: 500 },
       scope: "Production renderer/preload, AgentHost, TaskCoordinator, scheduler, projection, history index, activity center and native SessionManager; controlled prompt/IPC routing; first animation frame, not physical display; model and external tools excluded." };
-    report.passed = report.uncachedSwitches === 0 && Object.entries(report.limitsMs).every(([key, limit]) => metrics[key].samples >= (key === "progress" ? 100 : key === "states" ? 25 : 110) && metrics[key].p95Ms <= limit)
+    report.passed = progressDiagnostic.followLatest && !progressDiagnostic.historyPage?.hasNewer && metadataDurations.length >= 10 && report.uncachedSwitches === 0 && Object.entries(report.limitsMs).every(([key, limit]) => metrics[key].samples >= (key === "progress" ? 100 : key === "states" ? 25 : 110) && metrics[key].p95Ms <= limit)
       && Object.values(report.byNavigation).every(group => Object.entries(group).every(([key, values]) => values.samples === 60 && values.p95Ms <= report.limitsMs[key]));
     if (process.env.ARCANE_BENCHMARK_OUTPUT) writeFileSync(process.env.ARCANE_BENCHMARK_OUTPUT, JSON.stringify(report, null, 2) + "\n");
     console.log(JSON.stringify(report, null, 2));

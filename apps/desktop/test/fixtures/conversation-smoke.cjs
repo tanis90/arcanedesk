@@ -86,7 +86,8 @@ app.whenReady().then(async () => {
     await until('selectedSessionId === "A" && workspaceReady.has("A") && !!document.querySelector(".streaming")');
     assert.equal(await evaluate('document.querySelector(".streaming .body").textContent'), "A partial reply");
     await evaluate('input.value = "draft A"; input.dispatchEvent(new Event("input")); pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; saveWorkspace();');
-    await evaluate('messages.scrollTop = 200; messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
+    await evaluate('messages.scrollTo({top:200, behavior:"instant"}); messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
+    assert.equal(await evaluate('followLatest'), false, "fixture actually moves away from the live tail before switching");
     const anchor = await evaluate('workspaceStore.cache.get("A").anchor');
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B" && workspaceReady.has("B")');

@@ -642,7 +642,9 @@ function scrollToEnd(force = false) {
   if (force && historyPage?.hasNewer) { void showHistoryPage({}, "latest"); return; }
   if (force || followLatest) {
     if (force) followLatest = true;
-    messages.scrollTop = messages.scrollHeight;
+    // Smooth programmatic scrolling emits intermediate positions which look
+    // like a user leaving the live tail and can persist an old-history anchor.
+    messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
   }
   updateScrollButton();
 }
