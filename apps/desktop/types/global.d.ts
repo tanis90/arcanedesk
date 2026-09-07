@@ -34,6 +34,8 @@ interface ArcaneBridge {
   listSessions(context?: ArcaneModeContext): Promise<any>;
   currentSession(): Promise<any>;
   sessionSnapshot(sessionId: string): Promise<any>;
+  activitySnapshot(): Promise<any>;
+  markActivityRead(request: { sessionId: string; runtimeEpoch: string; seq: number; visible: boolean; atBottom: boolean; readKey?: string }): Promise<any>;
   respondToTask(request: { sessionId: string; taskId: string; attentionId: string; commandId: string; response: string }): Promise<any>;
   newSession(context?: ArcaneModeContext): Promise<any>;
   openSession(path: string, context?: ArcaneModeContext): Promise<any>;

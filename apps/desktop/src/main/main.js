@@ -11,6 +11,7 @@ import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
 import { SessionRegistry } from "./conversations/session-registry.js";
+import { ActivityCenter } from "./conversations/activity-center.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
@@ -79,10 +80,16 @@ let chatWidthPx = null; // 用户可拖;null = 按比例初始化
 let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设为 exact origin
 let webPermissionPolicy = null;
 let displayMediaController = null;
+let activityCenter = null;
 
 function sendToRenderer(event) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("arcane:event", event);
+  }
+  // Deliver content first; a later activity update cannot acknowledge unseen content.
+  if (event.runtimeEpoch) {
+    try { activityCenter?.observe(event); }
+    catch (error) { console.error("[activity] event projection failed", error.message); }
   }
 }
 
@@ -702,6 +709,25 @@ app.whenReady().then(async () => {
   });
   // Global provider changes visit resident sessions; task state stays on each host.
   const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
+  activityCenter = new ActivityCenter({
+    file: configPath("activity.json"),
+    describe: id => {
+      const host = allSessionHosts().find(host => host.describeCurrent()?.id === id);
+      return host ? { ...host.describeCurrent(), mode: host.profile.mode } : null;
+    },
+    emit: sendToRenderer,
+    notify: notice => sendToRenderer({ type: "activity_notice", notice }),
+    log: console.error,
+  });
+  ipcMain.handle("activity:snapshot", event => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    return { ok: true, ...activityCenter.snapshot() };
+  });
+  ipcMain.handle("activity:read", (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    if (!request || typeof request !== "object") return { ok: false, code: "INVALID_REQUEST" };
+    return activityCenter.markRead(request, Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()));
+  });
 
   function staleModeResponse() {
     const context = modeController.snapshot();
@@ -728,10 +754,16 @@ app.whenReady().then(async () => {
     return { ...result, error: err(key) };
   }
 
+  function activityHostPayload(host) {
+    const payload = host.currentPayload();
+    activityCenter.reconcile(payload, host.profile.mode);
+    return payload;
+  }
+
   async function currentModePayload() {
     const context = await modeController.readySnapshot();
     return {
-      ...context.host.currentPayload(),
+      ...activityHostPayload(context.host),
       ...modeController.publicSnapshot(context),
       busy: context.host.busy,
       cwd: context.mode === "prep" ? context.host.cwd() : undefined,
@@ -759,7 +791,7 @@ app.whenReady().then(async () => {
       requestedMode,
       stale,
       busy: host.busy,
-      ...host.currentPayload(),
+      ...activityHostPayload(host),
       cwd: context.mode === "prep" ? host.cwd() : undefined,
     };
   });
@@ -782,7 +814,7 @@ app.whenReady().then(async () => {
       return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
     }
     const nextHost = await hosts.prep.select(null, true);
-    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
+    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost) });
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
@@ -796,7 +828,7 @@ app.whenReady().then(async () => {
     return {
       ok: true,
       ...modeController.publicSnapshot(context),
-      sessions: list,
+      sessions: list.map(row => ({ ...row, activity: activityCenter.get(row.id) })),
     };
   });
   ipcMain.handle("sessions:current", async () => {
@@ -807,7 +839,7 @@ app.whenReady().then(async () => {
     if (!isTrustedChatIpc(_event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     const host = allSessionHosts().find(host => host.describeCurrent()?.id === sessionId);
     if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
-    return { ok: true, ...host.currentPayload(), mode: host.profile.mode, cwd: host.cwd() };
+    return { ok: true, ...activityHostPayload(host), mode: host.profile.mode, cwd: host.cwd() };
   });
   ipcMain.handle("sessions:new", async (_event, request) => {
     const validated = await validateModeRequest(request);
@@ -816,7 +848,7 @@ app.whenReady().then(async () => {
     const selection = ++hosts[context.mode].selection;
     await modeController.ensureStarted(context.mode);
     const nextHost = await hosts[context.mode].select(null, true, selection);
-    return { ok: true, ...nextHost.currentPayload(), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
     const validated = await validateModeRequest(request);
@@ -830,7 +862,7 @@ app.whenReady().then(async () => {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
     const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
-    return { ok: true, ...nextHost.currentPayload(), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:delete", async (_event, request) => {
     const validated = await validateModeRequest(request);
@@ -843,6 +875,10 @@ app.whenReady().then(async () => {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
     const result = await hosts[context.mode].deleteSession(sessionPath);
+    if (result.ok) {
+      const deleted = list.find(row => row.path === sessionPath);
+      if (deleted) activityCenter.remove(deleted.id);
+    }
     return result;
   });
 
@@ -1353,6 +1389,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  activityCenter?.flush();
   clearFoundryPermissionState("app-quit");
   void telemetry?.close(); // best-effort flush,最多 500ms(§4.2)
 });

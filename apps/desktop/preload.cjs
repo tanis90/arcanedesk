@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld("arcane", {
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
   sessionSnapshot: (sessionId) => ipcRenderer.invoke("sessions:snapshot", sessionId),
+  activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),
+  markActivityRead: (request) => ipcRenderer.invoke("activity:read", request),
   respondToTask: (request) => ipcRenderer.invoke("tasks:respond", request),
   newSession: (context) => ipcRenderer.invoke("sessions:new", context),
   openSession: (path, context) => ipcRenderer.invoke("sessions:open", {
