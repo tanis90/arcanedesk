@@ -722,12 +722,14 @@ export class AgentHost {
         // Chromium decodes all three supported formats, including WebP. This fixed read
         // runs inside the outer combined lease; no model-generated page code is involved.
         const dataUrl = `data:${mimeType};base64,${bytes.toString("base64")}`;
-        return evaluateNavigationSafe(this.getFoundryView?.()?.webContents, `(async () => {
+        const outcome = await evaluateNavigationSafe(this.getFoundryView?.()?.webContents, `(async () => {
           const response = await fetch(${JSON.stringify(dataUrl)});
           const bitmap = await createImageBitmap(await response.blob());
           try { return { width: bitmap.width, height: bitmap.height }; }
           finally { bitmap.close(); }
         })()`, { timeoutMs: 10_000, signal });
+        if (outcome.status !== "completed") throw new Error("IMAGE_DECODE_FAILED: Foundry image decoder did not complete");
+        return outcome.value;
       },
       call: (action, args, options) => {
         if (!this.foundryRuntime?.call) throw new Error("Foundry runtime unavailable");

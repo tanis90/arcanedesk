@@ -50,6 +50,21 @@ test("Actor update checks only touched fields; unrelated HP changes do not block
   assert.equal(f.writes(), 1);
 });
 
+test("native update may expand and mutate its input without corrupting readback expectations", async () => {
+  const f = fixture(), nativeUpdate = f.actor.update;
+  f.actor.update = async function(patch) {
+    await nativeUpdate.call(this, patch);
+    // Foundry expands dotted keys in the caller's update object in place.
+    patch.prototypeToken = { name: patch["prototypeToken.name"] };
+    delete patch["prototypeToken.name"];
+  };
+  const read = await f.read(["prototypeToken"]);
+  const result = await f.edit(read.readState, { name: "Renamed", prototypeToken: { name: "Token name" } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.steps.find(step => step.step === "prototypeToken.name").after, "Token name");
+  assert.equal(f.writes(), 1);
+});
+
 test("Actor image uses Data paths, preserves disabled rings and checks relevant read fields", async () => {
   const f = fixture();
   const unread = await f.read();
@@ -86,6 +101,26 @@ function placedImages(f, failIndex = -1) {
   f.game.scenes = tokens.map((token, index) => ({ uuid: `Scene.s${index}`, tokens: [token] }));
   return tokens;
 }
+
+test("placed image confirmation reads persisted fields while canvas texture still shows its prior image", async () => {
+  const f = fixture();
+  placedImages(f);
+  const token = f.game.scenes[0].tokens[0];
+  const originalUpdate = token.update;
+  let storedTexture = { ...token.texture };
+  token.toObject = () => ({ texture: storedTexture, ring: token.ring });
+  token.update = async patch => {
+    const visibleBefore = token.texture.src;
+    await originalUpdate.call(token, patch);
+    storedTexture = { ...token.texture };
+    token.texture.src = visibleBefore;
+  };
+  const read = await f.read(["prototypeToken", "sceneTokens"]);
+  const result = await f.edit(read.readState, { image: { dataPath: "assets/persisted.png", syncPlacedTokens: true } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(storedTexture.src, "assets/persisted.png");
+  assert.equal(token.texture.src, "placed.png");
+});
 
 test("Actor images synchronize linked and unlinked Tokens across Scenes without changing layout", async () => {
   const f = fixture(), tokens = placedImages(f);
@@ -159,6 +194,10 @@ test("grant is one batch and existing sources are skipped instead of stacked", a
   assert.equal(result.status, "completed"); assert.equal(f.actor.items.size, 1);
   assert.equal([...f.actor.items.values()][0].system.quantity, 2);
   const reread = await f.read(["items"]);
+  assert.equal(reread.items[0].quantity, 2); assert.equal(reread.items[0].equipped, true);
+  assert.equal("quantity" in reread.readState.items[0], false);
+  // Resource use does not invalidate the identity-only grant readRef.
+  [...f.actor.items.values()][0].system.quantity = 1;
   const skipped = await f.call("actorGrantItems", { ...params, readState: reread.readState });
   assert.equal(skipped.status, "completed"); assert.equal(skipped.steps[0].skippedExisting.length, 1);
   assert.equal(f.writes(), 1);

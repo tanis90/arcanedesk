@@ -7,21 +7,23 @@
 
 ## 当前状态
 
-实现及自动化门禁已完成，整体验收未完成。跑团、共享上下文、备团搜索／Actor／图片／Scene 工具均已接入；真实 FVTT 行为与性能验收需要可用的隔离测试世界。
+本轮 App/SDK 范围已实现，并通过下述 QA-A 功能、真实模型和热连接战斗回归验收。
+auto pack 改造按约定仅交接 TODO：召唤新协议、可选独立视觉入口不宣称已经可用；短休／长休不实施。
+结论仅覆盖列明的版本组合与测试条件。下文较早“增量”保留历史检查结果，当前状态以本节及 QA 记录为准。
 
 | 方案项 | 实施状态与剩余工作 |
 | --- | --- |
-| M0 基线／工具矩阵 | 集中 allowlist 与真实 Pi active set 检查已通过；跑团实际 7 个工具，备团 18 个；性能基线待测 |
-| M1 共享上下文 | SDK 全量 Token、结构引用，服务失效标记、operation 查询、动态动作引用映射及工具激活完成；待真实世界验收 |
-| M1 状态 | SDK 源保护、原生结束专注、目标解析、四态、严格 schema、中英文别名、绑定来源服务及工具激活完成；待真实系统验证 |
+| M0 基线／工具矩阵 | 真实 Pi active set 通过；跑团 7、备团 18；修正后的 10 组交错战斗对比通过 |
+| M1 共享上下文 | 全量 Token、结构引用及轻量动态映射通过；真实模型首次重读、同会话后续轻读通过 |
+| M1 状态 | 真实双人上下状态、幂等、来源保护和原生结束专注通过；模型状态任务各一次调用 |
 | M1 操作记录 | JSONL、派发前落盘、去重、重启不重放、服务调用和会话删除清理已实现并测试 |
-| M1 环境绑定 | 消息入队时固定读取 world/Scene/selection、输入日志元数据、已消费输入绑定已接入；真实 Pi 工具集合通过，真实页面并发仍待验收 |
-| M2 跑团执行 | executeAction、普通 narrative-only 法术、非战斗执行、回合约束、引用解析和新工具激活完成；待完整参数覆盖与真实世界验收 |
-| M3 备团 Actor | 搜索、get/create/update/grant、局部 readRef、图片上传与同步已接入；真实世界验收待完成 |
-| M4 备团 Scene | Scene get/apply、背景图片、分组 Token 布局与局部回读已接入；真实世界验收待完成 |
-| M5 召唤 | auto pack 只记录 AUTO-001；新 executeAction 已在扣费前拒绝召唤放置，不调用旧同先攻协议；真实组合仍待验收 |
+| M1 环境绑定 | 入队固定 world/Scene/selection；真实页面排队改选 10 次不串目标，重载后的已知操作不重放 |
+| M2 跑团执行 | 非战斗易容术／敲击术、近战／远程／法术攻击、战斗执行与推进通过；故障回执不重扣 |
+| M3 备团 Actor | 真实合集导入、授物去重、改图和 linked/unlinked/ring 同步通过；模型无需 JS |
+| M4 备团 Scene | 真实非当前 Scene 的背景／网格／Token 创建、更新与删除通过；模型批量创建无需 JS |
+| M5 召唤 | 本轮写前拒绝通过；旧包未提供认可 marker，模型不发现该召唤；包侧完整集成留在 AUTO-001 |
 | Prompt／UI／遥测 | 已改跑团名称、提示词、执行摘要与工具分类，历史旧工具仍可显示；新增内容工具随各阶段补充 |
-| 完整验收 | 全仓 npm run verify 通过，已发现的合同审计项已修正；真实测试世界及性能对比待完成 |
+| 完整验收 | 全仓 verify、QA-A 功能／故障注入／真实模型场景及热连接战斗回归通过；包侧事项继续延期 |
 
 ## 已有证据
 
@@ -36,11 +38,132 @@
 - SDK 旧四默认 actions 与原 battleContext/turnContext/executeTurn 行为保留；
   目标解析调整后 43 项 SDK 测试全部通过，包括提交时选择 UUID 与跑团禁止独立 Actor 旁路。
 
-## 下一步
+## 后续边界
 
-取得已配置 dnd5e／Midi／Arcane 模块、允许测试写入的隔离世界地址，由用户完成登录后，
-执行 M1–M4 的真实行为验收与固定模型性能对比。核查实际模块组合是否提供独立视觉入口；
-若涉及 auto pack 改造，按 TODO 纪律记录，不修改包。当前本地自动化不能替代这些验收。
+用户已指定 QA-A，授权空密码 GM 登录，并指定 Kimi K2.7 HighSpeed 做性能验收。
+以后替换 Foundry／dnd5e／Midi／auto pack 版本时重跑对应集成测试；包侧完成后再接召唤和可选视觉。
+当前已完成项目见下述证据，不将已知旧包缺能力标作 App 实现失败，也不冒充已实现的召唤能力。
+
+## QA-A 环境交接
+
+- 用户指定使用 `fvtt-qa-farm` skill 和 QA-A。使用现有镜像对应的干净 worktree
+  `C:/Users/yangqi/code/Arcane-Desk/.worktrees/chat-bubbles-farm-a-baseline` 中的 Docker 脚本。
+- 固定环境候选为 `29d9906ed8ecc8366e29e6b621db2921f44eb6c5`，镜像为
+  `sha256:056b124107bc9450e657e2061237ae4baad40d550542420e86ebb189ee015eb2`。
+  这是测试环境／模块基线，不是本次 App/SDK 实现版本；本次已提交实现为 `ba350d0`。
+- `validate-config.ps1` 通过；`start-slots.ps1 -Slots A -Replace` 从同一固定镜像重建可丢弃的
+  QA-A，返回 running/healthy，内置隔离校验通过：`Mounts=[]`、仅 loopback 30101、world `cos-a`。
+  QA-B 和 primary 未操作；未构建或改写 auto pack。
+- 镜像标签声明 Foundry 13.351.0、dnd5e 5.3.3、Arcane 模块 0.3.18；实际启用模块和 Midi
+  版本仍须登录后读取，不能用镜像标签代替运行态验收。
+- GM Chrome 已通过 `slot-chrome.ps1 -Slot A -Role GM` 打开，独立 CDP 9231。
+  单次只读检查确认 `/join`、world `cos-a`、`game.ready=false`，页面标题 COS-QA-A。
+  随后用户明确授权本轮及后续 QA-A 空密码 GM 登录，已登录；该授权只用于 QA 环境。
+
+## QA-A 真实验收增量
+
+- 运行态确认 Foundry 13.351、dnd5e 5.3.3、Midi 13.0.63、DAE 13.0.28、Times Up 13.1.9、
+  Arcane 0.3.18。没有改写任何模块代码或 pack。
+- 新增 opt-in runner `apps/desktop/test/review-prep-play-qa.mjs`，固定要求显式传入 QA-A origin、
+  CDP 9231 和 cos-a；每次派发前保存记录，失败不重放，保留 fixture UUID。使用本分支 SDK 原始
+  runtime，真实 Foundry Document／Midi；这是 SDK 层证据，不冒充已通过完整模型流程。
+- `prep-play-1788782298272.json`（本机 Temp）通过：精确合集来源导入 Wolf、改名和 prototype 名、
+  授物去重、Scene 创建／Token 移动与删除、激活、无 Token Actor 排除、两人上下中毒、倒地幂等，
+  linked/unlinked Token 图片与启用圆环同步且位置／名称／hidden 不变、真实 PNG 解码／上传／复用、
+  Scene 背景和网格更新、真实 dnd5e 专注结束，以及非战斗近战／长弓／光导箭与战斗内执行和推进。
+- 易容术和敲击术使用明确 narrative 记账分支；一环／二环分别只扣一次，无门文档、无战斗，
+  资源变化不使静态上下文失效。该证据不表示易容术的原生 transform 或动画已经验收。
+- 攻击以 Midi RollComplete 命中／伤害记录与实际 HP 对照；长弓扣一支箭，光导箭扣一环位。
+  世界原有另一个 Scene 的战斗，测试确认新非战斗攻击不创建新 Combat，也不误用其它 Scene 战斗。
+- 真实环境发现并修正：Foundry 原地展开 update 参数导致回读误报；Token 生成改走原生
+  getTokenDocument，并为 linked ActorDelta 补空集合进行严格校验；更新仅校验实际更改字段；
+  图片回读使用持久化字段并关闭图片切换动画，避免画布过渡值导致误报；允许 DAE 的空
+  specialDuration 元数据，仍保护真实来源／触发效果。对应回归测试已加入。
+- 石像鬼中毒测试出现原生免疫清理竞态，回执保守报告 indeterminate，未重试该次移除。
+  确认 fixture 的 poisoned immunity 后，正常状态矩阵改用精确 Wolf；未修改怪物免疫规则。
+- 独立模型 QA 配置使用生产 ProviderStore／Electron safeStorage 保存用户提供的密钥，仓库、报告
+  和日志不保存密钥。官方模型列表接口确认 `kimi-for-coding-highspeed` 可用。
+- 首轮真实模型预跑发现 Kimi 拒绝根联合 schema，补 `type: object` 仍被拒绝。最终将 provider
+  可见根 schema 展开为普通 object，原精确联合留在宿主入口校验；分支互斥、必填组合和未知字段
+  仍在获取绑定／审批／派发前验证。没有修改模型参数形状，也没有放宽实际写入合同。
+- 实际宿主图片服务此前返回整个 navigation-safe 结果，现提取其 dimensions value，并在解码未完成时
+  写前拒绝。补充实际 AgentHost 服务工厂测试；真实模型上传场景继续验证这条路径。
+- Kimi 的 Pi 会话 thinkingLevel 在两版均为 off，供应商仍实际返回 reasoning token；本轮标为
+  provider-default，不声称 high 推理档位，不以 token 数冒充思考耗时。
+
+## 模型流畅度验收
+
+- 基线 App/SDK 为独立 detached worktree `9107c09`，新版为本分支工作区；使用同一 Pi 依赖、
+  同一 QA-A／模块／角色／动作和 Kimi 模型，两版真实 AgentHost、系统提示词、工具集合及 Runtime。
+  CDP 只承担 Electron 页面 transport，不模拟模型响应或 Foundry 写入。
+- `benchmark-1788783373029.json`：10 组交错、每版每组首次和后续指令各一次，共 40 轮完成。
+  首次 p50 基线 8127 ms／新版 11581 ms（+42.5%），p95 14003／24205 ms（+72.9%）；
+  后续 p50 5799／5776 ms（-0.4%），p95 7093／6052 ms（-14.7%），均为 3 次工具调用。
+  这轮首次回归未通过发布门槛，不能只引用后续指标宣称整体提速。
+- 首次慢的可解释路径：4 个新版样本先读 turn 再读 static，后者清除了 turn 证据，首次 execute
+  被 TURN_CONTEXT_REQUIRED 零写拒绝，再轻读后执行成功；没有重复攻击。提示词与静态工具说明现明确
+  static → turn → execute → turn，并在用户已声明连接就绪时直接工作。修正后另采 10 组，不混合统计。
+- 两轮均为热连接，首次能力上下文与后续指令分组；人工等待为零。尚未测独立冷连接，
+  供应商 reasoning 为实际计数，无法据此得到单独思考时长。预跑 API 拒绝与浏览器只读启动超时
+  不计入成功样本。报告保存在本机 Temp，仓库仅留脱敏统计和可复现 runner。
+- 修正后 `benchmark-1788783832924.json` 的另 10 组全部完成（40 轮）。首次每个新版样本均为
+  static → turn → execute → turn，没有缺回合证据拒绝；后续均为 turn → execute → turn，
+  没有重复重读。结果如下，10 个样本的 p95 为样本最大值，不能据此宣称稳定的尾延迟提速。
+
+| 热连接指令 | 基线 p50 / p95（ms） | 新版 p50 / p95（ms） | 平均工具数（基线 → 新版） |
+| --- | --- | --- | --- |
+| 首次能力上下文 | 9109 / 15972 | 8795 / 10230 | 4.7 → 4 |
+| 同会话后续 | 5875 / 6215 | 5759 / 6157 | 3 → 3 |
+
+- 首次总输入含 cache 的均值 31136 → 24911 token，输出 890 → 732，实际 reasoning 741 → 555；
+  后续分别为 37094 → 29409、300 → 282、178 → 129。p50/p95 无超过 10% 回归；
+  结论是这组样本未拖慢既有战斗路径，而非已证明所有场景思考明显加速。
+- Runtime 调用有独立 duration 记录；runner 未单独埋点排队时间，不能把串行负载直接当作
+  队列耗时为零。页面重连和人为争用测试另外记录在下节；不把它们拼成同一模型负载的延迟分解。
+- 备团模型先前在完成授物后使用 JS 查看 equipped，因为物品投影缺少该字段。actor_get 的 items
+  现补 quantity/equipped；readRef 仍只捕获 Item 身份，数量消耗不使授物引用失效。
+  提示词明确已核验回执和结构化查询的用途，不增加工具或跑团重上下文。
+
+## 本轮最终验收证据
+
+- 全仓 `npm run verify` 返回 0：Desktop 443、SDK 84、CLI 232、WebMCP 24 项通过，
+  类型、源码边界、runtime hash、构建和安装 tarball 后的消费验证通过。
+- `benchmark-1788784760300.json`：真实 Kimi／AgentHost 场景全部通过，备团 18／跑团 7 个实际工具。
+  创建 Wolf、授 Rapier 并装备、真实本地 PNG 经生产宿主解码上传、创建背景／网格／两个 Token
+  的非当前 Scene、同来源重复授物跳过；这些任务未调用 browser_evaluate。
+  双人上下倒地各一次 conditions_set；非战斗易容术是 static＋execute，后续敲击术仅 execute，
+  分别只扣一个正确环级法术位；来源管理的倒地零写拒绝且保留原效果。
+- `benchmark-1788784945600.json`：真实旧包 Summon Beast 的发现缺口及有／无战斗写前拒绝，
+  详见 AUTO-001。真实叙事扣位后由 QA transport 丢失响应，回执 indeterminate；
+  同 ID 重投与服务重启均不再次派发，4 个法术位仅变为 3。
+- `prep-play-reconnect-1788784965040.json`：10 次已登录 GM 页面重载至世界／canvas 就绪，
+  p50 6485 ms、p95 7029 ms；热就绪读取 p50 51 ms、p95 69 ms。
+  这是已有浏览器缓存／热服务器的页面重连，独立记录，不混进模型指令延迟；不是全新机器或空缓存启动。
+  `benchmark-1788785054319.json` 确认真实页面重载后，重建服务查询并重投原操作仍零派发，法术位仍为 3。
+- `benchmark-1788785191875.json`：10 次真实选择快照／共享页面租约测试。入队固定 A，阻塞写入，
+  把画布选择改成 B 后释放租约；实际写入始终是 A，B 不变。单独记录排队 p50 1.47 ms／p95 2.71 ms，
+  Runtime p50 95 ms／p95 169 ms。人为阻塞仅覆盖改选窗口，这些数值不表示繁忙多会话的排队分布。
+- `benchmark-1788785381949.json`：仅针对 QA fixture Item，在内存 Midi 调用边界注入三种故障，
+  finally 恢复原函数，未改 auto pack、模块文件或 Item 数据。真实聊天卡生成但无 workflow 时，
+  indeterminate 且不扣位；真实光导箭执行后注入异常，HP 496→483、法术位 3→2，仅调用一次；
+  无完成信号直至超时，indeterminate 且不扣位。三种均未转 narrative、未补扣或重施。
+  故障来源是受控 QA 注入，不声称当前模块自然发生了这些错误。
+
+这些 JSON 位于本机 Temp（模型测试在 `arcane-prep-play-model-qa` 子目录），不含密钥。
+仓库保留统计和 opt-in runner，不提交完整模型会话或世界资料。
+
+复现入口：`test/review-prep-play-qa.mjs` 验 SDK 真实世界；
+`test/fixtures/prep-play-model-benchmark.cjs` 由 Electron main 运行，接受 `--qa-root`、`--qa-report`、
+`--baseline` 和 `--samples=10`，默认比较两版真实模型；也可单独传 `--scenarios=true`、
+`--edge-cases=true`、`--queue-checks=true` 或 `--native-faults=true`。备团场景还需
+`ARCANE_QA_NODE` 指向可用 Node。`--edge-cases=true --replay-report=<原边界报告>` 验证重启恢复；
+`test/review-prep-play-connection.mjs --qa-a-reload` 单独验证重连。
+必须先按 QA Farm skill 核验 QA-A，配置独立加密 provider，并运行 SDK runner 生成带所有权的 fixture 报告。
+不要让这些真实 runner 与 `verify`／SDK build 并行：构建会重建 dist，可能干扰正在启动的测试进程。
+
+收尾时再次通过 QA-A 隔离验证（同一 committed image、Mounts=[]），随后按 skill 执行
+`stop-slots.ps1 -Slots A`，已删除 qafarm-a 与本轮可丢弃世界并停止 GM Chrome。
+QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和脱敏测试报告保留在本机 Temp。
 
 ## 方案审计增量
 

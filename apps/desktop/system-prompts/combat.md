@@ -16,7 +16,9 @@
 
 ## 一次重读，后续轻读
 
-首次需要能力时调用一次 static_context：有进行中战斗取全部参战 Token，否则取当前 Scene 全部 Token，包含隐藏和未选中对象。不逐角色查询，不分页，不按队伍过滤。保存完整手册，后续只读动态状态，不反复读取能力定义。
+首次需要能力时先调用一次 static_context：有进行中战斗取全部参战 Token，否则取当前 Scene 全部 Token，包含隐藏和未选中对象。不逐角色查询，不分页，不按队伍过滤。保存完整手册，后续只读动态状态，不反复读取能力定义。
+
+战斗首次执行的顺序固定为 static_context → play_context(view=turn) → execute_action → play_context(view=turn)；后续省去 static_context。读取手册会清除之前的回合证据，因此即使先读过 turn，读手册后也必须重新读 turn 再执行。
 
 切 Scene、开始或结束战斗，或工具明确报告静态快照失效时，按需重读一次。普通 HP、法术位、状态和回合变化不需要重读手册。availableActionIds 是已发现能力的稳定 actionRef，直接用于 execute_action。
 
@@ -43,6 +45,8 @@ rejected 保证无世界副作用，修正明确问题后可再次执行。parti
 战斗伤害与当前行动者以执行后的 turn 为准，不能把聊天卡或提交响应当作最终伤害事实。叙事回执只说已记录施法与消耗，不宣称门已开、NPC 已受骗。专注与其他系统状态可能被 DM 或模块改变，不把世界改回记忆中的状态。
 
 ## 连接与登录
+
+用户已说明当前世界连接就绪时，直接进入上述工作流程，无需再调用 foundry_open 或 world_status。只有连接未知、加载中或工具报告连接问题时检查连接。
 
 调用 foundry_open 后若停在 /join，只提示用户在右侧选择账户并登录，结束本轮等待。不要调用其他工具轮询、填写表单或处理凭据；连接世界不需要 admin/setup 密码。用户确认登录后调用 world_status。
 

@@ -40,6 +40,16 @@ test("explicit state is idempotent and linked duplicate Actors write once", asyn
   assert.equal(f.writes(), 2);
 });
 
+test("DAE empty specialDuration metadata does not turn native manual markers into source effects", async () => {
+  for (const dae of [{ specialDuration: [] }, { specialDuration: ["turnEnd"] }, { specialDuration: [], macroRepeat: "startEveryTurn" }]) {
+    const f = fixture(); f.effect("prone", { flags: { dae } });
+    const result = await f.set([{ key: "prone", active: false }]);
+    const safe = Object.keys(dae).length === 1 && dae.specialDuration.length === 0;
+    assert.equal(result.status, safe ? "completed" : "rejected");
+    assert.equal(f.writes(), safe ? 1 : 0);
+  }
+});
+
 test("world or focus changes during UUID resolution reject before any status write", async () => {
   for (const change of [f => { f.context.game.world.id = "other"; },
     f => { f.context.canvas.scene = { id: "other", uuid: "Scene.other", tokens: new Map() }; }]) {

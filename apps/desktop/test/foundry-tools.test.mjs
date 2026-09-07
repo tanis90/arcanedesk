@@ -3,12 +3,11 @@ import test from "node:test";
 import { Value } from "typebox/value";
 import { createFoundryTools } from "../src/main/foundry-tools.js";
 
-test("new schemas reject unknown keys, unbounded selectors and operation view without a reference", () => {
+test("new schemas reject unknown keys and unbounded selectors", () => {
   const tools = new Map(createFoundryTools({}).map(tool => [tool.name, tool]));
   const valid = (name, params) => Value.Check(tools.get(name).parameters, params);
   assert.equal(valid("foundry_static_context", {}), true);
   assert.equal(valid("foundry_static_context", { source: "actor" }), false);
-  assert.equal(valid("foundry_play_context", { view: "operation" }), false);
   assert.equal(valid("foundry_play_context", { view: "operation", operationRef: "known" }), true);
   assert.equal(valid("foundry_play_context", { view: "current" }), true);
   assert.equal(valid("foundry_play_context", { view: "scene" }), false);
@@ -21,9 +20,25 @@ test("new schemas reject unknown keys, unbounded selectors and operation view wi
   assert.equal(valid("foundry_actor_update", actor({ sourcePath: "npc.png", dataPath: "assets/npc.png" })), false);
   assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png", upload: { base64: "secret" } })), false);
   assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter" }, tokens: { create: [{ actorUuid: "Actor.a", x: 0, y: 0 }] } }), true);
-  assert.equal(valid("foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", scene: { name: "Renamed" } }), false);
   assert.equal(valid("foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", tokens: { walls: [] } }), false);
   assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter", background: { sourcePath: "map.webp", syncPlacedTokens: true } } }), false);
+});
+
+test("provider object schemas retain exact branch validation before host access or writes", async () => {
+  const tools = new Map(createFoundryTools({}).map(tool => [tool.name, tool]));
+  for (const [name, params] of [
+    ["foundry_play_context", { view: "operation" }],
+    ["foundry_play_context", { view: "current", operationRef: "unexpected" }],
+    ["foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", scene: { name: "Renamed" } }],
+    ["foundry_scene_apply", { operation: "create", scene: { name: "New" }, sceneUuid: "Scene.s" }],
+    ["foundry_execute_action", {}],
+    ["foundry_execute_action", { actionRef: "one", actions: [{ actionRef: "two" }] }],
+    ["foundry_execute_action", { actions: [{ actionRef: "one" }], resolution: "narrative" }],
+  ]) {
+    const tool = tools.get(name);
+    assert.equal(tool.parameters.type, "object"); assert.equal(tool.parameters.anyOf, undefined);
+    assert.equal((await tool.execute("invalid", params)).details.code, "INPUT_INVALID");
+  }
 });
 
 test("condition approval pins the consumed input and denial does not create an operation", async () => {

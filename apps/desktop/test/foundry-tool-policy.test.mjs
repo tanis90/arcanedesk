@@ -22,6 +22,7 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
   await loader.reload();
   const host = new AgentHost({ profile: { mode }, log() {} });
   const customTools = host.buildTools();
+  for (const tool of customTools) assert.equal(tool.parameters.type, "object", `${tool.name}: provider requires an object root even for unions`);
   if (mode === "prep") customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNames(mode);

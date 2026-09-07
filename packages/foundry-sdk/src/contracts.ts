@@ -387,6 +387,7 @@ export interface ActorReadInput {
   cursor?: string;
 }
 export interface PrepItemIdentity { id: string; uuid: string; name: string; type: string; sourceUuid: string | null }
+export interface PrepItemProjection extends PrepItemIdentity { quantity: number | null; equipped: boolean | null }
 export interface ActorReadState {
   actorUuid: string;
   world: { origin: string; id: string };
@@ -398,7 +399,7 @@ export interface ActorReadState {
 export interface ActorReadResult {
   actorUuid: string; name: string; type: string; folderId: string | null; img: string | null;
   hp: { value: number | null; max: number | null; temp: number | null }; ac: number | null;
-  items?: PrepItemIdentity[]; resources?: Record<string, number>; prototypeToken?: RuntimeArguments;
+  items?: PrepItemProjection[]; resources?: Record<string, number>; prototypeToken?: RuntimeArguments;
   sceneTokens?: RuntimeArguments[]; nextCursor: string | null; readState: ActorReadState;
 }
 export interface CompendiumGrant {

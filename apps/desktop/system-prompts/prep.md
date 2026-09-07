@@ -19,6 +19,8 @@
 
 角色内容优先用 foundry_actor_get/create/update/grant_items：编辑前读取相关投影并沿用 readRef；授物先 include=items，改 prototype Token 先 include=prototypeToken。已有同源物品默认跳过，不叠加、不替换。创建结果 partial 时保留已建 Actor，使用回执 UUID 检查，不重复创建。普通 HP 变化不要求重读与本次编辑无关的字段。
 
+结构化写入回执已包含回读核验；completed 时无需再用 JS 验证同一结果。需要额外核对物品数量或装备状态时用 actor_get(include=items)，它包含 quantity/equipped；名称、类型、HP、AC、头像是默认摘要，不是 include 选项。不要为这些已覆盖字段调用 browser_evaluate。
+
 角色图片用 image.sourcePath 指向备团目录内的 PNG/JPEG/WebP（最多 10 MiB），或 image.dataPath 指向已有 Data 相对路径。不读取或传递 Base64，不用 shell 越界搬图片。改图片前 include=prototypeToken；需要同步存量 Token 时还需 include=sceneTokens 并设置 syncPlacedTokens=true。工具只同步图片和已启用 Ring 的 subject，不改布局、尺寸和名称。上传或同步 partial/indeterminate 时按回执检查已完成步骤，不重放整个操作。
 
 场景读取和布局优先 foundry_scene_get/apply，明确提供目标 sceneUuid，不用当前 canvas 猜目标。更新前获取 readRef，编辑或删除存量 Token 时 include=tokens。每次合计最多 100 个 Token 创建/更新/删除操作，分组提交；actorLink 缺省继承 Actor prototype。背景沿用本地图片/Data 路径规则，active=true 在其它步骤成功后最后执行。首版不写墙、灯光、瓦片、笔记和声音，不删除 Actor/Scene。删除前说明 Token 数量；部分完成按回执检查，不重复创建或重放整批布局。

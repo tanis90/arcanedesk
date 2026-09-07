@@ -1,5 +1,6 @@
 import { Type } from "typebox";
-import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Value } from "typebox/value";
+import { defineTool as definePiTool } from "@earendil-works/pi-coding-agent";
 
 /** @template {import("typebox").TProperties} P @param {P} properties */
 const exact = properties => Type.Object(properties, { additionalProperties: false });
@@ -11,6 +12,26 @@ const source = Type.Union([
   exact({ kind: Type.Literal("name"), name: ref(), scope: Type.Union([Type.Literal("focus"), Type.Literal("actors")]) }),
 ]);
 const textResult = data => ({ content: [{ type: /** @type {const} */ ("text"), text: JSON.stringify(data) }], details: data });
+
+// Some providers require an object root and reject root-level anyOf even when
+// type=object is present. Keep the exact union as a pre-dispatch validator and
+// publish its fields as an object; the caller-facing argument shape is unchanged.
+function defineTool(definition) {
+  const contract = definition.parameters;
+  if (!Array.isArray(contract.anyOf)) return definePiTool(definition);
+  const branches = /** @type {import("typebox").TObject[]} */ (contract.anyOf);
+  const properties = /** @type {import("typebox").TProperties} */ ({});
+  for (const key of new Set(branches.flatMap(branch => Object.keys(branch.properties)))) {
+    const variants = [...new Map(branches.filter(branch => key in branch.properties)
+      .map(branch => { const schema = Type.Required(exact({ value: branch.properties[key] })).properties.value; return [JSON.stringify(schema), schema]; })).values()];
+    const schema = variants.length === 1 ? variants[0] : Type.Union(variants);
+    properties[key] = branches.every(branch => branch.required?.includes(key)) ? schema : Type.Optional(schema);
+  }
+  return definePiTool({ ...definition, parameters: exact(properties), execute: async (id, params, signal, update, context) => {
+    if (!Value.Check(contract, params)) return textResult({ status: "rejected", code: "INPUT_INVALID", message: "Arguments do not match a supported parameter combination; no action was dispatched." });
+    return definition.execute(id, params, signal, update, context);
+  } });
+}
 const activityInput = exact({
   spellLevel: Type.Optional(Type.Integer({ minimum: 1, maximum: 9 })),
   attackRollMode: Type.Optional(Type.Union([Type.Literal("normal"), Type.Literal("advantage"), Type.Literal("disadvantage")])),
@@ -112,7 +133,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_execute_action", label: "Execute Action",
-      description: "Use a discovered action reference. Outside combat execute one spell or attack; during combat execute only the current actor and read current turn first. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
+      description: "Use a discovered action reference. Pass either actionRef for one action or actions for a combat sequence, never both. Outside combat execute one spell or attack; during combat execute only the current actor and read current turn first. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
       parameters: Type.Union([
         exact({ ...actionFields, resolution: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("narrative")])), advance: Type.Optional(Type.Boolean()) }),
         exact({ actions: Type.Array(exact(actionFields), { minItems: 1, maxItems: 20 }), advance: Type.Optional(Type.Boolean()) }),
@@ -128,7 +149,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_static_context", label: "Static Context",
-      description: "Read the full static manual once per combat or Scene: all focused Tokens and their complete supported abilities. During combat focus is its participants; otherwise every current Scene Token. Refresh only when the scope or capability structure changes.",
+      description: "Read the full static manual once per combat or Scene: all focused Tokens and their complete supported abilities. During combat focus is its participants; otherwise every current Scene Token. Refresh only when the scope or capability structure changes. This clears prior turn evidence: in combat read play_context(view=turn) after this, before executing.",
       parameters: exact({}),
       execute: async (_id, _params, signal) => textResult(await host.foundryServices().readStatic(signal)),
     }),

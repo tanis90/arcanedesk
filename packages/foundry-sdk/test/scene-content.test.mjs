@@ -28,7 +28,7 @@ function fixture() {
     }
     toObject() { const { parent, uuid, id, ...data } = this; return structuredClone({ ...data, _id: id }); }
     clone(patch) { const data = this.toObject(); patchObject(data,patch); return new Token(data,{ parent: this.parent }); }
-    validate() { validations++; if (this.width > 100) throw new Error("INPUT_INVALID: native Token width constraint"); return true; }
+    validate({ changes } = {}) { validations++; if ((changes?.width ?? this.width) > 100) throw new Error("INPUT_INVALID: native Token width constraint"); return true; }
   }
   class Scene {
     constructor(data = {}) {
@@ -39,7 +39,7 @@ function fixture() {
     }
     toObject() { return { _id: this.id, name: this.name, width: this.width, height: this.height, grid: structuredClone(this.grid), background: structuredClone(this.background), active: this.active, flags: structuredClone(this.flags), tokens: [...this.tokens.values()].map(token => token.toObject()) }; }
     clone(patch) { const data = this.toObject(); patchObject(data,patch); return new Scene(data); }
-    validate() { validations++; if (this.grid.size < 50) throw new Error("INPUT_INVALID: native Scene grid constraint"); return true; }
+    validate({ changes } = {}) { validations++; if ((changes?.grid?.size ?? this.grid.size) < 50) throw new Error("INPUT_INVALID: native Scene grid constraint"); return true; }
     static async create(data) { events.push("create-scene"); if (failure === "create-scene") throw Error("connection lost"); const scene = new Scene(data); scenes.set(scene.id,scene); return scene; }
     async update(patch) { events.push("update-scene"); if (failure === "update-scene") throw Error("connection lost"); patchObject(this,patch); }
     async createEmbeddedDocuments(type, entries) {
@@ -56,6 +56,8 @@ function fixture() {
   const current = new Scene({ _id: "current", name: "Current", active: true }); scenes.set(current.id,current);
   const other = new Scene({ _id: "other", name: "Other", tokens: [{ _id: "one", actorId: "actor" }, { _id: "two", actorId: "actor" }] }); scenes.set(other.id,other);
   const actor = { documentName: "Actor", id: "actor", uuid: "Actor.actor", prototypeToken: { toObject: () => ({ name: "Prototype", actorLink: true, width: 2, height: 2, texture: { src: "actor.png" } }) } };
+  actor.getTokenDocument = async placement => new Token({ ...actor.prototypeToken.toObject(), ...placement, actorId: actor.id,
+    delta: { system: {}, items: [], effects: [], flags: {} } });
   const world = { origin: "https://f.test", id: "world" }, game = { ready: true, user: { isGM: true }, world: { id: "world" }, scenes };
   const run = vm.runInContext(`(${runtimeFunction})`, vm.createContext({ game, canvas: { scene: current }, location: { origin: world.origin },
     fromUuid: async uuid => uuid === actor.uuid ? actor : [...scenes.values()].find(scene => scene.uuid === uuid),
