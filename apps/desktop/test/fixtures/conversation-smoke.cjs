@@ -14,11 +14,12 @@ let lastAnswer = null;
 let sendTestEvent = () => {};
 let epochA = "test";
 let migratedHistory = false;
+let interrupted = false;
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
     busy: id === "A" && (!finished || question?.state === "pending"),
-    task: id === "A" ? { id: question?.taskId ?? "task-A", state: question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
+    task: id === "A" ? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
     attentions: id === "A" && question ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
@@ -143,7 +144,29 @@ app.whenReady().then(async () => {
       type: "message", key: "new", role: "assistant", text: "Fresh instance result" });
     await until('viewSeq === 1 && messages.textContent.includes("Fresh instance result")');
     assert.equal(await evaluate('messages.textContent.includes("STALE OLD INSTANCE")'), false);
-    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, scoped answer and reloaded runtime cursor");
+    interrupted = true;
+    await evaluate('resyncSelected()');
+    await until('!!document.querySelector(".recover-task")');
+    await evaluate('input.value = "keep my draft"; pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; document.querySelector(".recover-task").click(); document.querySelector(".recover-task").click();');
+    const recoveryDraft = await evaluate('input.value');
+    assert.ok(recoveryDraft.startsWith("keep my draft\n\n"));
+    assert.equal(recoveryDraft, "keep my draft\n\n" + await evaluate('t("chat.recovery.prompt")'), "repeat clicks do not duplicate the recovery request");
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    assert.equal(submitAttempts, 2, "preparing recovery never submits a model request");
+    await evaluate('saveWorkspace(); switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task")');
+    assert.equal(await evaluate('input.value'), recoveryDraft);
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    await evaluate('saveWorkspace()');
+    const recoveryReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await recoveryReloaded;
+    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task") && pendingImages.length === 1');
+    assert.equal(await evaluate('input.value'), recoveryDraft);
+    assert.equal(submitAttempts, 2, "reloading recovery does not replay an input");
+    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, scoped answer, reloaded cursor and explicit interruption recovery");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

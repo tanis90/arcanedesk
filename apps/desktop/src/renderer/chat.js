@@ -44,6 +44,18 @@ function showTaskState(task) {
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task;
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
+  if (task?.state === "interrupted") {
+    taskIndicator.appendChild(el("span", null, " · " + t("chat.recovery.explanation") + " "));
+    const target = { sessionId: selectedSessionId, taskId: task.id };
+    const recover = el("button", "recover-task", t("chat.recovery.action"));
+    recover.addEventListener("click", () => {
+      if (selectedSessionId !== target.sessionId || selectedTaskId !== target.taskId || busy) return;
+      const instruction = t("chat.recovery.prompt");
+      if (!input.value.includes(instruction)) input.value += (input.value.trim() ? "\n\n" : "") + instruction;
+      draftRevision++; autosize(); scheduleWorkspaceSave(); input.focus();
+    });
+    taskIndicator.appendChild(recover);
+  }
   if (task?.state === "waiting_resource" && task.waitingFor) {
     const holder = task.waitingFor.holders?.[0];
     const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
