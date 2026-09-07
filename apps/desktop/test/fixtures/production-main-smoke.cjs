@@ -8,6 +8,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const longTool = process.argv.includes("--long-tool");
+const deletionScenario = process.argv.includes("--deletion-scenario");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
@@ -120,6 +121,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (deletionScenario) {
+      assert.deepEqual(requests, ["A", "B"]);
+      assert.equal(hostB.tasks.task.state, "completed");
+      console.log("PASS production deletion: running task remains tracked until stop, then deletion preserves independent B");
+      return;
+    }
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
@@ -397,6 +404,10 @@ app.on("will-quit", () => {
   await ui('busy && messages.textContent.includes("B partial")');
   hostB = globalThis.__arcaneHosts.prep.get(idB);
   assert.ok(hostA.busy && hostB.busy);
+  if (deletionScenario) {
+    await require("./production-deletion.cjs")({ hostA, hostB, streams, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
   if (contextIsolation) {
     assert.equal(hostA.cwd(), path.join(scratch, "workspace-A"));
     assert.equal(hostB.cwd(), path.join(scratch, "workspace-B"));
