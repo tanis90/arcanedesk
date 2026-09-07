@@ -970,10 +970,11 @@ function ensureToolCard(toolCallId, toolName, args) {
 
 function finishToolCard(toolCallId, toolName, event) {
   const entry = ensureToolCard(toolCallId, toolName);
+  if (Number.isFinite(event.startedAt)) entry.startAt = event.startedAt;
   const { card, startAt, state } = entry;
   card.classList.remove("running");
   card.classList.add(event.isError ? "err" : "ok");
-  const secs = ((Date.now() - startAt) / 1000).toFixed(1);
+  const secs = (((Number.isFinite(event.finishedAt) ? event.finishedAt : Date.now()) - startAt) / 1000).toFixed(1);
   card.querySelector(".duration").textContent = `${secs}s`;
 
   const text = resultText(event.result);
@@ -1298,9 +1299,11 @@ function onEvent(event) {
       }
       break;
     }
-    case "tool_start":
-      ensureToolCard(event.toolCallId, event.toolName, event.args);
+    case "tool_start": {
+      const tool = ensureToolCard(event.toolCallId, event.toolName, event.args);
+      if (Number.isFinite(event.startedAt)) tool.startAt = event.startedAt;
       break;
+    }
     case "tool_end":
       finishToolCard(event.toolCallId, event.toolName, event);
       break;

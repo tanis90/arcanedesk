@@ -38,14 +38,17 @@ export class SessionProjection {
         this.messages.delete(event.key);
         break;
       case "tool_start":
+        event.startedAt = this.now();
         this.tools.set(event.toolCallId, { toolCallId: event.toolCallId, toolName: event.toolName,
-          args: event.args, state: "running", startedAt: this.now() });
+          args: event.args, state: "running", startedAt: event.startedAt });
         break;
       case "tool_end": {
         const previous = this.tools.get(event.toolCallId);
+        event.startedAt = previous?.startedAt;
+        event.finishedAt = this.now();
         this.tools.set(event.toolCallId, { ...previous, toolCallId: event.toolCallId,
           toolName: event.toolName, state: event.isError ? "failed" : "succeeded",
-          finishedAt: this.now(), result: event.result });
+          finishedAt: event.finishedAt, result: event.result });
         break;
       }
       case "auto_retry_start":

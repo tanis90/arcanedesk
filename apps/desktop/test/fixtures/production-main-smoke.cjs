@@ -1,12 +1,13 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
 const { app, dialog, Tray } = require("electron");
-const { mkdtempSync, readFileSync, writeFileSync } = require("node:fs");
+const { mkdtempSync, readFileSync, writeFileSync, existsSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
 const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const longTool = process.argv.includes("--long-tool");
 const scratch = process.argv.find(arg => arg.startsWith("--smoke-root="))?.slice("--smoke-root=".length)
   ?? mkdtempSync(path.join(tmpdir(), "arcane-production-smoke-"));
 app.setPath("userData", scratch);
@@ -31,6 +32,9 @@ app.on("browser-window-created", (_event, value) => {
 });
 const streams = new Map();
 const requests = [];
+const toolStarted = path.join(scratch, "tool-started.txt");
+const toolRelease = path.join(scratch, "tool-release.txt");
+const psLiteral = value => "'" + value.replaceAll("'", "''") + "'";
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET") { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ data: [{ id: "arcane-spark" }] })); return; }
   let body = "";
@@ -46,6 +50,17 @@ const server = http.createServer(async (req, res) => {
   res.on("close", () => { entry.closed = true; });
   streams.set(tag, entry);
   write({ role: "assistant", content: `${tag} partial` });
+  if (longTool && tag === "B") {
+    const toolResult = data.messages.find(row => row.role === "tool" && row.tool_call_id === "long-tool");
+    if (toolResult) {
+      assert.ok(JSON.stringify(toolResult.content).includes("LONG TOOL FINISHED"), "real shell result reaches the SDK model context");
+      entry.finish();
+    } else {
+      const command = `[IO.File]::AppendAllText(${psLiteral(toolStarted)}, "started\n"); while (!(Test-Path -LiteralPath ${psLiteral(toolRelease)})) { Start-Sleep -Milliseconds 100 }; Write-Output 'LONG TOOL FINISHED'`;
+      write({ tool_calls: [{ index: 0, id: "long-tool", type: "function", function: { name: "powershell", arguments: JSON.stringify({ command, timeout: 60 }) } }] });
+      write({}, "tool_calls"); res.end("data: [DONE]\n\n");
+    }
+  }
 });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(check, label) {
@@ -59,6 +74,14 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (longTool) {
+      assert.equal(hostB.tasks.task.state, "completed");
+      assert.equal(hostB.busy, false);
+      assert.equal(readFileSync(toolStarted, "utf8"), "started\n", "the shell ran exactly once");
+      assert.deepEqual(requests, ["A", "B", "B"], "only B's tool-result continuation adds a request");
+      console.log("PASS production long tool: real shell, cross-mode/reload continuity, original timer and isolated stop");
+      return;
+    }
     assert.equal(hostB.tasks.task.state, "stopped");
     assert.equal(hostB.busy, false);
     assert.ok(tray.isDestroyed(), "native tray destroyed on normal exit");
@@ -112,6 +135,44 @@ app.on("will-quit", () => {
   await ui('busy && messages.textContent.includes("B partial")');
   hostB = globalThis.__arcaneHosts.prep.get(idB);
   assert.ok(hostA.busy && hostB.busy);
+  if (longTool) {
+    await until(() => existsSync(toolStarted), "real PowerShell process entered its wait");
+    await ui('toolCards.get("long-tool")?.card.classList.contains("running")');
+    const startedAt = await evaluate('toolCards.get("long-tool").startAt');
+    await evaluate('switchMode("combat")');
+    await ui('modeContext().mode === "combat" && workspaceReady.has(selectedSessionId)');
+    await evaluate('input.value = "combat draft during tool"; input.dispatchEvent(new Event("input"));');
+    assert.ok(hostB.busy);
+    await evaluate('switchMode("prep")');
+    await ui(`selectedSessionId === ${JSON.stringify(idB)} && toolCards.get("long-tool")?.card.classList.contains("running")`);
+    assert.equal(await evaluate('toolCards.get("long-tool").startAt'), startedAt);
+    await openHost(hostA);
+    await ui(`selectedSessionId === ${JSON.stringify(idA)} && busy`);
+    await evaluate('stop.click(); switchMode("combat")');
+    await ui('modeContext().mode === "combat" && input.value === "combat draft during tool"');
+    await until(() => hostA.tasks.task.state === "stopped", "A stopped independently");
+    assert.ok(hostB.busy, "stopping A cannot stop B's shell");
+    await evaluate('switchMode("prep")');
+    await openHost(hostB);
+    await ui(`selectedSessionId === ${JSON.stringify(idB)} && toolCards.get("long-tool")?.card.classList.contains("running")`);
+    const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await reloaded;
+    await ui(`selectedSessionId === ${JSON.stringify(idB)} && toolCards.get("long-tool")?.card.classList.contains("running")`);
+    assert.equal(await evaluate('toolCards.get("long-tool").startAt'), startedAt);
+    assert.equal(readFileSync(toolStarted, "utf8"), "started\n");
+    assert.deepEqual(requests, ["A", "B"], "switching and reload do not re-prompt or rerun the tool");
+    writeFileSync(toolRelease, "release");
+    await ui('!busy && messages.textContent.includes("B final result") && !toolCards.get("long-tool").card.classList.contains("running")');
+    assert.equal(await evaluate('toolCards.get("long-tool").startAt'), startedAt);
+    const timing = hostB.projection.snapshot().tools.find(tool => tool.toolCallId === "long-tool");
+    const duration = ((timing.finishedAt - timing.startedAt) / 1000).toFixed(1) + "s";
+    assert.equal(await evaluate('toolCards.get("long-tool").card.querySelector(".duration").textContent'), duration);
+    const completedReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await completedReload;
+    await ui('!busy && messages.textContent.includes("B final result") && !!toolCards.get("long-tool")');
+    assert.equal(await evaluate('toolCards.get("long-tool").card.querySelector(".duration").textContent'), duration);
+    finalExit = true; app.quit(); return;
+  }
   await openHost(hostA);
   await ui(`selectedSessionId === ${JSON.stringify(idA)} && busy && messages.textContent.includes("A partial")`);
   assert.equal(await evaluate('document.querySelectorAll(".streaming").length'), 1);
@@ -166,4 +227,11 @@ app.on("will-quit", () => {
   assert.equal(shows, 2, "tray click callback restores window");
   decision = 1; finalExit = true;
   menu.items[1].click();
-})().catch(error => { console.error(error); server.close(); app.exit(1); });
+})().catch(async error => {
+  console.error(error);
+  if (longTool) {
+    writeFileSync(toolRelease, "release after test failure");
+    await Promise.allSettled(Object.values(globalThis.__arcaneHosts ?? {}).flatMap(registry => registry.allHosts()).map(host => host.abort(host.task?.id)));
+  }
+  server.close(); app.exit(1);
+});
