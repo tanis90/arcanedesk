@@ -11,6 +11,32 @@ function stateClasses() {
   return context.ArcaneConversationState;
 }
 
+test("fresh snapshots replace a reclaimed runtime even without a new event; late old events stay retired", () => {
+  const { EventInbox } = stateClasses();
+  const inbox = new EventInbox();
+  inbox.record({ sessionId: "A", runtimeEpoch: "old", seq: 99 });
+  const observed = inbox.epoch("A");
+  assert.equal(inbox.acceptSnapshot("A", "new"), false, "cache cannot declare a new runtime");
+  assert.equal(inbox.acceptSnapshot("A", "new", observed), true);
+  assert.equal(inbox.after("A", "new", 0).length, 0);
+  assert.equal(inbox.record({ sessionId: "A", runtimeEpoch: "old", seq: 100 }), false);
+  assert.equal(inbox.acceptSnapshot("A", "old", "new"), false);
+  inbox.record({ sessionId: "A", runtimeEpoch: "new", seq: 1 });
+  assert.equal(inbox.after("A", "new", 0).length, 1);
+});
+
+test("snapshot request overtaken by another runtime cannot retire its newer events", () => {
+  const { EventInbox } = stateClasses();
+  const inbox = new EventInbox();
+  assert.equal(inbox.acceptSnapshot("A", "old"), true);
+  const observed = inbox.epoch("A");
+  inbox.record({ sessionId: "A", runtimeEpoch: "newest", seq: 1 });
+  assert.equal(inbox.acceptSnapshot("A", "middle", observed), false);
+  assert.equal(inbox.epoch("A"), "newest");
+  assert.equal(inbox.acceptSnapshot("A", "newest", observed), true);
+  assert.equal(inbox.after("A", "newest", 0).length, 1);
+});
+
 test("deleted session events cannot recreate an inbox entry", () => {
   const { EventInbox } = stateClasses();
   const inbox = new EventInbox();

@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-// One epoch per execution process; sequence numbers are scoped to a projection.
-const runtimeEpoch = randomUUID();
-
 /** Recoverable UI state. This projection does not decide task terminal states. */
 export class SessionProjection {
-  constructor({ sessionId = null, capacity = 256, epoch = runtimeEpoch, now = Date.now } = {}) {
+  // Sequence numbers restart when a host is reloaded, even within the same process.
+  constructor({ sessionId = null, capacity = 256, epoch = randomUUID(), now = Date.now } = {}) {
     if (!Number.isInteger(capacity) || capacity < 1) throw new RangeError("capacity must be positive");
     this.sessionId = sessionId;
     this.runtimeEpoch = epoch;

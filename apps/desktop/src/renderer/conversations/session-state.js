@@ -5,12 +5,26 @@
   class EventInbox {
     constructor(capacity = 512) { this.capacity = capacity; this.sessions = new Map(); this.retiredEpochs = new Map(); this.deleted = new Set(); }
     remove(sessionId) { this.deleted.add(sessionId); this.sessions.delete(sessionId); this.retiredEpochs.delete(sessionId); }
+    epoch(sessionId) { return this.sessions.get(sessionId)?.epoch ?? null; }
+    acceptSnapshot(sessionId, epoch, observedEpoch = undefined) {
+      if (this.deleted.has(sessionId) || !epoch || this.retiredEpochs.get(sessionId)?.has(epoch)) return false;
+      const entry = this.sessions.get(sessionId);
+      if (entry?.epoch === epoch) return true;
+      // Only a fresh request that observed the current epoch may replace it.
+      // Cached snapshots and requests overtaken by a new runtime must resync.
+      if (entry && entry.epoch !== observedEpoch) return false;
+      const retired = this.retiredEpochs.get(sessionId) ?? new Set();
+      if (entry) retired.add(entry.epoch);
+      this.retiredEpochs.set(sessionId, retired);
+      this.sessions.set(sessionId, { epoch, events: new Map() });
+      return true;
+    }
     record(event) {
       if (!event.sessionId || this.deleted.has(event.sessionId) || !Number.isInteger(event.seq)) return;
       let entry = this.sessions.get(event.sessionId);
       if (!entry || entry.epoch !== event.runtimeEpoch) {
         const retired = this.retiredEpochs.get(event.sessionId) ?? new Set();
-        if (retired.has(event.runtimeEpoch)) return;
+        if (retired.has(event.runtimeEpoch)) return false;
         if (entry) retired.add(entry.epoch);
         this.retiredEpochs.set(event.sessionId, retired);
         entry = { epoch: event.runtimeEpoch, events: new Map() };

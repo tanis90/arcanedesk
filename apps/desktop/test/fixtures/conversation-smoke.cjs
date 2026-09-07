@@ -12,6 +12,7 @@ let finished = false;
 let question = null;
 let lastAnswer = null;
 let sendTestEvent = () => {};
+let epochA = "test";
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
@@ -22,7 +23,7 @@ function snapshot(mode) {
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
       ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])] : [],
-    inFlight: { runtimeEpoch: "test", seq: id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
+    inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
       tools: id === "A" ? [{ toolCallId: "tool-A", toolName: "bash", state: finished ? "succeeded" : "running", startedAt }] : [] } };
 }
@@ -127,7 +128,18 @@ app.whenReady().then(async () => {
     assert.equal(lastAnswer.sessionId, "A");
     assert.equal(lastAnswer.taskId, "task-question");
     assert.equal(lastAnswer.attentionId, "question-A");
-    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, question restore and scoped answer");
+    // Reclaimed host: no new event has arrived to announce its new cursor.
+    epochA = "reloaded";
+    await evaluate('resyncSelected()');
+    await until('viewEpoch === "reloaded" && viewSeq === 0 && !syncingSessions.has("A")');
+    assert.equal(await evaluate('eventInbox.epoch("A")'), "reloaded");
+    window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "test", seq: 100,
+      type: "message", key: "stale", role: "assistant", text: "STALE OLD INSTANCE" });
+    window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "reloaded", seq: 1,
+      type: "message", key: "new", role: "assistant", text: "Fresh instance result" });
+    await until('viewSeq === 1 && messages.textContent.includes("Fresh instance result")');
+    assert.equal(await evaluate('messages.textContent.includes("STALE OLD INSTANCE")'), false);
+    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, scoped answer and reloaded runtime cursor");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { SessionProjection } from "../src/main/sync/session-projection.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
+test("a reloaded projection in the same process cannot reuse the previous event cursor", () => {
+  const old = new SessionProjection({ sessionId: "A" });
+  old.publish({ type: "message", key: "old", text: "old result" });
+  const next = new SessionProjection({ sessionId: "A" });
+  assert.notEqual(next.runtimeEpoch, old.runtimeEpoch);
+  assert.equal(next.sync({ runtimeEpoch: old.runtimeEpoch, afterSeq: 1 }).kind, "snapshot");
+});
+
 test("snapshot restores cumulative text, thinking and a tool's original start time", () => {
   let now = 10;
   const projection = new SessionProjection({ sessionId: "A", now: () => now });

@@ -248,7 +248,7 @@ async function installSnapshot(payload) {
       updateInputReceipt(item.commandId, item.state);
     }
   }
-  const replay = eventInbox.after(id, viewEpoch, viewSeq);
+  const replay = eventInbox.acceptSnapshot(id, viewEpoch) ? eventInbox.after(id, viewEpoch, viewSeq) : null;
   restoringView = false;
   if (replay === null) { void resyncSelected(); return; }
   for (const event of replay) receiveEvent(event, true);
@@ -305,10 +305,16 @@ async function resyncSelected() {
     }
   }, 1000);
   try {
-    const payload = await window.arcane.sessionSnapshot(id);
-    if (id !== selectedSessionId || token !== snapshotRequest) return;
-    if (!payload.ok) throw new Error(payload.code);
-    await installSnapshot(payload);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const observedEpoch = eventInbox.epoch(id);
+      const payload = await window.arcane.sessionSnapshot(id);
+      if (id !== selectedSessionId || token !== snapshotRequest) return;
+      if (!payload.ok) throw new Error(payload.code);
+      if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) continue;
+      await installSnapshot(payload);
+      return;
+    }
+    throw new Error("Session runtime changed during synchronization");
   } catch {
     if (selectedSessionId === id) {
       syncIndicator.textContent = t("chat.syncFailed"); syncIndicator.hidden = false;
@@ -322,7 +328,7 @@ function receiveEvent(event, replay = false) {
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
-  if (!replay) eventInbox.record(event);
+  if (!replay && eventInbox.record(event) === false) return;
   if (event.sessionId && event.sessionId === selectedSessionId && Number.isInteger(event.seq)) {
     if (restoringView) return;
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
