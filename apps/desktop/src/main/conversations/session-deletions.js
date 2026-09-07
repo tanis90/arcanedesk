@@ -38,7 +38,7 @@ export class SessionDeletions {
     this.append({ type: "begin", id, sessionPath });
     this.entries.set(id, { id, sessionPath, deleted: false, clean: false });
   }
-  cancel(id) { this.append({ type: "cancel", id }); this.entries.delete(id); }
+  cancel(id) { this.append({ type: "cancel", id }); this.entries.delete(id); this.compact(); }
   commit(id) {
     const entry = this.entries.get(id);
     if (!entry) return;
@@ -48,6 +48,18 @@ export class SessionDeletions {
       catch (error) { if (error.code !== "ENOENT") throw error; }
       this.append({ type: "clean", id }); entry.clean = true;
     }
+    this.compact();
+  }
+  compact() {
+    if (this.journal.records.length < this.entries.size * 3 + 128) return;
+    const records = [];
+    for (const entry of this.entries.values()) {
+      records.push({ type: "begin", id: entry.id, sessionPath: entry.sessionPath });
+      if (entry.deleted) records.push({ type: "commit", id: entry.id });
+      if (entry.clean) records.push({ type: "clean", id: entry.id });
+    }
+    try { this.journal.compact(records); this.compactionError = null; }
+    catch (error) { this.compactionError = error.message; }
   }
   isDeleted(sessionPath) {
     const key = process.platform === "win32" ? sessionPath.toLowerCase() : sessionPath;

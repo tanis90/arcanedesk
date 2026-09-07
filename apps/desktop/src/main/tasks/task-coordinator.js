@@ -31,7 +31,13 @@ export class TaskCoordinator {
     this.attentionResolvers = new Map();
     this.pendingModel = null;
     for (const record of journal.records) {
-      if (record.type === "accepted") {
+      if (record.type === "checkpoint") {
+        if (record.version !== 1) throw new Error("Unsupported task checkpoint");
+        this.commands = new Map(record.commands);
+        this.inputs = new Map(record.inputs.map(input => [input.id, input]));
+        this.attentions = new Map(record.attentions.map(attention => [attention.id, attention]));
+        this.task = record.task; this.pendingModel = record.pendingModel;
+      } else if (record.type === "accepted") {
         this.commands.set(record.commandId, record);
         this.inputs.set(record.input.id, record.input);
         this.task = record.task;
@@ -52,9 +58,27 @@ export class TaskCoordinator {
     for (const attention of this.attentions.values()) {
       if (attention.state === "pending") this.updateAttention({ ...attention, state: "interrupted" });
     }
+    this.compact();
   }
 
   get busy() { return activeStates.has(this.task?.state); }
+  compact(force = false) {
+    if (this.busy || typeof this.journal.compact !== "function") return false;
+    const consumed = input => ["consumed", "handled"].includes(input.state);
+    if (!force && this.journal.records.length < 128 && ![...this.inputs.values()].some(input => consumed(input) && input.images?.length)) return false;
+    const commands = /** @type {Array<[any, any]>} */ ([...this.commands].map(([id, record]) => [id, { fingerprint: record.fingerprint, ack: record.ack }]));
+    const inputs = [...this.inputs.values()].map(input => {
+      if (!consumed(input)) return { ...input };
+      const { images: _images, executionText: _execution, expandedText: _expanded, ...state } = input;
+      return state;
+    });
+    try {
+      this.journal.compact([{ type: "checkpoint", version: 1, commands, inputs, task: this.task,
+        attentions: [...this.attentions.values()], pendingModel: this.pendingModel }]);
+      this.commands = new Map(commands); this.inputs = new Map(inputs.map(input => [input.id, input]));
+      this.compactionError = null; return true;
+    } catch (error) { this.compactionError = error.message; return false; }
+  }
   snapshotAttentions() { return structuredClone([...this.attentions.values()]); }
   setPendingModel(model) {
     this.journal.append({ type: "pending_model", model });
@@ -181,6 +205,7 @@ export class TaskCoordinator {
     }).finally(() => {
       this.run = null;
       if (this.busy && [...this.inputs.values()].some(i => i.taskId === this.task.id && pendingStates.has(i.state))) this.schedule();
+      else this.compact();
     });
     this.run.catch(() => {});
   }

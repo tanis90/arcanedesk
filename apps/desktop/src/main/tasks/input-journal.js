@@ -1,4 +1,5 @@
-import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, truncateSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, truncateSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 /** Durable command acceptance. A damaged tail is truncated, never replayed as work. */
@@ -29,5 +30,24 @@ export class InputJournal {
       finally { closeSync(fd); }
     }
     this.records.push(copy);
+  }
+
+  /** Replace only after the new complete log has been flushed; failed writes retain the old log. */
+  compact(records) {
+    const copy = structuredClone(records);
+    if (this.file) {
+      const temporary = `${this.file}.${randomUUID()}.tmp`;
+      let created = false;
+      try {
+        const fd = openSync(temporary, "wx"); created = true;
+        try { writeFileSync(fd, copy.map(record => JSON.stringify(record) + "\n").join(""), "utf8"); fsyncSync(fd); }
+        finally { closeSync(fd); }
+        renameSync(temporary, this.file);
+      } catch (error) {
+        if (created) { try { unlinkSync(temporary); } catch { /* original journal remains authoritative */ } }
+        throw error;
+      }
+    }
+    this.records = copy;
   }
 }
