@@ -39,8 +39,10 @@ let mode = "prep";
 let generation = 0;
 const submittedCommands = new Set();
 let submitAttempts = 0;
+let layoutActivity;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "activity:snapshot" && layoutActivity) return { ok: true, ...layoutActivity.snapshot() };
   if (channel === "chat:abort") return new Promise(resolve => abortRequests.push({ input, resolve }));
   if (channel === "tasks:respond") {
     lastAnswer = input;
@@ -82,9 +84,19 @@ app.whenReady().then(async () => {
     throw new Error("Timed out: " + code);
   }
   try {
+    if (process.argv.includes("--layout-review")) {
+      const { pathToFileURL } = require("node:url");
+      const { ActivityCenter } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/activity-center.js")));
+      layoutActivity = new ActivityCenter();
+      layoutActivity.reconcile({ ...snapshot("prep"), session: { id: "A", name: "多任务验收 · 正在整理剧本与地图" } }, "prep");
+    }
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "A" && workspaceReady.has("A") && !!document.querySelector(".streaming")');
     assert.equal(await evaluate('document.querySelector(".streaming .body").textContent'), "A partial reply");
+    if (process.argv.includes("--layout-review")) {
+      await require("./layout-review.cjs")({ window, evaluate });
+      app.exit(0); return;
+    }
     await evaluate('input.value = "draft A"; input.dispatchEvent(new Event("input")); pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; saveWorkspace();');
     await evaluate('messages.scrollTo({top:200, behavior:"instant"}); messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
     assert.equal(await evaluate('followLatest'), false, "fixture actually moves away from the live tail before switching");

@@ -1,0 +1,258 @@
+[
+  {
+    "name": "minimum",
+    "width": 1080,
+    "height": 640,
+    "chat": null,
+    "pinned": true,
+    "items": [
+      {
+        "id": "activity-toggle",
+        "left": 278,
+        "right": 394.796875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "conversation-task-status",
+        "left": 264,
+        "right": 1080,
+        "top": 97,
+        "bottom": 119.390625,
+        "width": 816,
+        "height": 22.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "chat-input",
+        "left": 289,
+        "right": 1059,
+        "top": 513,
+        "bottom": 561,
+        "width": 770,
+        "height": 48,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "stop",
+        "left": 987,
+        "right": 1019,
+        "top": 569,
+        "bottom": 601,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "send",
+        "left": 1027,
+        "right": 1059,
+        "top": 569,
+        "bottom": 601,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      }
+    ]
+  },
+  {
+    "name": "wide",
+    "width": 1520,
+    "height": 920,
+    "chat": null,
+    "pinned": true,
+    "items": [
+      {
+        "id": "activity-toggle",
+        "left": 278,
+        "right": 394.796875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "conversation-task-status",
+        "left": 264,
+        "right": 1520,
+        "top": 97,
+        "bottom": 119.390625,
+        "width": 1256,
+        "height": 22.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "chat-input",
+        "left": 289,
+        "right": 1499,
+        "top": 793,
+        "bottom": 841,
+        "width": 1210,
+        "height": 48,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "stop",
+        "left": 1427,
+        "right": 1459,
+        "top": 849,
+        "bottom": 881,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "send",
+        "left": 1467,
+        "right": 1499,
+        "top": 849,
+        "bottom": 881,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      }
+    ]
+  },
+  {
+    "name": "split",
+    "width": 1520,
+    "height": 920,
+    "chat": 456,
+    "pinned": false,
+    "items": [
+      {
+        "id": "activity-toggle",
+        "left": 14,
+        "right": 130.796875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "conversation-task-status",
+        "left": 0,
+        "right": 462,
+        "top": 97,
+        "bottom": 119.390625,
+        "width": 462,
+        "height": 22.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "chat-input",
+        "left": 25,
+        "right": 441,
+        "top": 793,
+        "bottom": 841,
+        "width": 416,
+        "height": 48,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "stop",
+        "left": 369,
+        "right": 401,
+        "top": 849,
+        "bottom": 881,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "send",
+        "left": 409,
+        "right": 441,
+        "top": 849,
+        "bottom": 881,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      }
+    ]
+  },
+  {
+    "name": "split-minimum",
+    "width": 1080,
+    "height": 640,
+    "chat": 320,
+    "pinned": false,
+    "items": [
+      {
+        "id": "activity-toggle",
+        "left": 14,
+        "right": 130.796875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "conversation-task-status",
+        "left": 0,
+        "right": 326,
+        "top": 97,
+        "bottom": 119.390625,
+        "width": 326,
+        "height": 22.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "chat-input",
+        "left": 25,
+        "right": 305,
+        "top": 513,
+        "bottom": 561,
+        "width": 280,
+        "height": 48,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "stop",
+        "left": 233,
+        "right": 265,
+        "top": 569,
+        "bottom": 601,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "send",
+        "left": 273,
+        "right": 305,
+        "top": 569,
+        "bottom": 601,
+        "width": 32,
+        "height": 32,
+        "visible": true,
+        "within": true
+      }
+    ]
+  }
+]
