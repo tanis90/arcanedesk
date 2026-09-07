@@ -118,7 +118,7 @@ IPC 接收层检查来源、字段、目标会话是否存在及允许的操作�
 | sessions.sync | sessionId, runtimeEpoch?, afterSeq? | 返回可衔接的增量或完整运行快照 |
 | activity.markRead | sessionId, visibleContentCursor | 只推进确实已看到内容的游标 |
 
-当前 IPC `sessions:snapshot(sessionId, historyQuery?)` 支持按消息身份读取历史窗口：before、after、around 三选一，limit 为 1–200，默认 100。响应 historyPage 包含首尾身份、总条数及是否还有前后页；游标不在当前分支时明确返回 HISTORY_CURSOR_NOT_FOUND，不静默跳到别处。未传 historyQuery 的兼容调用暂时保留完整历史，前端分页接入后再统一调整默认入口。
+当前 IPC `sessions:snapshot(sessionId, historyQuery?)` 支持按消息身份读取历史窗口：before、after、around 三选一，limit 为 1–200，默认 100。响应 historyPage 包含首尾身份、总条数及是否还有前后页；游标不在当前分支时明确返回 HISTORY_CURSOR_NOT_FOUND。所有运行快照默认只带最近 100 条历史；前端按保存的阅读锚点补取对应窗口，并提供前后翻页和返回最新入口。原锚点已不在分支时明确提示后展示最近消息，加载失败保留锚点供重试。
 
 选择会话是前端行为，不再用“当前模式的 host”推导命令目标。携带合法 A 身份的操作，在用户切到 B 后仍属于 A。
 

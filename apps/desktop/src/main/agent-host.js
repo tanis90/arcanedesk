@@ -544,7 +544,7 @@ export class AgentHost {
 
   buildHistory() { return this.historyIndex().all(); }
 
-  currentPayload(historyQuery = undefined) {
+  currentPayload(historyQuery = {}) {
     return {
       attentions: this.tasks?.snapshotAttentions() ?? [],
       approvals: structuredClone([...this.approvalSnapshots.values()]),
@@ -554,7 +554,7 @@ export class AgentHost {
       task: this.task ? { ...this.task } : null,
       inFlight: this.projection.snapshot(),
       session: this.describeCurrent(),
-      ...(historyQuery === undefined ? { history: this.buildHistory() } : this.historyIndex().page(historyQuery)),
+      ...this.historyIndex().page(historyQuery),
       modelLabel: this.modelLabel ?? null,
       supportsImages: this.supportsImages ?? true,
     };

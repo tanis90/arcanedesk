@@ -173,6 +173,7 @@ function forgetSession(id) {
   const cleanup = workspaceStore.remove(id).catch(() => {});
   if (selectedSessionId === id) {
     snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
+    historyPage = null; pendingHistoryAnchor = null; historyRetry = null; historyPageRequest++;
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
     document.getElementById("conversation-title").textContent = "";
@@ -187,6 +188,53 @@ const lastSessionByMode = new Map();
 let workspaceSaveTimer;
 let activityView = null;
 let activityReady = false;
+let historyPage = null;
+let historyPageRequest = 0;
+let pendingHistoryAnchor = null;
+let historyRetry = null;
+
+function snapshotContainsAnchor(payload, key) {
+  const plain = key.replace(/^(?:think:|work:)/, "");
+  return (payload.history ?? []).some(row => [row.key, row.legacyKey, row.role + ":" + row.ts].includes(plain)
+    || row.toolCalls?.some(call => "tool:" + call.id === plain))
+    || (!payload.historyPage?.hasNewer && payload.inFlight?.streaming?.some(row => row.key === plain))
+    || (!payload.historyPage?.hasNewer && payload.inFlight?.tools?.some(row => "tool:" + row.toolCallId === plain && (!payload.historyPage || row.state === "running")))
+    || payload.attentions?.some(row => "attention:" + row.id === key);
+}
+
+async function showHistoryPage(query = {}, intent = "latest") {
+  const id = selectedSessionId, request = ++historyPageRequest, navigation = navigationRequest;
+  if (!id) return;
+  saveWorkspace();
+  document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
+  try {
+    const observedEpoch = eventInbox.epoch(id);
+    const payload = await window.arcane.sessionSnapshot(id, query);
+    if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
+    if (!payload.ok) throw new Error(payload.code);
+    if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("Stale history snapshot");
+    await installSnapshot(payload, intent);
+  } catch {
+    if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
+      historyRetry = { id, query, intent };
+      syncIndicator.textContent = t("chat.historyFailed"); syncIndicator.hidden = false;
+    }
+  } finally {
+    if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
+  }
+}
+
+function renderHistoryNavigation() {
+  if (!historyPage) return;
+  const button = (label, query, intent) => {
+    const node = el("button", "history-page-button", t(label));
+    node.type = "button";
+    node.addEventListener("click", () => { void showHistoryPage(query, intent); });
+    return node;
+  };
+  if (historyPage.hasOlder) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
+  if (historyPage.hasNewer) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
+}
 
 function scheduleWorkspaceSave() {
   clearTimeout(workspaceSaveTimer);
@@ -194,29 +242,35 @@ function scheduleWorkspaceSave() {
 }
 
 function saveWorkspace() {
-  if (!selectedSessionId || !workspaceReady.has(selectedSessionId)) return;
+  if (restoringView || !selectedSessionId || !workspaceReady.has(selectedSessionId)) return;
   const top = messages.getBoundingClientRect().top;
   const anchor = [...messages.querySelectorAll("[data-item-key]")].find(node => node.getBoundingClientRect().bottom > top);
-  const expansions = [...messages.querySelectorAll("[data-item-key]")].map(node => ({
+  const expansionStates = new Map((workspaceStore.cache.get(selectedSessionId)?.expansions ?? [])
+    .filter(state => /^(?:tool:|think:|work:)/.test(state.key)).map(state => [state.key, state]));
+  for (const node of messages.querySelectorAll("details[data-item-key], .card[data-item-key], .think[data-item-key]")) {
+    const state = {
     key: /** @type {HTMLElement} */ (node).dataset.itemKey,
     open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
-  }));
-  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest,
+    };
+    expansionStates.set(state.key, state);
+  }
+  const expansions = [...expansionStates.values()];
+  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest: pendingHistoryAnchor ? false : followLatest,
     attentionDrafts: Object.fromEntries([...attentionCards.keys()].map(id => [id, attentionDrafts.get(id) ?? ""])),
     attentionAttempts: Object.fromEntries([...attentionCards.keys()].filter(id => attentionAttempts.has(id)).map(id => [id, attentionAttempts.get(id)])),
     outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })),
-    anchor: anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null,
+    anchor: pendingHistoryAnchor ?? (anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null),
     expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
 }
 
-async function installSnapshot(payload) {
+async function installSnapshot(payload, pageIntent = null) {
   const id = payload.session?.id;
   if (!id || deletedSessions.has(id)) return;
   const token = ++snapshotRequest;
   const changed = selectedSessionId !== id;
+  historyRetry = null;
   activityReady = false;
   saveWorkspace();
-  snapshotCache.set(id, payload);
   if (payload.mode) lastSessionByMode.set(payload.mode, id);
   restoringView = true;
   syncIndicator.hidden = true;
@@ -230,7 +284,36 @@ async function installSnapshot(payload) {
   if (payload.mode) applyModeUi(payload.mode, payload.cwd);
   if (changed) { input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip(); }
   const revision = draftRevision;
-  renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy));
+  setTimeout(() => {
+    if (token === snapshotRequest && restoringView) { syncIndicator.textContent = t("chat.syncing"); syncIndicator.hidden = false; }
+  }, 1000);
+  let saved;
+  try { saved = await workspaceStore.load(id); } catch { saved = {}; }
+  if (token !== snapshotRequest || selectedSessionId !== id) return;
+  pendingHistoryAnchor = null;
+  let restoreError = false;
+  let anchorUnavailable = false;
+  if (!pageIntent && payload.historyPage && saved.followLatest === false && saved.anchor
+    && !snapshotContainsAnchor(payload, saved.anchor.key)) {
+    const observedEpoch = eventInbox.epoch(id);
+    try {
+      const around = await window.arcane.sessionSnapshot(id, { around: saved.anchor.key });
+      if (token !== snapshotRequest || selectedSessionId !== id) return;
+      if (around.code === "HISTORY_CURSOR_NOT_FOUND") { saved = { ...saved, anchor: null, followLatest: true }; anchorUnavailable = true; }
+      else if (!around.ok || !eventInbox.acceptSnapshot(id, around.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("History restore failed");
+      else payload = around;
+    } catch {
+      if (token !== snapshotRequest || selectedSessionId !== id) return;
+      pendingHistoryAnchor = saved.anchor; restoreError = true;
+    }
+  }
+  snapshotCache.set(id, payload);
+  historyPage = payload.historyPage ?? null;
+  selectedTaskId = payload.task?.id ?? null;
+  showTaskState(payload.task); showPendingModel(payload.pendingModel);
+  viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+  renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy), historyPage);
+  renderHistoryNavigation();
   if (payload.modelLabel) updateModelLabels(payload.modelLabel);
   if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
   for (const attention of payload.attentions ?? []) renderAttention(attention);
@@ -252,8 +335,6 @@ async function installSnapshot(payload) {
   restoringView = false;
   if (replay === null) { void resyncSelected(); return; }
   for (const event of replay) receiveEvent(event, true);
-  let saved;
-  try { saved = await workspaceStore.load(id); } catch { saved = {}; }
   if (token !== snapshotRequest || selectedSessionId !== id) return;
   for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
   for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
@@ -277,19 +358,24 @@ async function installSnapshot(payload) {
     pendingImages = saved.images ?? [];
     renderAttachStrip(); autosize();
   }
-  followLatest = saved.followLatest !== false;
+  followLatest = pageIntent ? pageIntent === "latest" : saved.followLatest !== false;
+  if (historyPage?.hasNewer) followLatest = false;
   for (const state of saved.expansions ?? []) {
     const node = messageNode(state.key);
     if (node instanceof HTMLDetailsElement) node.open = state.open;
     else node?.classList.toggle("open", state.open);
   }
   if (followLatest) scrollToEnd(true);
+  else if (pageIntent) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
   else if (saved.anchor) {
     const anchor = messageNode(saved.anchor.key);
-    if (anchor) messages.scrollTop += anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset;
+    if (anchor) messages.scrollTo({ top: messages.scrollTop + anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset, behavior: "instant" });
   }
   updateScrollButton();
   activityReady = true;
+  syncIndicator.hidden = !restoreError && !anchorUnavailable;
+  if (restoreError) syncIndicator.textContent = t("chat.historyFailed");
+  else if (anchorUnavailable) syncIndicator.textContent = t("chat.historyMoved");
   activityView?.render();
   if (changed) refreshSessions();
 }
@@ -307,7 +393,11 @@ async function resyncSelected() {
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       const observedEpoch = eventInbox.epoch(id);
-      const payload = await window.arcane.sessionSnapshot(id);
+      saveWorkspace();
+      const saved = workspaceStore.cache.get(id);
+      const query = saved?.followLatest === false && saved.anchor ? { around: saved.anchor.key } : {};
+      let payload = await window.arcane.sessionSnapshot(id, query);
+      if (payload.code === "HISTORY_CURSOR_NOT_FOUND") payload = await window.arcane.sessionSnapshot(id, {});
       if (id !== selectedSessionId || token !== snapshotRequest) return;
       if (!payload.ok) throw new Error(payload.code);
       if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) continue;
@@ -334,8 +424,13 @@ function receiveEvent(event, replay = false) {
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
     if (event.seq <= viewSeq) return;
     viewSeq = event.seq;
+    if (historyPage?.hasNewer && ["message", "message_delta", "tool_start", "tool_end", "agent_settled", "compaction_start", "compaction_end"].includes(event.type)
+      && !toolCards.has(event.toolCallId) && !streamBubbles.has(event.key) && !thinkBlocks.has(event.key)) {
+      updateScrollButton(); activityView?.scheduleRead(); return;
+    }
   }
   onEvent(event);
+  if (event.sessionId === selectedSessionId && event.type === "agent_end" && historyPage && messages.children.length > 220) void resyncSelected();
   activityView?.scheduleRead();
 }
 /** @type {"combat" | "prep"} */
@@ -453,6 +548,7 @@ function nearBottom() {
 
 function scrollToEnd(force = false) {
   if (restoringView) return;
+  if (force && historyPage?.hasNewer) { void showHistoryPage({}, "latest"); return; }
   if (force || followLatest) {
     if (force) followLatest = true;
     messages.scrollTop = messages.scrollHeight;
@@ -461,11 +557,11 @@ function scrollToEnd(force = false) {
 }
 
 function updateScrollButton() {
-  scrollBottomBtn.classList.toggle("show", !nearBottom() && messages.scrollHeight > messages.clientHeight);
+  scrollBottomBtn.classList.toggle("show", Boolean(historyPage?.hasNewer) || (!nearBottom() && messages.scrollHeight > messages.clientHeight));
 }
 
 messages.addEventListener("scroll", () => {
-  if (!restoringView) followLatest = nearBottom();
+  if (!restoringView) followLatest = !historyPage?.hasNewer && nearBottom();
   if (!restoringView) scheduleWorkspaceSave();
   updateScrollButton();
 });
@@ -1804,7 +1900,7 @@ function messageNode(key) {
     ?? messages.querySelector('[data-legacy-key="' + escaped + '"]');
 }
 
-function renderHistory(entries, inFlight = {}, running = false) {
+function renderHistory(entries, inFlight = {}, running = false, page = null) {
   resetConversation();
   const liveTools = new Map((inFlight.tools ?? []).map(tool => [tool.toolCallId, tool]));
   function restoreTool(call) {
@@ -1839,9 +1935,9 @@ function renderHistory(entries, inFlight = {}, running = false) {
     }
   }
   for (const tool of inFlight.tools ?? []) {
-    if (!toolCards.has(tool.toolCallId)) restoreTool({ id: tool.toolCallId, name: tool.toolName, args: tool.args });
+    if (!page?.hasNewer && (!page || tool.state === "running") && !toolCards.has(tool.toolCallId)) restoreTool({ id: tool.toolCallId, name: tool.toolName, args: tool.args });
   }
-  for (const draft of inFlight.streaming ?? []) {
+  for (const draft of page?.hasNewer ? [] : inFlight.streaming ?? []) {
     if (draft.thinking) thinkBlock(draft.key).body.textContent = draft.thinking;
     if (draft.text) streamBubble(draft.key).querySelector(".body").textContent = draft.text;
   }
@@ -2925,7 +3021,10 @@ window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });
-syncIndicator.addEventListener("click", () => { void resyncSelected(); });
+syncIndicator.addEventListener("click", () => {
+  if (historyRetry?.id === selectedSessionId) void showHistoryPage(historyRetry.query, historyRetry.intent);
+  else void resyncSelected();
+});
 messages.addEventListener("click", scheduleWorkspaceSave);
 messages.addEventListener("toggle", scheduleWorkspaceSave, true);
 setInterval(() => {
@@ -2940,7 +3039,7 @@ activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: w
     ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
     visible: document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
       && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
-    atBottom: messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
+    atBottom: !historyPage?.hasNewer && !pendingHistoryAnchor && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
     readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
     toLatest: () => scrollToEnd(true) }), open: openActivity, drawer: () => setDrawer(true), changed: updateSessionActivity });
 applyPanelLayout();

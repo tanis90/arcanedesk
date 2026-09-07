@@ -167,6 +167,10 @@ globalThis.ARCANE_MESSAGES = {
     "chat.attention.stale": "问题已经结束或被取消，请查看最新进展",
     "chat.attention.retry": "回答尚未确认，请再次提交以重试",
     "chat.syncFailed": "暂时无法同步，正在显示上次确认的内容。点击重试。",
+    "chat.historyOlder": "查看更早的消息",
+    "chat.historyNewer": "查看后续消息",
+    "chat.historyFailed": "暂时无法加载这段历史，已保留阅读位置。点击重试。",
+    "chat.historyMoved": "原阅读位置已不在当前会话分支，已打开最近的消息。",
 
     // ---------- 设置:框架 ----------
     "settings.title": "设置",
@@ -584,6 +588,10 @@ globalThis.ARCANE_MESSAGES = {
     "chat.attention.stale": "This question has ended or was cancelled. Check the latest progress.",
     "chat.attention.retry": "Answer not confirmed. Submit again to retry.",
     "chat.syncFailed": "Unable to sync. Showing the last confirmed content. Click to retry.",
+    "chat.historyOlder": "Earlier messages",
+    "chat.historyNewer": "Later messages",
+    "chat.historyFailed": "Unable to load this history. Your reading position is saved. Click to retry.",
+    "chat.historyMoved": "Your previous reading position is no longer on this branch. Showing recent messages.",
 
     // ---------- settings frame ----------
     "settings.title": "Settings",
