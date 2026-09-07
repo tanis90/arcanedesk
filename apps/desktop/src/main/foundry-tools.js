@@ -20,10 +20,43 @@ const activityInput = exact({
   targetSpec: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 });
 const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Array(ref(), { maxItems: 100 })), input: Type.Optional(activityInput) };
+const grant = exact({ packId: ref(), entryId: ref(), expectedName: Type.Optional(ref()), expectedType: Type.Optional(ref()),
+  quantity: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })), equipped: Type.Optional(Type.Boolean()) });
+const actorChanges = exact({ name: Type.Optional(ref()), folderId: Type.Optional(Type.Union([ref(), Type.Null()])),
+  prototypeToken: Type.Optional(exact({ name: Type.Optional(ref()), width: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })),
+    height: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })), disposition: Type.Optional(Type.Union([Type.Literal(-1), Type.Literal(0), Type.Literal(1)])) })),
+  dnd5e: Type.Optional(exact({ hp: Type.Optional(exact({ value: Type.Optional(Type.Number({ minimum: 0 })),
+    max: Type.Optional(Type.Number({ minimum: 0 })), temp: Type.Optional(Type.Number({ minimum: 0 })) })),
+    ac: Type.Optional(exact({ flat: Type.Number() })) })) });
 
 /** Definitions are mode-independent; activation belongs to the host's explicit allowlist. */
 export function createFoundryTools(host) {
+  const actorWrite = (name, action, parameters, description) => defineTool({
+    name, label: name, description, parameters, executionMode: "sequential",
+    execute: async (id, params, signal) => {
+      const binding = host.taskCoordinator().currentInputBinding();
+      const approved = await host.maybeRequestApproval({ tool: name, summary: description.split(".")[0], args: params });
+      if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
+      return textResult(await host.foundryServices().writeActor(action, params, binding, id, signal));
+    },
+  });
   return [
+    defineTool({
+      name: "foundry_actor_get", label: "Read Actor",
+      description: "Read an exact Actor's compact summary and requested editing projections. Returns a session readRef required for edits/grants. Include items before grants and prototypeToken before changing its fields. Prep-only; pages do not contain full Item documents.",
+      parameters: exact({ actorUuid: ref(), include: Type.Optional(Type.Array(Type.Union([Type.Literal("items"), Type.Literal("resources"), Type.Literal("prototypeToken"), Type.Literal("sceneTokens")]), { maxItems: 4, uniqueItems: true })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
+      execute: async (_id, params, signal) => textResult(await host.foundryServices().actorRead(params, signal)),
+    }),
+    actorWrite("foundry_actor_create", "actorCreate", exact({
+      source: Type.Union([exact({ kind: Type.Literal("blank"), actorType: Type.Union([Type.Literal("character"), Type.Literal("npc")]) }),
+        exact({ kind: Type.Literal("compendium"), packId: ref(), entryId: ref() })]),
+      name: ref(), folderId: Type.Optional(ref()), initialItems: Type.Optional(Type.Array(grant, { maxItems: 50 })),
+    }), "Create an empty or compendium Actor with an explicit name and optional initial compendium Items. Existing names are returned as collisions; partial creation is never retried automatically. Prep-only."),
+    actorWrite("foundry_actor_update", "actorEdit", exact({ actorUuid: ref(), readRef: ref(), changes: actorChanges }),
+      "Update bounded Actor name, existing folder, prototype Token fields, HP or flat AC. Requires a current readRef for touched fields; unrelated changes do not block. No arbitrary dotted patches. Prep-only."),
+    actorWrite("foundry_actor_grant_items", "actorGrantItems", exact({ actorUuid: ref(), readRef: ref(), items: Type.Array(grant, { minItems: 1, maxItems: 50 }) }),
+      "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     defineTool({
       name: "foundry_content_search", label: "Search Foundry Content",
       description: "Search world Actors/Scenes or compendium Actors/Items. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",

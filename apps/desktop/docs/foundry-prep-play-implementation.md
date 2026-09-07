@@ -7,17 +7,17 @@
 
 ## 当前状态
 
-整体未完成。跑团工具及共享能力已激活，备团已增加内容搜索；Actor／Scene 内容写入与完整验收尚未完成。
+整体未完成。跑团工具、共享能力及备团搜索／Actor 基本读写已激活；图片、Scene 工具与完整验收尚未完成。
 
 | 方案项 | 实施状态与剩余工作 |
 | --- | --- |
-| M0 基线／工具矩阵 | 集中 allowlist 与真实 Pi active set 检查已通过；跑团实际 7 个工具，备团当前阶段 12 个，后续按已实现内容工具增加到 18；性能基线待测 |
+| M0 基线／工具矩阵 | 集中 allowlist 与真实 Pi active set 检查已通过；跑团实际 7 个工具，备团当前阶段 16 个，后续加两个 Scene 工具到 18；性能基线待测 |
 | M1 共享上下文 | SDK 全量 Token、结构引用，服务失效标记、operation 查询、动态动作引用映射及工具激活完成；待真实世界验收 |
 | M1 状态 | SDK 源保护、原生结束专注、目标解析、四态、严格 schema、中英文别名、绑定来源服务及工具激活完成；待真实系统验证 |
 | M1 操作记录 | JSONL、派发前落盘、去重、重启不重放、服务调用和会话删除清理已实现并测试 |
 | M1 环境绑定 | 消息入队时固定读取 world/Scene/selection、输入日志元数据、已消费输入绑定已接入；真实 Pi 工具集合通过，真实页面并发仍待验收 |
 | M2 跑团执行 | executeAction、普通 narrative-only 法术、非战斗执行、回合约束、引用解析和新工具激活完成；待完整参数覆盖与真实世界验收 |
-| M3 备团 Actor | 内容搜索已激活并测试；Actor 服务、图片管线、readRef 待实现 |
+| M3 备团 Actor | 搜索、get/create/update/grant、局部 readRef 已激活并测试；图片管线与真实世界验收待完成 |
 | M4 备团 Scene | 未实现 Scene 服务、图片／批量 Token、局部回读 |
 | M5 召唤 | auto pack 只记录 AUTO-001；新 executeAction 已在扣费前拒绝召唤放置，不调用旧同先攻协议；真实组合仍待验收 |
 | Prompt／UI／遥测 | 已改跑团名称、提示词、执行摘要与工具分类，历史旧工具仍可显示；新增内容工具随各阶段补充 |
@@ -39,7 +39,7 @@
 ## 下一步
 
 M1/M2 新工具已加入 active set；主入口显式传 SDK action 并集，SDK 默认四项保持。
-下一步实现备团 Actor get/create/update/grant、图片管线和 readRef，再做 Scene get/apply。
+下一步实现图片管线、Actor 图片／Ring／存量 Token 同步和 Scene get/apply，再做整体审计与验收。
 
 M2 的完整发现→执行链路已建立，但仍需审计实际能力定义完整性与结构失效覆盖，
 以及独立视觉入口是否可复用；动态结果不得携带重定义。
@@ -74,6 +74,21 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
 - contentSearch 使用 world Actor/Scene 和 compendium Actor/Item 的限定组合，结果包含精确 UUID、
   packId/entryId/package；测试覆盖 105 条结果的分页、来源保留、游标错用、包类型和边界拒绝。
   SDK 最新 55 项测试通过；没有调用 auto pack 写接口。
+
+## Actor 工具增量
+
+- actorRead 提供 summary、items/resources/prototypeToken/sceneTokens 投影和分页；readState 只在
+  宿主保存，模型获得会话内 readRef。场景 Token 投影跨 Scene，保留 linked/unlinked 身份。
+- actorEdit 只允许 name/folder、prototype name/size/disposition、HP 和受支持 flat AC。
+  按触及字段比较读取值；未读取字段或相关字段已变则拒绝，无关 HP 变化不妨碍改名。
+- actorCreate 支持空白／合集来源、已有 Actor 文件夹、初始授物；首次写前解析所有来源并检查同名。
+  Actor 与授予 Item 留存请求身份和精确来源；已建 Actor 的后续失败返回 partial，不删除或重建。
+- actorGrantItems 预检来源与数量／装备字段，单次批量创建；同来源已存在返回 skippedExisting，
+  不叠加数量、不替换。readRef 只比较本次相关来源身份，无关物品变化不阻止操作。
+- 创建／编辑／授物共享本地操作记录、world 绑定、页面资源租约和 requestId；工具清单中已激活。
+  图片字段尚未开放，下一阶段补齐唯一技术方案要求，不能据当前基本读写标记 M3 完成。
+- SDK 61 项测试通过，含 6 项 Actor 场景；宿主服务与真实 Pi 激活 10 项定向测试通过。
+  Desktop typecheck、source boundary、Markdown 链接及 diff 空白检查通过。
 
 ## 宿主绑定增量
 

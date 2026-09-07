@@ -153,11 +153,12 @@ macOS DMG 或官方 timed URL；不要求系统 Node 或 Git Bash。App 启动�
 | foundry_execute_action | 明确的法术／攻击，支持非战斗与叙事记账，跑团专用 |
 | foundry_conditions_set | 显式上／下状态与结束专注，两模式共享 |
 | foundry_content_search | 世界角色／场景和合集 Actor／Item 搜索，精确来源与分页，备团专用 |
+| foundry_actor_get/create/update/grant_items | Actor 读取、创建、有限字段编辑及合集授物，备团专用 |
 | request_user_input | 两模式通用的必要提问 |
 
 跑团固定六个 Foundry 工具，加通用提问实际为七个；没有页面 JS、shell 或文件工具。
 备团另有 foundry_screenshot 与 browser_evaluate，以及平台文件／shell 工具。
-角色编辑与场景写入工具仍在后续实施阶段，不预注册未实现入口。
+图片与场景工具仍在后续实施阶段，不预注册未实现入口。
 休息接口延期；新召唤放置在扣费前说明依赖缺失，auto pack 仅记录 TODO。
 
 ## 调试

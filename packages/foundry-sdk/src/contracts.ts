@@ -22,6 +22,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  * their own allowlist. The SDK client defaults to SAFE_DIRECT_ACTIONS.
  */
 export const ALL_DIRECT_ACTIONS = [
+  "actorRead", "actorCreate", "actorEdit", "actorGrantItems",
   "contentSearch",
   "staticContext",
   "playContext",
@@ -67,6 +68,7 @@ export type DirectActionEffect = "read" | "write";
  * writes, including maintenance actions that also expose a dry-run mode.
  */
 export const DIRECT_ACTION_EFFECTS = {
+  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write",
   contentSearch: "read",
   staticContext: "read",
   playContext: "read",
@@ -320,6 +322,10 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  actorRead: FoundryActionContract<ActorReadInput, ActorReadResult>;
+  actorCreate: FoundryActionContract<ActorCreateInput, PlayWriteReceipt>;
+  actorEdit: FoundryActionContract<ActorEditInput, PlayWriteReceipt>;
+  actorGrantItems: FoundryActionContract<ActorGrantInput, PlayWriteReceipt>;
   contentSearch: FoundryActionContract<ContentSearchInput, ContentSearchResult>;
   executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
   conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
@@ -332,6 +338,42 @@ export interface FoundryActionMap {
 }
 
 export type TypedDirectAction = keyof FoundryActionMap;
+
+export interface ActorReadInput {
+  actorUuid: string;
+  include?: Array<"items" | "resources" | "prototypeToken" | "sceneTokens">;
+  limit?: number;
+  cursor?: string;
+}
+export interface PrepItemIdentity { id: string; uuid: string; name: string; type: string; sourceUuid: string | null }
+export interface ActorReadState {
+  actorUuid: string;
+  world: { origin: string; id: string };
+  include: NonNullable<ActorReadInput["include"]>;
+  fields: RuntimeArguments;
+  items?: PrepItemIdentity[];
+}
+export interface ActorReadResult {
+  actorUuid: string; name: string; type: string; folderId: string | null; img: string | null;
+  hp: { value: number | null; max: number | null; temp: number | null }; ac: number | null;
+  items?: PrepItemIdentity[]; resources?: Record<string, number>; prototypeToken?: RuntimeArguments;
+  sceneTokens?: RuntimeArguments[]; nextCursor: string | null; readState: ActorReadState;
+}
+export interface CompendiumGrant {
+  packId: string; entryId: string; expectedName?: string; expectedType?: string; quantity?: number; equipped?: boolean;
+}
+export interface PrepWriteIdentity { world: { origin: string; id: string }; requestId: string }
+export interface ActorCreateInput extends PrepWriteIdentity {
+  source: { kind: "blank"; actorType: "character" | "npc" } | { kind: "compendium"; packId: string; entryId: string };
+  name: string; folderId?: string; initialItems?: CompendiumGrant[];
+}
+export interface ActorChanges {
+  name?: string; folderId?: string | null;
+  prototypeToken?: { name?: string; width?: number; height?: number; disposition?: -1 | 0 | 1 };
+  dnd5e?: { hp?: { value?: number; max?: number; temp?: number }; ac?: { flat: number } };
+}
+export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
+export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
 
 export interface ContentSearchInput {
   scope: "world" | "compendium";

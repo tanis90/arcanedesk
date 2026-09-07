@@ -1,4 +1,5 @@
 import { FoundryOperationStore } from "./foundry-operation-store.js";
+import { randomUUID } from "node:crypto";
 
 const aliases = Object.freeze({
   "倒地": "prone", "中毒": "poisoned", "失明": "blinded", "魅惑": "charmed",
@@ -17,6 +18,7 @@ export class FoundryServices {
     this.store = new FoundryOperationStore({ directory, sessionId });
     this.staticSnapshot = null;
     this.turnSnapshot = null;
+    this.readRefs = new Map();
   }
 
   async readStatic(signal) {
@@ -31,6 +33,32 @@ export class FoundryServices {
   async contentSearch(params, signal) {
     if (this.mode !== "prep") throw new Error("MODE_FORBIDDEN: content tools are prep-only");
     return this.withPage(signal, () => this.call("contentSearch", params, { signal, executionTimeoutMs: 30_000 }));
+  }
+
+  async actorRead(params, signal) {
+    if (this.mode !== "prep") throw new Error("MODE_FORBIDDEN: Actor editing is prep-only");
+    return this.withPage(signal, async () => {
+      const { readState, ...data } = await this.call("actorRead", params, { signal, executionTimeoutMs: 30_000 });
+      const readRef = randomUUID();
+      this.readRefs.set(readRef, structuredClone(readState));
+      return { ...data, readRef };
+    });
+  }
+
+  async writeActor(action, params, binding, toolCallId, signal) {
+    const reject = (code, message) => ({ status: "rejected", code, message });
+    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems"].includes(action)) return reject("MODE_FORBIDDEN", "Actor editing is prep-only");
+    const { readRef, ...values } = params;
+    const readState = readRef ? this.readRefs.get(readRef) : null;
+    if (action !== "actorCreate" && (!readState || readState.actorUuid !== params.actorUuid)) return reject("READ_REF_INVALID", "Read this Actor in the current session first");
+    const metadata = await binding.metadata;
+    if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
+    const args = { ...values, world: metadata.world, ...(readState ? { readState } : {}) };
+    return this.withPage(signal, async () => {
+      if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
+      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action, args },
+        ({ requestId }) => this.call(action, { ...args, requestId }, { signal, executionTimeoutMs: 60_000 }));
+    });
   }
 
   /** @param {{view?: "scene" | "turn" | "operation", operationRef?: string}} [params] @param {AbortSignal} [signal] */

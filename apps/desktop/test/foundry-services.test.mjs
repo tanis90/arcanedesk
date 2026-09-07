@@ -91,3 +91,20 @@ test("content search is prep-only and uses one fixed read call", async t => {
   await f.service.contentSearch(query);
   assert.deepEqual(f.calls, [{ action: "contentSearch", args: query }]);
 });
+
+test("Actor readRef hides internal state, binds to this session and injects request identity into writes", async t => {
+  const f = fixture(t); f.service.mode = "prep";
+  const readState = { actorUuid: "Actor.a", world: { origin: "https://f.test", id: "w" }, fields: { name: "Guard" }, include: [] };
+  const calls = [];
+  f.service.call = async (action, args) => { calls.push({ action, args }); return action === "actorRead"
+    ? { actorUuid: "Actor.a", name: "Guard", readState } : { status: "completed", steps: [], verification: [], warnings: [] }; };
+  const read = await f.service.actorRead({ actorUuid: "Actor.a" });
+  assert.ok(read.readRef); assert.equal("readState" in read, false);
+  const input = { actorUuid: "Actor.a", readRef: read.readRef, changes: { name: "New" } };
+  assert.equal((await f.service.writeActor("actorEdit", { ...input, actorUuid: "Actor.other" }, f.binding, "bad")).code, "READ_REF_INVALID");
+  const result = await f.service.writeActor("actorEdit", input, f.binding, "edit");
+  assert.equal(result.status, "completed"); assert.equal(calls[1].args.requestId, result.operationRef);
+  assert.deepEqual(calls[1].args.readState, readState); assert.equal("readRef" in calls[1].args, false);
+  const other = fixture(t); other.service.mode = "prep";
+  assert.equal((await other.service.writeActor("actorEdit", input, f.binding, "edit")).code, "READ_REF_INVALID");
+});

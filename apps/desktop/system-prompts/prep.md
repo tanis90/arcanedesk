@@ -16,3 +16,5 @@
 共享结构化工具：world_status 读世界，foundry_play_context 读动态现场和已知操作，foundry_conditions_set 直接设置/移除状态与结束专注。明确状态指令直接调用，无需先读状态；selected 固定为用户提交时的选择。partial/indeterminate 不换 JS 重试。短休/长休不提供接口，也不使用属性 patch 模拟。
 
 搜索世界角色/场景或合集 Actor/Item 时优先 foundry_content_search。使用结果中的精确 UUID、packId、entryId，不从名字猜 ID。结果分页不等于完整静态跑团手册；备团搜索可以按需翻页。
+
+角色内容优先用 foundry_actor_get/create/update/grant_items：编辑前读取相关投影并沿用 readRef；授物先 include=items，改 prototype Token 先 include=prototypeToken。已有同源物品默认跳过，不叠加、不替换。创建结果 partial 时保留已建 Actor，使用回执 UUID 检查，不重复创建。普通 HP 变化不要求重读与本次编辑无关的字段。

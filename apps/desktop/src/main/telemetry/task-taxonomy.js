@@ -13,6 +13,7 @@ export function toolFamily(toolName) {
       return "foundry.visual_inspect";
     case "world_status":
     case "foundry_content_search":
+    case "foundry_actor_get":
       return "world.inspect";
     case "combat_battle_context":
     case "foundry_static_context":
@@ -23,6 +24,9 @@ export function toolFamily(toolName) {
     case "combat_execute_turn":
     case "foundry_execute_action":
     case "foundry_conditions_set":
+    case "foundry_actor_create":
+    case "foundry_actor_update":
+    case "foundry_actor_grant_items":
       return "combat.execute";
     case "read":
       return "filesystem.read";
@@ -59,6 +63,7 @@ export function actionFamily(action) {
   switch (String(action ?? "")) {
     case "worldInfo":
     case "contentSearch":
+    case "actorRead":
       return "world_info";
     case "battleContext":
     case "staticContext":
@@ -69,6 +74,9 @@ export function actionFamily(action) {
     case "executeTurn":
     case "executeAction":
     case "conditionsSet":
+    case "actorCreate":
+    case "actorEdit":
+    case "actorGrantItems":
       return "execute_turn";
     default:
       return "other";
