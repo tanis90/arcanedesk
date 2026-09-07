@@ -9,6 +9,32 @@ import { InputJournal } from "../src/main/tasks/input-journal.js";
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("stopping retains execution capacity and waits for actual tool settlement", async () => {
+  const { ExecutionScheduler } = await import("../src/main/scheduling/execution-scheduler.js");
+  const scheduler = new ExecutionScheduler({ capacity: 1 }), raw = deferred(), prompt = deferred();
+  let settling = false;
+  const c = new TaskCoordinator({ sessionId: "A", scheduler, adapter: {
+    prompt: () => prompt.promise, abort: async () => prompt.resolve(),
+    settleTask: async () => { settling = true; await raw.promise; },
+  } });
+  c.submit({ text: "run" }); await tick();
+  const stop = c.stop(c.task.id); await tick();
+  assert.equal(settling, true); assert.equal(c.task.state, "stopping");
+  assert.equal(scheduler.active.size, 1);
+  raw.resolve(); await stop; assert.equal(c.task.state, "stopped"); assert.equal(scheduler.active.size, 0);
+});
+
+test("supplement received while actual tools settle continues the same task", async () => {
+  const gate = deferred(), calls = [];
+  const c = new TaskCoordinator({ sessionId: "A", adapter: {
+    prompt: async text => { calls.push(text); }, settleTask: () => gate.promise,
+  } });
+  const first = c.submit({ text: "first" }); await tick();
+  const second = c.submit({ text: "second" }); assert.equal(second.taskId, first.taskId);
+  gate.resolve(); await c.run;
+  assert.deepEqual(calls, ["first", "second"]); assert.equal(c.task.state, "completed");
+});
+
 test("acceptance precedes execution; identical command retry executes once and changed content conflicts", async () => {
   const gate = deferred(); const calls = [];
   const coordinator = new TaskCoordinator({ sessionId: "A", adapter: {

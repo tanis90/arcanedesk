@@ -144,3 +144,21 @@ test("agent page tools and structured runtime share admission and reacquire the 
   await tick(); assert.equal(b.task.state, "waiting_resource");
   held.release(); await structured; assert.equal(b.task.state, "running");
 });
+
+test("AgentHost stop stays stopping until an aborted page script actually finishes", async () => {
+  const r = new ResourceCoordinator(), raw = deferred(), started = deferred(), abort = new AbortController();
+  const wc = new FakeWebContents(() => { started.resolve(); return raw.promise; });
+  const h = new AgentHost({ resources: r, profile: { mode: "prep" }, getFoundryView: () => ({ webContents: wc }),
+    sendToRenderer() {}, log() {} });
+  h.sessionManager = { getSessionId: () => "A", getSessionName: () => "A" };
+  h.session = {
+    prompt: () => h.buildTools().find(tool => tool.name === "browser_evaluate").execute("write", { code: "slow" }, abort.signal),
+    abort: async () => abort.abort(), clearQueue() {},
+  };
+  h.submitInput("write", [], "command"); await started.promise;
+  const stop = h.tasks.stop(h.task.id); await tick();
+  assert.equal(h.task.state, "stopping"); assert.equal(h.busy, true); assert.equal(r.active.size, 1);
+  assert.equal(h.submitInput("next", [], "next").code, "TASK_STOPPING");
+  raw.resolve("done"); await stop;
+  assert.equal(h.task.state, "stopped"); assert.equal(h.busy, false); assert.equal(r.active.size, 0);
+});

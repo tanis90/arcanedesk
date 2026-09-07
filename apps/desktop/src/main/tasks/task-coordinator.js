@@ -244,6 +244,7 @@ export class TaskCoordinator {
         this.dispatching = input;
         this.setInputState(input, "dispatching");
         await this.adapter.prompt(input.executionText ?? input.text, input.images);
+        await this.adapter.settleTask?.(taskId);
         await Promise.all([...this.queueWrites]);
         if (input.state === "dispatching") this.setInputState(input, "handled"); // extension commands may consume input without a model message
         this.dispatching = null;
@@ -259,6 +260,7 @@ export class TaskCoordinator {
       this.setTaskState(state);
     } catch (error) {
       this.adapter.clearQueue?.();
+      await this.adapter.settleTask?.(taskId);
       for (const input of this.inputs.values()) {
         if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, this.task.state === "stopping" ? "cancelled" : "failed");
       }

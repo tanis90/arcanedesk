@@ -754,6 +754,16 @@ export class AgentHost {
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
+        settleTask: async taskId => {
+          const waitId = `settle:${taskId}`;
+          try {
+            await this.resources?.waitForOwner(sessionId, taskId, details => {
+              if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, details);
+            });
+          } finally {
+            if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, null);
+          }
+        },
         abort: async () => {
           for (const id of this.approvals.keys()) this.respondApproval(id, false);
           await this.session?.abort();

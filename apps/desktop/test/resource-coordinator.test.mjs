@@ -57,6 +57,17 @@ test("queued cancellation is removed before any operation and does not strand fo
   held.release(); (await next).release(); assert.equal(calls, 0); assert.equal(r.queue.length, 0);
 });
 
+test("owner settlement ignores unrelated tasks and still awaits release if the observer fails", async () => {
+  const r = new ResourceCoordinator();
+  const a = await r.acquire(["one"], { sessionId: "A", taskId: "task" });
+  const b = await r.acquire(["two"], { sessionId: "B", taskId: "task" });
+  let ended = false;
+  const waiting = r.waitForOwner("A", "task", () => { throw new Error("storage failed"); }).catch(e => { ended = true; return e.message; });
+  await tick(); assert.equal(ended, false);
+  a.release(); assert.equal(await waiting, "storage failed"); assert.equal(r.active.size, 1);
+  b.release();
+});
+
 test("wait callbacks can release or cancel without stranding or removing another waiter", async () => {
   const r = new ResourceCoordinator();
   const held = await r.acquire(["shared"], {});

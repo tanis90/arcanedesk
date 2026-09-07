@@ -96,12 +96,29 @@ export class ResourceCoordinator {
         }
         this.queue.splice(index, 1); entry.signal?.removeEventListener("abort", entry.cancel);
         if (entry.signal?.aborted) { entry.reject(cancelled()); continue; }
+        let finish;
+        entry.finished = new Promise(resolve => { finish = resolve; });
         const token = Symbol("resource"); this.active.set(token, entry);
-        entry.resolve({ release: () => { if (this.active.delete(token)) this.drain(); } });
+        entry.resolve({ release: () => {
+          if (this.active.delete(token)) { finish(); this.drain(); }
+        } });
       }
     } finally {
       this.draining = false;
       if (this.redrain) { this.redrain = false; this.drain(); }
+    }
+  }
+
+  /** Wait for actual operations owned by this task, including deferred page execution. */
+  async waitForOwner(sessionId, taskId, onWait = (_details) => {}) {
+    while (true) {
+      const held = [...this.active.values()].filter(entry => entry.owner.sessionId === sessionId && entry.owner.taskId === taskId);
+      if (!held.length) return;
+      let observerError;
+      try { onWait({ resources: [...new Set(held.flatMap(entry => entry.resources))], holders: held.map(entry => entry.owner) }); }
+      catch (error) { observerError = error; }
+      await Promise.all(held.map(entry => entry.finished));
+      if (observerError) throw observerError;
     }
   }
 
