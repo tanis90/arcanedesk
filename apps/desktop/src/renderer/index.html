@@ -1624,7 +1624,10 @@
     <p class="telemetry-consent-foot" data-i18n="telemetry.consent.foot">不影响任何功能；之后可在「设置 → 通用」中随时更改。</p>
   </section>
   <aside id="session-drawer">
-    <div class="drawer-head"><span data-i18n="sessions.drawerTitle">会话</span><div><button id="session-new" title="新会话" data-i18n-title="sessions.new">+</button><button id="drawer-close" data-i18n-title="settings.close" title="关闭">×</button></div></div>
+    <div class="drawer-actions">
+      <button id="session-new" class="drawer-action" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg><span data-i18n="sessions.new">新会话</span></button>
+      <button id="session-search" class="drawer-action" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span data-i18n="navigation.search">搜索</span></button>
+    </div>
     <button id="navigation-retry" type="button" data-i18n="navigation.storageFailed" hidden></button>
     <div id="session-list"></div>
     <button id="session-archives" type="button" data-i18n="navigation.archives">已归档</button>

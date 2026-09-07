@@ -500,6 +500,7 @@ function receiveEvent(event, replay = false) {
     void refreshSessions(); return;
   }
   if (event.type === "shutdown_state") { showShutdown(event); return; }
+  if (event.type === "panel_pointer") { navigationView?.searchDialog?.close(); setDrawer(false); return; }
   if (event.type === "activity_removed") forgetSession(event.sessionId);
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
@@ -2221,8 +2222,11 @@ document.getElementById("sessions-toggle").addEventListener("click", () =>
   setDrawer(!drawer.classList.contains("open"))
 );
 drawerBackdrop.addEventListener("click", () => setDrawer(false));
-document.getElementById("drawer-close").addEventListener("click", () => setDrawer(false));
-document.addEventListener("keydown", event => { if (event.key === "Escape") setDrawer(false); });
+document.addEventListener("pointerdown", event => {
+  if (event.target instanceof Element && drawer.classList.contains("open") && !drawer.contains(event.target) && !event.target.closest("#sessions-toggle, dialog, .session-menu")) setDrawer(false);
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape" && !document.querySelector("dialog[open]")) setDrawer(false); });
+document.getElementById("session-search").addEventListener("click", () => navigationView?.search());
 document.getElementById("session-new").addEventListener("click", () => {
   const row = navigationView?.rows.get(selectedSessionId);
   void createProjectSession(row?.cwd ?? undefined);

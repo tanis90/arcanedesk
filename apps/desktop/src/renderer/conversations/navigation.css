@@ -58,3 +58,23 @@ body.archived-session #composer-wrap { display: none; }
 :is(.nav-project, .session-item, .session-menu, .session-dialog, #archive-page, #archive-readonly, #session-drawer, #navigation-toast) :is(button, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: none) { .nav-project-new, .s-menu { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .s-state[data-kind="running"] { animation: none; } .nav-chevron { transition: none; } }
+
+/* One consistent full-row target for navigation and actions. */
+:root { --nav-hover: #293344; --nav-selected: #344157; }
+:root[data-theme="light"] { --nav-hover: #d9ceb3; --nav-selected: #cfc1a0; }
+.drawer-actions { padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; flex: none; }
+.drawer-action { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.drawer-action svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
+.drawer-action:hover, .drawer-action:focus-visible, .session-item:hover, .session-item:focus-within, .search-result:hover, .search-result:focus-visible { background: var(--nav-hover); }
+.session-item.active, .session-item.active:hover { background: var(--nav-selected); border-color: transparent; }
+.session-item .s-body { align-self: stretch; padding: 4px 0; }
+.session-item .s-menu:hover { background: var(--nav-selected); }
+.session-dialog { margin: auto; }
+.session-search { width: min(600px, calc(100vw - 32px)); height: min(520px, calc(100vh - 64px)); padding: 12px; }
+.session-search[open] { display: flex; flex-direction: column; }
+body.with-panel .session-search { width: min(600px, calc(100vw - var(--panel-w, 0px) - 24px)); margin-left: max(12px, calc((100vw - var(--panel-w, 0px) - 600px) / 2)); margin-right: auto; }
+.search-results { max-height: min(55vh, 480px); overflow: auto; margin-top: 8px; }
+.session-search .search-result { display: flex; flex-direction: column; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 6px; padding: 10px; }
+.search-result .s-title, .search-result .s-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.search-result .s-meta { color: var(--muted); font-size: var(--fs-meta); }
+.session-search .search-result:hover, .session-search .search-result:focus-visible { background: var(--nav-hover); }

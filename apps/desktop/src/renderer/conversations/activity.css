@@ -34,7 +34,6 @@ body:has(#activity-jump:not([hidden])) #scroll-bottom { display: none; }
 .session-item:focus-within .s-del { opacity: 1; }
 body.sidebar-pinned #session-drawer { transform: none; box-shadow: none; }
 body.sidebar-pinned #drawer-backdrop { display: none; }
-body.sidebar-pinned #drawer-close { visibility: hidden; }
 body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
 #session-drawer { max-width: calc(100% - var(--panel-w, 0px)); }
 #activity-bar [hidden], #activity-jump[hidden], #activity-empty[hidden] { display: none; }

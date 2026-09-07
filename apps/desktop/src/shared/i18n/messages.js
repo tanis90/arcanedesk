@@ -9,6 +9,9 @@
 
 globalThis.ARCANE_MESSAGES = {
   "zh-CN": {
+    "navigation.search": "搜索",
+    "navigation.searchPlaceholder": "搜索会话标题或项目…",
+    "navigation.searchEmpty": "没有匹配的会话",
     "navigation.pinned": "置顶",
     "navigation.projects": "项目",
     "navigation.archives": "已归档",
@@ -465,6 +468,9 @@ globalThis.ARCANE_MESSAGES = {
   },
 
   "en-US": {
+    "navigation.search": "Search",
+    "navigation.searchPlaceholder": "Search session titles or projects…",
+    "navigation.searchEmpty": "No matching sessions",
     "navigation.pinned": "Pinned",
     "navigation.projects": "Projects",
     "navigation.archives": "Archived",

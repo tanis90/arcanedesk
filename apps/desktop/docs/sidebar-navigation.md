@@ -4,6 +4,10 @@
 
 ## Kimi 参考核对
 
+2026-09-07 补充实际内置浏览器操作：用户提供的 localhost:58627 界面，登录后验证新建行右侧留白可点击、整行悬停加深、搜索弹层键盘选择和点击外部关闭，并截图检查。Kimi 的会话行尾在悬停时出现置顶／归档快捷按钮；测试时误触归档已从设置恢复，原会话留在列表。ArcaneDesk 只参考整行命中和搜索入口，保留明确 ⋯ 菜单，不复刻行尾快捷归档。没有向 Kimi 提交新消息。
+
+本地 Pi 0.84.3：`dist/core/session-manager.d.ts` 的 SessionInfo 包含 name、cwd、firstMessage、allMessagesText；`dist/modes/interactive/components/session-selector-search.js` 实现终端过滤。没有独立公开搜索 API，本轮选择现有导航摘要的标题／目录轻量搜索。唯一行为定义见 architecture.md。
+
 已浅克隆两个官方仓库，未安装依赖或运行其服务：
 
 | 仓库 | 本地目录 | 核对版本 |

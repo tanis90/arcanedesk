@@ -30,6 +30,11 @@ module.exports = async ({ window, scratch, streams, requests, until, ui, evaluat
   window.setSize(1400, 900); window.showInactive();
   await run("applyPanelLayout(); setDrawer(true); refreshSessions()");
   await ui("navigationView.rows.size >= 2");
+  assert.equal(await run('document.getElementById("drawer-close")'), null);
+  const originalId = await run('selectedSessionId');
+  await click("#session-new");
+  await ui(`selectedSessionId !== ${JSON.stringify(originalId)} && workspaceReady.has(selectedSessionId)`);
+  assert.equal(requests.length, 0, "whole-row creation does not submit a model request");
   const a = globalThis.__arcaneHosts.prep.activeHost;
   const aid = a.describeCurrent().id;
   await run('input.value = "production-A"; submit()');
@@ -57,6 +62,22 @@ module.exports = async ({ window, scratch, streams, requests, until, ui, evaluat
   await run("refreshSessions()");
   assert.equal(await run('[...navigationView.groups.keys()].filter(key => key.endsWith("adventure")).length'), 2);
   await capture("running-projects");
+  await click("#session-search");
+  await ui('!!document.querySelector(".session-search[open]")');
+  await cdp("Input.insertText", { text: "production-A" });
+  await ui('document.querySelectorAll(".search-result").length === 1');
+  await capture("search");
+  await cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await ui(`selectedSessionId === ${JSON.stringify(aid)} && !document.querySelector(".session-search")`);
+  await click(row(bid) + " .s-state");
+  await ui(`selectedSessionId === ${JSON.stringify(bid)}`);
+  await click("#session-search");
+  await cdp("Input.insertText", { text: "no-match-acceptance-unique" });
+  await ui('document.querySelectorAll(".search-result").length === 0');
+  await cdp("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, x: 10, y: 850 });
+  await cdp("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, x: 10, y: 850 });
+  await ui('!document.querySelector(".session-search")');
   // Cross-mode navigation is exercised through the visible row, never a prompt.
   const combat = globalThis.__arcaneHosts.combat.activeHost.describeCurrent().id;
   await click(row(combat) + " .s-body");
@@ -131,6 +152,7 @@ module.exports = async ({ window, scratch, streams, requests, until, ui, evaluat
     await new Promise(resolve => setTimeout(resolve, 150));
     const shot = await cdp("Page.captureScreenshot", { format: "png" }); writeFileSync(path.join(output, name + ".png"), Buffer.from(shot.data, "base64"));
     assert.ok(await run('document.body.scrollWidth <= innerWidth'), name + " has no horizontal document overflow");
+    if (panel) { await click("#drawer-backdrop"); await ui('!drawer.classList.contains("open")'); }
   }
   writeFileSync(path.join(output, "result.json"), JSON.stringify({ requests, passed: true, checks: ["CDP real pointer menus", "same-name distinct projects", "cross-mode navigation", "stable streaming rows", "busy archive rejected", "archived submit rejected", "rename", "archive history and draft", "reload", "restore", "undo", "confirmed permanent delete preserves files", "layout screenshots"] }, null, 2));
   await run(`openActivity(navigationView.rows.get(${JSON.stringify(cid)}))`);

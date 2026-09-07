@@ -8,6 +8,7 @@
 | --- | --- |
 | 置顶及同名不同项目，A/B 同时运行 | [running-projects](running-projects.png) |
 | 会话右键菜单 | [session-menu](session-menu.png) |
+| 标题／项目搜索弹层 | [search](search.png) |
 | 已归档页面 | [archives](archives.png) |
 | 宽窗口 | [wide](wide.png) |
 | 窄窗口 | [minimum](minimum.png) |

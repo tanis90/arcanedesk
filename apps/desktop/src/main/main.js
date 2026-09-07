@@ -348,6 +348,9 @@ async function openFoundryView(rawUrl) {
     });
     mainWindow.contentView.addChildView(foundryView);
     const panelWebContents = foundryView.webContents;
+    panelWebContents.on("before-mouse-event", (_event, mouse) => {
+      if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
+    });
     if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
     panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
       if (isMainFrame === false || isInPlace) return;

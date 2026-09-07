@@ -116,8 +116,8 @@
           const state = node("span", "s-state");
           const menu = node("button", "s-menu", "⋯"); menu.type = "button"; menu.title = this.t("navigation.menu"); menu.setAttribute("aria-label", menu.title); menu.setAttribute("aria-haspopup", "menu");
           const current = () => this.rows.get(row.id);
-          body.addEventListener("click", () => { this.reveal(row.id); this.showArchives(false); void this.open(current()); });
-          menu.addEventListener("click", () => this.openMenu(current(), menu));
+          item.addEventListener("click", () => { this.reveal(row.id); this.showArchives(false); void this.open(current()); });
+          menu.addEventListener("click", event => { event.stopPropagation(); this.openMenu(current(), menu); });
           item.addEventListener("contextmenu", event => { event.preventDefault(); this.openMenu(current(), menu, event); });
           item.append(body, state, menu); this.items.set(row.id, item);
         }
@@ -158,6 +158,35 @@
       menu.style.top = Math.max(8, Math.min(event?.clientY ?? rect.bottom, innerHeight - menu.offsetHeight - 8)) + "px";
       menu.addEventListener("keydown", event => { if (!["ArrowDown", "ArrowUp", "Home", "End", "Tab"].includes(event.key)) return; if (event.key === "Tab") { this.closeMenu(); return; } event.preventDefault(); const buttons = [...menu.querySelectorAll("button:not(:disabled)")]; const index = buttons.indexOf(document.activeElement); buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length]?.focus(); });
       menu.querySelector("button:not(:disabled)")?.focus();
+    }
+    search() {
+      if (this.searchDialog?.open) { this.searchDialog.querySelector("input").focus(); return; }
+      this.closeMenu(false);
+      const dialog = node("dialog", "session-dialog session-search"), input = node("input"), results = node("div", "search-results");
+      this.searchDialog = dialog; dialog.setAttribute("aria-label", this.t("navigation.search"));
+      input.type = "search"; input.placeholder = this.t("navigation.searchPlaceholder"); input.setAttribute("aria-label", input.placeholder);
+      results.setAttribute("aria-live", "polite");
+      const render = () => {
+        const terms = input.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+        results.replaceChildren();
+        const matches = [...this.rows.values()].filter(row => terms.every(term => `${this.title(row)} ${row.cwd ?? ""}`.toLocaleLowerCase().includes(term)));
+        if (!matches.length) results.append(node("p", "nav-empty", this.t("navigation.searchEmpty")));
+        for (const row of matches) {
+          const button = node("button", "search-result"); button.type = "button";
+          button.append(node("span", "s-title", this.title(row)), node("span", "s-meta", (row.cwd || this.t("navigation.unknownProject")) + (row.archivedAt != null ? " · " + this.t("navigation.archived") : "")));
+          button.onclick = () => { const current = this.rows.get(row.id); if (!current) { render(); return; } dialog.close(); this.reveal(row.id); this.showArchives(false); void this.open(current); };
+          results.append(button);
+        }
+      };
+      input.oninput = render;
+      dialog.addEventListener("keydown", event => {
+        const buttons = [...results.querySelectorAll("button")];
+        if (event.key === "Enter" && document.activeElement === input) { event.preventDefault(); buttons[0]?.click(); }
+        if (["ArrowDown", "ArrowUp"].includes(event.key)) { event.preventDefault(); const index = buttons.indexOf(document.activeElement); if (event.key === "ArrowUp" && index <= 0) input.focus(); else buttons[(index + 1 * (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
+      });
+      dialog.addEventListener("click", event => { const rect = dialog.getBoundingClientRect(); if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) dialog.close(); });
+      dialog.onclose = () => { dialog.remove(); this.searchDialog = null; document.getElementById("session-search").focus(); };
+      dialog.append(input, results); document.body.append(dialog); render(); dialog.showModal(); input.focus();
     }
     async dialog(row, rename) {
       const dialog = node("dialog", "session-dialog"), form = node("form"); form.method = "dialog";
