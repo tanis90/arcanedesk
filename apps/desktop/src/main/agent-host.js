@@ -226,9 +226,11 @@ export class AgentHost {
    *   profile?: Record<string, any>,
    *   getLocale?: () => string,
    *   taskStorageDir?: string,
+   *   scheduler?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler } = {}) {
+    this.scheduler = scheduler;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
@@ -736,7 +738,7 @@ export class AgentHost {
     if (this.tasks) return this.tasks;
     const sessionId = this.describeCurrent()?.id ?? "unattached";
     const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
-    this.tasks = new TaskCoordinator({ sessionId, journal: new InputJournal(file), emit: event => this.emit(event),
+    this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, journal: new InputJournal(file), emit: event => this.emit(event),
       adapter: {
         beginTask: async (pending) => {
           if (!pending) return;
@@ -804,14 +806,14 @@ export class AgentHost {
   maybeRequestApproval(payload) {
     if (!APPROVALS_ENABLED) return Promise.resolve(true);
     const requestedAt = Date.now();
-    return new Promise((resolve) => {
+    const pending = new Promise((resolve) => {
       const approvalId = `appr_${randomUUID()}`;
       const finish = (approved, outcome = approved ? "allowed" : "denied") => {
         clearTimeout(timer);
         this.approvals.delete(approvalId);
         this.approvalSnapshots.delete(approvalId);
         this.emit({ type: "approval_resolved", approvalId, approved });
-        if (this.tasks?.task?.state === "waiting_user" && !this.approvals.size && !this.tasks.snapshotAttentions().some(a => a.state === "pending")) this.tasks.setTaskState("running");
+        if (!this.tasks?.admission && this.tasks?.task?.state === "waiting_user" && !this.approvals.size && !this.tasks.snapshotAttentions().some(a => a.state === "pending")) this.tasks.setTaskState("running");
         this.telemetry?.approvalResolved(this.profile.mode, payload?.tool, outcome, Date.now() - requestedAt);
         resolve(approved);
       };
@@ -824,6 +826,7 @@ export class AgentHost {
       if (this.tasks?.busy && this.tasks.task.state !== "stopping") this.tasks.setTaskState("waiting_user");
       this.emit({ type: "approval_request", approvalId, ...payload });
     });
+    return this.tasks?.admission ? this.tasks.admission.waitForUser(pending).catch(() => false) : pending;
   }
 
   respondApproval(approvalId, approved) {

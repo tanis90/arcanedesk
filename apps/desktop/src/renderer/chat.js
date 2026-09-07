@@ -17,6 +17,7 @@ function showPendingModel(model) {
 }
 function showTaskState(task) {
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
+    queued: "activity.capacityQueue", waiting_resource: "activity.waitingResource", cancelled: "activity.cancelled",
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task;
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
@@ -1009,7 +1010,7 @@ function onEvent(event) {
   if (event.type !== "session_switched" && event.sessionId && event.sessionId !== selectedSessionId) return;
   if (event.taskId && selectedTaskId && event.taskId !== selectedTaskId
     && event.type !== "session_switched"
-    && !(event.type === "task_state" && event.task.state === "running")) return;
+    && !(event.type === "task_state" && ["running", "queued"].includes(event.task.state))) return;
   switch (event.type) {
     case "attention":
       renderAttention(event.attention);

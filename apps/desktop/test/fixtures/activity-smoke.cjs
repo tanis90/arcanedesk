@@ -178,6 +178,11 @@ app.whenReady().then(async () => {
     window.reload(); await rebuilt;
     await until('selectedSessionId === "B" && activityReady && !openingNotification');
     assert.equal(notificationBroker.takeTarget(), null);
+    send("B", { type: "task_state", task: { id: "task-B-queued", state: "queued" } });
+    await until('selectedTaskId === "task-B-queued" && busy');
+    assert.equal(await evaluate('taskIndicator.textContent'), await evaluate('t("activity.capacityQueue")'));
+    send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
+    await until('!busy && taskIndicator.textContent === t("activity.cancelled")');
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

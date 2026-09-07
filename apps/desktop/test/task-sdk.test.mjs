@@ -5,15 +5,17 @@ import path from "node:path";
 import os from "node:os";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { TaskCoordinator } from "../src/main/tasks/task-coordinator.js";
+import { ExecutionScheduler } from "../src/main/scheduling/execution-scheduler.js";
 
 // Use the exact pi-ai copy bundled with the installed SDK, not a second version.
 const { AssistantMessageEventStream } = await import(new URL("../node_modules/@earendil-works/pi-ai/dist/index.js", import.meta.resolve("@earendil-works/pi-coding-agent")));
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 
-async function sdkHarness({ ask = false } = {}) {
+async function sdkHarness({ ask = false, scheduler = null, marker = false } = {}) {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "arcane-sdk-task-"));
   const first = deferred(); const release = deferred(); const calls = [];
   let coordinator;
+  const markers = [];
   const runtime = await ModelRuntime.create({ authPath: path.join(cwd, "auth.json"), modelsPath: null, refreshOnCreate: false });
   runtime.registerProvider("arcane-test", {
     api: "openai-completions", apiKey: "test-only", baseUrl: "http://127.0.0.1:1",
@@ -27,6 +29,7 @@ async function sdkHarness({ ask = false } = {}) {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
       if (ask && index === 1) {
         message.content = [{ type: "toolCall", id: "ask-1", name: "request_user_input", arguments: { question: "Choose a scene" } }];
+        if (marker) message.content.push({ type: "toolCall", id: "marker-1", name: "marker", arguments: {} });
         message.stopReason = "toolUse";
       }
       let ended = false;
@@ -52,20 +55,44 @@ async function sdkHarness({ ask = false } = {}) {
   await loader.reload();
   const { session } = await createAgentSession({ cwd, agentDir: cwd, sessionManager: SessionManager.inMemory(cwd),
     settingsManager, resourceLoader: loader, modelRuntime: runtime, model: runtime.getModel("arcane-test", "test"),
-    tools: ask ? ["request_user_input"] : [],
+    tools: ask ? ["request_user_input", ...(marker ? ["marker"] : [])] : [],
     customTools: ask ? [{ name: "request_user_input", label: "Ask", description: "Ask a question",
+      executionMode: "sequential",
       parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"] },
       execute: async (_id, args, signal) => ({ content: [{ type: "text", text: JSON.stringify(await coordinator.ask(args, signal)) }] }),
-    }] : [] });
-  coordinator = new TaskCoordinator({ sessionId: "test", adapter: {
+    }, ...(marker ? [{ name: "marker", label: "Marker", description: "Record continuation", parameters: { type: "object", properties: {} },
+      execute: async () => { markers.push(true); return { content: [{ type: "text", text: "continued" }] }; } }] : [])] : [] });
+  coordinator = new TaskCoordinator({ sessionId: "test", scheduler, adapter: {
     prompt: (text, images) => session.prompt(text, { images }),
     steer: (text, images) => session.steer(text, images),
     clearQueue: () => session.clearQueue(), isStreaming: () => session.isStreaming,
     abort: () => session.abort(),
   } });
   session.subscribe(event => coordinator.observe(event));
-  return { session, coordinator, first, release, calls };
+  return { session, coordinator, first, release, calls, markers };
 }
+
+test("real Pi releases capacity for questions and reacquires before any following tool or model call", { timeout: 15000 }, async () => {
+  const scheduler = new ExecutionScheduler({ capacity: 1 });
+  const h = await sdkHarness({ ask: true, scheduler, marker: true });
+  let other;
+  try {
+    const task = h.coordinator.submit({ text: "prepare" });
+    await h.first.promise; h.release.resolve();
+    const deadline = Date.now() + 5000;
+    while (h.coordinator.task.state !== "waiting_user" && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(h.coordinator.task.state, "waiting_user");
+    assert.equal(scheduler.active.size, 0); assert.equal(h.markers.length, 0);
+    other = await scheduler.acquire({ taskId: "other" });
+    const attention = h.coordinator.snapshotAttentions()[0];
+    assert.equal(h.coordinator.respond({ commandId: "answer", taskId: task.taskId, attentionId: attention.id, response: "Forest" }).ok, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.coordinator.task.state, "queued"); assert.equal(h.calls.length, 1); assert.equal(h.markers.length, 0);
+    other.release(); await h.coordinator.run;
+    assert.equal(h.coordinator.task.state, "completed"); assert.equal(h.calls.length, 2); assert.equal(h.markers.length, 1);
+    assert.equal(scheduler.active.size, 0);
+  } finally { other?.release(); await h.session.abort(); h.session.dispose(); }
+});
 
 test("real Pi SDK consumes steering exactly once at the next model boundary", { timeout: 15000 }, async () => {
   const h = await sdkHarness();
@@ -82,6 +109,28 @@ test("real Pi SDK consumes steering exactly once at the next model boundary", { 
     assert.equal(h.session.messages.filter(m => m.role === "user").length, 2);
     assert.equal(h.coordinator.task.state, "completed");
   } finally { await h.session.abort(); h.session.dispose(); }
+});
+
+test("real Pi can stop an answered question while queued to resume without executing following tools", { timeout: 15000 }, async () => {
+  const scheduler = new ExecutionScheduler({ capacity: 1 });
+  const h = await sdkHarness({ ask: true, scheduler, marker: true });
+  let other;
+  try {
+    const task = h.coordinator.submit({ text: "prepare" });
+    await h.first.promise; h.release.resolve();
+    const deadline = Date.now() + 5000;
+    while (h.coordinator.task.state !== "waiting_user" && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(h.coordinator.task.state, "waiting_user");
+    other = await scheduler.acquire({ taskId: "other" });
+    const attention = h.coordinator.snapshotAttentions()[0];
+    h.coordinator.respond({ commandId: "answer", taskId: task.taskId, attentionId: attention.id, response: "Forest" });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.coordinator.task.state, "queued");
+    await h.coordinator.stop(task.taskId);
+    assert.equal(h.coordinator.task.state, "stopped");
+    assert.equal(h.calls.length, 1); assert.equal(h.markers.length, 0);
+    assert.equal(scheduler.queue.length, 0); assert.equal(scheduler.active.size, 1);
+  } finally { other?.release(); await h.session.abort(); h.session.dispose(); }
 });
 
 test("real Pi abort confirms stopped and clears unconsumed steering", { timeout: 15000 }, async () => {

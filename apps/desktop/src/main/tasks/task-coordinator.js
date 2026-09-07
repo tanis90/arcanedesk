@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { InputJournal } from "./input-journal.js";
+import { TaskAdmission } from "../scheduling/execution-scheduler.js";
 
 const activeStates = new Set(["running", "stopping", "waiting_user", "queued", "waiting_resource"]);
 const pendingStates = new Set(["accepted", "queued", "dispatching", "context"]);
@@ -8,8 +9,9 @@ const messageText = message => typeof message?.content === "string" ? message.co
 
 /** One owner for a session's commands and task lifecycle. No view selection state. */
 export class TaskCoordinator {
-  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal}} options */
-  constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal() }) {
+  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal, scheduler?: any}} options */
+  constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal(), scheduler = null }) {
+    this.scheduler = scheduler; this.admission = null;
     this.sessionId = sessionId;
     this.adapter = adapter;
     this.emit = emit;
@@ -71,7 +73,7 @@ export class TaskCoordinator {
     const attention = { id: randomUUID(), taskId: this.task.id, question, options: [...options], state: "pending", createdAt: Date.now() };
     this.updateAttention(attention);
     this.setTaskState("waiting_user");
-    return new Promise(resolve => {
+    const pending = new Promise(resolve => {
       const cancel = () => this.cancelAttention(attention.id);
       this.attentionResolvers.set(attention.id, response => {
         signal?.removeEventListener("abort", cancel);
@@ -80,6 +82,7 @@ export class TaskCoordinator {
       signal?.addEventListener("abort", cancel, { once: true });
       if (signal?.aborted) cancel();
     });
+    return this.admission ? this.admission.waitForUser(pending).catch(() => ({ cancelled: true })) : pending;
   }
 
   cancelAttention(id) {
@@ -108,7 +111,7 @@ export class TaskCoordinator {
     this.commands.set(commandId, record);
     this.attentions.set(attentionId, answered);
     this.emit({ type: "attention", attention: structuredClone(answered) });
-    if (![...this.attentions.values()].some(a => a.taskId === taskId && a.state === "pending")) this.setTaskState("running");
+    if (!this.admission && ![...this.attentions.values()].some(a => a.taskId === taskId && a.state === "pending")) this.setTaskState("running");
     this.attentionResolvers.get(attentionId)({ response });
     this.attentionResolvers.delete(attentionId);
     return ack;
@@ -138,7 +141,7 @@ export class TaskCoordinator {
     if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
     const executionText = prepare ? prepare(text, images) : text;
     const supplement = this.busy;
-    const task = supplement ? this.task : { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
+    const task = supplement ? this.task : { id: randomUUID(), state: this.scheduler ? "queued" : "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
     const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
       taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
@@ -147,6 +150,10 @@ export class TaskCoordinator {
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
     this.task = task;
+    if (!supplement && this.scheduler) this.admission = new TaskAdmission(this.scheduler,
+      { sessionId: this.sessionId, taskId: task.id }, state => {
+        if (this.task?.id === task.id && this.busy && this.task.state !== "stopping" && this.task.state !== state) this.setTaskState(state);
+      });
     this.emit({ type: "task_state", task: { ...task } });
     this.emit({ type: "input_state", inputId: input.id, commandId, taskId: task.id, state: "accepted" });
     if (!this.run) this.schedule();
@@ -214,7 +221,11 @@ export class TaskCoordinator {
   }
 
   async drain(taskId) {
+    const admission = this.admission;
     try {
+      await admission?.acquire();
+      if (admission?.controller.signal.aborted) throw new Error("Execution cancelled");
+      if (admission) admission.started = true;
       await this.adapter.beginTask?.(this.task.modelToApply);
       while (this.task.id === taskId && this.task.state !== "stopping") {
         const input = [...this.inputs.values()].find(i => i.taskId === taskId && pendingStates.has(i.state));
@@ -240,16 +251,17 @@ export class TaskCoordinator {
     } catch (error) {
       this.adapter.clearQueue?.();
       for (const input of this.inputs.values()) {
-        if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, "failed");
+        if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, this.task.state === "stopping" ? "cancelled" : "failed");
       }
-      this.setTaskState(this.task.state === "stopping" ? "stopped" : "failed", error.message);
-    } finally { this.dispatching = null; }
+      this.setTaskState(this.task.state === "stopping" ? admission && !admission.started ? "cancelled" : "stopped" : "failed", error.message);
+    } finally { this.dispatching = null; admission?.release(); }
   }
 
   async stop(taskId) {
     if (taskId && taskId !== this.task?.id) return { ok: false, code: "STALE_TASK" };
     if (!this.busy) return { ok: true, task: this.task };
     this.setTaskState("stopping");
+    this.admission?.cancel();
     for (const id of this.attentionResolvers.keys()) this.cancelAttention(id);
     this.adapter.clearQueue?.();
     await this.adapter.abort();
