@@ -1,6 +1,6 @@
 # Desktop 多会话架构设计
 
-状态：设计草案，尚未实施
+状态：实施中；设计契约与实施前调查保留。当前实现和验收进度见 [milestones](milestones.md)，逐项缺口见 [验收审计](acceptance-audit.md)。
 
 日期：2026-09-07
 
@@ -341,11 +341,13 @@ src/renderer/activity/      # 活动列表及提示
 
 ## 11. 已知事实与待验证假设
 
-### 已确认的源码事实
+### 实施前已确认的源码事实（历史基线）
 
-- 当前每模式一个 AgentHost；同模式 open/new 会话主动 abort、detach，跨模式由两个 host 常驻。
-- 当前命令主要用 mode/generation 定位，busyByMode 按模式记录；不足以表达同模式多任务。
-- 当前 renderer 忽略非当前模式事件，恢复历史不包含完整运行现场，并将无结果的历史工具调用收尾。
+以下记录最初调查时的实现，不描述当前版本。按会话注册表、任务协调器和恢复协议已分阶段落地；当前证据与尚未通过的条款以 [验收审计](acceptance-audit.md) 为准。
+
+- 调查时每模式一个 AgentHost；同模式 open/new 会话主动 abort、detach，跨模式由两个 host 常驻。
+- 调查时命令主要用 mode/generation 定位，busyByMode 按模式记录；不足以表达同模式多任务。
+- 调查时 renderer 忽略非当前模式事件，恢复历史不包含完整运行现场，并将无结果的历史工具调用收尾。
 - 安装的 Pi SDK 有 steer、abort、waitForIdle、agent_settled 和带 willRetry 的 agent_end 相关逻辑；存在 API 不代表已证明其满足本文语义。
 
 ### 实施前的定向实验
