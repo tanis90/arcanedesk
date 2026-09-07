@@ -56,3 +56,5 @@ body.sidebar-pinned #shutdown-status { margin-left: 264px; }
 #send:disabled, #stop:disabled { opacity: .5; cursor: default; }
 .task-terminal-reason { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow-y: auto; color: var(--err); }
 .task-terminal-next { margin: 4px 0; }
+#conversation-retry { text-align: left; padding: 2px 16px; }
+body.sidebar-pinned #conversation-retry { margin-left: 264px; }

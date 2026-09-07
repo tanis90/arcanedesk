@@ -13,6 +13,7 @@ export class SessionProjection {
     this.messages = new Map();
     this.tools = new Map();
     this.retry = null;
+    this.taskId = null;
     this.events = [];
   }
 
@@ -29,7 +30,12 @@ export class SessionProjection {
       case "agent_start":
         this.messages.clear();
         this.tools.clear();
-        this.retry = null;
+        // The SDK emits agent_start again when a retry leaves backoff.
+        // Keep that stage until auto_retry_end or a task boundary.
+        break;
+      case "task_state":
+        if (this.taskId !== event.task?.id || !["queued", "running", "waiting_user", "waiting_resource", "stopping"].includes(event.task?.state)) this.retry = null;
+        this.taskId = event.task?.id;
         break;
       case "message_delta":
         this.messages.set(event.key, { key: event.key, text: event.text ?? "", thinking: event.thinking ?? "" });

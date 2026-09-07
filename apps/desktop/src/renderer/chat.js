@@ -11,6 +11,13 @@ const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
 let displayedTask = null;
+let displayedRetry = null;
+function showRetry(retry) {
+  displayedRetry = retry;
+  const indicator = document.getElementById("conversation-retry");
+  indicator.hidden = !Number.isInteger(retry?.attempt) || retry.attempt < 1 || !Number.isInteger(retry?.maxAttempts);
+  indicator.textContent = indicator.hidden ? "" : t("chat.retrying", retry);
+}
 const stopRequests = new Map();
 const confirmedAt = new Map();
 const syncAttemptAt = new Map();
@@ -80,6 +87,7 @@ function showPendingModel(model) {
   pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
 }
 function showTaskState(task) {
+  if (task?.id !== displayedTask?.id || !activeTaskStates.has(task?.state)) showRetry(null);
   displayedTask = task;
   reconcileStopRequest(selectedSessionId, task);
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
@@ -345,6 +353,7 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   selectedTaskId = payload.task?.id ?? null;
   document.getElementById("conversation-title").textContent = payload.session.name || "";
   showTaskState(payload.task);
+  showRetry(payload.inFlight?.retry);
   showPendingModel(payload.pendingModel);
   viewSeq = payload.inFlight?.seq ?? 0;
   viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
@@ -1253,6 +1262,12 @@ function onEvent(event) {
     && event.type !== "session_switched"
     && !(event.type === "task_state" && ["running", "queued"].includes(event.task.state))) return;
   switch (event.type) {
+    case "auto_retry_start":
+      showRetry({ attempt: event.attempt, maxAttempts: event.maxAttempts });
+      break;
+    case "auto_retry_end":
+      showRetry(null);
+      break;
     case "attention":
       renderAttention(event.attention);
       break;
@@ -1993,6 +2008,7 @@ reflectThemeGlyph();
 // ---------- sessions:历史渲染 + 会话抽屉 ----------
 
 function resetConversation() {
+  showRetry(null);
   messages.innerHTML = "";
   attentionCards.clear();
   toolCards.clear();
@@ -2010,6 +2026,7 @@ function messageNode(key) {
 
 function renderHistory(entries, inFlight = {}, running = false, page = null) {
   resetConversation();
+  showRetry(inFlight.retry);
   const liveTools = new Map((inFlight.tools ?? []).map(tool => [tool.toolCallId, tool]));
   function restoreTool(call) {
     const live = liveTools.get(call.id);
@@ -3107,6 +3124,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
 // 已渲染的聊天记录/会话标题是用户与 LLM 的数据,刻意不回翻。
 window.ArcaneI18n.onLocaleChange(() => {
   showTaskState(displayedTask);
+  showRetry(displayedRetry);
   if (!syncIndicator.hidden && syncIndicator.dataset.status) showSyncStatus(syncIndicator.dataset.status);
   if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);

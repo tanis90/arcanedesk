@@ -165,9 +165,11 @@ test("history restore preserves a running tool, marks missing results unknown an
   const cards = new Map();
   const finished = [];
   const bubbles = new Map();
+  let restoredRetry;
   const handler = chatSource.slice(chatSource.indexOf("function renderHistory(entries"), chatSource.indexOf("let currentSessionRequest"));
   const context = vm.createContext({
     resetConversation() {}, showWelcome() {}, closeWorkBlock() {}, addMessage() {}, renderThinkingHistory() {},
+    showRetry(value) { restoredRetry = value; },
     setBusy() {}, t: key => key, toolCards: cards, messages: { querySelectorAll: () => [] },
     ensureToolCard(id) {
       if (!cards.has(id)) cards.set(id, { startAt: 999, card: { classList: { remove() {} }, querySelector: () => ({ textContent: "" }) }, state: {} });
@@ -183,7 +185,8 @@ test("history restore preserves a running tool, marks missing results unknown an
     { id: "unknown", name: "bash", hasResult: false },
     { id: "done", name: "bash", hasResult: true, resultText: "ok" },
   ] }], { tools: [{ toolCallId: "running", state: "running", startedAt: 42 }],
-    streaming: [{ key: "m", text: "partial" }] }, true);
+    streaming: [{ key: "m", text: "partial" }], retry: { attempt: 1, maxAttempts: 2 } }, true);
+  assert.deepEqual(restoredRetry, { attempt: 1, maxAttempts: 2 });
   assert.equal(cards.get("running").startAt, 42);
   assert.equal(cards.get("unknown").state.textContent, "chat.card.unknown");
   assert.equal(finished.length, 1);

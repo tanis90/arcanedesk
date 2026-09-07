@@ -51,6 +51,8 @@ test("retry discards failed draft; final message removes live duplicate", () => 
   p.publish({ type: "auto_retry_start", attempt: 1, maxAttempts: 3 });
   assert.deepEqual(p.snapshot().streaming, []);
   assert.deepEqual(p.snapshot().retry, { attempt: 1, maxAttempts: 3 });
+  p.publish({ type: "agent_start" });
+  assert.deepEqual(p.snapshot().retry, { attempt: 1, maxAttempts: 3 }, "retry remains visible while the next request executes");
   p.publish({ type: "auto_retry_end", success: true });
   p.publish({ type: "message_delta", key: "b", text: "good" });
   p.publish({ type: "message", key: "b", text: "good final" });
