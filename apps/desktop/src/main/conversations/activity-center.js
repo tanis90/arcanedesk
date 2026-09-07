@@ -100,6 +100,7 @@ export class ActivityCenter {
     }
     row.taskId = task?.id ?? null;
     row.state = state;
+    row.waitingFor = task?.waitingFor ?? null;
     row.available = true;
     row.name = String(session.name ?? "");
     row.path = session.path ?? null;
@@ -133,9 +134,10 @@ export class ActivityCenter {
     let meaningful = contentEvents.has(event.type) && !(event.type === "message" && event.role === "user");
     let notice = null;
     if (event.type === "task_state" && event.task) {
-      meaningful = row.taskId !== event.task.id || row.state !== event.task.state;
+      meaningful = row.taskId !== event.task.id || row.state !== event.task.state || JSON.stringify(row.waitingFor ?? null) !== JSON.stringify(event.task.waitingFor ?? null);
       row.taskId = event.task.id;
       row.state = event.task.state;
+      row.waitingFor = event.task.waitingFor ?? null;
       if (meaningful && noticeStates.has(row.state)) notice = { key: `task:${row.taskId}:${row.state}`, kind: row.state };
       if (!activeStates.has(row.state)) row.attentionIds = [];
     } else if (event.type === "attention" && event.attention) {

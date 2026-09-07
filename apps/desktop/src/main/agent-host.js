@@ -9,7 +9,8 @@ import { readFileSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAgentSession, createBashTool, createPowerShellTool, defineTool, DefaultResourceLoader, getAgentDir, isToolCallEventType, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, createBashTool, createPowerShellTool, createReadTool, createWriteTool, createEditTool, defineTool, DefaultResourceLoader, getAgentDir, isToolCallEventType, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { filesystemResource, toolFilesystemPath } from "./scheduling/resource-coordinator.js";
 import { Type } from "typebox";
 import { capturePageNavigationSafe, encodeFoundryScreenshot } from "./foundry-screenshot.js";
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
@@ -227,10 +228,12 @@ export class AgentHost {
    *   getLocale?: () => string,
    *   taskStorageDir?: string,
    *   scheduler?: any,
+   *   resources?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler, resources } = {}) {
     this.scheduler = scheduler;
+    this.resources = resources;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
@@ -370,7 +373,8 @@ export class AgentHost {
       if (!this.fvttOpsNode) throw new Error("Arcane FVTT Node is unavailable for the Agent shell");
       // SDK custom tools override built-ins with the same name. This keeps Pi's
       // native shell behavior/rendering while enforcing our spawn environment.
-      customTools.push(arcaneShellTool(cwd, this.fvttOpsNode));
+      customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]
+        .map(tool => this.coordinateWorkspaceTool(tool)));
     }
     const options = {
       cwd,
@@ -799,6 +803,33 @@ export class AgentHost {
     this.session?.dispose();
     this.session = null;
     this.telemetry?.releaseSession?.();
+  }
+
+  async withResources(keys, signal, operation) {
+    if (!this.resources) return operation();
+    const tasks = this.tasks;
+    const taskId = tasks?.task?.id;
+    const owner = { sessionId: this.describeCurrent()?.id, taskId, name: this.describeCurrent()?.name || "" };
+    const requestId = randomUUID();
+    const waiting = details => { if (tasks?.task?.id === taskId) tasks.resourceWaiting(requestId, details); };
+    try {
+      return await this.resources.run(keys, owner, signal, waiting, async () => {
+        waiting(null); return operation();
+      });
+    } finally { waiting(null); }
+  }
+
+  coordinateWorkspaceTool(tool) {
+    if (!this.resources) return tool;
+    return { ...tool, execute: (id, params, signal, onUpdate, context) => {
+      const cwd = this.cwd();
+      const keys = () => {
+        const resolved = [filesystemResource(cwd)];
+        if (typeof params?.path === "string") resolved.push(filesystemResource(toolFilesystemPath(params.path, cwd, tool.name === "read")));
+        return resolved;
+      };
+      return this.withResources(keys, signal, () => tool.execute(id, params, signal, onUpdate, context));
+    } };
   }
 
   // ---- approval gate(opt-in,默认关闭) ----

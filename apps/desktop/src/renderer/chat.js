@@ -21,6 +21,13 @@ function showTaskState(task) {
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task;
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
+  if (task?.state === "waiting_resource" && task.waitingFor) {
+    const holder = task.waitingFor.holders?.[0];
+    const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
+    const name = resource?.slice(3).split("/").filter(Boolean).at(-1) ?? t("activity.resource");
+    taskIndicator.textContent = t("activity.resourceWait", { resource: name,
+      owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
+  }
 }
 
 function renderAttention(attention) {

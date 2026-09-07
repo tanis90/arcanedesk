@@ -183,6 +183,12 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('taskIndicator.textContent'), await evaluate('t("activity.capacityQueue")'));
     send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
     await until('!busy && taskIndicator.textContent === t("activity.cancelled")');
+    send("B", { type: "task_state", task: { id: "task-B-resource", state: "running" } });
+    send("B", { type: "task_state", task: { id: "task-B-resource", state: "waiting_resource",
+      waitingFor: { resources: ["fs:c:/workspace/shared"], holders: [{ sessionId: "A", taskId: "task-A", name: "Session A" }] } } });
+    await until('busy && taskIndicator.textContent.includes("Session A") && taskIndicator.textContent.includes("shared")');
+    send("B", { type: "task_state", task: { id: "task-B-resource", state: "completed" } });
+    await until('!busy');
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

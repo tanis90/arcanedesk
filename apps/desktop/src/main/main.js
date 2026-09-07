@@ -14,6 +14,7 @@ import { SessionRegistry } from "./conversations/session-registry.js";
 import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
+import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
 import "../shared/i18n/messages.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
@@ -673,6 +674,7 @@ app.whenReady().then(async () => {
   // Each mode owns a registry; command contexts capture an actual session host.
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
+  const resources = new ResourceCoordinator();
   const hosts = {
     combat: new SessionRegistry({ createHost: () => new AgentHost({
       foundryRuntime,
@@ -680,7 +682,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler,
+      telemetry: telemetry?.forSession(), scheduler, resources,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
@@ -696,7 +698,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler,
+      telemetry: telemetry?.forSession(), scheduler, resources,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,

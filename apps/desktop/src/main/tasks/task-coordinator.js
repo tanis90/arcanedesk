@@ -12,6 +12,7 @@ export class TaskCoordinator {
   /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal, scheduler?: any}} options */
   constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal(), scheduler = null }) {
     this.scheduler = scheduler; this.admission = null;
+    this.resourceWaits = new Map();
     this.sessionId = sessionId;
     this.adapter = adapter;
     this.emit = emit;
@@ -119,8 +120,15 @@ export class TaskCoordinator {
   snapshotInputs() {
     return [...this.inputs.values()].map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
   }
+  resourceWaiting(id, details) {
+    if (details) this.resourceWaits.set(id, details); else this.resourceWaits.delete(id);
+    if (!this.busy || ["stopping", "waiting_user", "queued"].includes(this.task.state)) return;
+    if (this.resourceWaits.size) this.setTaskState("waiting_resource");
+    else if (this.task.state === "waiting_resource") this.setTaskState("running");
+  }
   setTaskState(state, error = null) {
-    this.task = { ...this.task, state, error, endedAt: activeStates.has(state) ? null : Date.now() };
+    this.task = { ...this.task, state, error, waitingFor: state === "waiting_resource" ? this.resourceWaits.values().next().value : null,
+      endedAt: activeStates.has(state) ? null : Date.now() };
     this.journal.append({ type: "task_state", task: this.task });
     this.emit({ type: "task_state", task: { ...this.task } });
   }
@@ -150,6 +158,7 @@ export class TaskCoordinator {
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
     this.task = task;
+    if (!supplement) this.resourceWaits.clear();
     if (!supplement && this.scheduler) this.admission = new TaskAdmission(this.scheduler,
       { sessionId: this.sessionId, taskId: task.id }, state => {
         if (this.task?.id === task.id && this.busy && this.task.state !== "stopping" && this.task.state !== state) this.setTaskState(state);
