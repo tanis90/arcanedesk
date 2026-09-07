@@ -817,7 +817,10 @@ app.whenReady().then(async () => {
 
   async function validateModeRequest(request) {
     if (request?.sessionId) {
-      const host = allSessionHosts().find(host => host.describeCurrent()?.id === request.sessionId);
+      let host;
+      try {
+        for (const registry of Object.values(hosts)) { host = await registry.getOrLoad(request.sessionId); if (host) break; }
+      } catch (error) { return { ok: false, code: error.code ?? "SESSION_LOAD_FAILED", error: error.message }; }
       if (!host) return { ok: false, code: "SESSION_NOT_FOUND", error: "Session not found" };
       return { ok: true, context: { mode: host.profile.mode, generation: request.generation, host } };
     }
@@ -911,9 +914,12 @@ app.whenReady().then(async () => {
     // readySnapshot 在模式变化时重试，响应中的 mode/host/history 必定来自同一快照。
     return currentModePayload();
   });
-  ipcMain.handle("sessions:snapshot", (_event, sessionId) => {
+  ipcMain.handle("sessions:snapshot", async (_event, sessionId) => {
     if (!isTrustedChatIpc(_event)) return { ok: false, code: "UNTRUSTED_CALLER" };
-    const host = allSessionHosts().find(host => host.describeCurrent()?.id === sessionId);
+    let host;
+    try {
+      for (const registry of Object.values(hosts)) { host = await registry.getOrLoad(sessionId); if (host) break; }
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_LOAD_FAILED", error: error.message }; }
     if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
     return { ok: true, ...activityHostPayload(host), mode: host.profile.mode, cwd: host.cwd() };
   });
@@ -1508,6 +1514,8 @@ app.whenReady().then(async () => {
       quitAllowed = true; app.quit();
     },
   });
+  const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
+  reclaimTimer.unref();
   hasLiveWork = () => allSessionHosts().some(host => host.busy) || resources.active.size > 0 || Boolean(panelCommands.run) ||
     Object.values(hosts).some(registry => registry.pending.size || registry.deleting.size);
   ipcMain.handle("lifecycle:get", event => isTrustedChatIpc(event) ? shutdown.snapshot() : null);

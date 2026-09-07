@@ -15,6 +15,7 @@ export class SessionRegistry {
     this.pending = new Map();
     this.selection = 0;
     this.deleting = new Map(); this.deleted = new Set();
+    this.evicted = new Map();
   }
 
   async start() {
@@ -23,7 +24,30 @@ export class SessionRegistry {
   }
 
   allHosts() { return [...this.hosts.values()]; }
-  get(id) { return this.hosts.get(id); }
+  get(id) { const host = this.hosts.get(id); if (host) host.lastUsedAt = Date.now(); return host; }
+  async getOrLoad(id) {
+    const current = this.get(id);
+    if (current) return current;
+    const file = this.evicted.get(id);
+    if (!file) return null;
+    await this.select(file, false, -1); // Loading a command target must not navigate the UI.
+    return this.get(id) ?? null;
+  }
+  prune({ now = Date.now(), idleMs = 300_000, keepIdle = 4 } = {}) {
+    if (this.closing) return [];
+    const idle = this.allHosts().filter(host => host !== this.activeHost && host.canEvict?.())
+      .sort((a, b) => (a.lastUsedAt ?? now) - (b.lastUsedAt ?? now));
+    const removed = [];
+    for (const host of idle.slice(0, Math.max(0, idle.length - keepIdle))) {
+      if (now - (host.lastUsedAt ?? now) < idleMs) continue;
+      const session = host.describeCurrent();
+      try { host.persistForEviction(); } catch { continue; }
+      this.evicted.set(session.id, session.path); this.hosts.delete(session.id);
+      try { host.dispose(); } catch { /* state is persisted and the retired host is no longer addressable */ }
+      removed.push(session.id);
+    }
+    return removed;
+  }
 
   async deleteSession(sessionPath) {
     const key = pathKey(sessionPath);
@@ -48,6 +72,7 @@ export class SessionRegistry {
           if (error.code !== "ENOENT") { this.deletions?.cancel(sessionId); throw error; }
         }
         this.deleted.add(key);
+        for (const [id, file] of this.evicted) if (pathKey(file) === key) this.evicted.delete(id);
         let warning;
         try { this.deletions?.commit(sessionId); } catch (error) { warning = error.message; }
         if (target) {
@@ -89,6 +114,7 @@ export class SessionRegistry {
             const id = created.describeCurrent()?.id;
             if (!id) throw new Error("Session has no stable identity");
             this.hosts.set(id, created);
+            this.evicted.delete(id);
             return created;
           } catch (error) {
             created.dispose();
@@ -103,6 +129,7 @@ export class SessionRegistry {
     if (host?.deleting || (requestedKey && this.deleted.has(requestedKey))) throw unavailable();
     if (selection !== this.selection) return this.activeHost;
     this.activeHost = host;
+    host.lastUsedAt = Date.now();
     return host;
   }
 

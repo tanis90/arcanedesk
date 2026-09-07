@@ -234,6 +234,7 @@ export class AgentHost {
   constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler, resources } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
+    this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
     this.resources = resources;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
@@ -305,6 +306,8 @@ export class AgentHost {
 
   /** 统一出站口:所有事件带 mode 标签,renderer 按活动模式过滤。 */
   emit(payload) {
+    if (this.retired) return;
+    this.lastUsedAt = Date.now();
     if (payload.type === "task_state") this.telemetry?.taskState?.(this.profile.mode, payload.task);
     if (payload.type === "session_switched") {
       this.sendToRenderer({ ...payload, mode: this.profile.mode, sessionId: this.describeCurrent()?.id });
@@ -665,36 +668,39 @@ export class AgentHost {
    * 自然恢复。只作用于本 host 当前会话,不广播、不改全局默认。
    */
   async setCurrentModel(providerId, modelId, applyNow = false) {
-    const ref = { providerId, modelId };
-    const model = this.modelRuntime?.getModel(providerId, modelId) ?? null;
-    if (this.modelRuntime && !model) {
-      return { ok: false, error: `model not found: ${providerId}/${modelId}` };
-    }
-    if (this.busy && !applyNow) {
-      this.taskCoordinator().setPendingModel(ref);
-      return { ok: true, deferred: true, model: ref };
-    }
-    // 会话已在该模型上:不重复写 model_change,只同步 UI 状态
-    const current = this.session?.model;
-    const sameModel = current?.provider === providerId && (current.id ?? current.name) === modelId;
-    const missingKey = this.providerStore?.missingApiKeyForModel?.(ref) ?? null;
-    if (missingKey) {
+    this.operations++;
+    try {
+      const ref = { providerId, modelId };
+      const model = this.modelRuntime?.getModel(providerId, modelId) ?? null;
+      if (this.modelRuntime && !model) {
+        return { ok: false, error: `model not found: ${providerId}/${modelId}` };
+      }
+      if (this.busy && !applyNow) {
+        this.taskCoordinator().setPendingModel(ref);
+        return { ok: true, deferred: true, model: ref };
+      }
+      // 会话已在该模型上:不重复写 model_change,只同步 UI 状态
+      const current = this.session?.model;
+      const sameModel = current?.provider === providerId && (current.id ?? current.name) === modelId;
+      const missingKey = this.providerStore?.missingApiKeyForModel?.(ref) ?? null;
+      if (missingKey) {
+        this._currentModelRef = ref;
+        this.modelLabel = `${providerId}/${modelId}`;
+        this.supportsImages = model?.input?.includes("image") ?? true;
+        this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
+        if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
+        return { ok: true, pendingKey: true };
+      }
+      if (!sameModel && model && this.session) {
+        await this.session.setModel(model);
+      }
       this._currentModelRef = ref;
       this.modelLabel = `${providerId}/${modelId}`;
       this.supportsImages = model?.input?.includes("image") ?? true;
       this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
       if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
-      return { ok: true, pendingKey: true };
-    }
-    if (!sameModel && model && this.session) {
-      await this.session.setModel(model);
-    }
-    this._currentModelRef = ref;
-    this.modelLabel = `${providerId}/${modelId}`;
-    this.supportsImages = model?.input?.includes("image") ?? true;
-    this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
-    if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
-    return { ok: true, ...(sameModel ? { noop: true } : null) };
+      return { ok: true, ...(sameModel ? { noop: true } : null) };
+    } finally { this.operations--; }
   }
 
   /** 会话是否已开始对话(有消息条目);空会话才允许被全局默认接管。 */
@@ -730,10 +736,13 @@ export class AgentHost {
 
   /** 手动压缩上下文(pi 原生 compact;自动压缩默认开启,这里只是手动入口)。 */
   async compact(instructions) {
-    if (!this.session) throw new Error("agent session not started");
-    if (this.session.isCompacting) return { ok: false, error: "compaction already in progress" };
-    const result = await this.session.compact(instructions || undefined);
-    return { ok: true, tokensBefore: result?.tokensBefore };
+    this.operations++;
+    try {
+      if (!this.session) throw new Error("agent session not started");
+      if (this.session.isCompacting) return { ok: false, error: "compaction already in progress" };
+      const result = await this.session.compact(instructions || undefined);
+      return { ok: true, tokensBefore: result?.tokensBefore };
+    } finally { this.operations--; }
   }
 
   get task() { return this.tasks?.task ?? null; }
@@ -811,12 +820,27 @@ export class AgentHost {
   }
 
   dispose() {
+    this.retired = true;
     this.deleting = true;
-    this.unsubscribe?.();
+    const unsubscribe = this.unsubscribe, session = this.session;
     this.unsubscribe = null;
-    this.session?.dispose();
     this.session = null;
-    this.telemetry?.releaseSession?.();
+    try { unsubscribe?.(); }
+    finally { try { session?.dispose(); } finally { this.telemetry?.releaseSession?.(); } }
+  }
+
+  canEvict() {
+    if (this.busy || this.tasks?.run || this.operations || this.deleting || this.closing || this.session?.isStreaming || this.session?.isCompacting || this.approvals.size) return false;
+    const ref = this._currentModelRef, model = this.session?.model;
+    // An unconfigured model choice can still be memory-only; keep its owner resident.
+    if (ref && (model?.provider !== ref.providerId || (model?.id ?? model?.name) !== ref.modelId)) return false;
+    return Boolean(this.sessionManager?.getSessionFile?.() && this.sessionManager?.getHeader?.());
+  }
+  persistForEviction() {
+    if (!this.canEvict()) throw new Error("Session still owns active or unsaved state");
+    const file = this.sessionManager.getSessionFile();
+    new InputJournal(file).compact([this.sessionManager.getHeader(), ...this.sessionManager.getEntries()]);
+    this.tasks?.compact(true);
   }
 
   async withResources(keys, signal, operation) {
