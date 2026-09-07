@@ -164,3 +164,20 @@ test("the first static manual includes existing buff riders; dynamic state track
   const ended = await f.call("playContext");
   assert.equal(ended.contextRef,heavy.contextRef); assert.deepEqual(ended.combatants[0].activeBuffRiderIds,[]);
 });
+
+test("native reaction and long-casting activities are not offered or dispatched through Play", async () => {
+  let nativeCalls = 0;
+  const f = fixture(async () => { nativeCalls++; return { status: "completed" }; });
+  const activity = { id: "use", type: "utility", activation: { type: "action" }, consumption: { spellSlot: true },
+    target: { affects: { type: "self" }, override: true }, range: { units: "self", override: true } };
+  f.item.system.activities = [activity];
+  const input = await f.resolve();
+  for (const timing of ["reaction","minute","hour","day","round"]) {
+    activity.activation.type = timing;
+    const snapshot = await f.call("staticContext");
+    assert.equal(snapshot.combatants[0].actions.length,0,timing);
+    const result = await f.call("executeAction",{ ...input, contextRef: snapshot.contextRef });
+    assert.equal(result.code,"CASTING_TIMING_UNSUPPORTED",timing);
+  }
+  assert.equal(nativeCalls,0); assert.equal(f.writes(),0); assert.equal(f.actor.system.spells.spell1.value,2);
+});
