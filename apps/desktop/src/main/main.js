@@ -16,6 +16,7 @@ import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
 import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
+import { loadPageWithRetry } from "./load-page.js";
 import { PanelCommands } from "./scheduling/panel-commands.js";
 import { SessionDeletions } from "./conversations/session-deletions.js";
 import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
@@ -390,18 +391,9 @@ async function openFoundryView(rawUrl) {
       trustFoundryPermissionOrigin(current);
       return { ok: true, page: inspected.state, summary: await describePanel(current, inspected.state) };
     }
-    const retryUrl = current || target;
-    let loaded = await loadFoundryPage(retryUrl);
-    let landedUrl = retryUrl;
-    if (!loaded.ok && retryUrl !== target) {
-      // 当前页可能死在 Foundry 自己的错误页(如 /no "Critical Failure!"):
-      // 原地重载只会复现同一页面、检测永远失败。退回 target 让服务器重新
-      // 路由到 /setup、/license 或 /join。
-      loaded = await loadFoundryPage(target);
-      landedUrl = target;
-    }
+    const loaded = await loadFoundryPage(target);
     if (!loaded.ok) return loaded;
-    return { ok: true, page: loaded.page, summary: await describePanel(landedUrl, loaded.page) };
+    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
   const restored = await restoreSessionCookie(foundryView, origin);
   const navUrl = restored ? new URL("/game", origin).href : target;
@@ -414,7 +406,7 @@ async function openFoundryView(rawUrl) {
 
 async function loadFoundryPage(url) {
   try {
-    await foundryView.webContents.loadURL(url);
+    await loadPageWithRetry(foundryView.webContents, url);
   } catch (error) {
     return {
       ok: false,
@@ -1487,46 +1479,7 @@ app.whenReady().then(async () => {
     ipcMain.handle(`panel:${action}`, event => isTrustedChatIpc(event) ? panelCommands.request(action) : { ok: false });
   }
   ipcMain.handle("panel:command-state", event => isTrustedChatIpc(event) ? panelCommands.snapshot() : null);
-  ipcMain.handle("panel:cancel-command", (event, id) => isTrustedChatIpc(event) ? panelCommands.cancel(id) : { ok: false });
-  let recoveryConfirming = false;
-  ipcMain.handle("panel:recover", async event => {
-    if (!isTrustedChatIpc(event) || recoveryConfirming || panelCommands.recovering) return { ok: false, code: "RECOVERY_RUNNING" };
-    recoveryConfirming = true;
-    try {
-      const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
-      const answer = await dialog.showMessageBox(mainWindow, { type: "warning", title: text("panel.recover"),
-        message: text("panel.recoveryConfirm"), buttons: [text("panel.keepWaiting"), text("panel.recover")], defaultId: 0, cancelId: 0, noLink: true });
-      if (answer.response !== 1) return { ok: true, cancelled: true };
-      const target = foundryView?.webContents?.getURL() || DEFAULT_FOUNDRY_URL;
-      return await panelCommands.recover({
-        stopOwners: owners => {
-          for (const owner of owners) {
-            if (!owner.sessionId || !owner.taskId) continue;
-            const host = Object.values(hosts).map(registry => registry.get(owner.sessionId)).find(Boolean);
-            if (!host || host.task?.id !== owner.taskId || !host.busy) continue;
-            void host.abort(owner.taskId).catch(error => console.error("[panel recovery] task stop failed", error));
-            if (host.task.state !== "stopping") throw new Error(text("panel.recoveryStopFailed"));
-          }
-        },
-        destroyPage: async () => {
-          const old = foundryView;
-          if (!old) return;
-          foundryView = null;
-          foundryRuntime.invalidate(); clearFoundryPermissionState("panel-recovery");
-          mainWindow?.contentView.removeChildView(old);
-          sendToRenderer({ type: "panel_status", open: false });
-          sendToRenderer({ type: "panel_layout", open: false });
-          if (!old.webContents.isDestroyed()) {
-            await new Promise(resolve => {
-              old.webContents.once("destroyed", resolve);
-              old.webContents.close({ waitForBeforeUnload: false });
-            });
-          }
-        },
-        reopen: () => openFoundryView(target),
-      });
-    } finally { recoveryConfirming = false; }
-  });
+
 
   // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整 Foundry view 宽度。
   ipcMain.handle("panel:set-chat-width", (_event, px) => {

@@ -73,15 +73,8 @@ function showPanelCommand(snapshot) {
   panelCommandSnapshot = snapshot;
   const bar = document.getElementById("panel-command"), command = snapshot.command;
   if (!bar) return;
-  bar.hidden = !command;
-  if (!command) return;
-  bar.querySelector("span").textContent = t(`panel.${command.state}`, {
-    action: t(`panel.${command.action}`), owner: command.waitingFor?.holders?.[0]?.name || t("activity.otherTask"),
-    error: command.error || (command.result?.error ? fmtIpc(command.result.error) : command.result?.summary) || t("common.unknown"),
-  });
-  document.getElementById("panel-command-cancel").hidden = command.state !== "queued";
-  document.getElementById("panel-command-dismiss").hidden = ["queued", "running"].includes(command.state);
-  document.getElementById("panel-command-recover").hidden = !["queued", "failed"].includes(command.state);
+  bar.hidden = command?.state !== "failed";
+  bar.querySelector("span").textContent = bar.hidden ? "" : t("panel.connectionFailed");
 }
 
 function showPendingModel(model) {
@@ -95,7 +88,7 @@ function showTaskState(task) {
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
     queued: "activity.capacityQueue", waiting_resource: "activity.waitingResource", cancelled: "activity.cancelled",
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
-  taskIndicator.hidden = !task;
+  taskIndicator.hidden = !task || ["running", "completed"].includes(task.state);
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
   if (task?.state === "failed") {
     taskIndicator.appendChild(el("div", "task-terminal-reason", task.error || t("chat.terminal.failedReason")));
@@ -1825,19 +1818,6 @@ stop.addEventListener("click", async () => {
 });
 togglePanelBtn.addEventListener("click", async () => {
   showPanelCommand(await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel()));
-});
-document.getElementById("panel-command-cancel")?.addEventListener("click", async () => {
-  await window.arcane.cancelPanelCommand(panelCommandSnapshot.command?.id);
-  showPanelCommand(await window.arcane.getPanelCommand());
-});
-document.getElementById("panel-command-dismiss")?.addEventListener("click", () => { document.getElementById("panel-command").hidden = true; });
-document.getElementById("panel-command-recover")?.addEventListener("click", async event => {
-  const button = /** @type {HTMLButtonElement} */ (event.currentTarget); button.disabled = true;
-  try {
-    const result = await window.arcane.recoverPanel();
-    showPanelCommand(result);
-    if (result?.code === "PAGE_OPERATION_RUNNING") document.querySelector("#panel-command > span").textContent = t("panel.recoveryBusy");
-  } finally { button.disabled = false; }
 });
 input.addEventListener("input", () => {
   autosize();
