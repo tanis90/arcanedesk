@@ -86,6 +86,10 @@ globalThis.ARCANE_MESSAGES = {
     "sessions.openFailed": "打开会话失败:{error}",
     "sessions.newFailed": "新建会话失败:{error}",
     "chat.sessionRestored": "· 会话已恢复 ·",
+    "chat.card.unknown": "状态未确认",
+    "chat.draftSaveFailed": "草稿暂未保存到磁盘，请保留当前窗口",
+    "chat.syncing": "正在同步会话进展…",
+    "chat.syncFailed": "暂时无法同步，正在显示上次确认的内容。点击重试。",
 
     // ---------- 设置:框架 ----------
     "settings.title": "设置",
@@ -422,6 +426,10 @@ globalThis.ARCANE_MESSAGES = {
     "sessions.openFailed": "Failed to open session: {error}",
     "sessions.newFailed": "Failed to create session: {error}",
     "chat.sessionRestored": "· Session restored ·",
+    "chat.card.unknown": "Status unconfirmed",
+    "chat.draftSaveFailed": "Draft could not be saved to disk. Keep this window open.",
+    "chat.syncing": "Syncing conversation progress…",
+    "chat.syncFailed": "Unable to sync. Showing the last confirmed content. Click to retry.",
 
     // ---------- settings frame ----------
     "settings.title": "Settings",

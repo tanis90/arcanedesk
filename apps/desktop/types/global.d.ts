@@ -33,6 +33,7 @@ interface ArcaneBridge {
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions(context?: ArcaneModeContext): Promise<any>;
   currentSession(): Promise<any>;
+  sessionSnapshot(sessionId: string): Promise<any>;
   newSession(context?: ArcaneModeContext): Promise<any>;
   openSession(path: string, context?: ArcaneModeContext): Promise<any>;
   deleteSession(path: string, context?: ArcaneModeContext): Promise<any>;

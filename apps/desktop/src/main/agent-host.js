@@ -294,6 +294,10 @@ export class AgentHost {
 
   /** 统一出站口:所有事件带 mode 标签,renderer 按活动模式过滤。 */
   emit(payload) {
+    if (payload.type === "session_switched") {
+      this.sendToRenderer({ ...payload, mode: this.profile.mode, sessionId: this.describeCurrent()?.id });
+      return;
+    }
     // World state belongs to the shared Foundry runtime, not a conversation stream.
     if (payload.type === "world_info") {
       this.sendToRenderer({ ...payload, mode: this.profile.mode });
@@ -526,7 +530,7 @@ export class AgentHost {
         const thinking = extractThinking(message);
         const toolCalls = (Array.isArray(message.content) ? message.content : [])
           .filter((part) => part?.type === "toolCall")
-          .map((part) => ({ id: part.id, name: part.name, args: part.arguments }));
+          .map((part) => ({ id: part.id, name: part.name, args: part.arguments, hasResult: false }));
         if (text || thinking || toolCalls.length > 0) out.push({ role: "assistant", text, thinking, toolCalls, ts: message.timestamp });
       } else if (message.role === "toolResult") {
         const text = (Array.isArray(message.content) ? message.content : [])
@@ -537,6 +541,7 @@ export class AgentHost {
         for (let i = out.length - 1; i >= 0; i--) {
           const call = /** @type {any} */ (out[i].toolCalls?.find((t) => t.id === message.toolCallId));
           if (call) {
+            call.hasResult = true;
             call.isError = Boolean(message.isError);
             call.resultText = text;
             break;

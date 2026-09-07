@@ -38,8 +38,7 @@ export class SessionRegistry {
     return { ok: true };
   }
 
-  async select(sessionPath, fresh = false) {
-    const selection = ++this.selection;
+  async select(sessionPath, fresh = false, selection = ++this.selection) {
     let host = sessionPath ? this.allHosts().find(h => h.describeCurrent()?.path === sessionPath) : null;
     if (!host) {
       const key = sessionPath ?? (fresh ? Symbol("new") : "initial");

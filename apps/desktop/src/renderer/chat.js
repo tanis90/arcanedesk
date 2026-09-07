@@ -4,6 +4,7 @@
 "use strict";
 
 const messages = document.getElementById("messages");
+const syncIndicator = document.getElementById("conversation-sync");
 const input = /** @type {HTMLTextAreaElement} */ (document.getElementById("chat-input"));
 const send = document.getElementById("send");
 const stop = document.getElementById("stop");
@@ -41,6 +42,119 @@ let currentMode = "prep";
 let currentModeGeneration = 0;
 let selectedSessionId = null;
 let selectedTaskId = null;
+const { EventInbox, WorkspaceStore } = /** @type {any} */ (globalThis).ArcaneConversationState;
+const eventInbox = new EventInbox();
+const workspaceStore = new WorkspaceStore();
+let viewSeq = 0;
+let viewEpoch = null;
+let snapshotRequest = 0;
+let restoringView = false;
+let followLatest = true;
+let draftRevision = 0;
+let navigationRequest = 0;
+const workspaceReady = new Set();
+const syncingSessions = new Set();
+const snapshotCache = new Map();
+const lastSessionByMode = new Map();
+let workspaceSaveTimer;
+
+function scheduleWorkspaceSave() {
+  clearTimeout(workspaceSaveTimer);
+  workspaceSaveTimer = setTimeout(saveWorkspace, 150);
+}
+
+function saveWorkspace() {
+  if (!selectedSessionId || !workspaceReady.has(selectedSessionId)) return;
+  const top = messages.getBoundingClientRect().top;
+  const anchor = [...messages.querySelectorAll("[data-item-key]")].find(node => node.getBoundingClientRect().bottom > top);
+  const expansions = [...messages.querySelectorAll("[data-item-key]")].map(node => ({
+    key: /** @type {HTMLElement} */ (node).dataset.itemKey,
+    open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
+  }));
+  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest,
+    anchor: anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null,
+    expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
+}
+
+async function installSnapshot(payload) {
+  const id = payload.session?.id;
+  if (!id) return;
+  const token = ++snapshotRequest;
+  const changed = selectedSessionId !== id;
+  saveWorkspace();
+  snapshotCache.set(id, payload);
+  if (payload.mode) lastSessionByMode.set(payload.mode, id);
+  restoringView = true;
+  syncIndicator.hidden = true;
+  selectedSessionId = id;
+  selectedTaskId = payload.task?.id ?? null;
+  viewSeq = payload.inFlight?.seq ?? 0;
+  viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+  if (payload.mode) applyModeUi(payload.mode, payload.cwd);
+  if (changed) { input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip(); }
+  const revision = draftRevision;
+  renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy));
+  if (payload.modelLabel) updateModelLabels(payload.modelLabel);
+  if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
+  const replay = eventInbox.after(id, viewEpoch, viewSeq);
+  restoringView = false;
+  if (replay === null) { void resyncSelected(); return; }
+  for (const event of replay) receiveEvent(event, true);
+  let saved;
+  try { saved = await workspaceStore.load(id); } catch { saved = {}; }
+  if (token !== snapshotRequest || selectedSessionId !== id) return;
+  workspaceReady.add(id);
+  if (revision === draftRevision) {
+    input.value = saved.draft ?? "";
+    pendingImages = saved.images ?? [];
+    renderAttachStrip(); autosize();
+  }
+  followLatest = saved.followLatest !== false;
+  for (const state of saved.expansions ?? []) {
+    const node = messages.querySelector('[data-item-key="' + CSS.escape(state.key) + '"]');
+    if (node instanceof HTMLDetailsElement) node.open = state.open;
+    else node?.classList.toggle("open", state.open);
+  }
+  if (followLatest) scrollToEnd(true);
+  else if (saved.anchor) {
+    const anchor = messages.querySelector('[data-item-key="' + CSS.escape(saved.anchor.key) + '"]');
+    if (anchor) messages.scrollTop += anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset;
+  }
+  updateScrollButton();
+}
+
+async function resyncSelected() {
+  const id = selectedSessionId;
+  const token = snapshotRequest;
+  if (!id || syncingSessions.has(id)) return;
+  syncingSessions.add(id);
+  const indicatorTimer = setTimeout(() => {
+    if (selectedSessionId === id) {
+      syncIndicator.textContent = t("chat.syncing"); syncIndicator.hidden = false;
+    }
+  }, 1000);
+  try {
+    const payload = await window.arcane.sessionSnapshot(id);
+    if (id !== selectedSessionId || token !== snapshotRequest) return;
+    if (!payload.ok) throw new Error(payload.code);
+    await installSnapshot(payload);
+  } catch {
+    if (selectedSessionId === id) {
+      syncIndicator.textContent = t("chat.syncFailed"); syncIndicator.hidden = false;
+    }
+  } finally { clearTimeout(indicatorTimer); syncingSessions.delete(id); }
+}
+
+function receiveEvent(event, replay = false) {
+  if (!replay) eventInbox.record(event);
+  if (event.sessionId && event.sessionId === selectedSessionId && Number.isInteger(event.seq)) {
+    if (restoringView) return;
+    if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
+    if (event.seq <= viewSeq) return;
+    viewSeq = event.seq;
+  }
+  onEvent(event);
+}
 /** @type {"combat" | "prep"} */
 let requestedMode = currentMode;
 let modeSwitchRequest = 0;
@@ -95,6 +209,9 @@ async function switchMode(next) {
   next = next === "prep" ? "prep" : "combat";
   if (next === requestedMode) return; // 已选中或已有同目标请求在途
   requestedMode = next;
+  const navigation = ++navigationRequest;
+  const cached = snapshotCache.get(lastSessionByMode.get(next));
+  if (cached) void installSnapshot(cached);
   const requestId = ++modeSwitchRequest;
   let result;
   try {
@@ -106,7 +223,7 @@ async function switchMode(next) {
     addStatus(t("chat.status.modeSwitchFailed", { error: error?.message ?? "unknown" }));
     return;
   }
-  if (requestId !== modeSwitchRequest) return; // 更新的用户选择已经在途/完成
+  if (requestId !== modeSwitchRequest || navigation !== navigationRequest) return;
   if (!result?.ok) {
     requestedMode = currentMode;
     addStatus(t("chat.status.modeSwitchFailed", {
@@ -118,10 +235,7 @@ async function switchMode(next) {
   applyModeUi(result.mode, result.cwd);
   requestedMode = currentMode;
   invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
-  renderHistory(result.history ?? []);
-  selectedSessionId = result.session?.id ?? null;
-  selectedTaskId = result.task?.id ?? null;
-  setBusy(Boolean(result.busy)); // 后台模式可能还在跑:恢复真实 busy 态
+  void installSnapshot(result);
   if (result.modelLabel) updateModelLabels(result.modelLabel);
   if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
   refreshSessions();
@@ -155,7 +269,9 @@ function nearBottom() {
 }
 
 function scrollToEnd(force = false) {
-  if (force || nearBottom()) {
+  if (restoringView) return;
+  if (force || followLatest) {
+    if (force) followLatest = true;
     messages.scrollTop = messages.scrollHeight;
   }
   updateScrollButton();
@@ -165,7 +281,11 @@ function updateScrollButton() {
   scrollBottomBtn.classList.toggle("show", !nearBottom() && messages.scrollHeight > messages.clientHeight);
 }
 
-messages.addEventListener("scroll", updateScrollButton);
+messages.addEventListener("scroll", () => {
+  if (!restoringView) followLatest = nearBottom();
+  if (!restoringView) scheduleWorkspaceSave();
+  updateScrollButton();
+});
 scrollBottomBtn.addEventListener("click", () => scrollToEnd(true));
 
 // ---------- helpers ----------
@@ -259,10 +379,11 @@ function renderUserText(node, text) {
   }
 }
 
-function addMessage(role, text, images) {
+function addMessage(role, text, images, key = null) {
   closeWorkBlock(); // 最终回答/新 user 消息落在块外
   dismissWelcome();
   const node = el("div", `msg ${role}`);
+  if (key) node.dataset.itemKey = key;
   if (role === "assistant") {
     const body = el("div", "body");
     renderMarkdown(body, text);
@@ -299,6 +420,7 @@ function streamBubble(key) {
   closeWorkBlock(); // assistant 文本(含轮间插叙)不属于工作过程块
   dismissWelcome();
   bubble = el("div", "msg assistant streaming");
+  bubble.dataset.itemKey = key;
   const body = el("div", "body");
   bubble.appendChild(body);
   messages.appendChild(bubble);
@@ -342,6 +464,7 @@ function thinkBlock(key) {
   if (entry) return entry;
   dismissWelcome();
   const block = el("div", "think");
+  block.dataset.itemKey = "think:" + key;
   const head = el("button", "think-head");
   const label = el("span", "think-label", t("chat.thinking"));
   const chev = el("span", "chev", "▸");
@@ -350,6 +473,7 @@ function thinkBlock(key) {
   block.append(head, body);
   head.addEventListener("click", () => block.classList.toggle("open"));
   workTarget().appendChild(block);
+  if (workBlock) workBlock.root.dataset.itemKey ||= "work:" + key;
   if (workBlock && workBlock.body.contains(block)) workBlock.lastAt = Date.now();
   entry = { block, label, body, startAt: Date.now() };
   thinkBlocks.set(key, entry);
@@ -448,6 +572,7 @@ function ensureToolCard(toolCallId, toolName, args) {
   dismissWelcome();
 
   const card = el("div", "card running open");
+  card.dataset.itemKey = "tool:" + toolCallId;
   const head = el("div", "head");
   const dot = el("span", "dot");
   const name = el("span", "tool-name", toolName);
@@ -472,6 +597,7 @@ function ensureToolCard(toolCallId, toolName, args) {
 
   const target = workTarget();
   target.appendChild(card);
+  if (workBlock) workBlock.root.dataset.itemKey ||= "work:tool:" + toolCallId;
   if (workBlock && target === workBlock.body) {
     workBlock.steps += 1;
     workBlock.lastAt = Date.now();
@@ -781,7 +907,7 @@ function onEvent(event) {
         if (finalText) renderMarkdown(body, finalText);
         scrollToEnd();
       } else if (finalText) {
-        addMessage(event.role, finalText);
+        addMessage(event.role, finalText, undefined, event.key);
       }
       if (event.key) settleThinkBlock(event.key, event.thinking);
       break;
@@ -851,10 +977,7 @@ function onEvent(event) {
       break;
     case "session_switched":
       // 切换/新建会话:整体重置后按历史重渲染(含工具卡片四态)
-      renderHistory(event.history ?? []);
-      selectedSessionId = event.session?.id ?? null;
-      selectedTaskId = event.task?.id ?? null;
-      setBusy(Boolean(event.busy));
+      void installSnapshot(event);
       if (event.modelLabel) updateModelLabels(event.modelLabel);
       if (typeof event.supportsImages === "boolean") modelSupportsImages = event.supportsImages;
       refreshSessions();
@@ -1100,6 +1223,7 @@ async function fileToAttachment(file) {
 }
 
 async function addImageFiles(files) {
+  const targetSessionId = selectedSessionId;
   const images = [...(files ?? [])].filter((f) => f?.type?.startsWith("image/"));
   if (images.length === 0) return;
   if (!modelSupportsImages) addStatus(t("chat.status.imageNoVision"));
@@ -1109,7 +1233,17 @@ async function addImageFiles(files) {
       break;
     }
     try {
-      pendingImages.push(await fileToAttachment(file));
+      const attachment = await fileToAttachment(file);
+      if (selectedSessionId === targetSessionId) {
+        pendingImages.push(attachment);
+        draftRevision++;
+        workspaceReady.add(targetSessionId);
+        saveWorkspace();
+      } else {
+        const saved = await workspaceStore.load(targetSessionId);
+        saved.images = [...(saved.images ?? []), attachment].slice(0, MAX_ATTACH);
+        await workspaceStore.save(targetSessionId, saved);
+      }
     } catch {
       addStatus(t("chat.status.imageReadFailed", { name: file.name ?? "clipboard" }));
     }
@@ -1129,6 +1263,9 @@ function renderAttachStrip() {
     remove.title = t("chat.attach.remove");
     remove.addEventListener("click", () => {
       pendingImages.splice(index, 1);
+      draftRevision++;
+      workspaceReady.add(selectedSessionId);
+      saveWorkspace();
       renderAttachStrip();
     });
     thumb.append(img, remove);
@@ -1185,6 +1322,9 @@ async function submit() {
   autosize();
   const echoImages = pendingImages.slice();
   pendingImages = [];
+  draftRevision++;
+  workspaceReady.add(selectedSessionId);
+  saveWorkspace();
   renderAttachStrip();
   const outbound = text || t("chat.imagePlaceholder"); // pi 总会带 text part,空串会被部分 provider 拒绝
   const userMessage = addMessage("user", outbound, echoImages);
@@ -1418,79 +1558,62 @@ function resetConversation() {
   setBusy(false);
 }
 
-function renderHistory(entries) {
+function renderHistory(entries, inFlight = {}, running = false) {
   resetConversation();
-  if (!entries || entries.length === 0) {
-    showWelcome();
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.role === "user") {
-      addMessage("user", entry.text, entry.images);
-    } else if (entry.role === "assistant") {
-      if (currentMode === "prep") {
-        // 备团:thinking + 工具卡片收进「工作过程」块(折叠),最终文本在块外
-        const calls = entry.toolCalls ?? [];
-        if (entry.thinking || calls.length > 0) {
-          if (entry.thinking) renderThinkingHistory(`hist:${entry.ts}`, entry.thinking);
-          for (const call of calls) {
-            ensureToolCard(call.id, call.name, call.args);
-            finishToolCard(call.id, call.name, {
-              isError: Boolean(call.isError),
-              result: { content: call.resultText ? [{ type: "text", text: call.resultText }] : [] },
-            });
-          }
-          closeWorkBlock(false); // 历史块直接收尾折叠;历史没有真实计时,不显示秒数
-        }
-        if (entry.text) addMessage("assistant", entry.text);
-      } else {
-        // 战斗:与现状逐像素一致(平铺)
-        if (entry.thinking) renderThinkingHistory(`hist:${entry.ts}`, entry.thinking);
-        if (entry.text) addMessage("assistant", entry.text);
-        for (const call of entry.toolCalls ?? []) {
-          ensureToolCard(call.id, call.name, call.args);
-          finishToolCard(call.id, call.name, {
-            isError: Boolean(call.isError),
-            result: { content: call.resultText ? [{ type: "text", text: call.resultText }] : [] },
-          });
-        }
+  const liveTools = new Map((inFlight.tools ?? []).map(tool => [tool.toolCallId, tool]));
+  function restoreTool(call) {
+    const live = liveTools.get(call.id);
+    const card = ensureToolCard(call.id, call.name, call.args);
+    if (live?.startedAt != null) card.startAt = live.startedAt;
+    if (live?.state === "running") return;
+    if (live?.state === "succeeded" || live?.state === "failed" || call.hasResult) {
+      finishToolCard(call.id, call.name, {
+        isError: live ? live.state === "failed" : Boolean(call.isError),
+        result: live?.result ?? { content: call.resultText ? [{ type: "text", text: call.resultText }] : [] },
+      });
+      if (live?.finishedAt != null && live?.startedAt != null) {
+        card.card.querySelector(".duration").textContent = ((live.finishedAt - live.startedAt) / 1000).toFixed(1) + "s";
       }
+    } else {
+      card.card.classList.remove("running");
+      card.state.className = "state-chip";
+      card.state.textContent = t("chat.card.unknown");
     }
   }
-  addStatus(t("chat.sessionRestored"));
-  scrollToEnd(true);
+  for (const entry of entries ?? []) {
+    const key = entry.role + ":" + entry.ts;
+    if (entry.role === "user") {
+      addMessage("user", entry.text, entry.images, key);
+    } else if (entry.role === "assistant") {
+      if (entry.thinking) renderThinkingHistory(key, entry.thinking);
+      for (const call of entry.toolCalls ?? []) restoreTool(call);
+      const hasLiveTools = (entry.toolCalls ?? []).some(call => liveTools.get(call.id)?.state === "running");
+      if (!hasLiveTools) closeWorkBlock(false);
+      if (entry.text) addMessage("assistant", entry.text, undefined, key);
+    }
+  }
+  for (const tool of inFlight.tools ?? []) {
+    if (!toolCards.has(tool.toolCallId)) restoreTool({ id: tool.toolCallId, name: tool.toolName, args: tool.args });
+  }
+  for (const draft of inFlight.streaming ?? []) {
+    if (draft.thinking) thinkBlock(draft.key).body.textContent = draft.thinking;
+    if (draft.text) streamBubble(draft.key).querySelector(".body").textContent = draft.text;
+  }
+  if (!(entries?.length || inFlight.streaming?.length || inFlight.tools?.length)) showWelcome();
+  setBusy(running);
 }
 
 let currentSessionRequest = 0;
 
 async function pullCurrentSession() {
   const requestId = ++currentSessionRequest;
+  const navigation = navigationRequest;
   const payload = await window.arcane.currentSession();
-  if (requestId !== currentSessionRequest || !acceptModeSnapshot(payload)) return;
-  // 模式真相以 main 为准(持久化在 ui.json);顺带同步模式滑块与目录 chip
-  if (payload.mode) {
-    const previousMode = currentMode;
-    applyModeUi(payload.mode, payload.cwd);
-    // 启动同步可把 renderer 默认 prep 校准成持久化模式；不要覆盖在途切换目标。
-    if (requestedMode === previousMode) requestedMode = currentMode;
-  }
-  if (!payload?.session) return;
-  selectedSessionId = payload.session.id;
-  selectedTaskId = payload.task?.id ?? null;
-  if (typeof payload.busy === "boolean") setBusy(payload.busy);
-  // 启动竞态:world/model 的推送可能早于 renderer 订阅,这里一并补齐
+  if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
+  if (payload.mode) requestedMode = payload.mode;
   const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
-  if (title) {
-    worldChip.textContent = title;
-    worldChip.title = `world: ${payload.worldInfo?.world?.id ?? title}`;
-    worldChip.style.display = "";
-  }
-  if (payload.modelLabel) updateModelLabels(payload.modelLabel);
-  if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
-  // 用户已经在本地输入/收到过消息时不覆盖对话区(启动竞态保护)
-  if (messages.querySelector(".msg, .card")) return;
-  renderHistory(payload.history ?? []);
-  setBusy(Boolean(payload.busy));
+  if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
+  await installSnapshot(payload);
 }
 
 const drawer = document.getElementById("session-drawer");
@@ -1548,7 +1671,12 @@ async function refreshSessions() {
     item.addEventListener("click", async () => {
       setDrawer(false);
       if (!s.active && sameModeContext(context)) {
+        const navigation = ++navigationRequest;
+        const cached = snapshotCache.get(s.id);
+        if (cached) void installSnapshot(cached);
         const result = await window.arcane.openSession(s.path, context);
+        if (navigation !== navigationRequest) return;
+        if (result?.ok) { await installSnapshot(result); refreshSessions(); }
         if (!result?.ok) {
           addStatus(t("sessions.openFailed", {
             error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
@@ -1567,8 +1695,10 @@ drawerBackdrop.addEventListener("click", () => setDrawer(false));
 document.getElementById("session-new").addEventListener("click", async () => {
   setDrawer(false);
   const context = modeContext();
+  const navigation = ++navigationRequest;
   const result = await window.arcane.newSession(context);
-  if (!sameModeContext(context)) return;
+  if (navigation !== navigationRequest) return;
+  if (result?.ok) { await installSnapshot(result); refreshSessions(); }
   if (!result?.ok) {
     addStatus(t("sessions.newFailed", {
       error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
@@ -2434,5 +2564,18 @@ applyModeUi(currentMode, lastPrepCwd);
 refreshTelemetryConsent();
 
 input.focus();
-window.arcane.onEvent(onEvent);
+window.arcane.onEvent(receiveEvent);
+input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
+window.addEventListener("pagehide", saveWorkspace);
+window.addEventListener("focus", () => { void resyncSelected(); });
+syncIndicator.addEventListener("click", () => { void resyncSelected(); });
+messages.addEventListener("click", scheduleWorkspaceSave);
+messages.addEventListener("toggle", scheduleWorkspaceSave, true);
+setInterval(() => {
+  for (const entry of toolCards.values()) {
+    if (entry.card.classList.contains("running")) {
+      entry.card.querySelector(".duration").textContent = ((Date.now() - entry.startAt) / 1000).toFixed(1) + "s";
+    }
+  }
+}, 1000);
 pullCurrentSession();

@@ -801,28 +801,34 @@ app.whenReady().then(async () => {
     // readySnapshot 在模式变化时重试，响应中的 mode/host/history 必定来自同一快照。
     return currentModePayload();
   });
+  ipcMain.handle("sessions:snapshot", (_event, sessionId) => {
+    if (!isTrustedChatIpc(_event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    const host = allSessionHosts().find(host => host.describeCurrent()?.id === sessionId);
+    if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
+    return { ok: true, ...host.currentPayload(), mode: host.profile.mode, cwd: host.cwd() };
+  });
   ipcMain.handle("sessions:new", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
+    const selection = ++hosts[context.mode].selection;
     await modeController.ensureStarted(context.mode);
-    const nextHost = await hosts[context.mode].select(null, true);
-    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
-    return { ok: true, ...modeController.publicSnapshot(context) };
+    const nextHost = await hosts[context.mode].select(null, true, selection);
+    return { ok: true, ...nextHost.currentPayload(), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
+    const selection = ++hosts[context.mode].selection;
     const sessionPath = String(request?.path ?? "");
     await modeController.ensureStarted(context.mode);
     const list = await hosts[context.mode].listSessions();
     if (!list.some((s) => s.path === sessionPath)) {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
-    const nextHost = await hosts[context.mode].select(sessionPath);
-    nextHost.emit({ type: "session_switched", ...nextHost.currentPayload() });
-    return { ok: true, ...modeController.publicSnapshot(context) };
+    const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
+    return { ok: true, ...nextHost.currentPayload(), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:delete", async (_event, request) => {
     const validated = await validateModeRequest(request);

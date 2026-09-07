@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
+  sessionSnapshot: (sessionId) => ipcRenderer.invoke("sessions:snapshot", sessionId),
   newSession: (context) => ipcRenderer.invoke("sessions:new", context),
   openSession: (path, context) => ipcRenderer.invoke("sessions:open", {
     path,

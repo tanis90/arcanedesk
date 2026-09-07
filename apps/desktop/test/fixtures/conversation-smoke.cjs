@@ -1,0 +1,91 @@
+const { app, BrowserWindow, ipcMain } = require("electron");
+const { readFileSync, mkdtempSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const path = require("node:path");
+const assert = require("node:assert/strict");
+
+const desktop = path.resolve(__dirname, "../..");
+app.setPath("userData", mkdtempSync(path.join(tmpdir(), "arcane-conversation-smoke-")));
+app.disableHardwareAcceleration();
+const startedAt = Date.now() - 15000;
+let finished = false;
+function snapshot(mode) {
+  const id = mode === "prep" ? "A" : "B";
+  return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
+    busy: id === "A" && !finished, task: id === "A" ? { id: "task-A", state: finished ? "completed" : "running" } : null,
+    history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
+      { role: "user", text: "Task A", ts: 1 },
+      { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
+      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])] : [],
+    inFlight: { runtimeEpoch: "test", seq: id === "A" && finished ? 3 : 0,
+      streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
+      tools: id === "A" ? [{ toolCallId: "tool-A", toolName: "bash", state: finished ? "succeeded" : "running", startedAt }] : [] } };
+}
+let mode = "prep";
+let generation = 0;
+const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
+for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "sessions:current") return { ...snapshot(mode), generation };
+  if (channel === "sessions:snapshot") return snapshot(input === "A" ? "prep" : "combat");
+  if (channel === "mode:set") { mode = input; return { ...snapshot(mode), generation: ++generation }; }
+  if (channel === "sessions:list") return { sessions: [] };
+  if (channel === "voice:get-config") return { enabled: false };
+  if (channel === "ui:get-locale") return { pref: "en-US", resolved: "en-US" };
+  if (channel === "slash:list") return { skills: [], templates: [], commands: [] };
+  return {};
+});
+
+app.whenReady().then(async () => {
+  const window = new BrowserWindow({ show: false, width: 1000, height: 800,
+    webPreferences: { preload: path.join(desktop, "preload.cjs"), contextIsolation: true } });
+  const evaluate = code => window.webContents.executeJavaScript(code);
+  async function until(code) {
+    const limit = Date.now() + 7000;
+    while (Date.now() < limit) {
+      if (await evaluate(code)) return;
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    throw new Error("Timed out: " + code);
+  }
+  try {
+    await window.loadFile(path.join(desktop, "src/renderer/index.html"));
+    await until('selectedSessionId === "A" && workspaceReady.has("A") && !!document.querySelector(".streaming")');
+    assert.equal(await evaluate('document.querySelector(".streaming .body").textContent'), "A partial reply");
+    await evaluate('input.value = "draft A"; input.dispatchEvent(new Event("input")); pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; saveWorkspace();');
+    await evaluate('messages.scrollTop = 200; messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
+    const anchor = await evaluate('workspaceStore.cache.get("A").anchor');
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B" && workspaceReady.has("B")');
+    assert.equal(await evaluate('input.value'), "");
+    await evaluate('input.value = "draft B"; input.dispatchEvent(new Event("input"));');
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && input.value === "draft A"');
+    assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("running")'), true);
+    assert.equal(await evaluate('toolCards.get("tool-A").startAt'), startedAt);
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    assert.equal(await evaluate('followLatest'), false);
+    assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("open")'), false);
+    const restoredOffset = await evaluate(`messages.querySelector('[data-item-key="${anchor.key}"]').getBoundingClientRect().top - messages.getBoundingClientRect().top`);
+    assert.ok(Math.abs(restoredOffset - anchor.offset) < 3, "reading anchor preserved");
+    await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
+    const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload();
+    await reloaded;
+    await until('selectedSessionId === "A" && input.value === "draft A" && pendingImages.length === 1');
+    assert.equal(await evaluate('document.querySelector(".streaming .body").textContent'), "A partial reply");
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    finished = true;
+    for (const event of [
+      { seq: 1, type: "tool_end", toolCallId: "tool-A", toolName: "bash", result: { content: [{ type: "text", text: "ok" }] } },
+      { seq: 2, type: "message", key: "draft-A", role: "assistant", text: "A final reply" },
+      { seq: 3, type: "task_state", task: { id: "task-A", state: "completed" } },
+    ]) window.webContents.send("arcane:event", { ...event, sessionId: "A", taskId: "task-A", mode: "prep", runtimeEpoch: "test" });
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && !busy && document.getElementById("messages").textContent.includes("A final reply")');
+    assert.equal(await evaluate('document.querySelectorAll(".streaming").length'), 0);
+    assert.equal(await evaluate('[...document.querySelectorAll(".msg.assistant")].filter(e => e.textContent === "A final reply").length'), 1);
+    console.log("PASS Electron: A/B/A, live text/tool restore, drafts, attachments, IndexedDB reload, background completion without duplicates");
+    app.exit(0);
+  } catch (error) { console.error(error); app.exit(1); }
+});
