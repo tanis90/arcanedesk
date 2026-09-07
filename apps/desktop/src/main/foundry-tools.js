@@ -25,6 +25,16 @@ const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Ar
 export function createFoundryTools(host) {
   return [
     defineTool({
+      name: "foundry_content_search", label: "Search Foundry Content",
+      description: "Search world Actors/Scenes or compendium Actors/Items. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
+      parameters: exact({ scope: Type.Union([Type.Literal("world"), Type.Literal("compendium")]),
+        documentType: Type.Union([Type.Literal("Actor"), Type.Literal("Item"), Type.Literal("Scene")]),
+        query: Type.String({ maxLength: 256 }), packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
+        actorType: Type.Optional(ref()), itemType: Type.Optional(ref()),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
+      execute: async (_id, params, signal) => textResult(await host.foundryServices().contentSearch(params, signal)),
+    }),
+    defineTool({
       name: "foundry_execute_action", label: "Execute Action",
       description: "Use a discovered action reference. Outside combat execute one spell or attack; during combat execute only the current actor and read current turn first. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
       parameters: Type.Union([
@@ -32,6 +42,7 @@ export function createFoundryTools(host) {
         exact({ actions: Type.Array(exact(actionFields), { minItems: 1, maxItems: 20 }), advance: Type.Optional(Type.Boolean()) }),
       ]),
       executionMode: "sequential",
+      promptGuidelines: ["Pass attackRollMode only when advertised and explicitly requested by the DM; normal leaves the roll unforced. For a batch, scope it per action. Never infer advantage or riders."],
       execute: async (id, params, signal) => {
         const binding = host.taskCoordinator().currentInputBinding();
         const approved = await host.maybeRequestApproval({ tool: "foundry_execute_action", summary: "Execute the requested spell or attack", args: params });

@@ -1,8 +1,8 @@
 // AgentHost — Pi coding agent session: agent loop is the core of the app.
 // Tools come in two layers:
-//   界面层:foundry_open + browser_evaluate(战斗做有界诊断;备团可按 DM 指令读写世界)
+//   界面层:foundry_open;browser_evaluate 仅备团
 //   运维视觉层:foundry_screenshot(仅备团/运维模式,返回当前 Foundry viewport)
-//   数据层:world_status + combat_*(固定页面 runtime,Turn Protocol v2,四态)
+//   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
 import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
@@ -24,6 +24,8 @@ import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { InputJournal } from "./tasks/input-journal.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
+import { createFoundryTools } from "./foundry-tools.js";
+import { activeToolNames, verifyActiveTools } from "./foundry-tool-policy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -119,7 +121,6 @@ const COMBAT_PROFILE = {
   systemPrompt: "combat", // "combat" = combat.md 全文替换;"append" = pi 默认 prompt + prep.md
   skillPaths: [], // prep: 用 getSkillPaths() 现取(SkillsUpdater 激活副本优先于包内基线)
   getSkillPaths: null,
-  customToolNames: null, // null = 全部 desktop custom tools;prep 只启用界面/eval
   fence: false, // prep: true 挂 cwd 围栏
 };
 
@@ -192,29 +193,6 @@ function extractThinking(message) {
     .filter((part) => part?.type === "thinking" && typeof part.thinking === "string")
     .map((part) => part.thinking)
     .join("");
-}
-
-/** Short human summary of an execute-turn call, shown on the approval card. */
-function summarizeExecuteTurn(params) {
-  if (!params) return "(no params)";
-  const parts = [];
-  if (Array.isArray(params.actions) && params.actions.length > 0) {
-    parts.push(
-      params.actions
-        .map((a) => {
-          const targets = Array.isArray(a?.targetTokenIds) && a.targetTokenIds.length > 0 ? ` -> ${a.targetTokenIds.join(", ")}` : "";
-          return `${a?.actionId ?? "?"}${targets}`;
-        })
-        .join("; ")
-    );
-  } else if (params.actionId) {
-    const targets = Array.isArray(params.targetTokenIds) && params.targetTokenIds.length > 0 ? ` -> ${params.targetTokenIds.join(", ")}` : "";
-    parts.push(`${params.actionId}${targets}`);
-  } else {
-    parts.push("(no actionId)");
-  }
-  if (params.advance) parts.push("[advance]");
-  return parts.join(" ");
 }
 
 export class AgentHost {
@@ -404,16 +382,7 @@ export class AgentHost {
       modelRuntime: this.modelRuntime ?? undefined,
       agentDir: getAgentDir(),
     };
-    if (!this.profile.builtinTools) {
-      // allowlist 只放 custom tools:无 shell/文件等内置工具。
-      // 注意不能用 noTools:"all"——那会连 customTools 一起禁掉,
-      // 模型收不到任何工具定义,只能把工具调用幻觉成文本。
-      options.tools = customTools.map((tool) => tool.name);
-    } else {
-      // Pi 默认仍是 read/bash/edit/write；Windows 要显式换成 powershell。
-      // 传了 customTools 也不会自动激活它们,所以一并放进 allowlist。
-      options.tools = [...builtinToolNamesForPlatform(), ...customTools.map((tool) => tool.name)];
-    }
+    options.tools = activeToolNames(this.profile.mode);
     // 模型按会话生效:已有会话恢复自己的模型,新会话才吃全局默认(见
     // initialModelRefForAttach)。传 model 对象是为了绕过 pi settings.json
     // 的默认,而不是覆盖会话选择。
@@ -459,6 +428,8 @@ export class AgentHost {
       options.resourceLoader = loader;
     }
     const { session } = await createAgentSession(options);
+    try { verifyActiveTools(session, options.tools); }
+    catch (error) { session.dispose(); throw error; }
     this.session = session;
     this.sessionManager = sessionManager;
     this._foundryServices = null;
@@ -1219,118 +1190,6 @@ export class AgentHost {
       },
     });
 
-    const combatBattleContext = defineTool({
-      name: "combat_battle_context",
-      label: "Battle Context",
-      description:
-        "Read the stable battle manual (Turn Protocol v2 battle-context): combatants, sides, static blocks and the action catalog with input contracts. Read ONCE per combat, not every turn.",
-      parameters: Type.Object({}),
-      execute: async (_toolCallId, _params, signal) => {
-        const data = await runtimeCall("battleContext", {}, {
-          signal,
-          executionTimeoutMs: 30_000,
-        });
-        return textResult(safeJson(data), data);
-      },
-    });
-
-    const combatTurnContext = defineTool({
-      name: "combat_turn_context",
-      label: "Turn Context",
-      description:
-        "Read the live mutable turn state (Turn Protocol v2 turn-context): current turn/round, actor HP, resources, conditions, concentration, available action ids. Read before EVERY decision.",
-      parameters: Type.Object({}),
-      promptGuidelines: [
-        "Read combat_turn_context before every combat decision; never act on remembered state.",
-      ],
-      execute: async (_toolCallId, _params, signal) => {
-        const data = await runtimeCall("turnContext", {}, {
-          signal,
-          executionTimeoutMs: 30_000,
-        });
-        return textResult(safeJson(data), data);
-      },
-    });
-
-    const executeTurnInput = Type.Optional(
-      Type.Object(
-        {
-          selections: Type.Optional(Type.Object({}, { additionalProperties: true })),
-          // 注意:runtime 契约里 declaredRiders / allocation 都是对象数组,不是对象
-          // (foundry-runtime.ts: "input.declaredRiders must be an array")。
-          declaredRiders: Type.Optional(
-            Type.Array(Type.Object({}, { additionalProperties: true }), {
-              description: "Rider entries, e.g. [{ id: \"branding-smite\", spellLevel: 2 }]",
-            })
-          ),
-          allocation: Type.Optional(
-            Type.Array(Type.Object({}, { additionalProperties: true }), {
-              description: "Non-empty array of allocation entries",
-            })
-          ),
-          spellLevel: Type.Optional(Type.Number()),
-          attackRollMode: Type.Optional(
-            Type.String({
-              enum: ["normal", "advantage", "disadvantage"],
-              description:
-                "Optional only when the selected battle-context action advertises input.attackRollMode. " +
-                "Set it only from an explicit DM instruction: advantage/disadvantage set the corresponding Midi request flags; " +
-                "normal leaves the roll unforced and does not cancel effects Foundry applies automatically. " +
-                "Otherwise omit it; never infer it from conditions, positioning, or tactics.",
-            })
-          ),
-          targetSpec: Type.Optional(Type.Object({}, { additionalProperties: true })),
-        },
-        { additionalProperties: true }
-      )
-    );
-
-    const combatExecuteTurn = defineTool({
-      name: "combat_execute_turn",
-      label: "Execute Turn Action",
-      description:
-        "Submit combat action(s) for the current combatant (Turn Protocol v2 execute-turn). " +
-        "Returns a four-state receipt: completed / rejected / partial / indeterminate.",
-      parameters: Type.Object({
-        actionId: Type.Optional(Type.String({ description: "Single action id from battle-context" })),
-        actions: Type.Optional(
-          Type.Array(
-            Type.Object({
-              actionId: Type.String(),
-              targetTokenIds: Type.Optional(Type.Array(Type.String())),
-              input: executeTurnInput,
-            }),
-            { description: "Multiple actions in one submission" }
-          )
-        ),
-        targetTokenIds: Type.Optional(Type.Array(Type.String())),
-        input: executeTurnInput,
-        advance: Type.Optional(Type.Boolean({ description: "Advance the combat turn after execution" })),
-      }),
-      executionMode: "sequential",
-      promptGuidelines: [
-        "Pass input.attackRollMode only when battle-context advertises it and the DM explicitly declares the mode; otherwise omit it. For actions[], scope it per action instead of copying it to every attack unless the DM explicitly applies it to all attacks.",
-        "When a receipt is partial or indeterminate, never retry automatically; read combat_turn_context for live state and report to the DM.",
-      ],
-      execute: async (_toolCallId, params, signal) => {
-        const approved = await host.maybeRequestApproval({
-          tool: "combat_execute_turn",
-          summary: summarizeExecuteTurn(params),
-          args: params,
-        });
-        if (!approved) return textResult("DM declined this action; do not retry it.");
-        const data = await runtimeCall("executeTurn", params, {
-          signal,
-          executionTimeoutMs: 120_000,
-        });
-        return textResult(safeJson(data), data);
-      },
-    });
-
-    const tools = [foundryOpen, browserEvaluate, worldStatus, combatBattleContext, combatTurnContext, combatExecuteTurn, requestUserInput];
-    if (prepWorldEdit) tools.splice(1, 0, foundryScreenshot);
-    if (!Array.isArray(host.profile.customToolNames)) return tools;
-    const enabled = new Set(host.profile.customToolNames);
-    return tools.filter((tool) => enabled.has(tool.name));
+    return [foundryOpen, foundryScreenshot, browserEvaluate, worldStatus, ...createFoundryTools(host), requestUserInput];
   }
 }

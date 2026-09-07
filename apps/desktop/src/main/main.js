@@ -1,3 +1,4 @@
+import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -630,6 +631,7 @@ app.whenReady().then(async () => {
     console.log("[telemetry] initialization failed; continuing without telemetry:", error?.message ?? error);
   }
   foundryRuntime = new DirectFoundryRuntime({
+    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
     getWebContents: () => foundryView?.webContents ?? null,
     onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
   });
@@ -753,7 +755,6 @@ app.whenReady().then(async () => {
         builtinTools: true,
         systemPrompt: "append",
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
-        customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate", "request_user_input"],
         fence: true,
       },
     }); } }),

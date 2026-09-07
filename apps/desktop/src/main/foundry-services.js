@@ -28,6 +28,11 @@ export class FoundryServices {
     });
   }
 
+  async contentSearch(params, signal) {
+    if (this.mode !== "prep") throw new Error("MODE_FORBIDDEN: content tools are prep-only");
+    return this.withPage(signal, () => this.call("contentSearch", params, { signal, executionTimeoutMs: 30_000 }));
+  }
+
   /** @param {{view?: "scene" | "turn" | "operation", operationRef?: string}} [params] @param {AbortSignal} [signal] */
   async readPlay({ view = "scene", operationRef } = {}, signal) {
     if (view === "operation") {

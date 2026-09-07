@@ -22,6 +22,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  * their own allowlist. The SDK client defaults to SAFE_DIRECT_ACTIONS.
  */
 export const ALL_DIRECT_ACTIONS = [
+  "contentSearch",
   "staticContext",
   "playContext",
   "conditionsSet",
@@ -66,6 +67,7 @@ export type DirectActionEffect = "read" | "write";
  * writes, including maintenance actions that also expose a dry-run mode.
  */
 export const DIRECT_ACTION_EFFECTS = {
+  contentSearch: "read",
   staticContext: "read",
   playContext: "read",
   conditionsSet: "write",
@@ -318,6 +320,7 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  contentSearch: FoundryActionContract<ContentSearchInput, ContentSearchResult>;
   executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
   conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
   staticContext: FoundryActionContract<Record<string, never>, PlayStaticContext>;
@@ -329,6 +332,24 @@ export interface FoundryActionMap {
 }
 
 export type TypedDirectAction = keyof FoundryActionMap;
+
+export interface ContentSearchInput {
+  scope: "world" | "compendium";
+  documentType: "Actor" | "Item" | "Scene";
+  query: string;
+  packIds?: string[];
+  actorType?: string;
+  itemType?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ContentSearchResult {
+  entries: Array<{ uuid: string; id: string; name: string; type: string; documentType: string;
+    entryId?: string; packId?: string; package?: string }>;
+  total: number;
+  nextCursor: string | null;
+}
 
 /** Resolved from the host's static snapshot, never supplied as a second model source selector. */
 export interface PlayResolvedAction {

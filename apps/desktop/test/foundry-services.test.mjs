@@ -82,3 +82,12 @@ test("light context maps current IDs to stable references and narrative availabi
   slots = 0;
   assert.deepEqual((await f.service.readPlay()).combatants[0].availableActionIds, ["ref-native"]);
 });
+
+test("content search is prep-only and uses one fixed read call", async t => {
+  const f = fixture(t), query = { scope: "world", documentType: "Actor", query: "Guard" };
+  await assert.rejects(f.service.contentSearch(query), /MODE_FORBIDDEN/);
+  assert.equal(f.calls.length, 0);
+  f.service.mode = "prep";
+  await f.service.contentSearch(query);
+  assert.deepEqual(f.calls, [{ action: "contentSearch", args: query }]);
+});

@@ -12,12 +12,17 @@ export function toolFamily(toolName) {
     case "foundry_screenshot":
       return "foundry.visual_inspect";
     case "world_status":
+    case "foundry_content_search":
       return "world.inspect";
     case "combat_battle_context":
+    case "foundry_static_context":
       return "combat.battle_context";
     case "combat_turn_context":
+    case "foundry_play_context":
       return "combat.turn_context";
     case "combat_execute_turn":
+    case "foundry_execute_action":
+    case "foundry_conditions_set":
       return "combat.execute";
     case "read":
       return "filesystem.read";
@@ -53,12 +58,17 @@ export function sideEffectClass(toolName) {
 export function actionFamily(action) {
   switch (String(action ?? "")) {
     case "worldInfo":
+    case "contentSearch":
       return "world_info";
     case "battleContext":
+    case "staticContext":
       return "battle_context";
     case "turnContext":
+    case "playContext":
       return "turn_context";
     case "executeTurn":
+    case "executeAction":
+    case "conditionsSet":
       return "execute_turn";
     default:
       return "other";

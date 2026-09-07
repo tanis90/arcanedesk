@@ -7,20 +7,20 @@
 
 ## 当前状态
 
-整体未完成。首批 SDK 能力和操作日志已实现，尚未接入 App 工具，不是可交付版本。
+整体未完成。跑团工具及共享能力已激活，备团已增加内容搜索；Actor／Scene 内容写入与完整验收尚未完成。
 
 | 方案项 | 实施状态与剩余工作 |
 | --- | --- |
-| M0 基线／工具矩阵 | 已从最新主线建独立 worktree；尚需集中 allowlist、真实 Pi active set 检查和性能基线 |
-| M1 共享上下文 | SDK 统一 Scene／有效战斗范围、全量 Token、结构引用；服务已实现快照失效标记和 operation 查询；尚需工具激活、动态动作引用映射 |
-| M1 状态 | SDK 源保护、原生结束专注、目标解析和四态；已补严格模型 schema、中英文别名、绑定来源的服务；尚需工具激活和真实系统验证 |
+| M0 基线／工具矩阵 | 集中 allowlist 与真实 Pi active set 检查已通过；跑团实际 7 个工具，备团当前阶段 12 个，后续按已实现内容工具增加到 18；性能基线待测 |
+| M1 共享上下文 | SDK 全量 Token、结构引用，服务失效标记、operation 查询、动态动作引用映射及工具激活完成；待真实世界验收 |
+| M1 状态 | SDK 源保护、原生结束专注、目标解析、四态、严格 schema、中英文别名、绑定来源服务及工具激活完成；待真实系统验证 |
 | M1 操作记录 | JSONL、派发前落盘、去重、重启不重放、服务调用和会话删除清理已实现并测试 |
-| M1 环境绑定 | 已接入消息入队时固定读取 world/Scene/selection、输入日志元数据、当前已消费输入绑定；模型工具工厂在审批前固定绑定，尚需真实 Pi 工具激活测试 |
-| M2 跑团执行 | 已实现 executeAction、普通 narrative-only 法术发现／扣费、复用旧执行核的非战斗动作、回合约束、服务引用解析；待统一工具激活、完整参数覆盖和真实世界验收 |
-| M3 备团 Actor | 未实现七项核心工具中的搜索和 Actor 服务、图片管线、readRef |
+| M1 环境绑定 | 消息入队时固定读取 world/Scene/selection、输入日志元数据、已消费输入绑定已接入；真实 Pi 工具集合通过，真实页面并发仍待验收 |
+| M2 跑团执行 | executeAction、普通 narrative-only 法术、非战斗执行、回合约束、引用解析和新工具激活完成；待完整参数覆盖与真实世界验收 |
+| M3 备团 Actor | 内容搜索已激活并测试；Actor 服务、图片管线、readRef 待实现 |
 | M4 备团 Scene | 未实现 Scene 服务、图片／批量 Token、局部回读 |
 | M5 召唤 | auto pack 只记录 AUTO-001；新 executeAction 已在扣费前拒绝召唤放置，不调用旧同先攻协议；真实组合仍待验收 |
-| Prompt／UI／遥测 | 尚未改名称、提示词、结果显示、工具分类 |
+| Prompt／UI／遥测 | 已改跑团名称、提示词、执行摘要与工具分类，历史旧工具仍可显示；新增内容工具随各阶段补充 |
 | 完整验收 | 尚未执行 CLI 全套回归、全仓 verify、真实测试世界及性能对比 |
 
 ## 已有证据
@@ -38,13 +38,11 @@
 
 ## 下一步
 
-M1 宿主服务与输入绑定已接入。新工具定义集中在 foundry-tools.js，但尚未加入 active set；
-既有模型仍使用旧工具。下一步实现 M2 executeAction 后统一切换工具名、schema/allowlist 和 prompt，
-避免把新 actionRef 目录和旧 executeTurn 模型参数混用。DirectFoundryRuntime 已支持显式 allowedActions，
-尚需主入口传具体新增 action 并集，默认四项仍保持。
+M1/M2 新工具已加入 active set；主入口显式传 SDK action 并集，SDK 默认四项保持。
+下一步实现备团 Actor get/create/update/grant、图片管线和 readRef，再做 Scene get/apply。
 
-随后实现 M2 的完整发现→执行链路，不能只改工具名称。静态动作目录还需补充 narrative-only
-普通法术、验证实际能力定义完整性及结构失效覆盖；动态结果不携带重定义。
+M2 的完整发现→执行链路已建立，但仍需审计实际能力定义完整性与结构失效覆盖，
+以及独立视觉入口是否可复用；动态结果不得携带重定义。
 最后推进 M3/M4 和全套验收。真实世界验收仅使用测试世界；若缺用户授权的连接或测试材料，
 先完成其它独立工作，再说明具体所需操作。
 
@@ -61,8 +59,21 @@ M1 宿主服务与输入绑定已接入。新工具定义集中在 foundry-tools
   派发后失败不补扣、召唤零写拒绝、叙事成功而推进失败返回 partial。
 - 非战斗攻击的新测试在原生执行函数边界注入 fixture，证明路由与来源；它不替代真实攻击验收。
   旧 CLI 232 项执行回归通过，最新 SDK 52 项测试通过；动态资源映射和工具服务的 7 项定向测试通过。
-- 新工具仍未激活。下一步统一切换 AgentHost 工具注册／显式 SDK action 并集／prompt，
-  然后推进备团搜索与 Actor、Scene 工具，不把当前执行基础视作方案完成。
+- 此增量之后已完成新工具激活，见下节；仍不把当前执行基础视作方案完成。
+
+## 工具激活与备团搜索增量
+
+- buildTools 注册全部自定义定义，TOOL_NAMES_BY_MODE/activeToolNames 是唯一激活来源。
+  attach 校验真实 session.getActiveToolNames；未知／缺失／多余名称使 attach 失败。
+- 跑团六个领域工具加 request_user_input，共 7 个；新 attach 不再暴露旧 combat_* 名称和页面 JS。
+  备团当前已实现 7 个领域工具、通用提问和 4 个平台工具，共 12 个；后续增加剩余 6 项内容工具。
+- 中英文界面改为跑团／Play，内部 combat key、历史目录和 prompt 文件名不变。
+  Prompt 保留一次重上下文、状态直接 set、战斗前后轻读及不确定结果不重试。
+- 真实 Pi 的 prep/play session 激活测试通过；工具切换后 Desktop 429 项全量回归通过。
+  后续 UI 摘要与搜索接入后的 typecheck、真实 Pi 激活及 schema 定向测试通过。
+- contentSearch 使用 world Actor/Scene 和 compendium Actor/Item 的限定组合，结果包含精确 UUID、
+  packId/entryId/package；测试覆盖 105 条结果的分页、来源保留、游标错用、包类型和边界拒绝。
+  SDK 最新 55 项测试通过；没有调用 auto pack 写接口。
 
 ## 宿主绑定增量
 
