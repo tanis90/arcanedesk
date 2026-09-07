@@ -12,6 +12,7 @@ const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
 const nativeReview = process.argv.includes("--native-review");
+const metadataScenario = process.argv.includes("--metadata-scenario");
 let delayedReply = null;
 if (navigationScenario) {
   const handle = ipcMain.handle.bind(ipcMain);
@@ -105,6 +106,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (metadataScenario) {
+      assert.deepEqual(requests, ["A", "B"]);
+      assert.equal(hostB.tasks.task.state, "completed");
+      console.log("PASS production metadata: first-turn title/count, background updates and stable row order");
+      return;
+    }
     if (nativeReview) {
       assert.equal(hostB.tasks.task.state, "stopped");
       assert.equal(hostB.busy, false);
@@ -155,6 +162,31 @@ app.on("will-quit", () => {
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (metadataScenario) {
+    const a = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('refreshSessions()');
+    await evaluate('input.value = "production-A"; submit()');
+    await ui('busy && messages.textContent.includes("A partial")');
+    const row = host => `sessionList.querySelector('[data-session-id="${host.describeCurrent().id}"]')`;
+    await ui(`${row(a)}.querySelector('.s-title').textContent === "production-A" && ${row(a)}.querySelector('.s-meta').textContent.includes("1 条")`);
+    await evaluate('document.getElementById("session-new").click()');
+    await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('refreshSessions()');
+    await evaluate('setDrawer(true)');
+    await evaluate('refreshSessions()');
+    await evaluate('globalThis.metadataRows = [...sessionList.children]; input.value = "production-B"; submit()');
+    await ui(`${row(hostB)}.querySelector('.s-title').textContent === "production-B" && ${row(hostB)}.querySelector('.s-meta').textContent.includes("1 条")`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "first-turn metadata patches rows in place");
+    streams.get("A").finish();
+    await until(() => a.tasks.task.state === "completed", "background A completes");
+    await ui(`${row(a)}.querySelector('.s-meta').textContent.includes("2 条")`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "background completion does not reorder rows");
+    streams.get("B").finish();
+    await ui(`!busy && ${row(hostB)}.querySelector('.s-meta').textContent.includes("2 条")`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "visible drawer keeps its order after current task completion");
+    finalExit = true; app.quit(); return;
+  }
   if (nativeReview) {
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('input.value = "production-A"; submit()');

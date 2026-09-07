@@ -504,6 +504,7 @@ function receiveEvent(event, replay = false) {
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
   if (!replay && eventInbox.record(event) === false) return;
+  if (!replay && (["message", "agent_end"].includes(event.type) || (event.type === "input_state" && event.state === "consumed"))) scheduleSessionMetadata();
   if (event.type === "task_state" && event.sessionId &&
     (stopRequests.get(event.sessionId)?.taskId === event.task.id || ["running", "queued"].includes(event.task.state))) {
     reconcileStopRequest(event.sessionId, event.task);
@@ -1395,8 +1396,7 @@ function onEvent(event) {
     case "agent_end":
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
-      // 首轮结束后 main 会给会话起名;抽屉开着时刷新列表
-      if (drawer.classList.contains("open")) refreshSessions();
+      // Metadata is patched in place by receiveEvent, including background tasks.
       break;
     case "compaction_start":
       // pi 自动压缩(threshold/overflow)或手动 /compact(manual)
@@ -2095,6 +2095,34 @@ const drawer = document.getElementById("session-drawer");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
 const sessionList = document.getElementById("session-list");
 let sessionRefreshRequest = 0;
+let sessionMetadataTimer = null;
+let sessionMetadataBusy = false;
+let sessionMetadataDirty = false;
+function sessionRowMeta(s) {
+  const when = s.modified ? new Date(s.modified) : null;
+  const count = t("sessions.count", { count: s.messageCount });
+  return when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")} · ${count}` : count;
+}
+function scheduleSessionMetadata() {
+  sessionMetadataDirty = true;
+  if (sessionMetadataTimer || sessionMetadataBusy) return;
+  sessionMetadataTimer = setTimeout(async () => {
+    sessionMetadataTimer = null;
+    sessionMetadataBusy = true; sessionMetadataDirty = false;
+    const context = modeContext(), revision = sessionRefreshRequest;
+    try {
+      const result = await window.arcane.listSessions(context);
+      if (!result?.ok || context.mode !== currentMode || context.generation !== currentModeGeneration || revision !== sessionRefreshRequest) return;
+      for (const s of result.sessions ?? []) {
+        const item = sessionList.querySelector('[data-session-id="' + CSS.escape(s.id) + '"]');
+        if (!item) continue;
+        item.querySelector(".s-title").textContent = s.name || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage) || t("sessions.untitled");
+        item.querySelector(".s-meta").textContent = sessionRowMeta(s);
+      }
+    } catch { /* Navigation still provides an explicit metadata refresh. */ }
+    finally { sessionMetadataBusy = false; if (sessionMetadataDirty) scheduleSessionMetadata(); }
+  }, 100);
+}
 
 function setDrawer(open) {
   drawer.classList.toggle("open", open);
@@ -2125,12 +2153,7 @@ async function refreshSessions() {
     const body = el("button", "s-body");
     body.type = "button";
     body.appendChild(el("div", "s-title", sessionName));
-    const when = s.modified ? new Date(s.modified) : null;
-    const countPart = t("sessions.count", { count: s.messageCount });
-    const meta = when
-      ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")} · ${countPart}`
-      : countPart;
-    body.appendChild(el("div", "s-meta", meta));
+    body.appendChild(el("div", "s-meta", sessionRowMeta(s)));
     body.appendChild(el("div", "s-activity"));
     const del = el("button", "s-del", "×");
     del.title = t("sessions.delete");

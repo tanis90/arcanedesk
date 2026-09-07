@@ -36,6 +36,24 @@ function harness(root = null) {
   return { registry, created };
 }
 
+test("resident list metadata uses the native journal while the first turn is not flushed", async () => {
+  const { registry } = harness();
+  const host = await registry.start();
+  const id = host.describeCurrent().id;
+  host.listSessions = async () => [{ id, firstMessage: "(no messages)", messageCount: 0, modified: 10 }];
+  host.sessionManager.getEntries = () => [
+    { type: "message", message: { role: "user", content: [{ type: "text", text: "First\n request" }] } },
+    { type: "message", message: { role: "assistant", content: "previous branch" } },
+    { type: "session_info", name: "test" },
+  ];
+  host.session.messages = []; // Compacted/selected branch is not the entire native journal.
+  const [row] = await registry.listSessions();
+  assert.equal(row.firstMessage, "First request");
+  assert.equal(row.messageCount, 2);
+  assert.equal(row.modified, 10, "metadata correction must not invent newer activity ordering");
+  assert.equal(row.name, "test");
+});
+
 test("deletion blocks input and reopening, waits for stop, coalesces retries and preserves later selection", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-"));
   const { registry, created } = harness(root);

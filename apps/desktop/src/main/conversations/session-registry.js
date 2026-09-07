@@ -144,7 +144,20 @@ export class SessionRegistry {
     for (const host of this.allHosts()) {
       const session = host.describeCurrent();
       const row = rows.get(session.id) ?? { ...session, firstMessage: "", messageCount: host.session?.messages?.length ?? 0 };
-      rows.set(session.id, { ...row, busy: host.busy, deleting: Boolean(host.deleting), task: host.task, active: host === this.activeHost });
+      // The SDK may buffer the first turn before flushing the session file.
+      // Resident metadata comes from its native journal, including all branches.
+      const entries = host.sessionManager?.getEntries?.();
+      let live = {};
+      if (entries) {
+        const messages = entries.filter(entry => entry.type === "message").map(entry => entry.message);
+        const firstMessage = messages.filter(message => message.role === "user").map(message =>
+          typeof message.content === "string" ? message.content : (message.content ?? []).filter(part => part.type === "text").map(part => part.text).join(" "))
+          .find(text => text.trim());
+        live = { name: session.name, messageCount: messages.length,
+          firstMessage: (firstMessage ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
+          firstMessageI18n: messages.length ? null : "sessions.unsaved" };
+      }
+      rows.set(session.id, { ...row, ...live, busy: host.busy, deleting: Boolean(host.deleting), task: host.task, active: host === this.activeHost });
     }
     return [...rows.values()];
   }
