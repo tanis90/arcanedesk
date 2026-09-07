@@ -1584,6 +1584,7 @@
       #telemetry-consent-card { bottom: 82px; }
     }
   </style>
+  <link rel="stylesheet" href="conversations/activity.css" />
 </head>
 <body data-mode="prep">
   <header class="chat-header">
@@ -1623,10 +1624,20 @@
     <p class="telemetry-consent-foot" data-i18n="telemetry.consent.foot">不影响任何功能；之后可在「设置 → 通用」中随时更改。</p>
   </section>
   <aside id="session-drawer">
+    <div class="drawer-head"><span data-i18n="activity.title">活动</span><button id="drawer-close" data-i18n-title="settings.close" title="关闭">×</button></div>
+    <div id="activity-list"></div>
+    <p id="activity-empty" class="drawer-empty" data-i18n="activity.empty">后台进展会显示在这里</p>
     <div class="drawer-head"><span data-i18n="sessions.drawerTitle">会话</span><button id="session-new" title="新会话" data-i18n-title="sessions.new">+</button></div>
     <div id="session-list"></div>
   </aside>
   <div id="drawer-backdrop"></div>
+  <div id="activity-bar">
+    <button id="activity-toggle" type="button" aria-controls="session-drawer" data-i18n="activity.title">活动</button>
+    <button id="activity-notice" type="button" aria-live="polite" hidden></button>
+    <button id="activity-dismiss" type="button" data-i18n-title="activity.dismiss" title="收起提示" hidden>×</button>
+    <button id="activity-error" type="button" data-i18n="activity.syncFailed" hidden>活动暂不可用，重试</button>
+  </div>
+  <div id="conversation-title"></div>
   <div id="conversation-sync" class="status-line" role="status" hidden></div>
   <div id="conversation-task-status" class="status-line" role="status" hidden></div>
   <div id="conversation-model-pending" class="status-line" role="status" hidden></div>
@@ -1646,6 +1657,7 @@
     </div>
   </main>
   <button class="scroll-bottom" id="scroll-bottom" title="回到底部" data-i18n-title="scrollBottom.title">↓</button>
+  <button id="activity-jump" type="button" data-i18n="activity.newProgress" hidden>有新进展 ↓</button>
   <div id="splitter" title="拖拽调整左右宽度" data-i18n-title="splitter.title"></div>
   <footer class="composer-wrap" id="composer-wrap">
     <div id="slash-popup"></div>
@@ -1801,6 +1813,7 @@
   <script src="../../generated/renderer-assets/mermaid/dist/mermaid.min.js"></script>
   <script src="markdown.js"></script>
   <script src="conversations/session-state.js"></script>
+  <script src="conversations/activity-view.js"></script>
   <script src="chat.js"></script>
   <script src="voice.js"></script>
 </body>

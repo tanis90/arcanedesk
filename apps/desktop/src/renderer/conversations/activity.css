@@ -1,0 +1,40 @@
+/* Quiet brass index for a DM's concurrent prep and combat work. */
+#activity-bar { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 3px 14px; flex: none; border-bottom: 1px solid var(--border-soft); background: var(--bg-soft); }
+#activity-bar button { font: var(--fs-meta)/1.6 var(--font-ui); border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+#activity-bar button:hover { color: var(--text); }
+#activity-toggle { flex: none; font-variant-numeric: tabular-nums; }
+#activity-toggle.needs-attention { color: var(--accent); }
+#activity-notice { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; border-left: 1px solid var(--accent-dim) !important; padding-left: 8px; }
+#activity-error { color: var(--warn) !important; }
+#activity-list { overflow-y: auto; flex: 0 1 auto; max-height: 42%; padding: 6px; }
+#activity-list:empty { padding: 0; }
+.activity-item { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; cursor: pointer; font: var(--fs-ui)/1.6 var(--font-ui); }
+.activity-item:hover { background: var(--panel-2); }
+.activity-item.active { border-color: var(--border); background: var(--panel); }
+.activity-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-meta, .s-activity { display: block; font-size: var(--fs-meta); color: var(--muted); }
+.activity-item[data-state="waiting_user"] .activity-meta { color: var(--accent); }
+.activity-item[data-state="failed"] .activity-meta { color: var(--err); }
+#conversation-title { padding: 8px 16px 0; font: 600 14px/1.5 var(--font-display); color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+#conversation-title:empty { display: none; }
+#conversation-task-status, #conversation-model-pending, #conversation-sync { text-align: left; padding: 2px 16px; }
+.card.attention .body { padding: 10px 12px; }
+.card.attention textarea { display: block; width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.card.attention textarea:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 1px; }
+.card.attention .actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.card.attention button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.card.attention button:hover { border-color: var(--accent); }
+.card.attention button.primary { margin-left: auto; background: var(--accent); color: var(--accent-contrast); }
+.card.attention button:disabled { opacity: .55; cursor: default; }
+.unread-divider { display: flex; align-items: center; gap: 12px; padding: 12px 0; font-size: var(--fs-meta); color: var(--accent); }
+.unread-divider::before, .unread-divider::after { content: ""; height: 1px; background: var(--border); flex: 1; }
+#activity-jump { align-self: flex-end; flex: none; margin: 4px 18px 6px; padding: 5px 12px; border: 1px solid var(--accent-dim); border-radius: 16px; background: var(--panel); color: var(--text); font: var(--fs-meta)/1.6 var(--font-ui); cursor: pointer; }
+body:has(#activity-jump:not([hidden])) #scroll-bottom { display: none; }
+.session-item .s-body { text-align: left; background: transparent; border: 0; cursor: pointer; font: inherit; }
+.session-item:focus-within .s-del { opacity: 1; }
+body.sidebar-pinned #session-drawer { transform: none; box-shadow: none; }
+body.sidebar-pinned #drawer-backdrop { display: none; }
+body.sidebar-pinned #drawer-close { visibility: hidden; }
+body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
+#session-drawer { max-width: calc(100% - var(--panel-w, 0px)); }
+#activity-bar [hidden], #activity-jump[hidden], #activity-empty[hidden] { display: none; }

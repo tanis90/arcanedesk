@@ -23,13 +23,14 @@ function showTaskState(task) {
 }
 
 function renderAttention(attention) {
+  dismissWelcome();
   const existing = attentionCards.get(attention.id);
   if (existing) {
     const draft = existing.querySelector("textarea");
     if (draft) attentionDrafts.set(attention.id, draft.value);
     existing.remove();
   }
-  const card = el("div", "card open");
+  const card = el("div", "card attention open");
   card.dataset.itemKey = "attention:" + attention.id;
   card.dataset.attentionId = attention.id;
   card.appendChild(el("div", "head", attention.question));
@@ -130,6 +131,8 @@ const syncingSessions = new Set();
 const snapshotCache = new Map();
 const lastSessionByMode = new Map();
 let workspaceSaveTimer;
+let activityView = null;
+let activityReady = false;
 
 function scheduleWorkspaceSave() {
   clearTimeout(workspaceSaveTimer);
@@ -157,6 +160,7 @@ async function installSnapshot(payload) {
   if (!id) return;
   const token = ++snapshotRequest;
   const changed = selectedSessionId !== id;
+  activityReady = false;
   saveWorkspace();
   snapshotCache.set(id, payload);
   if (payload.mode) lastSessionByMode.set(payload.mode, id);
@@ -164,6 +168,7 @@ async function installSnapshot(payload) {
   syncIndicator.hidden = true;
   selectedSessionId = id;
   selectedTaskId = payload.task?.id ?? null;
+  document.getElementById("conversation-title").textContent = payload.session.name || "";
   showTaskState(payload.task);
   showPendingModel(payload.pendingModel);
   viewSeq = payload.inFlight?.seq ?? 0;
@@ -230,6 +235,9 @@ async function installSnapshot(payload) {
     if (anchor) messages.scrollTop += anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset;
   }
   updateScrollButton();
+  activityReady = true;
+  activityView?.render();
+  if (changed) refreshSessions();
 }
 
 async function resyncSelected() {
@@ -251,10 +259,11 @@ async function resyncSelected() {
     if (selectedSessionId === id) {
       syncIndicator.textContent = t("chat.syncFailed"); syncIndicator.hidden = false;
     }
-  } finally { clearTimeout(indicatorTimer); syncingSessions.delete(id); }
+  } finally { clearTimeout(indicatorTimer); syncingSessions.delete(id); activityView?.scheduleRead(); }
 }
 
 function receiveEvent(event, replay = false) {
+  if (activityView?.receive(event)) return;
   if (!replay) eventInbox.record(event);
   if (event.sessionId && event.sessionId === selectedSessionId && Number.isInteger(event.seq)) {
     if (restoringView) return;
@@ -263,6 +272,7 @@ function receiveEvent(event, replay = false) {
     viewSeq = event.seq;
   }
   onEvent(event);
+  activityView?.scheduleRead();
 }
 /** @type {"combat" | "prep"} */
 let requestedMode = currentMode;
@@ -1592,6 +1602,7 @@ const splitter = document.getElementById("splitter");
 const panelLayout = { open: false, chatWidth: 0, gutter: 6 };
 
 function applyPanelLayout() {
+  document.body.classList.toggle("sidebar-pinned", (panelLayout.open ? panelLayout.chatWidth : window.innerWidth) >= 1000);
   if (!panelLayout.open) {
     document.body.classList.remove("with-panel");
     document.body.classList.remove("header-tight");
@@ -1781,6 +1792,8 @@ let sessionRefreshRequest = 0;
 function setDrawer(open) {
   drawer.classList.toggle("open", open);
   document.body.classList.toggle("drawer-open", open);
+  document.getElementById("activity-toggle").setAttribute("aria-expanded", String(open || document.body.classList.contains("sidebar-pinned")));
+  drawer.inert = !open && !document.body.classList.contains("sidebar-pinned");
   if (open) refreshSessions();
 }
 
@@ -1801,7 +1814,9 @@ async function refreshSessions() {
       || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage)
       || t("sessions.untitled");
     const item = el("div", `session-item${s.active ? " active" : ""}`);
-    const body = el("div", "s-body");
+    item.dataset.sessionId = s.id;
+    const body = el("button", "s-body");
+    body.type = "button";
     body.appendChild(el("div", "s-title", sessionName));
     const when = s.modified ? new Date(s.modified) : null;
     const countPart = t("sessions.count", { count: s.messageCount });
@@ -1809,6 +1824,7 @@ async function refreshSessions() {
       ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")} · ${countPart}`
       : countPart;
     body.appendChild(el("div", "s-meta", meta));
+    body.appendChild(el("div", "s-activity"));
     const del = el("button", "s-del", "×");
     del.title = t("sessions.delete");
     del.addEventListener("click", async (event) => {
@@ -1843,12 +1859,59 @@ async function refreshSessions() {
     });
     sessionList.appendChild(item);
   }
+  updateSessionActivity();
+}
+
+function updateSessionActivity() {
+  for (const item of sessionList.querySelectorAll(".session-item")) {
+    const id = /** @type {HTMLElement} */ (item).dataset.sessionId;
+    const row = activityView?.rows.get(id);
+    item.classList.toggle("active", id === selectedSessionId);
+    item.querySelector(".s-body")?.setAttribute("aria-current", String(id === selectedSessionId));
+    const status = item.querySelector(".s-activity");
+    if (status) status.textContent = row ? activityView.stateLabel(row.state) + (row.unread ? " · " + t("activity.unread") : "") : "";
+  }
+}
+
+async function openActivity(row, notice = null) {
+  if (!row) return;
+  const navigation = ++navigationRequest;
+  ++modeSwitchRequest;
+  setDrawer(false);
+  requestedMode = row.mode;
+  try {
+    let result = await window.arcane.setMode(row.mode);
+    if (navigation !== navigationRequest) return;
+    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+    if (result.stale || !acceptModeSnapshot(result)) { requestedMode = currentMode; return; }
+    if (result.session?.id !== row.sessionId) {
+      result = await window.arcane.openSession(row.path, { mode: result.mode, generation: result.generation, sessionId: result.session?.id });
+      if (navigation !== navigationRequest) return;
+    }
+    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+    await installSnapshot(result);
+    if (navigation !== navigationRequest) return;
+    requestedMode = currentMode;
+    invalidateSlashItems();
+    refreshSessions();
+    const attentionId = notice?.attentionId ?? row.attentionIds?.find(id => id.startsWith("question:"))?.slice(9);
+    const approvalId = notice?.approvalId ?? row.attentionIds?.find(id => id.startsWith("approval:"))?.slice(9);
+    const card = attentionId ? attentionCards.get(attentionId) : approvalId ? messages.querySelector('[data-approval-id="' + CSS.escape(approvalId) + '"]') : null;
+    if (card) { followLatest = false; card.scrollIntoView({ block: "center" }); }
+  } catch (error) {
+    if (navigation === navigationRequest) {
+      requestedMode = currentMode;
+      addStatus(t("sessions.openFailed", { error: error.message }));
+    }
+  }
 }
 
 document.getElementById("sessions-toggle").addEventListener("click", () =>
   setDrawer(!drawer.classList.contains("open"))
 );
 drawerBackdrop.addEventListener("click", () => setDrawer(false));
+document.getElementById("drawer-close").addEventListener("click", () => setDrawer(false));
+document.addEventListener("keydown", event => { if (event.key === "Escape") setDrawer(false); });
 document.getElementById("session-new").addEventListener("click", async () => {
   setDrawer(false);
   const context = modeContext();
@@ -2717,6 +2780,7 @@ window.ArcaneI18n.onLocaleChange(() => {
   renderPermissionRequest();
   if (displaySourceRequest) showDisplaySourcePicker(displaySourceRequest);
   if (settingsBackdrop.classList.contains("open")) refreshSettings();
+  activityView?.render();
 });
 
 // 首帧就用当前语言落一次模式徽章/目录 chip(applyI18n 对 dynamic 节点是跳过的)
@@ -2738,4 +2802,23 @@ setInterval(() => {
     }
   }
 }, 1000);
+activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: window.arcane, t,
+  getView: () => ({ sessionId: selectedSessionId, runtimeEpoch: viewEpoch, seq: viewSeq,
+    ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
+    visible: document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
+      && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
+    atBottom: messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
+    readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
+    toLatest: () => scrollToEnd(true) }), open: openActivity, drawer: () => setDrawer(true), changed: updateSessionActivity });
+applyPanelLayout();
+setDrawer(false);
+new ResizeObserver(() => {
+  drawer.inert = !drawer.classList.contains("open") && !document.body.classList.contains("sidebar-pinned");
+  activityView.scheduleRead();
+}).observe(messages);
+messages.addEventListener("scroll", () => activityView.scheduleRead());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.scheduleRead(); } });
+window.addEventListener("focus", () => { void activityView.load(); activityView.scheduleRead(); });
+void activityView.load();
+refreshSessions();
 pullCurrentSession();
