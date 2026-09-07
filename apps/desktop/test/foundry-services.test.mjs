@@ -142,3 +142,19 @@ test("local Actor images use one combined lease, internal bytes, and a replay-sa
   const invalid = await service.writeActor("actorCreate", { ...params, image: { ...params.image, dataPath: "also.png" } }, binding, "invalid");
   assert.equal(invalid.code, "INPUT_INVALID"); assert.equal(calls, 1);
 });
+
+test("Scene reads and writes share document services but cannot reuse Actor handles", async t => {
+  const f = fixture(t); f.service.mode = "prep";
+  const readState = { sceneUuid: "Scene.other", world: { origin: "https://f.test", id: "w" }, fields: { name: "Other" }, include: [] };
+  const calls = [];
+  f.service.call = async (action,args) => { calls.push({action,args}); return action === "sceneRead" ? { sceneUuid: "Scene.other", readState }
+    : { status: "completed", steps: [], verification: [], warnings: [] }; };
+  const read = await f.service.sceneRead({ sceneUuid: "Scene.other" });
+  assert.equal("readState" in read,false);
+  const params = { operation: "update", sceneUuid: "Scene.other", readRef: read.readRef, scene: { name: "Edited" } };
+  const result = await f.service.writeScene(params,f.binding,"scene-call");
+  assert.equal(result.status,"completed"); assert.equal(calls[1].action,"sceneApply");
+  assert.equal(calls[1].args.requestId,result.operationRef); assert.equal(calls[1].args.readState.sceneUuid,"Scene.other");
+  assert.equal((await f.service.writeActor("actorEdit",{ actorUuid: "Actor.a", readRef: read.readRef, changes: { name: "Wrong" } },f.binding,"bad")).code,"READ_REF_INVALID");
+  assert.equal(calls.length,2);
+});

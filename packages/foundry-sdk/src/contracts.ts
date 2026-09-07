@@ -22,6 +22,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  * their own allowlist. The SDK client defaults to SAFE_DIRECT_ACTIONS.
  */
 export const ALL_DIRECT_ACTIONS = [
+  "sceneRead", "sceneApply",
   "actorRead", "actorCreate", "actorEdit", "actorGrantItems",
   "contentSearch",
   "staticContext",
@@ -68,6 +69,7 @@ export type DirectActionEffect = "read" | "write";
  * writes, including maintenance actions that also expose a dry-run mode.
  */
 export const DIRECT_ACTION_EFFECTS = {
+  sceneRead: "read", sceneApply: "write",
   actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write",
   contentSearch: "read",
   staticContext: "read",
@@ -322,6 +324,8 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  sceneRead: FoundryActionContract<SceneReadInput, SceneReadResult>;
+  sceneApply: FoundryActionContract<SceneApplyInput, PlayWriteReceipt>;
   actorRead: FoundryActionContract<ActorReadInput, ActorReadResult>;
   actorCreate: FoundryActionContract<ActorCreateInput, PlayWriteReceipt>;
   actorEdit: FoundryActionContract<ActorEditInput, PlayWriteReceipt>;
@@ -338,6 +342,36 @@ export interface FoundryActionMap {
 }
 
 export type TypedDirectAction = keyof FoundryActionMap;
+
+export interface SceneReadInput {
+  sceneUuid: string; include?: Array<"tokens" | "walls" | "lights" | "tiles" | "notes" | "sounds">;
+  limit?: number; cursor?: string;
+}
+export interface SceneReadState {
+  sceneUuid: string; world: { origin: string; id: string }; fields: RuntimeArguments;
+  include: NonNullable<SceneReadInput["include"]>;
+  tokens?: Array<{ id: string; uuid: string; fields: RuntimeArguments; fingerprint: string }>;
+}
+export interface SceneReadResult {
+  sceneUuid: string; name: string; active: boolean; width: number; height: number;
+  placeables: Record<string, RuntimeArguments[]>; nextCursors: Record<string, string | null>; readState: SceneReadState;
+}
+export interface TokenPlacementFields {
+  x?: number; y?: number; name?: string; hidden?: boolean; disposition?: -1 | 0 | 1;
+  width?: number; height?: number; elevation?: number;
+}
+export interface TokenPlacement extends TokenPlacementFields { actorUuid: string; x: number; y: number; actorLink?: boolean }
+export interface TokenLayout {
+  create?: TokenPlacement[]; update?: Array<{ tokenId: string; changes: TokenPlacementFields }>; deleteIds?: string[];
+}
+export interface SceneChanges {
+  name?: string; active?: boolean; background?: Omit<ActorDataImage, "syncPlacedTokens">;
+  width?: number; height?: number; grid?: { type?: number; size?: number; distance?: number; units?: string };
+}
+export type SceneApplyInput = PrepWriteIdentity & { tokens?: TokenLayout } & (
+  { operation: "create"; scene: SceneChanges & { name: string } }
+  | { operation: "update"; sceneUuid: string; readState: SceneReadState; scene?: SceneChanges }
+);
 
 export interface ActorReadInput {
   actorUuid: string;

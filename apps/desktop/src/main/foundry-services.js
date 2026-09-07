@@ -40,9 +40,17 @@ export class FoundryServices {
   }
 
   async actorRead(params, signal) {
+    return this.readContent("actorRead", params, signal);
+  }
+
+  async sceneRead(params, signal) {
+    return this.readContent("sceneRead", params, signal);
+  }
+
+  async readContent(action, params, signal) {
     if (this.mode !== "prep") throw new Error("MODE_FORBIDDEN: Actor editing is prep-only");
     return this.withPage(signal, async () => {
-      const { readState, ...data } = await this.call("actorRead", params, { signal, executionTimeoutMs: 30_000 });
+      const { readState, ...data } = await this.call(action, params, { signal, executionTimeoutMs: 30_000 });
       const readRef = randomUUID();
       this.readRefs.set(readRef, structuredClone(readState));
       return { ...data, readRef };
@@ -50,15 +58,26 @@ export class FoundryServices {
   }
 
   async writeActor(action, params, binding, toolCallId, signal) {
+    return this.writeContent(action, params, binding, toolCallId, signal);
+  }
+
+  async writeScene(params, binding, toolCallId, signal) {
+    return this.writeContent("sceneApply", params, binding, toolCallId, signal);
+  }
+
+  async writeContent(action, params, binding, toolCallId, signal) {
     const reject = (code, message) => ({ status: "rejected", code, message });
-    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems"].includes(action)) return reject("MODE_FORBIDDEN", "Actor editing is prep-only");
+    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "sceneApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
     const { readRef, ...values } = params;
     const readState = readRef ? this.readRefs.get(readRef) : null;
-    if (action !== "actorCreate" && (!readState || readState.actorUuid !== params.actorUuid)) return reject("READ_REF_INVALID", "Read this Actor in the current session first");
+    const sceneAction = action === "sceneApply";
+    const creating = action === "actorCreate" || (sceneAction && params.operation === "create");
+    const identityKey = sceneAction ? "sceneUuid" : "actorUuid";
+    if (!creating && (!readState || !params[identityKey] || readState[identityKey] !== params[identityKey])) return reject("READ_REF_INVALID", "Read this document in the current session first");
     const metadata = await binding.metadata;
     if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
     const args = { ...values, world: metadata.world, ...(readState ? { readState } : {}) };
-    const image = action === "actorCreate" ? values.image : values.changes?.image;
+    const image = sceneAction ? values.scene?.background : action === "actorCreate" ? values.image : values.changes?.image;
     const local = image && "sourcePath" in image;
     const cwd = local ? this.getCwd?.() : null;
     if (local && (!cwd || !this.withAssets || !this.decodeImage)) return reject("CAPABILITY_UNAVAILABLE", "Local image upload is unavailable");
@@ -83,7 +102,8 @@ export class FoundryServices {
         if (prepared) {
           const runtimeImage = { dataPath: prepared.dataPath, syncPlacedTokens: image.syncPlacedTokens,
             upload: { base64: prepared.bytes.toString("base64"), hash: prepared.hash, extension: prepared.extension, mimeType: prepared.mimeType } };
-          runtimeArgs = action === "actorCreate" ? { ...runtimeArgs, image: runtimeImage }
+          runtimeArgs = sceneAction ? { ...runtimeArgs, scene: { ...values.scene, background: runtimeImage } }
+            : action === "actorCreate" ? { ...runtimeArgs, image: runtimeImage }
             : { ...runtimeArgs, changes: { ...values.changes, image: runtimeImage } };
         }
         return this.call(action, runtimeArgs, { signal, executionTimeoutMs: 60_000 });

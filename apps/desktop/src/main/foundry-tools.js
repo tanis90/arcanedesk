@@ -26,6 +26,20 @@ const actorImage = Type.Union([
   exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
   exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
 ]);
+const dataImage = Type.Union([exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }) }),
+  exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }) })]);
+const placementFields = { x: Type.Optional(Type.Number()), y: Type.Optional(Type.Number()), name: Type.Optional(ref()),
+  hidden: Type.Optional(Type.Boolean()), disposition: Type.Optional(Type.Union([Type.Literal(-1), Type.Literal(0), Type.Literal(1)])),
+  width: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), height: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), elevation: Type.Optional(Type.Number()) };
+const tokenLayout = exact({
+  create: Type.Optional(Type.Array(exact({ ...placementFields, actorUuid: ref(), x: Type.Number(), y: Type.Number(), actorLink: Type.Optional(Type.Boolean()) }), { maxItems: 100 })),
+  update: Type.Optional(Type.Array(exact({ tokenId: ref(), changes: exact(placementFields) }), { maxItems: 100 })),
+  deleteIds: Type.Optional(Type.Array(ref(), { maxItems: 100, uniqueItems: true })),
+});
+const sceneFields = { name: Type.Optional(ref()), active: Type.Optional(Type.Boolean()), background: Type.Optional(dataImage),
+  width: Type.Optional(Type.Integer({ minimum: 1 })), height: Type.Optional(Type.Integer({ minimum: 1 })),
+  grid: Type.Optional(exact({ type: Type.Optional(Type.Integer()), size: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+    distance: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), units: Type.Optional(Type.String({ maxLength: 256 })) })) };
 const actorChanges = exact({ name: Type.Optional(ref()), folderId: Type.Optional(Type.Union([ref(), Type.Null()])),
   image: Type.Optional(actorImage),
   prototypeToken: Type.Optional(exact({ name: Type.Optional(ref()), width: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })),
@@ -46,6 +60,30 @@ export function createFoundryTools(host) {
     },
   });
   return [
+    defineTool({
+      name: "foundry_scene_get", label: "Read Scene",
+      description: "Read an exact Scene, including one not currently displayed. Returns compact metadata and requested placeable pages plus a session readRef. Include tokens before changing or deleting existing Tokens. Prep-only.",
+      parameters: exact({ sceneUuid: ref(), include: Type.Optional(Type.Array(Type.Union([Type.Literal("tokens"), Type.Literal("walls"),
+        Type.Literal("lights"), Type.Literal("tiles"), Type.Literal("notes"), Type.Literal("sounds")]), { maxItems: 6, uniqueItems: true })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
+      execute: async (_id, params, signal) => textResult(await host.foundryServices().sceneRead(params, signal)),
+    }),
+    defineTool({
+      name: "foundry_scene_apply", label: "Apply Scene",
+      description: "Create or update an explicit Scene's metadata, grid, background and Token layout. At most 100 total Token operations; grouped creates/updates/deletes run in order and activation runs last. Token actorLink defaults to its Actor prototype. Background accepts a local prep image or Data-relative path, never Base64. Requires readRef for updates. Partial/indeterminate receipts must not be replayed. Prep-only.",
+      parameters: Type.Union([
+        exact({ operation: Type.Literal("create"), scene: exact({ ...sceneFields, name: ref() }), tokens: Type.Optional(tokenLayout) }),
+        exact({ operation: Type.Literal("update"), sceneUuid: ref(), readRef: ref(), scene: Type.Optional(exact(sceneFields)), tokens: Type.Optional(tokenLayout) }),
+      ]), executionMode: "sequential",
+      execute: async (id, params, signal) => {
+        const binding = host.taskCoordinator().currentInputBinding();
+        const deletionCount = params.tokens?.deleteIds?.length ?? 0;
+        const approved = await host.maybeRequestApproval({ tool: "foundry_scene_apply",
+          summary: `${params.operation} Scene; create ${params.tokens?.create?.length ?? 0}, update ${params.tokens?.update?.length ?? 0}, delete ${deletionCount} Tokens`, args: params });
+        if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
+        return textResult(await host.foundryServices().writeScene(params, binding, id, signal));
+      },
+    }),
     defineTool({
       name: "foundry_actor_get", label: "Read Actor",
       description: "Read an exact Actor's compact summary and requested editing projections. Returns a session readRef required for edits/grants. Include items before grants and prototypeToken before changing its fields. Prep-only; pages do not contain full Item documents.",

@@ -18,6 +18,10 @@ test("new schemas reject unknown keys, unbounded selectors and operation view wi
   assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png" })), true);
   assert.equal(valid("foundry_actor_update", actor({ sourcePath: "npc.png", dataPath: "assets/npc.png" })), false);
   assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png", upload: { base64: "secret" } })), false);
+  assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter" }, tokens: { create: [{ actorUuid: "Actor.a", x: 0, y: 0 }] } }), true);
+  assert.equal(valid("foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", scene: { name: "Renamed" } }), false);
+  assert.equal(valid("foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", tokens: { walls: [] } }), false);
+  assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter", background: { sourcePath: "map.webp", syncPlacedTokens: true } } }), false);
 });
 
 test("condition approval pins the consumed input and denial does not create an operation", async () => {

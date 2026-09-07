@@ -18,10 +18,10 @@
 | M1 环境绑定 | 消息入队时固定读取 world/Scene/selection、输入日志元数据、已消费输入绑定已接入；真实 Pi 工具集合通过，真实页面并发仍待验收 |
 | M2 跑团执行 | executeAction、普通 narrative-only 法术、非战斗执行、回合约束、引用解析和新工具激活完成；待完整参数覆盖与真实世界验收 |
 | M3 备团 Actor | 搜索、get/create/update/grant、局部 readRef、图片上传与同步已接入；真实世界验收待完成 |
-| M4 备团 Scene | 未实现 Scene 服务、图片／批量 Token、局部回读 |
+| M4 备团 Scene | Scene get/apply、背景图片、分组 Token 布局与局部回读已接入；真实世界验收待完成 |
 | M5 召唤 | auto pack 只记录 AUTO-001；新 executeAction 已在扣费前拒绝召唤放置，不调用旧同先攻协议；真实组合仍待验收 |
 | Prompt／UI／遥测 | 已改跑团名称、提示词、执行摘要与工具分类，历史旧工具仍可显示；新增内容工具随各阶段补充 |
-| 完整验收 | 尚未执行 CLI 全套回归、全仓 verify、真实测试世界及性能对比 |
+| 完整验收 | SDK/CLI/Desktop 全套回归通过；全仓 verify、真实测试世界及性能对比待完成 |
 
 ## 已有证据
 
@@ -39,7 +39,7 @@
 ## 下一步
 
 M1/M2 新工具已加入 active set；主入口显式传 SDK action 并集，SDK 默认四项保持。
-图片管线和 Actor 图片／Ring／存量 Token 同步已接入；下一步实现 Scene get/apply，再做整体审计与验收。
+图片管线、Actor 图片同步和 Scene get/apply 已接入；下一步做整体方案审计、全仓 verify、真实世界及性能验收。
 
 M2 的完整发现→执行链路已建立，但仍需审计实际能力定义完整性与结构失效覆盖，
 以及独立视觉入口是否可复用；动态结果不得携带重定义。
@@ -65,7 +65,26 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
   同 toolCall 单次派发、同内容复用、冲突不覆盖、局部 readRef 与逐文档 partial。
 - 本增量后的 Desktop 全量 436 项测试通过；typecheck、source boundary、55 份 Markdown 链接及
   diff 空白检查通过。实际工具数保持跑团 7、备团 16，剩余两项 Scene 工具接入后备团为 18。
-- Scene get/apply 尚未完成；真实 Foundry 上传、Ring 和 Chromium 解码仍待验收，不能标记 M3/M4 完成。
+- Scene get/apply 后续接入见下节；真实 Foundry 上传、Ring 和 Chromium 解码仍待验收，不能标记 M3/M4 完成。
+
+## Scene 工具增量
+
+- sceneRead 按明确 Scene UUID 读取，不依赖 canvas；默认返回场景元数据，按需读取六类 placeables。
+  每类默认 50、最大 100 条，nextCursors 给出仍有后续结果的类型；翻页沿用同一 Scene/include。
+  readState 仅由宿主保存，模型拿会话 readRef；Token 删除还比较读取时文档指纹。
+- sceneApply 在首次写前检查全量输入、合集外的精确 Actor 引用、重复/冲突 ID、100 项总上限，
+  并通过实际 Scene/Token Document 构造、clone 和 validate 检查字段；不自己猜系统接受的范围。
+- 场景 metadata、背景、Token create/update/delete 按组顺序执行，激活最后执行。
+  Token 创建继承 prototype actorLink；新 Scene/Token 带 requestId，重复创建请求不会再建。
+  图片上传后重查 world、Scene、局部字段和 Actor prototype，再进入文档写入。
+- 每组派发前记录 unknown，回读确认才改 completed；后续失败保留已完成 UUID 和未知批次。
+  布局变更比较本次触及字段，无关 hidden 等变化不阻止 x 坐标更新；删除要求文档未变。
+- 两个 Scene 工具已激活，复用内容服务、图片租约和操作日志；审批摘要明确创建/更新/删除数量。
+  真实 Pi 会话验证备团实际 18 个、跑团 7 个工具，旧 SDK 四默认 action 保持。
+- Scene 的 5 项定向测试与宿主服务/schema/真实 Pi 激活测试通过；这些使用 Document fixture，
+  尚不能证明实际 Foundry 原生字段兼容性、背景上传、布局与激活验收通过。
+- 本增量后的 SDK 73 项、CLI 232 项、Desktop 437 项全量回归通过；Desktop typecheck/source boundary、
+  Markdown 链接及 diff 空白检查通过。下一阶段执行全仓 verify，并逐项审计和真实验收。
 
 ## 跑团执行增量
 
