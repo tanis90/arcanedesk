@@ -46,6 +46,16 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
 最后推进 M3/M4 和全套验收。真实世界验收仅使用测试世界；若缺用户授权的连接或测试材料，
 先完成其它独立工作，再说明具体所需操作。
 
+## 图片资源读取增量
+
+- 新增 foundry-assets.js：本地文件 realpath 围栏、目录 junction 越界拒绝、10 MiB 有界读取、
+  读取前后文件变化检查、PNG/JPEG/WebP 字节识别、强制解码结果校验和 SHA-256 稳定 Data 路径。
+- Data 图片路径单独校验，拒绝绝对路径、URL、编码绕过与父目录片段；图片 bytes 仅供内部上传使用。
+- 4 项定向测试通过，覆盖路径与 junction、大小上限、伪格式、解码失败和按内容生成路径；
+  Desktop typecheck 与 source boundary 通过。解码测试当前使用注入接口，尚未验证真实 Electron 解码器。
+- 此模块尚未接入宿主资源租约和 SDK 上传；Actor 图片同步、Scene get/apply 仍未完成，
+  不能据此标记图片能力或 M3/M4 验收通过。
+
 ## 跑团执行增量
 
 - 新 SDK executeAction 只接受宿主从静态快照解析的动作身份；检查 world、contextRef、
