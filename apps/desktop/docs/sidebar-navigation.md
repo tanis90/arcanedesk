@@ -41,8 +41,8 @@
 
 | 仓库 | 本地目录 | 核对版本 |
 | --- | --- | --- |
-| [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | `C:\Users\yangqi\code\references\kimi-code` | `fb0353a8ba5ceb7e8ae4e27f3260b3c8c8d80784` |
-| [MoonshotAI/kimi-cli](https://github.com/MoonshotAI/kimi-cli) | `C:\Users\yangqi\code\references\kimi-cli` | `86f136422a0aae6b217ea49e7ea1d2e8a1defcd2` |
+| [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | 外部参考检出 `kimi-code` | `fb0353a8ba5ceb7e8ae4e27f3260b3c8c8d80784` |
+| [MoonshotAI/kimi-cli](https://github.com/MoonshotAI/kimi-cli) | 外部参考检出 `kimi-cli` | `86f136422a0aae6b217ea49e7ea1d2e8a1defcd2` |
 
 新版的 Web 参考来自仓库内构建产物，并非可读的原始组件源码。`apps/kimi-code/dist-web/assets/index-CiHMlsuo.js` 中可核对：
 

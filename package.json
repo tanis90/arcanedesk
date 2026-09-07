@@ -24,5 +24,9 @@
     "docs:check": "node scripts/check-markdown-links.mjs",
     "verify:repo": "node scripts/verify-repository.mjs",
     "verify": "npm run verify:repo && npm run docs:check && npm run typecheck && npm test && npm run build && npm run pack:check"
+  },
+  "devDependencies": {
+    "classic-level": "3.0.0",
+    "fflate": "0.8.3"
   }
 }

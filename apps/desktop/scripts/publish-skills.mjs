@@ -12,6 +12,7 @@
 // 环境变量,或 ~/.ossutil/arcane-release.conf 的 [ArcaneDeskRelease] 段。
 
 import fs from "node:fs";
+import { checkModuleBuilderVendor } from "./vendor-module-builder.mjs";
 import fsp from "node:fs/promises";
 import { builtinModules } from "node:module";
 import os from "node:os";
@@ -194,6 +195,7 @@ async function main() {
 
   // 本地静态门禁先行:bundle 必须自包含(可脱离 app 树运行),再谈网络与上传。
   const entries = await collectSkillFiles(SKILLS_DIR);
+  await checkModuleBuilderVendor();
   await assertSkillsSelfContained(SKILLS_DIR, entries);
 
   const current = await remoteRevision({ tolerateFailure: args.dryRun });

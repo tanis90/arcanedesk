@@ -64,3 +64,7 @@ dependency distributed by this repository. Arcane Desk does not include,
 download, mirror, or license the Foundry application or commercial game
 content. Users must provide their own lawfully licensed Foundry installation
 and comply with its license and applicable content licenses.
+
+## Offline module builder runtime
+
+The Desktop skill vendors `classic-level` 3.0.0 (MIT) and `fflate` 0.8.3 (MIT), plus their locked runtime dependencies, for offline module assembly. Their licenses and the native LevelDB/Snappy license files are preserved beside the generated runtime files. Source revision and per-file hashes are recorded under `apps/desktop/scripts/module-builder-vendor/`; dependency versions and integrity values use the repository root lockfile. No Foundry application or game content is included.
