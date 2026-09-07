@@ -20,7 +20,11 @@ export class SessionRegistry {
 
   async start() {
     if (this.activeHost) return this.activeHost;
-    return this.select(null, false);
+    // Losing the selection does not imply losing the resident sessions. Reuse
+    // their live SDK owners before discovering history (which could reopen one).
+    const resident = this.allHosts().filter(host => !host.deleting && !host.retired)
+      .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))[0];
+    return this.select(resident?.describeCurrent().path ?? null, false);
   }
 
   allHosts() { return [...this.hosts.values()]; }

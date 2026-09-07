@@ -1,4 +1,4 @@
-// ModeHostController — 双 AgentHost 的模式真相与异步启动闸门。
+// ModeHostController — 按模式的会话注册表选择与异步启动闸门。
 // 每个调用方先拿 snapshot，跨 await 始终使用同一份 { mode, generation, host }；
 // switchTo 采用 last-request-wins，较早但较慢的切换不能覆盖较新的用户选择。
 
@@ -81,13 +81,19 @@ export class ModeHostController {
    */
   ensureStarted(requestedMode) {
     const mode = normalizeMode(requestedMode);
-    if (this.#started.has(mode)) return Promise.resolve(this.#hosts[mode]);
+    const host = this.#hosts[mode];
+    const ready = () => !("activeHost" in host) || Boolean(host.activeHost);
+    // A registry can lose its selected host after a committed deletion whose
+    // replacement failed to start. Past initialization is not present readiness.
+    if (this.#started.has(mode) && ready()) return Promise.resolve(host);
+    this.#started.delete(mode);
     const pending = this.#startPromises.get(mode);
     if (pending) return pending;
 
     const startPromise = Promise.resolve()
       .then(() => this.#hosts[mode].start())
       .then(() => {
+        if (!ready()) throw Object.assign(new Error("Session initialization produced no active host"), { code: "SESSION_NOT_READY" });
         this.#started.add(mode);
         this.#startPromises.delete(mode);
         return this.#hosts[mode];

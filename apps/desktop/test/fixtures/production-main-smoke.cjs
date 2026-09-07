@@ -137,6 +137,18 @@ app.on("will-quit", () => {
     console.log("READY FOR FORCED TERMINATION");
     return; // The runner kills this exact child while B's SDK stream remains active.
   }
+  const prepRegistry = globalThis.__arcaneHosts.prep;
+  const createHost = prepRegistry.createHost;
+  prepRegistry.createHost = () => ({ start: async () => { throw new Error("injected replacement failure"); }, dispose() {} });
+  try {
+    const deleted = await evaluate(`window.arcane.deleteSession(${JSON.stringify(hostA.describeCurrent().path)}, modeContext())`);
+    assert.equal(deleted.ok, true);
+    assert.equal(deleted.warning, "injected replacement failure");
+  } finally { prepRegistry.createHost = createHost; }
+  await evaluate('(async () => { const snapshot = await window.arcane.currentSession(); await installSnapshot(snapshot); })()');
+  await ui(`selectedSessionId === ${JSON.stringify(idB)} && busy && messages.textContent.includes("B partial")`);
+  assert.equal(prepRegistry.get(idB), hostB, "recovery must reuse the live background B, not overwrite it with a second SDK session");
+  assert.ok(hostB.busy && !streams.get("B").closed);
   window.close();
   await until(() => prompts.length === 1, "cancel close prompt");
   await sleep(50);

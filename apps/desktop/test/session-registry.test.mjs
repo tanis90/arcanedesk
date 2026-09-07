@@ -92,6 +92,38 @@ test("replacement startup failure cannot report an already committed deletion as
   registry.createHost = create; assert.ok(await registry.start());
 });
 
+test("mode controller recovers an empty registry after deletion replacement fails, sharing retry initialization", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "arcane-mode-recovery-"));
+  const { registry, created } = harness(root);
+  const controller = new ModeHostController({ hosts: { prep: registry, combat: harness().registry } });
+  const initial = await controller.readySnapshot();
+  const file = initial.host.describeCurrent().path;
+  writeFileSync(file, "history");
+  const create = registry.createHost;
+  registry.createHost = () => ({ start: async () => { throw new Error("startup failed"); }, dispose() {} });
+  assert.equal((await registry.deleteSession(file)).ok, true);
+  assert.equal(registry.activeHost, null);
+  assert.equal(controller.matches(initial), false);
+  await assert.rejects(controller.ensureStarted("prep"), /startup failed/);
+  const gate = deferred();
+  registry.createHost = () => {
+    const host = create(), start = host.start;
+    host.start = async options => { await gate.promise; await start(options); };
+    return host;
+  };
+  const first = controller.ensureStarted("prep"), second = controller.ensureStarted("prep");
+  assert.equal(first, second, "concurrent recovery shares one start promise");
+  const ready = controller.readySnapshot();
+  gate.resolve(); await Promise.all([first, second]);
+  const recovered = await ready;
+  assert.equal(created.length, 2, "recovery creates only one replacement host");
+  assert.equal(recovered.host, registry.activeHost);
+  assert.notEqual(recovered.host, initial.host);
+  assert.equal(controller.matches(recovered), true);
+  assert.equal(existsSync(file), false, "recovery never recreates the deleted session");
+  assert.equal((await controller.switchTo("prep")).host, recovered.host);
+});
+
 test("same-mode A to B to A retains running host; stopping A does not stop B", async () => {
   const { registry, created } = harness();
   const a = await registry.start();
@@ -113,6 +145,19 @@ test("same-mode A to B to A retains running host; stopping A does not stop B", a
   created[1].gate.resolve();
   await bRun;
   assert.equal(b.task.state, "completed");
+});
+
+test("initialization without a selected host reuses a live resident instead of recreating its SDK session", async () => {
+  const { registry, created } = harness();
+  const b = await registry.start();
+  const running = b.prompt("background task");
+  registry.activeHost = null; // Selected A was removed and its replacement failed.
+  try {
+    assert.equal(await registry.start(), b);
+    assert.equal(registry.get(b.describeCurrent().id), b);
+    assert.equal(created.length, 1);
+    assert.equal(b.busy, true);
+  } finally { created[0].gate.resolve(); await running; }
 });
 
 test("stale task stop never aborts a later task", async () => {
