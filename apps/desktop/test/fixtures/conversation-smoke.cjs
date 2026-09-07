@@ -89,6 +89,7 @@ app.whenReady().then(async () => {
       const { ActivityCenter } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/activity-center.js")));
       layoutActivity = new ActivityCenter();
       layoutActivity.reconcile({ ...snapshot("prep"), session: { id: "A", name: "多任务验收 · 正在整理剧本与地图" } }, "prep");
+      for (const id of ["B", "C"]) layoutActivity.reconcile({ ...snapshot("prep"), session: { id, name: `后台素材 ${id}` }, task: { id: `task-${id}`, state: "completed" } }, "prep");
     }
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "A" && workspaceReady.has("A") && !!document.querySelector(".streaming")');

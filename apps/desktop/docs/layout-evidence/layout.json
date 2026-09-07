@@ -18,6 +18,17 @@
         "within": true
       },
       {
+        "id": "activity-notice",
+        "left": 402.796875,
+        "right": 569.875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 167.078125,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
         "id": "conversation-task-status",
         "left": 264,
         "right": 1080,
@@ -77,6 +88,17 @@
         "top": 42.296875,
         "bottom": 60.6875,
         "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "activity-notice",
+        "left": 402.796875,
+        "right": 569.875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 167.078125,
         "height": 18.390625,
         "visible": true,
         "within": true
@@ -146,6 +168,17 @@
         "within": true
       },
       {
+        "id": "activity-notice",
+        "left": 138.796875,
+        "right": 305.875,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 167.078125,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
         "id": "conversation-task-status",
         "left": 0,
         "right": 462,
@@ -205,6 +238,17 @@
         "top": 42.296875,
         "bottom": 60.6875,
         "width": 116.796875,
+        "height": 18.390625,
+        "visible": true,
+        "within": true
+      },
+      {
+        "id": "activity-notice",
+        "left": 138.796875,
+        "right": 296.125,
+        "top": 42.296875,
+        "bottom": 60.6875,
+        "width": 157.328125,
         "height": 18.390625,
         "visible": true,
         "within": true
