@@ -352,6 +352,7 @@ export interface ActorReadState {
   include: NonNullable<ActorReadInput["include"]>;
   fields: RuntimeArguments;
   items?: PrepItemIdentity[];
+  sceneTokens?: RuntimeArguments[];
 }
 export interface ActorReadResult {
   actorUuid: string; name: string; type: string; folderId: string | null; img: string | null;
@@ -363,12 +364,18 @@ export interface CompendiumGrant {
   packId: string; entryId: string; expectedName?: string; expectedType?: string; quantity?: number; equipped?: boolean;
 }
 export interface PrepWriteIdentity { world: { origin: string; id: string }; requestId: string }
+/** Internal upload bytes are prepared by the host, never supplied by the model. */
+export interface ActorDataImage {
+  dataPath: string; syncPlacedTokens?: boolean;
+  upload?: { base64: string; hash: string; mimeType: string; extension: "png" | "jpg" | "webp" };
+}
 export interface ActorCreateInput extends PrepWriteIdentity {
   source: { kind: "blank"; actorType: "character" | "npc" } | { kind: "compendium"; packId: string; entryId: string };
-  name: string; folderId?: string; initialItems?: CompendiumGrant[];
+  name: string; folderId?: string; initialItems?: CompendiumGrant[]; image?: ActorDataImage;
 }
 export interface ActorChanges {
   name?: string; folderId?: string | null;
+  image?: ActorDataImage;
   prototypeToken?: { name?: string; width?: number; height?: number; disposition?: -1 | 0 | 1 };
   dnd5e?: { hp?: { value?: number; max?: number; temp?: number }; ac?: { flat: number } };
 }

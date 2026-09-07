@@ -1,5 +1,6 @@
 import { FoundryOperationStore } from "./foundry-operation-store.js";
 import { randomUUID } from "node:crypto";
+import { readFoundryImage, validateDataImagePath } from "./foundry-assets.js";
 
 const aliases = Object.freeze({
   "倒地": "prone", "中毒": "poisoned", "失明": "blinded", "魅惑": "charmed",
@@ -11,10 +12,13 @@ const aliases = Object.freeze({
 
 /** Per-session handles; the host supplies the shared page lease and runtime. */
 export class FoundryServices {
-  constructor({ sessionId, directory, mode, withPage, call }) {
+  constructor({ sessionId, directory, mode, withPage, call, getCwd = null, withAssets = null, decodeImage = null }) {
     this.mode = mode;
     this.withPage = withPage;
     this.call = call;
+    this.getCwd = getCwd;
+    this.withAssets = withAssets;
+    this.decodeImage = decodeImage;
     this.store = new FoundryOperationStore({ directory, sessionId });
     this.staticSnapshot = null;
     this.turnSnapshot = null;
@@ -54,10 +58,36 @@ export class FoundryServices {
     const metadata = await binding.metadata;
     if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
     const args = { ...values, world: metadata.world, ...(readState ? { readState } : {}) };
-    return this.withPage(signal, async () => {
+    const image = action === "actorCreate" ? values.image : values.changes?.image;
+    const local = image && "sourcePath" in image;
+    const cwd = local ? this.getCwd?.() : null;
+    if (local && (!cwd || !this.withAssets || !this.decodeImage)) return reject("CAPABILITY_UNAVAILABLE", "Local image upload is unavailable");
+    const lease = local ? operation => this.withAssets(cwd, signal, operation) : operation => this.withPage(signal, operation);
+    return lease(async () => {
       if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
-      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action, args },
-        ({ requestId }) => this.call(action, { ...args, requestId }, { signal, executionTimeoutMs: 60_000 }));
+      let prepared;
+      try {
+        if (image) {
+          if (Object.keys(image).some(key => !["sourcePath", "dataPath", "syncPlacedTokens"].includes(key))
+            || (local && "dataPath" in image)) throw new Error("INPUT_INVALID: choose one image source");
+          prepared = local ? await readFoundryImage({ cwd, sourcePath: image.sourcePath,
+            decodeImage: (bytes, mimeType) => this.decodeImage(bytes, mimeType, signal) }) : null;
+          if (!local) validateDataImagePath(image.dataPath);
+        }
+      } catch (error) { return reject(String(error.message).split(":")[0], String(error.message)); }
+      if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
+      // Only the digest enters the journal. Base64 exists inside the runtime dispatch, never model output.
+      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action,
+        args: { ...args, ...(prepared ? { imageHash: prepared.hash } : {}) } }, ({ requestId }) => {
+        let runtimeArgs = { ...args, requestId };
+        if (prepared) {
+          const runtimeImage = { dataPath: prepared.dataPath, syncPlacedTokens: image.syncPlacedTokens,
+            upload: { base64: prepared.bytes.toString("base64"), hash: prepared.hash, extension: prepared.extension, mimeType: prepared.mimeType } };
+          runtimeArgs = action === "actorCreate" ? { ...runtimeArgs, image: runtimeImage }
+            : { ...runtimeArgs, changes: { ...values.changes, image: runtimeImage } };
+        }
+        return this.call(action, runtimeArgs, { signal, executionTimeoutMs: 60_000 });
+      });
     });
   }
 

@@ -17,7 +17,7 @@
 | M1 操作记录 | JSONL、派发前落盘、去重、重启不重放、服务调用和会话删除清理已实现并测试 |
 | M1 环境绑定 | 消息入队时固定读取 world/Scene/selection、输入日志元数据、已消费输入绑定已接入；真实 Pi 工具集合通过，真实页面并发仍待验收 |
 | M2 跑团执行 | executeAction、普通 narrative-only 法术、非战斗执行、回合约束、引用解析和新工具激活完成；待完整参数覆盖与真实世界验收 |
-| M3 备团 Actor | 搜索、get/create/update/grant、局部 readRef 已激活并测试；图片管线与真实世界验收待完成 |
+| M3 备团 Actor | 搜索、get/create/update/grant、局部 readRef、图片上传与同步已接入；真实世界验收待完成 |
 | M4 备团 Scene | 未实现 Scene 服务、图片／批量 Token、局部回读 |
 | M5 召唤 | auto pack 只记录 AUTO-001；新 executeAction 已在扣费前拒绝召唤放置，不调用旧同先攻协议；真实组合仍待验收 |
 | Prompt／UI／遥测 | 已改跑团名称、提示词、执行摘要与工具分类，历史旧工具仍可显示；新增内容工具随各阶段补充 |
@@ -39,7 +39,7 @@
 ## 下一步
 
 M1/M2 新工具已加入 active set；主入口显式传 SDK action 并集，SDK 默认四项保持。
-下一步实现图片管线、Actor 图片／Ring／存量 Token 同步和 Scene get/apply，再做整体审计与验收。
+图片管线和 Actor 图片／Ring／存量 Token 同步已接入；下一步实现 Scene get/apply，再做整体审计与验收。
 
 M2 的完整发现→执行链路已建立，但仍需审计实际能力定义完整性与结构失效覆盖，
 以及独立视觉入口是否可复用；动态结果不得携带重定义。
@@ -52,9 +52,20 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
   读取前后文件变化检查、PNG/JPEG/WebP 字节识别、强制解码结果校验和 SHA-256 稳定 Data 路径。
 - Data 图片路径单独校验，拒绝绝对路径、URL、编码绕过与父目录片段；图片 bytes 仅供内部上传使用。
 - 4 项定向测试通过，覆盖路径与 junction、大小上限、伪格式、解码失败和按内容生成路径；
-  Desktop typecheck 与 source boundary 通过。解码测试当前使用注入接口，尚未验证真实 Electron 解码器。
-- 此模块尚未接入宿主资源租约和 SDK 上传；Actor 图片同步、Scene get/apply 仍未完成，
-  不能据此标记图片能力或 M3/M4 验收通过。
+  Desktop typecheck 与 source boundary 通过。解码测试当前使用注入接口，尚未验证真实 Chromium 解码器。
+- 本地图片现已接入宿主一次申请的 cwd/page 资源租约，并通过固定 Chromium 解码读取支持三种格式。
+  图片只在内部派发时编码，模型 schema、回执和操作日志均不含二进制内容。
+- Runtime 在首次写前检查目标、相关读取字段与上传哈希；上传至固定 hash 路径，已有内容校验一致
+  则复用，不一致则停止、不覆盖。上传后重新核查 world/Actor/相关字段，回读远端内容确认哈希。
+  HTTP LAN 页面的 SHA-256 后备实现通过不同块长与 padding 边界的标准 Node 哈希对比。
+- Actor create 在创建后设置图片、再授初始 Items；edit 同步头像和 prototype texture，并只同步
+  已启用 Ring 的 subject。可选跨 Scene 同步 linked/unlinked Token 图片，不改名称、尺寸或布局。
+  每个 Token 写入前再查图片与绑定是否变化，失败停止后续步骤，回执区分 completed/unknown/not-started。
+- SDK 68 项测试通过；图片／服务／schema 定向测试通过，覆盖一次组合租约、内部编码不泄露、
+  同 toolCall 单次派发、同内容复用、冲突不覆盖、局部 readRef 与逐文档 partial。
+- 本增量后的 Desktop 全量 436 项测试通过；typecheck、source boundary、55 份 Markdown 链接及
+  diff 空白检查通过。实际工具数保持跑团 7、备团 16，剩余两项 Scene 工具接入后备团为 18。
+- Scene get/apply 尚未完成；真实 Foundry 上传、Ring 和 Chromium 解码仍待验收，不能标记 M3/M4 完成。
 
 ## 跑团执行增量
 
@@ -96,7 +107,7 @@ M2 的完整发现→执行链路已建立，但仍需审计实际能力定义�
 - actorGrantItems 预检来源与数量／装备字段，单次批量创建；同来源已存在返回 skippedExisting，
   不叠加数量、不替换。readRef 只比较本次相关来源身份，无关物品变化不阻止操作。
 - 创建／编辑／授物共享本地操作记录、world 绑定、页面资源租约和 requestId；工具清单中已激活。
-  图片字段尚未开放，下一阶段补齐唯一技术方案要求，不能据当前基本读写标记 M3 完成。
+  图片字段的后续接入见上节；真实世界验收尚未完成，不能据当前基本读写标记 M3 完成。
 - SDK 61 项测试通过，含 6 项 Actor 场景；宿主服务与真实 Pi 激活 10 项定向测试通过。
   Desktop typecheck、source boundary、Markdown 链接及 diff 空白检查通过。
 

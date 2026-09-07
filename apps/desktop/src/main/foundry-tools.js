@@ -22,7 +22,12 @@ const activityInput = exact({
 const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Array(ref(), { maxItems: 100 })), input: Type.Optional(activityInput) };
 const grant = exact({ packId: ref(), entryId: ref(), expectedName: Type.Optional(ref()), expectedType: Type.Optional(ref()),
   quantity: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })), equipped: Type.Optional(Type.Boolean()) });
+const actorImage = Type.Union([
+  exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
+  exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
+]);
 const actorChanges = exact({ name: Type.Optional(ref()), folderId: Type.Optional(Type.Union([ref(), Type.Null()])),
+  image: Type.Optional(actorImage),
   prototypeToken: Type.Optional(exact({ name: Type.Optional(ref()), width: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })),
     height: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })), disposition: Type.Optional(Type.Union([Type.Literal(-1), Type.Literal(0), Type.Literal(1)])) })),
   dnd5e: Type.Optional(exact({ hp: Type.Optional(exact({ value: Type.Optional(Type.Number({ minimum: 0 })),
@@ -51,10 +56,10 @@ export function createFoundryTools(host) {
     actorWrite("foundry_actor_create", "actorCreate", exact({
       source: Type.Union([exact({ kind: Type.Literal("blank"), actorType: Type.Union([Type.Literal("character"), Type.Literal("npc")]) }),
         exact({ kind: Type.Literal("compendium"), packId: ref(), entryId: ref() })]),
-      name: ref(), folderId: Type.Optional(ref()), initialItems: Type.Optional(Type.Array(grant, { maxItems: 50 })),
+      name: ref(), folderId: Type.Optional(ref()), image: Type.Optional(actorImage), initialItems: Type.Optional(Type.Array(grant, { maxItems: 50 })),
     }), "Create an empty or compendium Actor with an explicit name and optional initial compendium Items. Existing names are returned as collisions; partial creation is never retried automatically. Prep-only."),
     actorWrite("foundry_actor_update", "actorEdit", exact({ actorUuid: ref(), readRef: ref(), changes: actorChanges }),
-      "Update bounded Actor name, existing folder, prototype Token fields, HP or flat AC. Requires a current readRef for touched fields; unrelated changes do not block. No arbitrary dotted patches. Prep-only."),
+      "Update bounded Actor name, existing folder, image, prototype Token fields, HP or flat AC. Images use a Data-relative path or a local sourcePath inside the prep directory (PNG/JPEG/WebP, at most 10 MiB); never supply Base64. Include prototypeToken in the prior read, and sceneTokens when syncPlacedTokens is true. Synchronization preserves Token names, positions and sizes. Requires a current readRef for touched fields; unrelated changes do not block. Prep-only."),
     actorWrite("foundry_actor_grant_items", "actorGrantItems", exact({ actorUuid: ref(), readRef: ref(), items: Type.Array(grant, { minItems: 1, maxItems: 50 }) }),
       "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     defineTool({

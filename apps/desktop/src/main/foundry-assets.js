@@ -59,8 +59,8 @@ export async function readFoundryImage({ cwd, sourcePath, decodeImage }) {
     bytes = bytes.subarray(0, offset);
   } finally { await file.close(); }
   const format = imageFormat(bytes);
-  // Production supplies Electron nativeImage; requiring a decoder avoids accepting magic bytes alone.
-  const dimensions = await decodeImage(bytes);
+  // Requiring a decoder avoids accepting magic bytes alone, including truncated containers.
+  const dimensions = await decodeImage(bytes, format.mimeType);
   if (!dimensions || !Number.isInteger(dimensions.width) || !Number.isInteger(dimensions.height)
     || dimensions.width <= 0 || dimensions.height <= 0)
     throw new Error("IMAGE_DECODE_FAILED: image could not be decoded");

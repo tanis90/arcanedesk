@@ -13,6 +13,11 @@ test("new schemas reject unknown keys, unbounded selectors and operation view wi
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected" }], conditions: [{ key: "prone", active: false }] }), true);
   assert.equal(valid("foundry_conditions_set", { targets: Array(21).fill({ kind: "selected" }), conditions: [{ key: "prone", active: false }] }), false);
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected", code: "x" }], conditions: [{ key: "prone", toggle: true }] }), false);
+  const actor = image => ({ actorUuid: "Actor.a", readRef: "read", changes: { image } });
+  assert.equal(valid("foundry_actor_update", actor({ sourcePath: "images/npc.webp", syncPlacedTokens: true })), true);
+  assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png" })), true);
+  assert.equal(valid("foundry_actor_update", actor({ sourcePath: "npc.png", dataPath: "assets/npc.png" })), false);
+  assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png", upload: { base64: "secret" } })), false);
 });
 
 test("condition approval pins the consumed input and denial does not create an operation", async () => {

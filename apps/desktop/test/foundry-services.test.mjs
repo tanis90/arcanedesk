@@ -108,3 +108,37 @@ test("Actor readRef hides internal state, binds to this session and injects requ
   const other = fixture(t); other.service.mode = "prep";
   assert.equal((await other.service.writeActor("actorEdit", input, f.binding, "edit")).code, "READ_REF_INVALID");
 });
+
+test("local Actor images use one combined lease, internal bytes, and a replay-safe operation", async t => {
+  const { writeFileSync, readFileSync } = await import("node:fs");
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-image-service-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO1cAAAAASUVORK5CYII=", "base64");
+  writeFileSync(path.join(directory, "actor.png"), png);
+  let locked = false, calls = 0;
+  const service = new FoundryServices({ sessionId: "images", directory, mode: "prep", getCwd: () => directory,
+    withPage: () => { throw Error("must acquire page and cwd together"); },
+    withAssets: async (cwd, _signal, callback) => {
+      assert.equal(cwd, directory); assert.equal(locked, false); locked = true;
+      try { return await callback(); } finally { locked = false; }
+    },
+    decodeImage: bytes => { assert.equal(locked, true); assert.deepEqual(bytes, png); return { width: 1, height: 1 }; },
+    call: async (action, args) => {
+      assert.equal(locked, true); assert.equal(action, "actorCreate"); calls++;
+      assert.equal(args.image.upload.base64, png.toString("base64"));
+      assert.equal("sourcePath" in args.image, false); assert.ok(args.requestId);
+      return { status: "completed", steps: [{ step: "upload-image", state: "completed", targets: [args.image.dataPath] }], verification: [], warnings: [] };
+    },
+  });
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "w" } }) };
+  const params = { source: { kind: "blank", actorType: "npc" }, name: "Image Actor", image: { sourcePath: "actor.png" } };
+  const first = await service.writeActor("actorCreate", params, binding, "image-call");
+  assert.equal(first.status, "completed");
+  assert.deepEqual(await service.writeActor("actorCreate", params, binding, "image-call"), first);
+  assert.equal(calls, 1);
+  const journal = readFileSync(path.join(directory, "images.jsonl"), "utf8");
+  assert.equal(journal.includes(png.toString("base64")), false);
+  assert.equal(JSON.stringify(first).includes("base64"), false);
+  const invalid = await service.writeActor("actorCreate", { ...params, image: { ...params.image, dataPath: "also.png" } }, binding, "invalid");
+  assert.equal(invalid.code, "INPUT_INVALID"); assert.equal(calls, 1);
+});
