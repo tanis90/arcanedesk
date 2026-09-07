@@ -672,7 +672,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry,
+      telemetry: telemetry?.forSession(),
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
@@ -688,7 +688,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry,
+      telemetry: telemetry?.forSession(),
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
@@ -1241,13 +1241,11 @@ app.whenReady().then(async () => {
       };
       const result = host.submitInput(message, images, payload?.commandId, prepare);
       if (result.ok && !result.duplicate) {
-        if (result.disposition === "new_task") telemetry?.turnStarted(mode);
-        else telemetry?.turnSteered(mode);
-        telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
+        if (result.disposition !== "new_task") host.telemetry?.turnSteered(mode);
+        host.telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
       }
       return { ...result, ...modeController.publicSnapshot(context) };
     } catch (error) {
-      telemetry?.turnFailed(mode, error);
       const message = String(error?.message ?? error);
       if (/No API key found/i.test(message)) {
         const missingKey = host.missingApiKeyForCurrentModel();
@@ -1273,7 +1271,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("chat:abort", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
-    telemetry?.turnAborted(validated.context.mode);
     const result = await validated.context.host.abort(request?.taskId);
     return { ...result, ...modeController.publicSnapshot(validated.context) };
   });

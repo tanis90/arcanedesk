@@ -39,9 +39,15 @@ export class TelemetryClient {
    *   log?: (...data: any[]) => void,
    *   fetchImpl?: typeof fetch,
    *   monotonicNow?: () => number,
+   *   shared?: TelemetryClient,
    * }} options
    */
-  constructor({ userDataDir, appVersion, packaged, log = () => {}, fetchImpl, monotonicNow }) {
+  constructor({ userDataDir, appVersion, packaged, log = () => {}, fetchImpl, monotonicNow, shared = null }) {
+    this.userDataDir = userDataDir;
+    this.shared = shared;
+    this.sessionScopes = new Set();
+    this.observedTasks = new Map();
+    this.released = false;
     this.log = log;
     this.packaged = Boolean(packaged);
     this.appVersion = String(appVersion ?? "0");
@@ -67,10 +73,20 @@ export class TelemetryClient {
     /** @type {Map<string, { skillName: string, fileKind: string, revision: number }>} toolCallId -> 待确认的 skill 读取 */
     this.pendingSkillReads = new Map();
 
+    this.summarizer = new TurnSummarizer({ onSummary: (mode, data) => this.#emitSummary(mode, data) });
+    if (shared) {
+      // Independent correlation state; exactly one writer/uploader/consent owner.
+      this.store = shared.store;
+      this.writer = shared.writer;
+      this.uploader = shared.uploader;
+      Object.defineProperty(this, "recording", { get: () => !this.released && shared.recording });
+      this.getSkillsContext = () => shared.getSkillsContext?.();
+      return;
+    }
+
     this.store = new TelemetryStore(path.join(userDataDir, "config", "telemetry.json"), log);
     const telemetryDir = path.join(userDataDir, "telemetry");
     this.writer = new TelemetryWriter(telemetryDir, { log });
-    this.summarizer = new TurnSummarizer({ onSummary: (mode, data) => this.#emitSummary(mode, data) });
     // 上传端点:正式版跟随授权走生产端点;开发版只有显式测试 endpoint 才上传(§3.1)
     this.uploader = new TelemetryUploader({
       telemetryDir,
@@ -87,6 +103,48 @@ export class TelemetryClient {
     this.installationId = null;
     this.started = false;
     this.appStartedRecorded = false;
+  }
+
+  /** One resident AgentHost owns one scope. No Pi session identifier enters an envelope. */
+  forSession() {
+    const owner = this.shared ?? this;
+    const scope = new TelemetryClient({ userDataDir: owner.userDataDir, appVersion: owner.appVersion,
+      packaged: owner.packaged, log: owner.log, monotonicNow: owner.monotonicNow, shared: owner });
+    owner.sessionScopes.add(scope);
+    return scope;
+  }
+
+  releaseSession() {
+    return this.#safe("releaseSession", () => {
+      if (!this.shared) return;
+      this.released = true;
+      this.shared.sessionScopes.delete(this);
+      this.#resetTurns();
+      this.agentSessions.clear();
+      this.agentSessionInfo.clear();
+      this.observedTasks.clear();
+    });
+  }
+
+  #resetTurns() {
+    this.activeTurns.clear(); this.pendingRetries.clear(); this.toolStarts.clear();
+    this.pendingSkillReads.clear(); this.summarizer.reset();
+  }
+
+  /** TaskCoordinator is authoritative for scoped sessions, including multi-prompt tasks. */
+  taskState(mode, task) {
+    return this.#safe("taskState", () => {
+      if (!this.shared || !task?.id || this.released) return;
+      const active = ["running", "queued", "waiting_resource", "waiting_user", "stopping"].includes(task.state);
+      if (active && this.observedTasks.get(mode) !== task.id) {
+        this.observedTasks.set(mode, task.id);
+        this.turnStarted(mode);
+      }
+      if (this.observedTasks.get(mode) !== task.id) return; // recovered terminal state is not a new run
+      if (task.state === "completed") this.#closeTurn(mode, "settled");
+      else if (task.state === "failed" || task.state === "interrupted") this.turnFailed(mode, task.error);
+      else if (task.state === "stopped" || task.state === "cancelled") this.turnAborted(mode);
+    });
   }
 
   /**
@@ -158,11 +216,7 @@ export class TelemetryClient {
       this.log("[telemetry] failed to persist disabled consent:", error?.message ?? error);
     }
     await this.writer.deleteAll();
-    this.activeTurns.clear();
-    this.pendingRetries.clear();
-    this.toolStarts.clear();
-    this.pendingSkillReads.clear();
-    this.summarizer.reset();
+    for (const scope of [this, ...this.sessionScopes]) scope.#resetTurns();
     this.appStartedRecorded = false;
   }
 
@@ -178,7 +232,9 @@ export class TelemetryClient {
     if (this.writer.disabled) await this.writer.start();
     this.#recordAppStartedOnce();
     if (!wasRecording) {
-      for (const [mode, info] of this.agentSessionInfo) this.#recordSessionAttachment(mode, info);
+      for (const scope of [this, ...this.sessionScopes]) {
+        for (const [mode, info] of scope.agentSessionInfo) scope.#recordSessionAttachment(mode, info);
+      }
     }
     this.uploader.start();
   }
@@ -196,13 +252,14 @@ export class TelemetryClient {
   // ---- envelope ----
 
   #nextEnvelope(mode, turnId) {
-    this.seq += 1;
+    const owner = this.shared ?? this;
+    owner.seq += 1;
     return {
-      bootId: this.bootId,
-      seq: this.seq,
+      bootId: owner.bootId,
+      seq: owner.seq,
       monotonicMs: this.monotonicNow(),
-      installationId: this.installationId,
-      appSessionId: this.appSessionId,
+      installationId: owner.installationId,
+      appSessionId: owner.appSessionId,
       agentSessionId: mode ? this.agentSessions.get(mode) ?? null : null,
       turnId: turnId ?? (mode ? this.activeTurns.get(mode)?.turnId ?? null : null),
       mode: mode ?? null,
@@ -384,7 +441,7 @@ export class TelemetryClient {
         return;
       }
       case "agent_settled": {
-        this.#closeTurn(mode, "settled");
+        if (!this.shared) this.#closeTurn(mode, "settled");
         return;
       }
       default:
@@ -478,6 +535,7 @@ export class TelemetryClient {
     const turnId = turn.turnId;
     this.activeTurns.delete(mode);
     this.pendingRetries.delete(mode);
+    if (this.shared) { this.toolStarts.clear(); this.pendingSkillReads.clear(); }
     if (data) this.#emitSummary(mode, data, turnId);
   }
 
@@ -506,7 +564,7 @@ export class TelemetryClient {
   }
 
   /** DirectFoundryRuntime 调用结果(§16.3):归入战斗模式活动回合。 */
-  foundryRuntimeResult(record = {}) {
+  foundryRuntimeResult(record = {}, mode = "combat") {
     return this.#safe("foundryRuntimeResult", () => {
       const { action, phase, status, receipt, durationMs, errorCode } = record ?? {};
       const errorClass =
@@ -521,7 +579,7 @@ export class TelemetryClient {
                 : errorCode
                   ? classifyError({ code: errorCode })
                   : "unknown";
-      this.#record("foundry.runtime_completed", "combat", null, {
+      this.#record("foundry.runtime_completed", mode, null, {
         actionFamily: actionFamily(action),
         phase,
         status,

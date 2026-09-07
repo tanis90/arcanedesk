@@ -1,4 +1,5 @@
 import { FoundryRuntimeClient } from "@arcanedesk/foundry-sdk/client";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
 
@@ -81,12 +82,23 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
       ...(evaluate ? { evaluate } : {}),
       ...(inspectPage ? { inspectPage } : {}),
     });
+    const callContext = new AsyncLocalStorage();
     super({
       transport,
       ...(runtimeSource !== undefined ? { runtimeSource } : {}),
       ...(readyPollMs !== undefined ? { readyPollMs } : {}),
       ...(log ? { log } : {}),
-      ...(onCallResult ? { onCallResult } : {}),
+      onCallResult: record => {
+        const context = callContext.getStore();
+        if (context?.telemetry) context.telemetry.foundryRuntimeResult(record, context.mode);
+        else onCallResult?.(record);
+      },
     });
+    this.callContext = callContext;
+  }
+
+  /** Context follows the caller's promise, including time spent in the SDK write queue. */
+  callForSession(telemetry, mode, action, args, options) {
+    return this.callContext.run({ telemetry, mode }, () => this.call(action, args, options));
   }
 }

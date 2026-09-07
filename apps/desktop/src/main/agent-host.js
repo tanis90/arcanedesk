@@ -299,6 +299,7 @@ export class AgentHost {
 
   /** 统一出站口:所有事件带 mode 标签,renderer 按活动模式过滤。 */
   emit(payload) {
+    if (payload.type === "task_state") this.telemetry?.taskState?.(this.profile.mode, payload.task);
     if (payload.type === "session_switched") {
       this.sendToRenderer({ ...payload, mode: this.profile.mode, sessionId: this.describeCurrent()?.id });
       return;
@@ -795,6 +796,7 @@ export class AgentHost {
     this.unsubscribe = null;
     this.session?.dispose();
     this.session = null;
+    this.telemetry?.releaseSession?.();
   }
 
   // ---- approval gate(opt-in,默认关闭) ----
@@ -1109,7 +1111,9 @@ export class AgentHost {
       if (!host.foundryRuntime?.call) {
         throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
       }
-      return host.foundryRuntime.call(action, args, options);
+      return host.foundryRuntime.callForSession
+        ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
+        : host.foundryRuntime.call(action, args, options);
     };
 
     const worldStatus = defineTool({

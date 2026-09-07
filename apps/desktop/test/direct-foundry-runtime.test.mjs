@@ -64,6 +64,20 @@ async function rejectsWithCode(promise, code) {
   });
 }
 
+test("queued shared Foundry calls retain their caller's telemetry scope and mode", async () => {
+  const global = [], a = [], b = [];
+  const runtime = createRuntime({ onCallResult: record => global.push(record) });
+  await Promise.all([
+    runtime.callForSession({ foundryRuntimeResult: (record, mode) => a.push({ record, mode }) }, "prep", "worldInfo", {}, {}),
+    runtime.callForSession({ foundryRuntimeResult: (record, mode) => b.push({ record, mode }) }, "combat", "executeTurn", {}, {}),
+    runtime.call("battleContext", {}),
+  ]);
+  assert.equal(a.length, 1); assert.equal(b.length, 1); assert.equal(global.length, 1);
+  assert.equal(a[0].mode, "prep"); assert.equal(a[0].record.action, "worldInfo");
+  assert.equal(b[0].mode, "combat"); assert.equal(b[0].record.action, "executeTurn");
+  assert.equal(global[0].action, "battleContext");
+});
+
 test("fixed actions dispatch data to the trusted runtime with requireGM enabled", async () => {
   const runtime = createRuntime();
 

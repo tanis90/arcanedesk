@@ -19,6 +19,92 @@ function tempClient({ packaged = false, fetchImpl, log } = {}) {
   return { client, userDataDir };
 }
 
+test("resident scopes isolate same-mode tools, retries and task summaries while sharing one event stream", async () => {
+  const { client, userDataDir } = tempClient();
+  let now = 0;
+  client.monotonicNow = () => now;
+  client.start(); await client.whenReady;
+  const a = client.forSession(), b = client.forSession();
+  assert.equal(a.writer, client.writer); assert.equal(b.uploader, client.uploader);
+  a.sessionAttached("prep", "deepseek", "deepseek-v4-flash", true);
+  b.sessionAttached("prep", "openai", "gpt-4o", true);
+  a.taskState("prep", { id: "PRIVATE_TASK_A", state: "running" });
+  b.taskState("prep", { id: "PRIVATE_TASK_B", state: "running" });
+  const aId = a.activeTurns.get("prep").turnId, bId = b.activeTurns.get("prep").turnId;
+  assert.notEqual(aId, bId);
+  a.observeAgentEvent("prep", { type: "tool_execution_start", toolCallId: "same-id", toolName: "read" });
+  now = 50;
+  b.observeAgentEvent("prep", { type: "tool_execution_start", toolCallId: "same-id", toolName: "bash" });
+  a.observeAgentEvent("prep", { type: "auto_retry_start", attempt: 1, maxAttempts: 3, errorMessage: "timeout" });
+  b.observeAgentEvent("prep", { type: "auto_retry_start", attempt: 2, maxAttempts: 5, errorMessage: "429" });
+  now = 150;
+  a.observeAgentEvent("prep", { type: "tool_execution_end", toolCallId: "same-id", toolName: "read", isError: false });
+  a.observeAgentEvent("prep", { type: "auto_retry_end", success: true });
+  a.observeAgentEvent("prep", { type: "agent_settled" });
+  assert.equal(a.activeTurns.get("prep").turnId, aId, "SDK fragment does not close the application task");
+  a.taskState("prep", { id: "PRIVATE_TASK_A", state: "completed" });
+  assert.equal(b.activeTurns.get("prep").turnId, bId);
+  now = 450;
+  b.observeAgentEvent("prep", { type: "tool_execution_end", toolCallId: "same-id", toolName: "bash", isError: true });
+  b.observeAgentEvent("prep", { type: "auto_retry_end", success: false });
+  b.taskState("prep", { id: "PRIVATE_TASK_B", state: "failed", error: "timeout" });
+  b.taskState("prep", { id: "PRIVATE_TASK_B", state: "failed", error: "timeout" });
+  const events = await readAllEvents(client, userDataDir);
+  await client.close();
+  const summaries = events.filter(e => e.event === "turn.summary");
+  assert.equal(summaries.length, 2);
+  assert.deepEqual(summaries.map(e => e.data.transport_status), ["completed", "failed"]);
+  assert.deepEqual(summaries.map(e => e.data.tool_calls), [1, 1]);
+  const tools = events.filter(e => e.event === "tool.completed");
+  assert.deepEqual(tools.map(e => [e.turn_id, e.data.duration_ms]), [[aId, 150], [bId, 400]]);
+  assert.deepEqual(events.filter(e => e.event === "model.retry").map(e => [e.turn_id, e.data.attempt, e.data.max_attempts]), [[aId, 1, 3], [bId, 2, 5]]);
+  assert.equal(new Set(events.map(e => e.seq)).size, events.length);
+  assert.equal(new Set(events.map(e => e.boot_id)).size, 1);
+  assert.equal(new Set(events.filter(e => e.mode === "prep").map(e => e.agent_session_id)).size, 2);
+  assert.equal(JSON.stringify(events).includes("PRIVATE_TASK"), false);
+  for (const e of events) assert.equal(findForbiddenKey(e), null);
+});
+
+test("consent reset visits every resident scope; re-enable skips partially recorded tasks", async () => {
+  const { client, userDataDir } = tempClient({ packaged: true });
+  client.start(); await client.whenReady;
+  const a = client.forSession(), b = client.forSession();
+  a.sessionAttached("prep", "openai", "gpt-4o", true);
+  b.sessionAttached("prep", "deepseek", "deepseek-v4-flash", true);
+  await client.consentEnabled();
+  a.taskState("prep", { id: "a", state: "running" });
+  b.taskState("prep", { id: "b", state: "running" });
+  await client.consentDisabled();
+  assert.equal(a.recording, false); assert.equal(b.activeTurns.size, 0);
+  await client.consentEnabled();
+  a.taskState("prep", { id: "a", state: "waiting_user" });
+  a.taskState("prep", { id: "a", state: "completed" });
+  b.taskState("prep", { id: "b", state: "stopped" });
+  a.taskState("prep", { id: "next-a", state: "running" });
+  a.taskState("prep", { id: "next-a", state: "completed" });
+  const events = await readAllEvents(client, userDataDir); await client.close();
+  assert.equal(events.filter(e => e.event === "agent.session_attached").length, 2);
+  assert.equal(events.filter(e => e.event === "turn.started").length, 1);
+  assert.equal(events.filter(e => e.event === "turn.summary").length, 1);
+});
+
+test("releasing a scope leaves other sessions and the shared writer usable", async () => {
+  const { client, userDataDir } = tempClient();
+  client.start(); await client.whenReady;
+  const a = client.forSession(), b = client.forSession();
+  a.sessionAttached("prep", "openai", "gpt-4o", true);
+  b.sessionAttached("prep", "openai", "gpt-4o", true);
+  a.releaseSession();
+  a.taskState("prep", { id: "late-a", state: "running" });
+  b.taskState("prep", { id: "b", state: "running" });
+  b.taskState("prep", { id: "b", state: "stopped" });
+  assert.equal(client.sessionScopes.size, 1);
+  assert.equal(a.recording, false);
+  const events = await readAllEvents(client, userDataDir); await client.close();
+  assert.equal(events.filter(e => e.event === "turn.summary").length, 1);
+  assert.equal(events.find(e => e.event === "turn.summary").data.transport_status, "aborted");
+});
+
 async function readAllEvents(client, userDataDir) {
   await client.whenReady;
   await client.writer.prepareQuit();
