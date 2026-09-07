@@ -16,6 +16,7 @@ import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
 import { err, errorToIpc, I18nError } from "./i18n-error.mjs";
 import { claimSessionMode, isPathInside, readSessionMode, sessionDirForMode, SessionModeError } from "./session-mode.js";
 import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
+import { SessionProjection } from "./sync/session-projection.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -242,6 +243,7 @@ export class AgentHost {
     this.session = null;
     this.sessionManager = null;
     this.unsubscribe = null;
+    this.projection = new SessionProjection();
     this.approvals = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
@@ -291,7 +293,12 @@ export class AgentHost {
 
   /** 统一出站口:所有事件带 mode 标签,renderer 按活动模式过滤。 */
   emit(payload) {
-    this.sendToRenderer({ ...payload, mode: this.profile.mode });
+    // World state belongs to the shared Foundry runtime, not a conversation stream.
+    if (payload.type === "world_info") {
+      this.sendToRenderer({ ...payload, mode: this.profile.mode });
+      return;
+    }
+    this.sendToRenderer(this.projection.publish({ ...payload, mode: this.profile.mode }));
   }
 
   /**
@@ -408,6 +415,8 @@ export class AgentHost {
     const { session } = await createAgentSession(options);
     this.session = session;
     this.sessionManager = sessionManager;
+    this.projection = new SessionProjection({ sessionId: sessionManager.getSessionId() });
+    this._lastMessageKey = null;
     this.unsubscribe = session.subscribe((event) => this.forwardEvent(event));
     // ref/label 一律以会话实际持有的模型为准:恢复出的会话模型或 SDK 兜底
     // 结果都直接读 session.model,preferred 只在新会话上与它一致。
@@ -531,6 +540,7 @@ export class AgentHost {
 
   currentPayload() {
     return {
+      inFlight: this.projection.snapshot(),
       session: this.describeCurrent(),
       history: this.buildHistory(),
       modelLabel: this.modelLabel ?? null,
@@ -756,13 +766,16 @@ export class AgentHost {
       case "agent_start":
         this._lastError = null;
         this.log(`[agent:${this.profile.mode}] event agent_start`);
+        this.emit({ type: "agent_start" });
         return;
       case "auto_retry_start":
         this._lastError = event.errorMessage ?? this._lastError;
+        this.emit({ type: "auto_retry_start", attempt: event.attempt, maxAttempts: event.maxAttempts });
         this.log(`[agent:${this.profile.mode}] auto-retry ${event.attempt}/${event.maxAttempts}: ${event.errorMessage}`);
         return;
       case "auto_retry_end":
         this._lastError = event.success ? null : (event.finalError ?? this._lastError);
+        this.emit({ type: "auto_retry_end", success: event.success });
         this.log(`[agent:${this.profile.mode}] auto-retry end (success=${event.success}${event.finalError ? `, error=${event.finalError}` : ""})`);
         return;
       case "turn_end":
