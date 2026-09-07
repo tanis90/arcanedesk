@@ -99,7 +99,7 @@ test("renderer ignores another session and a previous task's terminal event", ()
   const handler = source.slice(source.indexOf("function onEvent(event)"), source.indexOf("// ---------- slash 候选弹窗"));
   const states = [];
   const context = vm.createContext({ currentMode: "prep", selectedSessionId: "B", selectedTaskId: "new",
-    setBusy: value => states.push(value) });
+    setBusy: value => states.push(value), showTaskState() {} });
   vm.runInContext(handler, context);
   context.onEvent({ type: "task_state", mode: "prep", sessionId: "A", taskId: "a", task: { id: "a", state: "completed" } });
   context.onEvent({ type: "task_state", mode: "prep", sessionId: "B", taskId: "old", task: { id: "old", state: "completed" } });

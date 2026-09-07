@@ -250,6 +250,7 @@ export class AgentHost {
     this.tasks = null;
     this.taskStorageDir = taskStorageDir;
     this.approvals = new Map();
+    this.approvalSnapshots = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
     // 错误只能从 assistant 消息与 auto_retry 事件里跟踪。
@@ -560,6 +561,9 @@ export class AgentHost {
 
   currentPayload() {
     return {
+      attentions: this.tasks?.snapshotAttentions() ?? [],
+      approvals: structuredClone([...this.approvalSnapshots.values()]),
+      pendingModel: this.tasks?.pendingModel ?? null,
       inputs: this.tasks?.snapshotInputs() ?? [],
       busy: this.busy,
       task: this.task ? { ...this.task } : null,
@@ -652,11 +656,15 @@ export class AgentHost {
    * 立即切当前会话模型;model_change 由 Pi 写进本会话 JSONL,重开/重启后
    * 自然恢复。只作用于本 host 当前会话,不广播、不改全局默认。
    */
-  async setCurrentModel(providerId, modelId) {
+  async setCurrentModel(providerId, modelId, applyNow = false) {
     const ref = { providerId, modelId };
     const model = this.modelRuntime?.getModel(providerId, modelId) ?? null;
     if (this.modelRuntime && !model) {
       return { ok: false, error: `model not found: ${providerId}/${modelId}` };
+    }
+    if (this.busy && !applyNow) {
+      this.taskCoordinator().setPendingModel(ref);
+      return { ok: true, deferred: true, model: ref };
     }
     // 会话已在该模型上:不重复写 model_change,只同步 UI 状态
     const current = this.session?.model;
@@ -667,6 +675,7 @@ export class AgentHost {
       this.modelLabel = `${providerId}/${modelId}`;
       this.supportsImages = model?.input?.includes("image") ?? true;
       this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
+      if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
       return { ok: true, pendingKey: true };
     }
     if (!sameModel && model && this.session) {
@@ -676,6 +685,7 @@ export class AgentHost {
     this.modelLabel = `${providerId}/${modelId}`;
     this.supportsImages = model?.input?.includes("image") ?? true;
     this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
+    if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
     return { ok: true, ...(sameModel ? { noop: true } : null) };
   }
 
@@ -727,6 +737,12 @@ export class AgentHost {
     const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
     this.tasks = new TaskCoordinator({ sessionId, journal: new InputJournal(file), emit: event => this.emit(event),
       adapter: {
+        beginTask: async (pending) => {
+          if (!pending) return;
+          const result = await this.setCurrentModel(pending.providerId, pending.modelId, true);
+          if (!result.ok || result.pendingKey) throw new Error(result.error ?? "Selected model requires configuration");
+          if (this.tasks.pendingModel === pending) this.tasks.setPendingModel(null);
+        },
         prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
         isStreaming: () => Boolean(this.session?.isStreaming),
@@ -791,6 +807,9 @@ export class AgentHost {
       const finish = (approved, outcome = approved ? "allowed" : "denied") => {
         clearTimeout(timer);
         this.approvals.delete(approvalId);
+        this.approvalSnapshots.delete(approvalId);
+        this.emit({ type: "approval_resolved", approvalId, approved });
+        if (this.tasks?.task?.state === "waiting_user" && !this.approvals.size && !this.tasks.snapshotAttentions().some(a => a.state === "pending")) this.tasks.setTaskState("running");
         this.telemetry?.approvalResolved(this.profile.mode, payload?.tool, outcome, Date.now() - requestedAt);
         resolve(approved);
       };
@@ -799,6 +818,8 @@ export class AgentHost {
         finish(false, "timeout");
       }, APPROVAL_TIMEOUT_MS);
       this.approvals.set(approvalId, finish);
+      this.approvalSnapshots.set(approvalId, { approvalId, requestedAt, ...payload });
+      if (this.tasks?.busy && this.tasks.task.state !== "stopping") this.tasks.setTaskState("waiting_user");
       this.emit({ type: "approval_request", approvalId, ...payload });
     });
   }
@@ -920,6 +941,17 @@ export class AgentHost {
   buildTools() {
     const host = this;
     const prepWorldEdit = host.profile.mode === "prep";
+    const requestUserInput = defineTool({
+      name: "request_user_input", label: "Ask the user",
+      description: "Ask a concrete question when user input is necessary to continue. The task waits for the user's answer. Use options for concise choices; free-text answers are always allowed. Do not add unnecessary approval requests.",
+      parameters: Type.Object({ question: Type.String({ minLength: 1, maxLength: 12000 }),
+        options: Type.Optional(Type.Array(Type.String({ maxLength: 1000 }), { maxItems: 8 })) }),
+      executionMode: "sequential",
+      execute: async (_id, params, signal) => {
+        const response = await host.taskCoordinator().ask(params, signal);
+        return textResult(safeJson(response), response);
+      },
+    });
 
     const foundryOpen = defineTool({
       name: "foundry_open",
@@ -1209,7 +1241,7 @@ export class AgentHost {
       },
     });
 
-    const tools = [foundryOpen, browserEvaluate, worldStatus, combatBattleContext, combatTurnContext, combatExecuteTurn];
+    const tools = [foundryOpen, browserEvaluate, worldStatus, combatBattleContext, combatTurnContext, combatExecuteTurn, requestUserInput];
     if (prepWorldEdit) tools.splice(1, 0, foundryScreenshot);
     if (!Array.isArray(host.profile.customToolNames)) return tools;
     const enabled = new Set(host.profile.customToolNames);

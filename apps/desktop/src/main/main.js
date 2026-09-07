@@ -691,7 +691,7 @@ app.whenReady().then(async () => {
         builtinTools: true,
         systemPrompt: "append",
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
-        customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate"],
+        customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate", "request_user_input"],
         fence: true,
       },
     }); } }),
@@ -957,7 +957,7 @@ app.whenReady().then(async () => {
     await modeController.ensureStarted(validated.context.mode);
     const result = await validated.context.host.setCurrentModel(providerId, modelId);
     if (!result?.ok) return { ...result, ...modeController.publicSnapshot(validated.context) };
-    return { ok: true, model: { providerId, modelId }, ...modeController.publicSnapshot(validated.context) };
+    return { ...result, model: { providerId, modelId }, ...modeController.publicSnapshot(validated.context) };
   });
   // ---- 隐私:正式版首次明确选择 + 设置页随时撤回 ----
   const unavailableTelemetryStatus = () => ({
@@ -1240,6 +1240,12 @@ app.whenReady().then(async () => {
     telemetry?.turnAborted(validated.context.mode);
     const result = await validated.context.host.abort(request?.taskId);
     return { ...result, ...modeController.publicSnapshot(validated.context) };
+  });
+  ipcMain.handle("tasks:respond", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    const validated = await validateModeRequest(request);
+    if (!validated.ok) return validated;
+    return validated.context.host.taskCoordinator().respond(request);
   });
 
   // 主题持久化:renderer 切换主题时写 userData/config/ui.json,

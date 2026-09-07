@@ -125,3 +125,52 @@ test("journal recovery keeps acceptance identity, marks interrupted, and never r
   assert.equal(recovered.run, null);
   gate.resolve(); await original.run;
 });
+
+test("structured answer is scoped, durable and idempotent, then resumes the same task", async () => {
+  let coordinator; let question;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    prompt: async () => { question = coordinator.ask({ question: "Which scene?", options: ["Forest", "City"] }); await question; },
+  } });
+  const task = coordinator.submit({ text: "prepare" }); await tick();
+  assert.equal(coordinator.task.state, "waiting_user");
+  const attention = coordinator.snapshotAttentions()[0];
+  assert.equal(coordinator.respond({ commandId: "wrong", taskId: "old", attentionId: attention.id, response: "Forest" }).code, "STALE_ATTENTION");
+  const command = { commandId: "answer", taskId: task.taskId, attentionId: attention.id, response: "Forest" };
+  assert.equal(coordinator.respond(command).ok, true);
+  assert.equal(coordinator.respond(command).duplicate, true);
+  assert.equal(coordinator.respond({ ...command, response: "City" }).code, "COMMAND_CONFLICT");
+  assert.deepEqual(await question, { response: "Forest" });
+  await coordinator.run;
+  assert.equal(coordinator.task.id, task.taskId);
+  assert.equal(coordinator.task.state, "completed");
+  assert.equal(coordinator.snapshotAttentions()[0].response, "Forest");
+});
+
+test("stop resolves a waiting question and rejects later answers", async () => {
+  let coordinator; let answer;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    prompt: async () => { answer = await coordinator.ask({ question: "Continue?" }); }, abort: async () => {},
+  } });
+  const task = coordinator.submit({ text: "work" }); await tick();
+  const attentionId = coordinator.snapshotAttentions()[0].id;
+  await coordinator.stop(task.taskId);
+  assert.deepEqual(answer, { cancelled: true });
+  assert.equal(coordinator.task.state, "stopped");
+  assert.equal(coordinator.snapshotAttentions()[0].state, "cancelled");
+  assert.equal(coordinator.respond({ commandId: "late", taskId: task.taskId, attentionId, response: "yes" }).code, "STALE_ATTENTION");
+});
+
+test("recovery marks an unresolved question interrupted instead of pretending a resolver survived", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-attention-test-"));
+  const file = path.join(dir, "journal.jsonl");
+  let original;
+  original = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: {
+    prompt: async () => { await original.ask({ question: "Choose?" }); }, abort: async () => {},
+  } });
+  const task = original.submit({ text: "work" }); await tick();
+  const restored = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: {} });
+  const attention = restored.snapshotAttentions()[0];
+  assert.equal(attention.state, "interrupted");
+  assert.equal(restored.respond({ commandId: "after-restart", taskId: task.taskId, attentionId: attention.id, response: "yes" }).code, "STALE_ATTENTION");
+  await original.stop(task.taskId);
+});

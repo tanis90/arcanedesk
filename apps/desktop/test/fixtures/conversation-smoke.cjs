@@ -9,15 +9,20 @@ app.setPath("userData", mkdtempSync(path.join(tmpdir(), "arcane-conversation-smo
 app.disableHardwareAcceleration();
 const startedAt = Date.now() - 15000;
 let finished = false;
+let question = null;
+let lastAnswer = null;
+let sendTestEvent = () => {};
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
-    busy: id === "A" && !finished, task: id === "A" ? { id: "task-A", state: finished ? "completed" : "running" } : null,
+    busy: id === "A" && (!finished || question?.state === "pending"),
+    task: id === "A" ? { id: question?.taskId ?? "task-A", state: question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
+    attentions: id === "A" && question ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
       ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])] : [],
-    inFlight: { runtimeEpoch: "test", seq: id === "A" && finished ? 3 : 0,
+    inFlight: { runtimeEpoch: "test", seq: id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
       tools: id === "A" ? [{ toolCallId: "tool-A", toolName: "bash", state: finished ? "succeeded" : "running", startedAt }] : [] } };
 }
@@ -27,6 +32,13 @@ const submittedCommands = new Set();
 let submitAttempts = 0;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "tasks:respond") {
+    lastAnswer = input;
+    question = { ...question, state: "answered", response: input.response };
+    sendTestEvent({ type: "attention", attention: question, seq: 4 });
+    sendTestEvent({ type: "task_state", task: { id: question.taskId, state: "completed" }, seq: 5 });
+    return { ok: true };
+  }
   if (channel === "chat:prompt") {
     submitAttempts++;
     submittedCommands.add(input.commandId);
@@ -47,6 +59,7 @@ app.whenReady().then(async () => {
   const window = new BrowserWindow({ show: false, width: 1000, height: 800,
     webPreferences: { preload: path.join(desktop, "preload.cjs"), contextIsolation: true } });
   const evaluate = code => window.webContents.executeJavaScript(code);
+  sendTestEvent = event => window.webContents.send("arcane:event", { ...event, sessionId: "A", mode: "prep", runtimeEpoch: "test", taskId: question.taskId });
   async function until(code) {
     const limit = Date.now() + 7000;
     while (Date.now() < limit) {
@@ -99,7 +112,22 @@ app.whenReady().then(async () => {
     await until('outboxFor("A").size === 0');
     assert.equal(submitAttempts, 2);
     assert.equal(submittedCommands.size, 1);
-    console.log("PASS Electron: A/B/A, live restore, drafts/attachments, IndexedDB reload, background completion, stable retry command");
+    question = { id: "question-A", taskId: "task-question", state: "pending", question: "Which scene?", options: ["Forest", "City"] };
+    await evaluate('resyncSelected()');
+    await until('!!document.querySelector("[data-attention-id] textarea")');
+    assert.equal(await evaluate('busy'), true);
+    await evaluate('const answer = document.querySelector("[data-attention-id] textarea"); answer.value = "Quiet forest"; answer.dispatchEvent(new Event("input"));');
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    assert.equal(await evaluate('document.querySelectorAll("[data-attention-id]").length'), 0);
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && document.querySelector("[data-attention-id] textarea")?.value === "Quiet forest"');
+    await evaluate('document.querySelector("[data-attention-id] button.primary").click()');
+    await until('!document.querySelector("[data-attention-id] textarea") && document.querySelector("[data-attention-id]").textContent.includes("Quiet forest")');
+    assert.equal(lastAnswer.sessionId, "A");
+    assert.equal(lastAnswer.taskId, "task-question");
+    assert.equal(lastAnswer.attentionId, "question-A");
+    console.log("PASS Electron: conversation restore, isolated drafts, stable retry, question restore and scoped answer");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

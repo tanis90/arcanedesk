@@ -5,6 +5,79 @@
 
 const messages = document.getElementById("messages");
 const syncIndicator = document.getElementById("conversation-sync");
+const taskIndicator = document.getElementById("conversation-task-status");
+const pendingModelIndicator = document.getElementById("conversation-model-pending");
+const attentionCards = new Map();
+const attentionDrafts = new Map();
+const attentionAttempts = new Map();
+
+function showPendingModel(model) {
+  pendingModelIndicator.hidden = !model;
+  pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
+}
+function showTaskState(task) {
+  const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
+    completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
+  taskIndicator.hidden = !task;
+  taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
+}
+
+function renderAttention(attention) {
+  const existing = attentionCards.get(attention.id);
+  if (existing) {
+    const draft = existing.querySelector("textarea");
+    if (draft) attentionDrafts.set(attention.id, draft.value);
+    existing.remove();
+  }
+  const card = el("div", "card open");
+  card.dataset.itemKey = "attention:" + attention.id;
+  card.dataset.attentionId = attention.id;
+  card.appendChild(el("div", "head", attention.question));
+  const body = el("div", "body");
+  if (attention.state !== "pending") {
+    const stateKeys = { answered: "chat.attention.answered", cancelled: "chat.attention.cancelled", interrupted: "chat.attention.interrupted" };
+    body.appendChild(el("div", null, attention.response ?? t(stateKeys[attention.state] ?? "chat.attention.interrupted")));
+  } else {
+    const target = { sessionId: selectedSessionId, taskId: attention.taskId, attentionId: attention.id };
+    const answer = /** @type {HTMLTextAreaElement} */ (el("textarea"));
+    answer.placeholder = t("chat.attention.placeholder");
+    answer.setAttribute("aria-label", t("chat.attention.placeholder"));
+    answer.value = attentionDrafts.get(attention.id) ?? "";
+    answer.addEventListener("input", () => { attentionDrafts.set(attention.id, answer.value); scheduleWorkspaceSave(); });
+    const actions = el("div", "actions");
+    const submitAnswer = el("button", "primary", t("chat.attention.submit"));
+    const feedback = el("div", "status-line");
+    let sending = false;
+    let attempt = attentionAttempts.get(attention.id) ?? null;
+    async function respond() {
+      if (sending || !answer.value.trim()) return;
+      attempt = attentionAttempts.get(attention.id) ?? attempt;
+      if (!attempt || attempt.response !== answer.value.trim()) attempt = { ...target, commandId: crypto.randomUUID(), response: answer.value.trim() };
+      attentionAttempts.set(attention.id, attempt);
+      saveWorkspace();
+      sending = true; submitAnswer.disabled = true;
+      feedback.textContent = t("chat.input.sending");
+      let result;
+      try { result = await window.arcane.respondToTask(attempt); }
+      catch { result = { ok: false }; }
+      sending = false; submitAnswer.disabled = false;
+      if (result.ok) { attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id); feedback.textContent = t("chat.attention.answered"); }
+      else feedback.textContent = t(result.code === "STALE_ATTENTION" ? "chat.attention.stale" : "chat.attention.retry");
+    }
+    for (const option of attention.options ?? []) {
+      const button = el("button", null, option);
+      button.addEventListener("click", () => { answer.value = option; void respond(); });
+      actions.appendChild(button);
+    }
+    submitAnswer.addEventListener("click", () => { void respond(); });
+    actions.appendChild(submitAnswer);
+    body.append(answer, actions, feedback);
+  }
+  card.appendChild(body);
+  messages.appendChild(card);
+  attentionCards.set(attention.id, card);
+  scrollToEnd();
+}
 const input = /** @type {HTMLTextAreaElement} */ (document.getElementById("chat-input"));
 const send = document.getElementById("send");
 const stop = document.getElementById("stop");
@@ -72,6 +145,8 @@ function saveWorkspace() {
     open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
   }));
   workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest,
+    attentionDrafts: Object.fromEntries([...attentionCards.keys()].map(id => [id, attentionDrafts.get(id) ?? ""])),
+    attentionAttempts: Object.fromEntries([...attentionCards.keys()].filter(id => attentionAttempts.has(id)).map(id => [id, attentionAttempts.get(id)])),
     outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })),
     anchor: anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null,
     expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
@@ -89,6 +164,8 @@ async function installSnapshot(payload) {
   syncIndicator.hidden = true;
   selectedSessionId = id;
   selectedTaskId = payload.task?.id ?? null;
+  showTaskState(payload.task);
+  showPendingModel(payload.pendingModel);
   viewSeq = payload.inFlight?.seq ?? 0;
   viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
   if (payload.mode) applyModeUi(payload.mode, payload.cwd);
@@ -97,10 +174,8 @@ async function installSnapshot(payload) {
   renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy));
   if (payload.modelLabel) updateModelLabels(payload.modelLabel);
   if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
-  const replay = eventInbox.after(id, viewEpoch, viewSeq);
-  restoringView = false;
-  if (replay === null) { void resyncSelected(); return; }
-  for (const event of replay) receiveEvent(event, true);
+  for (const attention of payload.attentions ?? []) renderAttention(attention);
+  for (const approval of payload.approvals ?? []) addApprovalCard(approval);
   for (const item of payload.inputs ?? []) {
     const historyNode = item.messageKey ? messages.querySelector('[data-item-key="' + CSS.escape(item.messageKey) + '"]') : null;
     if (historyNode instanceof HTMLElement) {
@@ -114,9 +189,19 @@ async function installSnapshot(payload) {
       updateInputReceipt(item.commandId, item.state);
     }
   }
+  const replay = eventInbox.after(id, viewEpoch, viewSeq);
+  restoringView = false;
+  if (replay === null) { void resyncSelected(); return; }
+  for (const event of replay) receiveEvent(event, true);
   let saved;
   try { saved = await workspaceStore.load(id); } catch { saved = {}; }
   if (token !== snapshotRequest || selectedSessionId !== id) return;
+  for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
+  for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
+  for (const [attentionId, card] of attentionCards) {
+    const answer = card.querySelector("textarea");
+    if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
+  }
   workspaceReady.add(id);
   if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, item])));
   const acceptedCommands = new Set((payload.inputs ?? []).map(item => item.commandId));
@@ -668,6 +753,7 @@ function finishToolCard(toolCallId, toolName, event) {
 function addApprovalCard(event) {
   dismissWelcome();
   const card = el("div", "card approval");
+  card.dataset.approvalId = event.approvalId;
   const head = el("div", "head");
   const dot = el("span", "dot");
   dot.style.background = "var(--warn)";
@@ -914,12 +1000,19 @@ function onEvent(event) {
     && event.type !== "session_switched"
     && !(event.type === "task_state" && event.task.state === "running")) return;
   switch (event.type) {
+    case "attention":
+      renderAttention(event.attention);
+      break;
+    case "model_pending":
+      showPendingModel(event.model);
+      break;
     case "input_state":
       updateInputReceipt(event.commandId, event.state);
       break;
     case "task_state":
       selectedTaskId = event.task.id;
-      setBusy(event.task.state === "running" || event.task.state === "stopping");
+      setBusy(["running", "stopping", "waiting_user", "queued", "waiting_resource"].includes(event.task.state));
+      showTaskState(event.task);
       if (event.task.state === "failed" && event.task.error) addStatus(t("chat.status.sendFailed", { error: event.task.error }));
       break;
     case "message": {
@@ -1003,6 +1096,14 @@ function onEvent(event) {
     case "approval_request":
       addApprovalCard(event);
       break;
+    case "approval_resolved": {
+      const card = messages.querySelector('[data-approval-id="' + CSS.escape(event.approvalId) + '"]');
+      if (card) {
+        for (const button of card.querySelectorAll("button")) button.disabled = true;
+        card.querySelector(".state-chip").textContent = t(event.approved ? "chat.approval.allowed" : "chat.approval.denied");
+      }
+      break;
+    }
     case "session_switched":
       // 切换/新建会话:整体重置后按历史重渲染(含工具卡片四态)
       void installSnapshot(event);
@@ -1606,6 +1707,7 @@ reflectThemeGlyph();
 
 function resetConversation() {
   messages.innerHTML = "";
+  attentionCards.clear();
   toolCards.clear();
   streamBubbles.clear();
   thinkBlocks.clear();
@@ -2228,7 +2330,9 @@ function updateModelLabels(label) {
 async function selectChatModel(providerId, modelId) {
   // 会话内切换:只作用于当前模式的当前会话(model_change 落该会话 JSONL),
   // 不再走全局默认通道,避免 A 会话换模型把 B 也带走。
-  const result = await window.arcane.setChatModel(modeContext(), providerId, modelId);
+  const context = modeContext();
+  const result = await window.arcane.setChatModel(context, providerId, modelId);
+  if (!sameModeContext(context)) return result;
   if (!result?.ok) {
     addStatus(t("sm.form.useFailed", {
       error: result?.error ? fmtIpc(result.error) : t("common.unknownError"),
@@ -2236,9 +2340,10 @@ async function selectChatModel(providerId, modelId) {
     return result;
   }
   const model = result.model ?? { providerId, modelId };
+  if (result.deferred) { showPendingModel(model); return result; }
   updateModelLabels(`${model.providerId}/${model.modelId}`);
-  const access = await window.arcane.getModelAccess(modeContext());
-  if (!access?.missingKey) clearModelSetupCard();
+  const access = await window.arcane.getModelAccess(context);
+  if (sameModeContext(context) && !access?.missingKey) clearModelSetupCard();
   return result;
 }
 

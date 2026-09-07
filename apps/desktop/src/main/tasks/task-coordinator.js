@@ -24,6 +24,9 @@ export class TaskCoordinator {
     this.aborted = false;
     this.lastError = null;
     this.queueWrites = new Set();
+    this.attentions = new Map();
+    this.attentionResolvers = new Map();
+    this.pendingModel = null;
     for (const record of journal.records) {
       if (record.type === "accepted") {
         this.commands.set(record.commandId, record);
@@ -33,14 +36,83 @@ export class TaskCoordinator {
         const input = this.inputs.get(record.inputId);
         if (input) input.state = record.state;
       } else if (record.type === "task_state") this.task = record.task;
+      else if (record.type === "attention") this.attentions.set(record.attention.id, record.attention);
+      else if (record.type === "response") {
+        this.commands.set(record.commandId, record);
+        this.attentions.set(record.attention.id, record.attention);
+      } else if (record.type === "pending_model") this.pendingModel = record.model;
     }
     if (this.busy) {
       this.setTaskState("interrupted");
       for (const input of this.inputs.values()) if (pendingStates.has(input.state)) this.setInputState(input, "interrupted");
     }
+    for (const attention of this.attentions.values()) {
+      if (attention.state === "pending") this.updateAttention({ ...attention, state: "interrupted" });
+    }
   }
 
   get busy() { return activeStates.has(this.task?.state); }
+  snapshotAttentions() { return structuredClone([...this.attentions.values()]); }
+  setPendingModel(model) {
+    this.journal.append({ type: "pending_model", model });
+    this.pendingModel = model ? { ...model } : null;
+    this.emit({ type: "model_pending", model: this.pendingModel });
+  }
+  updateAttention(attention) {
+    this.journal.append({ type: "attention", attention });
+    this.attentions.set(attention.id, attention);
+    this.emit({ type: "attention", attention: structuredClone(attention) });
+  }
+
+  ask({ question, options = [] }, signal) {
+    if (!this.busy || this.task.state === "stopping" || signal?.aborted) return Promise.resolve({ cancelled: true });
+    if (typeof question !== "string" || !question.trim() || question.length > 12000) throw new Error("Invalid question");
+    if (!Array.isArray(options) || options.length > 8 || options.some(option => typeof option !== "string" || option.length > 1000)) throw new Error("Invalid answer options");
+    const attention = { id: randomUUID(), taskId: this.task.id, question, options: [...options], state: "pending", createdAt: Date.now() };
+    this.updateAttention(attention);
+    this.setTaskState("waiting_user");
+    return new Promise(resolve => {
+      const cancel = () => this.cancelAttention(attention.id);
+      this.attentionResolvers.set(attention.id, response => {
+        signal?.removeEventListener("abort", cancel);
+        resolve(response);
+      });
+      signal?.addEventListener("abort", cancel, { once: true });
+      if (signal?.aborted) cancel();
+    });
+  }
+
+  cancelAttention(id) {
+    const attention = this.attentions.get(id);
+    if (!attention || attention.state !== "pending") return;
+    this.updateAttention({ ...attention, state: "cancelled" });
+    this.attentionResolvers.get(id)?.({ cancelled: true });
+    this.attentionResolvers.delete(id);
+  }
+
+  respond({ commandId, taskId, attentionId, response }) {
+    if (typeof commandId !== "string" || !commandId || typeof response !== "string" || !response.trim() || response.length > 20000) {
+      return { ok: false, code: "INVALID_RESPONSE" };
+    }
+    const fingerprint = createHash("sha256").update(JSON.stringify({ taskId, attentionId, response })).digest("hex");
+    const previous = this.commands.get(commandId);
+    if (previous) return previous.fingerprint === fingerprint ? { ...previous.ack, duplicate: true } : { ok: false, code: "COMMAND_CONFLICT" };
+    const attention = this.attentions.get(attentionId);
+    if (taskId !== this.task?.id || attention?.taskId !== taskId || attention.state !== "pending" || !this.attentionResolvers.has(attentionId) || this.task.state === "stopping") {
+      return { ok: false, code: "STALE_ATTENTION" };
+    }
+    const answered = { ...attention, state: "answered", response, answeredAt: Date.now() };
+    const ack = { ok: true, commandId, sessionId: this.sessionId, taskId, attentionId };
+    const record = { type: "response", commandId, fingerprint, attention: answered, ack };
+    this.journal.append(record);
+    this.commands.set(commandId, record);
+    this.attentions.set(attentionId, answered);
+    this.emit({ type: "attention", attention: structuredClone(answered) });
+    if (![...this.attentions.values()].some(a => a.taskId === taskId && a.state === "pending")) this.setTaskState("running");
+    this.attentionResolvers.get(attentionId)({ response });
+    this.attentionResolvers.delete(attentionId);
+    return ack;
+  }
   snapshotInputs() {
     return [...this.inputs.values()].map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
   }
@@ -66,7 +138,7 @@ export class TaskCoordinator {
     if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
     const executionText = prepare ? prepare(text, images) : text;
     const supplement = this.busy;
-    const task = supplement ? this.task : { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null };
+    const task = supplement ? this.task : { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
     const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
       taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
@@ -143,6 +215,7 @@ export class TaskCoordinator {
 
   async drain(taskId) {
     try {
+      await this.adapter.beginTask?.(this.task.modelToApply);
       while (this.task.id === taskId && this.task.state !== "stopping") {
         const input = [...this.inputs.values()].find(i => i.taskId === taskId && pendingStates.has(i.state));
         if (!input) break;
@@ -177,6 +250,7 @@ export class TaskCoordinator {
     if (taskId && taskId !== this.task?.id) return { ok: false, code: "STALE_TASK" };
     if (!this.busy) return { ok: true, task: this.task };
     this.setTaskState("stopping");
+    for (const id of this.attentionResolvers.keys()) this.cancelAttention(id);
     this.adapter.clearQueue?.();
     await this.adapter.abort();
     this.adapter.clearQueue?.();

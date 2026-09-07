@@ -17,6 +17,7 @@ const TOOL_NAMES = [
   "combat_battle_context",
   "combat_turn_context",
   "combat_execute_turn",
+  "request_user_input",
 ];
 
 function buildHarness({ call, sendToRenderer = () => {} } = {}) {
@@ -103,6 +104,27 @@ test("attach keeps a session's own model by refusing the global default", () => 
     { providerId: "arcane-spark", modelId: "arcane-spark" },
   );
   assert.equal(initialModelRefForAttach(null, null), null);
+});
+
+test("model changes during a task are deferred until the next task begins", async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const models = [];
+  const host = new AgentHost({ sendToRenderer() {}, log() {} });
+  host.sessionManager = { getSessionId: () => "model-test", getSessionName: () => "test" };
+  host.modelRuntime = { getModel: (provider, id) => ({ provider, id, input: ["text"] }) };
+  host.session = { model: { provider: "p", id: "old" }, prompt: () => gate,
+    setModel: async model => { models.push(model.id); host.session.model = model; }, clearQueue() {} };
+  host.submitInput("first", [], "first");
+  const result = await host.setCurrentModel("p", "new");
+  assert.equal(result.deferred, true);
+  assert.deepEqual(models, []);
+  release(); await host.tasks.run;
+  assert.deepEqual(models, []);
+  host.submitInput("next", [], "next");
+  await host.tasks.run;
+  assert.deepEqual(models, ["new"]);
+  assert.equal(host.tasks.pendingModel, null);
 });
 
 test("sessionHasMessages reports whether the attached session already started", () => {
@@ -248,6 +270,12 @@ test("combat tool names and input schemas stay stable", () => {
         },
       },
       world_status: { type: "object", properties: {} },
+      request_user_input: {
+        type: "object", required: ["question"], properties: {
+          question: { type: "string", minLength: 1, maxLength: 12000 },
+          options: { type: "array", maxItems: 8, items: { type: "string", maxLength: 1000 } },
+        },
+      },
       combat_battle_context: { type: "object", properties: {} },
       combat_turn_context: { type: "object", properties: {} },
       combat_execute_turn: {
