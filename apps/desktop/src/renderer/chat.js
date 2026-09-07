@@ -1860,11 +1860,17 @@ async function refreshSessions() {
     body.appendChild(el("div", "s-activity"));
     const del = el("button", "s-del", "×");
     del.title = t("sessions.delete");
+    del.disabled = Boolean(s.deleting);
+    if (s.deleting) del.title = t("sessions.deleting");
     del.addEventListener("click", async (event) => {
       event.stopPropagation();
       if (!confirm(t("sessions.deleteConfirm", { name: sessionName }))) return;
       if (!sameModeContext(context)) return;
-      const result = await window.arcane.deleteSession(s.path, context);
+      del.disabled = true; del.title = t("sessions.deleting");
+      let result;
+      try { result = await window.arcane.deleteSession(s.path, context); }
+      catch (error) { result = { ok: false, error: error.message }; }
+      finally { del.disabled = false; del.title = t("sessions.delete"); }
       if (!result?.ok) {
         addStatus(t("sessions.deleteFailed", {
           error: result?.error ? fmtIpc(result.error) : t("common.unknown"),

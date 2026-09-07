@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { SessionRegistry } from "../src/main/conversations/session-registry.js";
 import { AgentHost } from "../src/main/agent-host.js";
 import { ModeHostController } from "../src/main/mode-host-controller.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import vm from "node:vm";
 
 function deferred() {
@@ -12,7 +14,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness() {
+function harness(root = null) {
   let count = 0;
   const created = [];
   const registry = new SessionRegistry({ createHost: () => {
@@ -20,17 +22,75 @@ function harness() {
     const host = new AgentHost({ sendToRenderer: e => events.push(e), log: () => {} });
     const gate = deferred();
     host.start = async ({ sessionPath } = {}) => {
-      const id = sessionPath ?? `session-${++count}`;
+      const name = `session-${++count}`;
+      const id = sessionPath ?? (root ? path.join(root, name) : name);
       host.sessionManager = { getSessionId: () => id, getSessionFile: () => id,
         getSessionName: () => "test" };
       host.session = { messages: [], prompt: () => gate.promise, abort: async () => gate.resolve(), dispose() {} };
     };
     host.listSessions = async () => [];
+    if (root) host.openSessionManager = () => {};
     created.push({ host, gate, events });
     return host;
   } });
   return { registry, created };
 }
+
+test("deletion blocks input and reopening, waits for stop, coalesces retries and preserves later selection", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-"));
+  const { registry, created } = harness(root);
+  const a = await registry.start(), file = a.describeCurrent().path;
+  writeFileSync(file, "history");
+  const run = a.prompt("work"), stopped = deferred(); let aborts = 0;
+  await new Promise(resolve => setImmediate(resolve));
+  a.session.abort = async () => { aborts++; await stopped.promise; created[0].gate.resolve(); };
+  const deleting = registry.deleteSession(file), again = registry.deleteSession(file);
+  assert.equal(a.submitInput("late", [], "late").code, "SESSION_DELETING");
+  await assert.rejects(registry.select(file), { code: "SESSION_DELETING" });
+  const b = await registry.select(null, true);
+  assert.equal(existsSync(file), true); assert.equal(a.busy, true);
+  stopped.resolve(); assert.equal((await deleting).ok, true); assert.equal((await again).ok, true); await run;
+  assert.equal(aborts, 1); assert.equal(existsSync(file), false); assert.equal(a.session, null);
+  assert.equal(registry.activeHost, b); assert.equal(registry.get(a.describeCurrent().id), undefined);
+  await assert.rejects(registry.select(file), { code: "SESSION_DELETING" });
+});
+
+test("deletion during historical loading retires the uninstalled host before removing the file", async () => {
+  const file = path.join(mkdtempSync(path.join(os.tmpdir(), "arcane-delete-load-")), "history.jsonl");
+  writeFileSync(file, "history");
+  const gate = deferred(); let disposed = 0;
+  const registry = new SessionRegistry({ createHost: () => ({
+    start: () => gate.promise, describeCurrent: () => ({ id: "loaded", path: file }), dispose: () => { disposed++; },
+  }) });
+  registry.activeHost = { openSessionManager() {} };
+  const loading = registry.select(file).catch(error => error.code);
+  const deleting = registry.deleteSession(file);
+  assert.equal(existsSync(file), true); gate.resolve();
+  assert.equal(await loading, "SESSION_DELETING"); assert.equal((await deleting).ok, true);
+  assert.equal(disposed, 1); assert.equal(registry.allHosts().length, 0); assert.equal(existsSync(file), false);
+});
+
+test("failed filesystem deletion reopens admission and preserves the host", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-failure-"));
+  const { registry } = harness(root);
+  const a = await registry.select(root);
+  const result = await registry.deleteSession(root); // unlink cannot remove a directory
+  assert.equal(result.ok, false); assert.equal(a.deleting, false);
+  assert.equal(await registry.select(root), a); assert.ok(a.session); assert.equal(existsSync(root), true);
+});
+
+test("replacement startup failure cannot report an already committed deletion as failed", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-replacement-"));
+  const { registry } = harness(root);
+  const a = await registry.start(), file = a.describeCurrent().path;
+  writeFileSync(file, "history");
+  const create = registry.createHost;
+  registry.createHost = () => ({ start: async () => { throw new Error("startup failed"); }, dispose() {} });
+  const result = await registry.deleteSession(file);
+  assert.equal(result.ok, true); assert.equal(result.warning, "startup failed");
+  assert.equal(existsSync(file), false); assert.equal(registry.activeHost, null);
+  registry.createHost = create; assert.ok(await registry.start());
+});
 
 test("same-mode A to B to A retains running host; stopping A does not stop B", async () => {
   const { registry, created } = harness();

@@ -773,6 +773,7 @@ export class AgentHost {
   }
 
   submitInput(text, images, commandId, prepare = null) {
+    if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
     if (!this.session) throw new Error("agent session not started");
     const result = this.taskCoordinator().submit({ commandId, text, images, prepare });
     if (result.ok && !result.duplicate && !this.sessionManager?.getSessionName()) {
@@ -808,6 +809,7 @@ export class AgentHost {
   }
 
   dispose() {
+    this.deleting = true;
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.session?.dispose();

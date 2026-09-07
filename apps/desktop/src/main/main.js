@@ -894,8 +894,10 @@ app.whenReady().then(async () => {
     if (!list.some((s) => s.path === sessionPath)) {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
-    const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
-    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    try {
+      const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
+      return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_OPEN_FAILED", error: error.message }; }
   });
   ipcMain.handle("sessions:delete", async (_event, request) => {
     const validated = await validateModeRequest(request);
