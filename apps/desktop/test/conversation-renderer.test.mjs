@@ -11,6 +11,79 @@ function stateClasses() {
   return context.ArcaneConversationState;
 }
 
+test("payload caches evict least recently read entries and oversized disposable payloads", () => {
+  const { BoundedCache } = stateClasses();
+  const cache = new BoundedCache({ maxEntries: 2, maxWeight: 500 });
+  cache.set("a", { text: "a" }); cache.set("b", { text: "b" }); cache.get("a");
+  cache.set("c", { text: "c" });
+  assert.equal(cache.has("a"), true); assert.equal(cache.has("b"), false);
+  cache.set("large", { text: "x".repeat(1000) });
+  assert.equal(cache.has("large"), false); assert.ok(cache.weight <= 500);
+  cache.clear(); assert.equal(cache.weight, 0); assert.equal(cache.size, 0);
+});
+
+test("evicted event bodies require a fresh snapshot and cannot forget retired runtime identity", () => {
+  const { EventInbox } = stateClasses();
+  const inbox = new EventInbox(5, { maxSessions: 1, maxWeight: 1000 });
+  inbox.record({ sessionId: "A", runtimeEpoch: "old", seq: 7, text: "a" });
+  inbox.record({ sessionId: "B", runtimeEpoch: "b", seq: 1 });
+  assert.equal(inbox.sessions.has("A"), false);
+  assert.equal(inbox.after("A", "old", 6), null);
+  assert.equal(inbox.after("A", "old", 7).length, 0);
+  assert.equal(inbox.acceptSnapshot("A", "new", "old"), true);
+  inbox.record({ sessionId: "B", runtimeEpoch: "b", seq: 2 });
+  assert.equal(inbox.record({ sessionId: "A", runtimeEpoch: "old", seq: 8 }), false);
+  assert.equal(inbox.epoch("A"), "new");
+  inbox.record({ sessionId: "A", runtimeEpoch: "new", seq: 1, text: "x".repeat(1000) });
+  assert.equal(inbox.sessions.has("A"), false); assert.ok(inbox.weight <= 1000);
+  assert.equal(inbox.after("A", "new", 0), null);
+  assert.equal(inbox.after("A", "new", 1).length, 0);
+});
+
+test("failed draft writes remain pinned under cache pressure", async () => {
+  const { WorkspaceStore } = stateClasses();
+  const store = new WorkspaceStore(null, { maxEntries: 1, maxWeight: 100 });
+  await assert.rejects(store.save("A", { draft: "a".repeat(100), images: [{ data: "image" }] }));
+  await assert.rejects(store.save("B", { draft: "b" }));
+  store.cache.prune();
+  assert.equal(store.cache.size, 2); assert.equal(store.dirty.size, 2);
+  assert.equal((await store.load("A")).images[0].data, "image");
+});
+
+test("an older successful transaction cannot unpin a newer failed draft", async () => {
+  const { WorkspaceStore } = stateClasses();
+  const transactions = [];
+  const store = new WorkspaceStore(null, { maxEntries: 0 });
+  store.open = async () => ({ transaction() {
+    const tx = { objectStore: () => ({ get: () => ({}), put() {} }) };
+    transactions.push(tx); return tx;
+  } });
+  const older = store.save("A", { draft: "old" });
+  const newer = store.save("A", { draft: "new" });
+  await new Promise(resolve => setImmediate(resolve));
+  transactions[0].oncomplete(); await older;
+  assert.equal(store.dirty.has("A"), true); assert.equal((await store.load("A")).draft, "new");
+  const rejection = assert.rejects(newer);
+  transactions[1].onerror(); await rejection;
+  store.cache.prune(); assert.equal((await store.load("A")).draft, "new");
+});
+
+test("an old disk read cannot resurrect state after a newer write was saved and evicted", async () => {
+  const { WorkspaceStore } = stateClasses();
+  const reads = [];
+  const store = new WorkspaceStore(null, { maxEntries: 0 });
+  store.open = async () => ({ transaction: () => ({ objectStore: () => ({ get() { const request = {}; reads.push(request); return request; } }) }) });
+  const pending = store.load("A");
+  await new Promise(resolve => setImmediate(resolve));
+  store.revisions.set("A", 1); store.cache.set("A", { draft: "new" });
+  assert.equal(store.cache.has("A"), false);
+  reads[0].result = { draft: "old" }; reads[0].onsuccess();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads.length, 2);
+  reads[1].result = { draft: "new" }; reads[1].onsuccess();
+  assert.equal((await pending).draft, "new");
+});
+
 test("fresh snapshots replace a reclaimed runtime even without a new event; late old events stay retired", () => {
   const { EventInbox } = stateClasses();
   const inbox = new EventInbox();

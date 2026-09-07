@@ -107,7 +107,26 @@ app.whenReady().then(async () => {
     release(); await evaluate('new Promise(resolve => setTimeout(resolve, 80))');
     assert.equal(await evaluate('selectedSessionId'), bId);
     assert.equal(await evaluate('messages.textContent.includes("Message prep")'), false);
-    console.log("PASS Electron history: bounded pages, native history, anchor restore, draft/image isolation, background output, failure retry, reload and stale page rejection");
+    await evaluate(`(async () => {
+      for (let i = 0; i < 40; i++) {
+        snapshotCache.set("pressure-" + i, { history: [{ text: "cached" }] });
+        eventInbox.record({ sessionId: "pressure-" + i, runtimeEpoch: "pressure", seq: 1, text: "progress" });
+        await workspaceStore.save("pressure-" + i, { draft: "draft-" + i, images: [{data:"image-" + i}], anchor:{key:"anchor-" + i,offset:5} });
+      }
+    })()`);
+    assert.equal(await evaluate(`snapshotCache.has(${JSON.stringify(aId)}) || eventInbox.sessions.has(${JSON.stringify(aId)}) || workspaceStore.cache.has(${JSON.stringify(aId)})`), false);
+    assert.ok(await evaluate('snapshotCache.size <= 8 && eventInbox.sessions.size <= 32 && workspaceStore.cache.size <= 16'));
+    const restored = await evaluate('workspaceStore.load("pressure-0")');
+    assert.equal(restored.draft, "draft-0"); assert.equal(restored.images[0].data, "image-0"); assert.equal(restored.anchor.key, "anchor-0");
+    await evaluate('switchMode("prep")');
+    await until(`selectedSessionId === ${JSON.stringify(aId)} && activityReady && historyPage.hasNewer && input.value === "long history draft"`);
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    await evaluate('showHistoryPage({}, "latest")');
+    await until('activityReady && !historyPage.hasNewer');
+    const installs = await evaluate('snapshotRequest');
+    hosts.prep.emit({ type: "session_switched", ...hosts.prep.currentPayload() });
+    await until(`activityReady && snapshotRequest === ${installs + 1} && viewSeq === ${hosts.prep.projection.seq}`);
+    console.log("PASS Electron history: bounded pages and caches, durable eviction/reload, anchors, drafts/images, background output, retry and stale page rejection");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

@@ -148,7 +148,7 @@ let currentMode = "prep";
 let currentModeGeneration = 0;
 let selectedSessionId = null;
 let selectedTaskId = null;
-const { EventInbox, WorkspaceStore } = /** @type {any} */ (globalThis).ArcaneConversationState;
+const { EventInbox, WorkspaceStore, BoundedCache } = /** @type {any} */ (globalThis).ArcaneConversationState;
 const eventInbox = new EventInbox();
 const workspaceStore = new WorkspaceStore();
 let viewSeq = 0;
@@ -160,7 +160,7 @@ let draftRevision = 0;
 let navigationRequest = 0;
 const workspaceReady = new Set();
 const syncingSessions = new Set();
-const snapshotCache = new Map();
+const snapshotCache = new BoundedCache();
 const deletedSessions = new Set();
 function forgetSession(id) {
   if (!id) return;
@@ -174,6 +174,7 @@ function forgetSession(id) {
   if (selectedSessionId === id) {
     snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
     historyPage = null; pendingHistoryAnchor = null; historyRetry = null; historyPageRequest++;
+    workspaceStore.setActive(null);
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
     document.getElementById("conversation-title").textContent = "";
@@ -275,6 +276,7 @@ async function installSnapshot(payload, pageIntent = null) {
   restoringView = true;
   syncIndicator.hidden = true;
   selectedSessionId = id;
+  workspaceStore.setActive(id);
   selectedTaskId = payload.task?.id ?? null;
   document.getElementById("conversation-title").textContent = payload.session.name || "";
   showTaskState(payload.task);
@@ -282,7 +284,7 @@ async function installSnapshot(payload, pageIntent = null) {
   viewSeq = payload.inFlight?.seq ?? 0;
   viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
   if (payload.mode) applyModeUi(payload.mode, payload.cwd);
-  if (changed) { input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip(); }
+  if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
   const revision = draftRevision;
   setTimeout(() => {
     if (token === snapshotRequest && restoringView) { syncIndicator.textContent = t("chat.syncing"); syncIndicator.hidden = false; }
@@ -377,6 +379,7 @@ async function installSnapshot(payload, pageIntent = null) {
   if (restoreError) syncIndicator.textContent = t("chat.historyFailed");
   else if (anchorUnavailable) syncIndicator.textContent = t("chat.historyMoved");
   activityView?.render();
+  pruneOutboxes();
   if (changed) refreshSessions();
 }
 
@@ -1607,6 +1610,12 @@ function autosize() {
 }
 
 const outboxBySession = new Map();
+function pruneOutboxes() {
+  for (const [id, box] of outboxBySession) {
+    if (outboxBySession.size <= 16) break;
+    if (id !== selectedSessionId && !box.size) outboxBySession.delete(id);
+  }
+}
 const inputStateKeys = {
   sending: "chat.input.sending", accepted: "chat.input.accepted", queued: "chat.input.queued",
   dispatching: "chat.input.dispatching", context: "chat.input.context", consumed: "chat.input.consumed",
@@ -1671,6 +1680,7 @@ async function sendSubmission(submission) {
       await workspaceStore.save(id, saved);
     } catch { /* The in-memory outbox still owns the retry command. */ }
   }
+  pruneOutboxes();
 }
 
 async function submit() {

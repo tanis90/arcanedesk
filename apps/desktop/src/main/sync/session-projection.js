@@ -21,6 +21,10 @@ export class SessionProjection {
     // Own the data before applying it: callers and IPC recipients cannot mutate state.
     const event = structuredClone({ ...payload, sessionId: this.sessionId,
       runtimeEpoch: this.runtimeEpoch, seq: ++this.seq });
+    // The switch envelope is itself the snapshot boundary, not an event to replay.
+    if (event.type === "session_switched" && event.inFlight) {
+      event.inFlight.runtimeEpoch = event.runtimeEpoch; event.inFlight.seq = event.seq;
+    }
     switch (event.type) {
       case "agent_start":
         this.messages.clear();

@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 import { SessionProjection } from "../src/main/sync/session-projection.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
+test("a session switch snapshot includes its own envelope and cannot replay itself", () => {
+  const p = new SessionProjection({ sessionId: "A" });
+  p.publish({ type: "message_delta", key: "draft", text: "half" });
+  const before = p.snapshot();
+  const event = p.publish({ type: "session_switched", inFlight: before, history: [] });
+  assert.equal(before.seq, 1);
+  assert.equal(event.inFlight.seq, event.seq);
+  assert.deepEqual(p.sync({ runtimeEpoch: event.inFlight.runtimeEpoch, afterSeq: event.inFlight.seq }).events, []);
+  assert.equal(event.inFlight.streaming[0].text, "half");
+});
+
 test("a reloaded projection in the same process cannot reuse the previous event cursor", () => {
   const old = new SessionProjection({ sessionId: "A" });
   old.publish({ type: "message", key: "old", text: "old result" });
