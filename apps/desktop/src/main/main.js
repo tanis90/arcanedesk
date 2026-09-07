@@ -996,15 +996,15 @@ app.whenReady().then(async () => {
     return { model, missingKey: validated.context.host.missingApiKeyForCurrentModel() };
   });
 
-  // 全局默认只落到"尚未开始对话"的会话(两模式的空会话);进行中/有历史的
-  // 会话各自持有模型,绝不被动切换 —— 模型按会话生效。
-  async function applyDefaultModelToEmptySessions(target) {
+  // Saving credentials can activate a model already selected by a session;
+  // it cannot assign the global default to an existing empty conversation.
+  async function activateSelectedModels(providerId) {
     const results = await Promise.all(
-      allSessionHosts().map(async (host) =>
-        host.sessionHasMessages()
-          ? { ok: true, skipped: true }
-          : host.setCurrentModel(target.providerId, target.modelId)
-      ),
+      allSessionHosts().map(async (host) => {
+        const selected = host.currentModelRef();
+        if (host.busy || selected?.providerId !== providerId) return { ok: true, skipped: true };
+        return host.setCurrentModel(selected.providerId, selected.modelId);
+      }),
     );
     return results.find((result) => !result?.ok) ?? { ok: true };
   }
@@ -1033,14 +1033,8 @@ app.whenReady().then(async () => {
         if (host.modelRuntime) providerStore.applyToRuntime(host.modelRuntime);
       }
       const providerId = String(input?.id ?? "").trim();
-      const effective = providerStore.effectiveModel();
-      if (
-        effective?.providerId === providerId &&
-        !providerStore.missingApiKeyForModel(effective)
-      ) {
-        const activated = await applyDefaultModelToEmptySessions(effective);
-        if (!activated.ok) return { ...activated, saved: true };
-      }
+      const activated = await activateSelectedModels(providerId);
+      if (!activated.ok) return { ...activated, saved: true };
     }
     return result;
   });
@@ -1061,8 +1055,6 @@ app.whenReady().then(async () => {
     const selection = pid && mid ? { providerId: pid, modelId: mid } : null;
     const target = providerStore.modelForSelection(selection);
     if (!target) return { ok: false, error: "no default model available" };
-    const applied = await applyDefaultModelToEmptySessions(target);
-    if (!applied.ok) return applied;
     providerStore.setDefaultModel(pid, mid);
     return { ok: true, model: target };
   });

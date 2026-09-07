@@ -1,6 +1,6 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
 const { app, dialog, Tray } = require("electron");
-const { mkdtempSync, readFileSync, writeFileSync, existsSync } = require("node:fs");
+const { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
 const http = require("node:http");
@@ -8,6 +8,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const longTool = process.argv.includes("--long-tool");
+const contextIsolation = process.argv.includes("--context-isolation");
 const scratch = process.argv.find(arg => arg.startsWith("--smoke-root="))?.slice("--smoke-root=".length)
   ?? mkdtempSync(path.join(tmpdir(), "arcane-production-smoke-"));
 app.setPath("userData", scratch);
@@ -22,6 +23,8 @@ Object.assign(process.env, {
   ARCANE_SKILLS_UPDATE_BASE_URL: "http://127.0.0.1:1", ARCANE_TELEMETRY_DISABLED: "1",
 });
 let window, tray, menu, decision = 0, prompts = [], finalExit = false, hostB;
+let pickedDirectory = null;
+dialog.showOpenDialog = async () => ({ canceled: !pickedDirectory, filePaths: pickedDirectory ? [pickedDirectory] : [] });
 const setContextMenu = Tray.prototype.setContextMenu;
 Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; return setContextMenu.call(this, value); };
 dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
@@ -32,6 +35,7 @@ app.on("browser-window-created", (_event, value) => {
 });
 const streams = new Map();
 const requests = [];
+const requestedModels = [];
 const toolStarted = path.join(scratch, "tool-started.txt");
 const toolRelease = path.join(scratch, "tool-release.txt");
 const psLiteral = value => "'" + value.replaceAll("'", "''") + "'";
@@ -44,6 +48,7 @@ const server = http.createServer(async (req, res) => {
   const tag = JSON.stringify(user?.content).match(/production-([ABC])/)?.[1];
   if (!tag) { res.writeHead(400); res.end("Unknown smoke input"); return; }
   requests.push(tag);
+  requestedModels.push(data.model);
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   const write = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: `smoke-${tag}`, object: "chat.completion.chunk", created: 1, model: "arcane-spark", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
   const entry = { closed: false, finish() { write({ content: ` ${tag} final result` }); write({}, "stop"); res.end("data: [DONE]\n\n"); } };
@@ -74,6 +79,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (contextIsolation) {
+      assert.deepEqual(requests, ["A", "B", "C"]);
+      assert.deepEqual(requestedModels, ["arcane-spark", "model-b", "model-next"]);
+      console.log("PASS production context: isolated directories/models, default only for new sessions and deferred task model");
+      return;
+    }
     if (longTool) {
       assert.equal(hostB.tasks.task.state, "completed");
       assert.equal(hostB.busy, false);
@@ -122,19 +133,76 @@ app.on("will-quit", () => {
     console.log("PASS crash recovery: durable result, interrupted first-turn task, no automatic replay and explicit continuation");
     app.exit(0); return;
   }
+  if (contextIsolation) {
+    pickedDirectory = path.join(scratch, "workspace-A"); mkdirSync(pickedDirectory);
+    assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
+    await ui('workspaceReady.has(selectedSessionId) && !restoringView');
+    const provider = { id: "context-models", name: "Context fixture", api: "openai-completions",
+      baseUrl: process.env.ARCANE_SPARK_BASE_URL, apiKey: "fixture-only", models: [{ id: "model-b" }, { id: "model-next" }] };
+    assert.equal((await evaluate(`window.arcane.saveProvider(${JSON.stringify(provider)})`)).ok, true);
+  }
   const idA = await evaluate("selectedSessionId");
   await evaluate('input.value = "production-A"; submit()');
   await ui('busy && messages.textContent.includes("A partial")');
   const hostA = globalThis.__arcaneHosts.prep.get(idA);
   assert.ok(hostA.describeCurrent().path.startsWith(scratch), "session storage is isolated");
-  await evaluate('document.getElementById("session-new").click()');
+  if (contextIsolation) {
+    pickedDirectory = path.join(scratch, "workspace-B"); mkdirSync(pickedDirectory);
+    assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
+  } else await evaluate('document.getElementById("session-new").click()');
   await ui(`selectedSessionId !== ${JSON.stringify(idA)} && workspaceReady.has(selectedSessionId)`);
   const idB = await evaluate("selectedSessionId");
   assert.ok(hostA.busy && !streams.get("A").closed, "navigation keeps A streaming");
+  if (contextIsolation) assert.equal((await evaluate('window.arcane.setChatModel(modeContext(), "context-models", "model-b")')).ok, true);
   await evaluate('input.value = "production-B"; submit()');
   await ui('busy && messages.textContent.includes("B partial")');
   hostB = globalThis.__arcaneHosts.prep.get(idB);
   assert.ok(hostA.busy && hostB.busy);
+  if (contextIsolation) {
+    assert.equal(hostA.cwd(), path.join(scratch, "workspace-A"));
+    assert.equal(hostB.cwd(), path.join(scratch, "workspace-B"));
+    assert.equal(hostA.sessionManager.getCwd(), hostA.cwd());
+    assert.equal(hostB.sessionManager.getCwd(), hostB.cwd());
+    await evaluate('document.getElementById("session-new").click()');
+    await ui(`selectedSessionId !== ${JSON.stringify(idB)} && workspaceReady.has(selectedSessionId)`);
+    const emptyHost = globalThis.__arcaneHosts.prep.activeHost;
+    assert.equal((await evaluate('window.arcane.setChatModel(modeContext(), "context-models", "model-b")')).ok, true);
+    assert.equal((await evaluate('window.arcane.setDefaultModel("context-models", "model-next")')).ok, true);
+    assert.equal(emptyHost.currentModelRef().modelId, "model-b", "changing default cannot overwrite an existing empty session's model");
+    assert.equal(hostA.currentModelRef().modelId, "arcane-spark");
+    assert.equal(hostB.currentModelRef().modelId, "model-b");
+    const pendingProvider = { id: "context-pending", api: "openai-completions", baseUrl: process.env.ARCANE_SPARK_BASE_URL, models: [{ id: "pending-model" }] };
+    assert.equal((await evaluate(`window.arcane.saveProvider(${JSON.stringify(pendingProvider)})`)).ok, true);
+    const pendingChoice = await evaluate('window.arcane.setChatModel(modeContext(), "context-pending", "pending-model")');
+    assert.ok(pendingChoice.ok && pendingChoice.pendingKey);
+    assert.notEqual(emptyHost.session.model?.provider, "context-pending");
+    assert.equal((await evaluate(`window.arcane.saveProvider(${JSON.stringify({ ...pendingProvider, apiKey: "fixture-only" })})`)).ok, true);
+    assert.equal(emptyHost.session.model.provider, "context-pending", "saving a non-default provider key activates the session that already chose it");
+    assert.equal(hostA.currentModelRef().modelId, "arcane-spark");
+    assert.equal(hostB.currentModelRef().modelId, "model-b");
+    await evaluate('document.getElementById("session-new").click()');
+    await ui(`selectedSessionId !== ${JSON.stringify(emptyHost.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
+    assert.equal(globalThis.__arcaneHosts.prep.activeHost.currentModelRef().modelId, "model-next", "new sessions take the new default");
+    await openHost(hostB);
+    const deferred = await evaluate('window.arcane.setChatModel(modeContext(), "context-models", "model-next")');
+    assert.ok(deferred.ok && deferred.deferred);
+    assert.equal(hostB.currentModelRef().modelId, "model-b");
+    await ui('!document.getElementById("conversation-model-pending").hidden');
+    streams.get("B").finish();
+    await ui('!busy && messages.textContent.includes("B final result")');
+    await evaluate('input.value = "production-C"; submit()');
+    await ui('busy && messages.textContent.includes("C partial")');
+    assert.equal(hostB.currentModelRef().modelId, "model-next");
+    assert.equal(hostB.cwd(), path.join(scratch, "workspace-B"));
+    assert.ok(hostA.busy && !streams.get("A").closed);
+    await openHost(hostA);
+    await ui(`selectedSessionId === ${JSON.stringify(idA)} && busy`);
+    assert.equal(hostA.currentModelRef().modelId, "arcane-spark");
+    assert.equal(hostA.cwd(), path.join(scratch, "workspace-A"));
+    streams.get("A").finish(); streams.get("C").finish();
+    await until(() => !hostA.busy && !hostB.busy, "both independent contexts complete");
+    finalExit = true; app.quit(); return;
+  }
   if (longTool) {
     await until(() => existsSync(toolStarted), "real PowerShell process entered its wait");
     await ui('toolCards.get("long-tool")?.card.classList.contains("running")');
