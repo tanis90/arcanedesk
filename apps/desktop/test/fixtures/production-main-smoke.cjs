@@ -1,5 +1,5 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
-const { app, dialog, Tray } = require("electron");
+const { app, dialog, Tray, ipcMain } = require("electron");
 const { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
@@ -10,6 +10,21 @@ const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.s
 const longTool = process.argv.includes("--long-tool");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
+const navigationScenario = process.argv.includes("--navigation-scenario");
+let delayedReply = null;
+if (navigationScenario) {
+  const handle = ipcMain.handle.bind(ipcMain);
+  ipcMain.handle = (channel, listener) => handle(channel, async (...args) => {
+    const result = await listener(...args);
+    const gate = delayedReply;
+    if (gate && channel === gate.channel && result.session?.id === gate.sessionId && !gate.captured) {
+      gate.captured = structuredClone(result);
+      await new Promise(resolve => { gate.release = resolve; });
+      gate.delivered = true;
+    }
+    return result;
+  });
+}
 const scratch = process.argv.find(arg => arg.startsWith("--smoke-root="))?.slice("--smoke-root=".length)
   ?? mkdtempSync(path.join(tmpdir(), "arcane-production-smoke-"));
 app.setPath("userData", scratch);
@@ -89,6 +104,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (navigationScenario) {
+      assert.deepEqual(requests, ["A", "B"]);
+      assert.equal(hostB.tasks.task.state, "completed");
+      console.log("PASS production navigation: late replies, snapshot-terminal boundary and session isolation");
+      return;
+    }
     if (retryScenario) {
       assert.equal(requests.filter(tag => tag === "A").length, 2);
       assert.equal(requests.filter(tag => tag === "B").length, 1);
@@ -125,6 +146,52 @@ app.on("will-quit", () => {
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (navigationScenario) {
+    const a = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('input.value = "production-A"; submit()');
+    await ui('busy && messages.textContent.includes("A partial")');
+    await evaluate('document.getElementById("session-new").click()');
+    await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('input.value = "production-B"; submit()');
+    await ui('busy && messages.textContent.includes("B partial")');
+    await evaluate('input.value = "B draft"; saveWorkspace()');
+    await openHost(a);
+    await ui('busy && messages.textContent.includes("A partial")');
+    await evaluate('input.value = "A draft"; saveWorkspace(); refreshSessions()');
+    const clickSession = host => evaluate(`sessionList.querySelector('[data-session-id="${host.describeCurrent().id}"] .s-body').click()`);
+    await ui(`!!sessionList.querySelector('[data-session-id="${hostB.describeCurrent().id}"]')`);
+    const gate = delayedReply = { channel: "sessions:open", sessionId: hostB.describeCurrent().id };
+    await clickSession(hostB);
+    await until(() => gate.captured, "B response captured after real IPC handler");
+    await ui(`selectedSessionId === ${JSON.stringify(hostB.describeCurrent().id)} && input.value === "B draft"`);
+    await clickSession(a);
+    await ui(`selectedSessionId === ${JSON.stringify(a.describeCurrent().id)} && input.value === "A draft"`);
+    gate.release();
+    await until(() => gate.delivered, "late B reply delivered");
+    await sleep(200);
+    assert.equal(await evaluate('selectedSessionId'), a.describeCurrent().id);
+    assert.equal(globalThis.__arcaneHosts.prep.activeHost, a);
+    assert.equal(await evaluate('messages.textContent.includes("B partial")'), false);
+    const boundary = delayedReply = { channel: "sessions:snapshot", sessionId: a.describeCurrent().id };
+    await evaluate('globalThis.navigationSnapshotSettled = false; void resyncSelected().finally(() => { globalThis.navigationSnapshotSettled = true; })');
+    await until(() => boundary.captured, "running snapshot captured");
+    assert.equal(boundary.captured.task.state, "running");
+    streams.get("A").finish();
+    await until(() => a.tasks.task.state === "completed", "A ends while old snapshot is pending");
+    await ui('!busy && messages.textContent.includes("A final result")');
+    boundary.release();
+    await until(() => boundary.delivered, "old running snapshot delivered after terminal event");
+    await ui('globalThis.navigationSnapshotSettled && !busy && !restoringView && messages.textContent.includes("A final result")');
+    assert.equal(await evaluate('input.value'), "A draft");
+    assert.equal(await evaluate('messages.textContent.split("A final result").length - 1'), 1);
+    delayedReply = null;
+    await openHost(hostB);
+    await ui('busy && input.value === "B draft" && messages.textContent.includes("B partial")');
+    streams.get("B").finish();
+    await ui('!busy && messages.textContent.includes("B final result")');
+    finalExit = true; app.quit(); return;
+  }
   if (retryScenario) {
     const a = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('input.value = "production-A"; submit()');

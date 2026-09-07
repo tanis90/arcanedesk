@@ -2157,11 +2157,12 @@ async function refreshSessions() {
     item.append(body, del);
     item.addEventListener("click", async () => {
       setDrawer(false);
-      if (!s.active && sameModeContext(context)) {
+      if (s.id !== selectedSessionId && context.mode === currentMode && context.generation === currentModeGeneration) {
+        const selectionContext = modeContext();
         const navigation = ++navigationRequest;
         const cached = snapshotCache.get(s.id);
         if (cached) void installSnapshot(cached, null, true);
-        const result = await window.arcane.openSession(s.path, context);
+        const result = await window.arcane.openSession(s.path, selectionContext);
         if (navigation !== navigationRequest) return;
         if (result?.ok) { await installSnapshot(result); refreshSessions(); }
         if (!result?.ok) {
