@@ -234,7 +234,7 @@ export class TaskCoordinator {
       let input = [...this.inputs.values()].find(i => i.taskId === this.task.id && i.state === "queued" && i.expandedText === text);
       if (!input && this.dispatching && this.dispatching.state === "dispatching") input = this.dispatching;
       if (input) {
-        input.messageKey = `user:${event.message.timestamp}`;
+        input.messageKey = event.message.arcaneMessageKey ?? `user:${event.message.timestamp}`;
         this.setInputState(input, "context");
       }
     }

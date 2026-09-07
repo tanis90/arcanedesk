@@ -6,12 +6,13 @@ import os from "node:os";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { TaskCoordinator } from "../src/main/tasks/task-coordinator.js";
 import { ExecutionScheduler } from "../src/main/scheduling/execution-scheduler.js";
+import { AgentHost } from "../src/main/agent-host.js";
 
 // Use the exact pi-ai copy bundled with the installed SDK, not a second version.
 const { AssistantMessageEventStream } = await import(new URL("../node_modules/@earendil-works/pi-ai/dist/index.js", import.meta.resolve("@earendil-works/pi-coding-agent")));
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 
-async function sdkHarness({ ask = false, scheduler = null, marker = false } = {}) {
+async function sdkHarness({ ask = false, scheduler = null, marker = false, persistentIdentity = false } = {}) {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "arcane-sdk-task-"));
   const first = deferred(); const release = deferred(); const calls = [];
   let coordinator;
@@ -24,7 +25,7 @@ async function sdkHarness({ ask = false, scheduler = null, marker = false } = {}
       const stream = new AssistantMessageEventStream();
       const index = calls.push(context.messages);
       const message = { role: "assistant", content: [{ type: "text", text: "test answer" }],
-        api: model.api, provider: model.provider, model: model.id, timestamp: Date.now(), stopReason: "stop",
+        api: model.api, provider: model.provider, model: model.id, timestamp: persistentIdentity ? 42 : Date.now(), stopReason: "stop",
         usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
       if (ask && index === 1) {
@@ -53,7 +54,8 @@ async function sdkHarness({ ask = false, scheduler = null, marker = false } = {}
   const loader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
   await loader.reload();
-  const { session } = await createAgentSession({ cwd, agentDir: cwd, sessionManager: SessionManager.inMemory(cwd),
+  const sessionManager = persistentIdentity ? SessionManager.create(cwd, path.join(cwd, "sessions")) : SessionManager.inMemory(cwd);
+  const { session } = await createAgentSession({ cwd, agentDir: cwd, sessionManager,
     settingsManager, resourceLoader: loader, modelRuntime: runtime, model: runtime.getModel("arcane-test", "test"),
     tools: ask ? ["request_user_input", ...(marker ? ["marker"] : [])] : [],
     customTools: ask ? [{ name: "request_user_input", label: "Ask", description: "Ask a question",
@@ -68,9 +70,34 @@ async function sdkHarness({ ask = false, scheduler = null, marker = false } = {}
     clearQueue: () => session.clearQueue(), isStreaming: () => session.isStreaming,
     abort: () => session.abort(),
   } });
-  session.subscribe(event => coordinator.observe(event));
-  return { session, coordinator, first, release, calls, markers };
+  const events = [];
+  const host = persistentIdentity ? new AgentHost({ sendToRenderer: event => events.push(event), log() {} }) : null;
+  if (host) { host.session = session; host.sessionManager = sessionManager; host.tasks = coordinator; }
+  session.subscribe(event => host ? host.forwardEvent(event) : coordinator.observe(event));
+  return { session, coordinator, first, release, calls, markers, host, events, sessionManager };
 }
+
+test("real SDK persists distinct same-timestamp message identities and input receipts across reopen", { timeout: 15000 }, async () => {
+  const h = await sdkHarness({ persistentIdentity: true });
+  try {
+    h.coordinator.submit({ commandId: "first", text: "first input" });
+    await h.first.promise;
+    h.coordinator.submit({ commandId: "second", text: "second input" });
+    h.release.resolve(); await h.coordinator.run;
+    const before = h.host.buildHistory();
+    const assistant = before.filter(row => row.role === "assistant");
+    assert.equal(assistant.length, 2); assert.equal(assistant[0].ts, assistant[1].ts);
+    assert.notEqual(assistant[0].key, assistant[1].key);
+    const emitted = h.events.filter(event => event.type === "message");
+    assert.deepEqual(emitted.map(event => event.key), assistant.map(row => row.key));
+    assert.equal(new Set(before.map(row => row.key)).size, 4);
+    for (const input of h.coordinator.snapshotInputs()) assert.ok(before.some(row => row.key === input.messageKey && row.text === input.text));
+    const reopened = new AgentHost({ sendToRenderer() {}, log() {} });
+    reopened.sessionManager = SessionManager.open(h.sessionManager.getSessionFile());
+    reopened.session = { messages: [] }; // History is independent of current model context.
+    assert.deepEqual(reopened.buildHistory(), before);
+  } finally { await h.session.abort(); h.session.dispose(); }
+});
 
 test("real Pi releases capacity for questions and reacquires before any following tool or model call", { timeout: 15000 }, async () => {
   const scheduler = new ExecutionScheduler({ capacity: 1 });

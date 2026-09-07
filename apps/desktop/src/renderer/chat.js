@@ -236,7 +236,7 @@ async function installSnapshot(payload) {
   for (const attention of payload.attentions ?? []) renderAttention(attention);
   for (const approval of payload.approvals ?? []) addApprovalCard(approval);
   for (const item of payload.inputs ?? []) {
-    const historyNode = item.messageKey ? messages.querySelector('[data-item-key="' + CSS.escape(item.messageKey) + '"]') : null;
+    const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
     if (historyNode instanceof HTMLElement) {
       historyNode.dataset.commandId = item.commandId;
       updateInputReceipt(item.commandId, item.state);
@@ -279,13 +279,13 @@ async function installSnapshot(payload) {
   }
   followLatest = saved.followLatest !== false;
   for (const state of saved.expansions ?? []) {
-    const node = messages.querySelector('[data-item-key="' + CSS.escape(state.key) + '"]');
+    const node = messageNode(state.key);
     if (node instanceof HTMLDetailsElement) node.open = state.open;
     else node?.classList.toggle("open", state.open);
   }
   if (followLatest) scrollToEnd(true);
   else if (saved.anchor) {
-    const anchor = messages.querySelector('[data-item-key="' + CSS.escape(saved.anchor.key) + '"]');
+    const anchor = messageNode(saved.anchor.key);
     if (anchor) messages.scrollTop += anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset;
   }
   updateScrollButton();
@@ -1798,6 +1798,12 @@ function resetConversation() {
   setBusy(false);
 }
 
+function messageNode(key) {
+  const escaped = CSS.escape(key);
+  return messages.querySelector('[data-item-key="' + escaped + '"]')
+    ?? messages.querySelector('[data-legacy-key="' + escaped + '"]');
+}
+
 function renderHistory(entries, inFlight = {}, running = false) {
   resetConversation();
   const liveTools = new Map((inFlight.tools ?? []).map(tool => [tool.toolCallId, tool]));
@@ -1821,7 +1827,7 @@ function renderHistory(entries, inFlight = {}, running = false) {
     }
   }
   for (const entry of entries ?? []) {
-    const key = entry.role + ":" + entry.ts;
+    const key = entry.key ?? entry.role + ":" + entry.ts;
     if (entry.role === "user") {
       addMessage("user", entry.text, entry.images, key);
     } else if (entry.role === "assistant") {
@@ -1838,6 +1844,14 @@ function renderHistory(entries, inFlight = {}, running = false) {
   for (const draft of inFlight.streaming ?? []) {
     if (draft.thinking) thinkBlock(draft.key).body.textContent = draft.thinking;
     if (draft.text) streamBubble(draft.key).querySelector(".body").textContent = draft.text;
+  }
+  const legacyKeys = new Map((entries ?? []).filter(entry => entry.key && entry.legacyKey).map(entry => [entry.key, entry.legacyKey]));
+  for (const node of messages.querySelectorAll("[data-item-key]")) {
+    if (!(node instanceof HTMLElement)) continue;
+    const key = node.dataset.itemKey;
+    const prefix = key.startsWith("think:") ? "think:" : key.startsWith("work:") ? "work:" : "";
+    const legacy = legacyKeys.get(key.slice(prefix.length));
+    if (legacy) node.dataset.legacyKey = prefix + legacy;
   }
   if (!(entries?.length || inFlight.streaming?.length || inFlight.tools?.length)) showWelcome();
   setBusy(running);

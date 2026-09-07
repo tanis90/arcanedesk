@@ -142,10 +142,12 @@
       if (!container || !view.ready || container.querySelector(".unread-divider") || !this.boundary) return;
       const key = this.boundary.readKey || this.boundary.firstUnreadKey;
       if (!key) return;
-      let target = container.querySelector('[data-item-key="' + CSS.escape(key) + '"]');
+      const findKey = key => container.querySelector('[data-item-key="' + CSS.escape(key) + '"]')
+        ?? container.querySelector('[data-legacy-key="' + CSS.escape(key) + '"]');
+      let target = findKey(key);
       let after = Boolean(this.boundary.readKey);
       if (!target && this.boundary.firstUnreadKey) {
-        target = container.querySelector('[data-item-key="' + CSS.escape(this.boundary.firstUnreadKey) + '"]');
+        target = findKey(this.boundary.firstUnreadKey);
         after = false;
       }
       if (!target) return;

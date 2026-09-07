@@ -18,6 +18,7 @@ import { err, errorToIpc, I18nError } from "./i18n-error.mjs";
 import { claimSessionMode, isPathInside, readSessionMode, sessionDirForMode, SessionModeError } from "./session-mode.js";
 import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
+import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { InputJournal } from "./tasks/input-journal.js";
 
@@ -254,6 +255,7 @@ export class AgentHost {
     this.sessionManager = null;
     this.unsubscribe = null;
     this.projection = new SessionProjection();
+    this.messageIdentity = new MessageIdentity();
     this.tasks = null;
     this.taskStorageDir = taskStorageDir;
     this.approvals = new Map();
@@ -445,6 +447,7 @@ export class AgentHost {
     this.session = session;
     this.sessionManager = sessionManager;
     this.projection = new SessionProjection({ sessionId: sessionManager.getSessionId() });
+    this.messageIdentity = new MessageIdentity();
     this.tasks = null;
     this.taskCoordinator();
     this._lastMessageKey = null;
@@ -529,7 +532,14 @@ export class AgentHost {
   buildHistory() {
     if (!this.session) return [];
     const out = [];
-    for (const message of this.session.messages ?? []) {
+    // Model context drops older messages after compaction; the branch retains user history.
+    const branch = this.sessionManager?.getBranch?.();
+    const records = branch ? branch.filter(entry => entry.type === "message")
+      : (this.session.messages ?? []).map(message => ({ message }));
+    for (const record of records) {
+      const message = record.message;
+      const identity = { key: message.arcaneMessageKey ?? (record.id ? `entry:${record.id}` : messageKey(message)),
+        legacyKey: `${message.role}:${message.timestamp}` };
       if (message.role === "user") {
         const parts = Array.isArray(message.content) ? message.content : [];
         const text =
@@ -542,14 +552,14 @@ export class AgentHost {
         const images = parts
           .filter((part) => part?.type === "image" && part.data)
           .map((part) => ({ data: /** @type {any} */ (part).data, mimeType: /** @type {any} */ (part).mimeType ?? "image/png" }));
-        if (text.trim() || images.length > 0) out.push({ role: "user", text, images, ts: message.timestamp });
+        if (text.trim() || images.length > 0) out.push({ role: "user", text, images, ts: message.timestamp, ...identity });
       } else if (message.role === "assistant") {
         const text = extractText(message);
         const thinking = extractThinking(message);
         const toolCalls = (Array.isArray(message.content) ? message.content : [])
           .filter((part) => part?.type === "toolCall")
           .map((part) => ({ id: part.id, name: part.name, args: part.arguments, hasResult: false }));
-        if (text || thinking || toolCalls.length > 0) out.push({ role: "assistant", text, thinking, toolCalls, ts: message.timestamp });
+        if (text || thinking || toolCalls.length > 0) out.push({ role: "assistant", text, thinking, toolCalls, ts: message.timestamp, ...identity });
       } else if (message.role === "toolResult") {
         const text = (Array.isArray(message.content) ? message.content : [])
           .filter((part) => part?.type === "text")
@@ -905,6 +915,7 @@ export class AgentHost {
   // ---- events -> renderer ----
 
   forwardEvent(event) {
+    this.messageIdentity.observe(event);
     this.tasks?.observe(event);
     // 遥测适配器在 UI 转换、去重与 early return 之前消费原始 SDK 生命周期事件,
     // 只读元数据,不碰 extractText/event.args/event.result(§16.2);内部自吞错误。
@@ -932,7 +943,7 @@ export class AgentHost {
       case "message_end": {
         const message = event.message ?? {};
         if (message.role !== "assistant") return; // 用户消息已在本地回显,避免重复
-        const key = `${message.role}:${message.timestamp}`;
+        const key = messageKey(message);
         if (this._lastMessageKey === key) return; // turn_end 与 message_end 去重
         this._lastMessageKey = key;
         if (message.errorMessage) this._lastError = message.errorMessage;
@@ -960,7 +971,7 @@ export class AgentHost {
         const text = extractText(message);
         const thinking = extractThinking(message);
         if (!text && !thinking) return;
-        out = { type: "message_delta", key: `${message.role}:${message.timestamp}`, text, thinking };
+        out = { type: "message_delta", key: messageKey(message), text, thinking };
         break;
       }
       case "tool_execution_start":

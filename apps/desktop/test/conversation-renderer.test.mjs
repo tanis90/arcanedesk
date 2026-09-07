@@ -95,7 +95,7 @@ test("history restore preserves a running tool, marks missing results unknown an
   const handler = chatSource.slice(chatSource.indexOf("function renderHistory(entries"), chatSource.indexOf("let currentSessionRequest"));
   const context = vm.createContext({
     resetConversation() {}, showWelcome() {}, closeWorkBlock() {}, addMessage() {}, renderThinkingHistory() {},
-    setBusy() {}, t: key => key, toolCards: cards,
+    setBusy() {}, t: key => key, toolCards: cards, messages: { querySelectorAll: () => [] },
     ensureToolCard(id) {
       if (!cards.has(id)) cards.set(id, { startAt: 999, card: { classList: { remove() {} }, querySelector: () => ({ textContent: "" }) }, state: {} });
       return cards.get(id);

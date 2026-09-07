@@ -13,6 +13,7 @@ let question = null;
 let lastAnswer = null;
 let sendTestEvent = () => {};
 let epochA = "test";
+let migratedHistory = false;
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
@@ -22,7 +23,8 @@ function snapshot(mode) {
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
-      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])] : [],
+      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])].map(row => migratedHistory
+        ? { ...row, key: `entry:${row.role}-${row.ts}`, legacyKey: `${row.role}:${row.ts}` } : row) : [],
     inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
       tools: id === "A" ? [{ toolCallId: "tool-A", toolName: "bash", state: finished ? "succeeded" : "running", startedAt }] : [] } };
@@ -80,6 +82,7 @@ app.whenReady().then(async () => {
     await until('selectedSessionId === "B" && workspaceReady.has("B")');
     assert.equal(await evaluate('input.value'), "");
     await evaluate('input.value = "draft B"; input.dispatchEvent(new Event("input"));');
+    migratedHistory = true;
     await evaluate('switchMode("prep")');
     await until('selectedSessionId === "A" && input.value === "draft A"');
     assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("running")'), true);
@@ -87,8 +90,9 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('pendingImages.length'), 1);
     assert.equal(await evaluate('followLatest'), false);
     assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("open")'), false);
-    const restoredOffset = await evaluate(`messages.querySelector('[data-item-key="${anchor.key}"]').getBoundingClientRect().top - messages.getBoundingClientRect().top`);
+    const restoredOffset = await evaluate(`messageNode(${JSON.stringify(anchor.key)}).getBoundingClientRect().top - messages.getBoundingClientRect().top`);
     assert.ok(Math.abs(restoredOffset - anchor.offset) < 3, "reading anchor preserved");
+    assert.ok((await evaluate(`messageNode(${JSON.stringify(anchor.key)}).dataset.itemKey`)).includes("entry:"), "legacy anchor resolves to durable message identity");
     await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
     const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload();
