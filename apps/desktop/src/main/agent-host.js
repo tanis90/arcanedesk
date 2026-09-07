@@ -5,7 +5,7 @@
 //   数据层:world_status + combat_*(固定页面 runtime,Turn Protocol v2,四态)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -280,7 +280,16 @@ export class AgentHost {
   }
 
   createSessionManager() {
-    return SessionManager.create(this.cwd(), this.sessionDir());
+    const manager = SessionManager.create(this.cwd(), this.sessionDir());
+    claimSessionMode(manager, this.profile.mode);
+    // The SDK defers the first file until an assistant message finishes. Persist
+    // the identity before accepting work, so a crash during turn one is recoverable.
+    // Reopen through the public API to put the SDK in append mode (no private flags).
+    const file = manager.getSessionFile();
+    const fd = openSync(file, "wx");
+    try { writeFileSync(fd, [manager.getHeader(), ...manager.getEntries()].map(entry => JSON.stringify(entry)).join("\n") + "\n"); fsyncSync(fd); }
+    finally { closeSync(fd); }
+    return SessionManager.open(file, this.sessionDir());
   }
 
   openSessionManager(sessionPath) {

@@ -80,8 +80,8 @@ export function readSessionMode(sessionManager) {
 }
 
 /**
- * 新 SessionManager 在 Pi 首次 assistant 消息前尚未创建 JSONL；此时把 marker
- * 追加到内存树，首次落盘会与 header/消息写进同一个文件。已有文件必须自带
+ * 新 SessionManager 尚未创建 JSONL；此时把 marker 追加到内存树。
+ * AgentHost 创建时将 marker 与 header 一起持久化，再用 SDK 打开。已有文件必须自带
  * marker，绝不根据所在目录静默认领，避免导入/误放后污染另一模式。
  */
 export function claimSessionMode(sessionManager, expectedMode) {

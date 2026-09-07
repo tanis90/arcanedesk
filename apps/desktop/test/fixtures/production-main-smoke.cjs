@@ -1,12 +1,14 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
 const { app, dialog, Tray } = require("electron");
-const { mkdtempSync } = require("node:fs");
+const { mkdtempSync, readFileSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
 const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-const scratch = mkdtempSync(path.join(tmpdir(), "arcane-production-smoke-"));
+const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const scratch = process.argv.find(arg => arg.startsWith("--smoke-root="))?.slice("--smoke-root=".length)
+  ?? mkdtempSync(path.join(tmpdir(), "arcane-production-smoke-"));
 app.setPath("userData", scratch);
 app.disableHardwareAcceleration();
 for (const key of Object.keys(process.env)) {
@@ -35,7 +37,7 @@ const server = http.createServer(async (req, res) => {
   for await (const chunk of req) body += chunk;
   const data = JSON.parse(body);
   const user = [...data.messages].reverse().find(row => row.role === "user");
-  const tag = JSON.stringify(user?.content).match(/production-([AB])/)?.[1];
+  const tag = JSON.stringify(user?.content).match(/production-([ABC])/)?.[1];
   if (!tag) { res.writeHead(400); res.end("Unknown smoke input"); return; }
   requests.push(tag);
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
@@ -71,6 +73,32 @@ app.on("will-quit", () => {
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (crashPhase === "recover") {
+    const saved = JSON.parse(readFileSync(path.join(scratch, "crash-checkpoint.json"), "utf8"));
+    await openHost({ describeCurrent: () => saved.b });
+    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && !!document.querySelector(".recover-task")`);
+    const restoredB = globalThis.__arcaneHosts.prep.get(saved.b.id);
+    assert.equal(restoredB.tasks.task.state, "interrupted");
+    assert.equal(restoredB.tasks.task.id, saved.taskId);
+    assert.ok(await evaluate('messages.textContent.includes("production-B")'), "accepted input remains visible");
+    await evaluate('document.querySelector(".recover-task").click(); saveWorkspace()');
+    assert.ok(await evaluate('input.value.includes(t("chat.recovery.prompt"))'));
+    await sleep(300);
+    assert.deepEqual(requests, [], "restart and recovery preparation do not replay model requests");
+    await evaluate('input.value += " production-C"; submit()');
+    await ui('busy && messages.textContent.includes("C partial")');
+    assert.notEqual(restoredB.tasks.task.id, saved.taskId, "explicit continuation starts a new task in the same session");
+    streams.get("C").finish();
+    await ui('!busy && messages.textContent.includes("C final result") && !document.querySelector(".recover-task")');
+    assert.equal(restoredB.tasks.task.state, "completed");
+    await openHost({ describeCurrent: () => saved.a });
+    await ui(`selectedSessionId === ${JSON.stringify(saved.a.id)} && !busy && messages.textContent.includes("A final result")`);
+    assert.equal(globalThis.__arcaneHosts.prep.get(saved.a.id).tasks.task.state, "completed");
+    await sleep(300);
+    assert.deepEqual(requests, ["C"], "only the explicitly submitted continuation executes");
+    console.log("PASS crash recovery: durable result, interrupted first-turn task, no automatic replay and explicit continuation");
+    app.exit(0); return;
+  }
   const idA = await evaluate("selectedSessionId");
   await evaluate('input.value = "production-A"; submit()');
   await ui('busy && messages.textContent.includes("A partial")');
@@ -104,6 +132,11 @@ app.on("will-quit", () => {
   window.reload(); await reloaded;
   await ui(`selectedSessionId === ${JSON.stringify(idA)} && messages.textContent.includes("A final result")`);
   assert.ok(hostB.busy && !streams.get("B").closed, "renderer reload preserves B execution");
+  if (crashPhase === "seed") {
+    writeFileSync(path.join(scratch, "crash-checkpoint.json"), JSON.stringify({ a: hostA.describeCurrent(), b: hostB.describeCurrent(), taskId: hostB.tasks.task.id }));
+    console.log("READY FOR FORCED TERMINATION");
+    return; // The runner kills this exact child while B's SDK stream remains active.
+  }
   window.close();
   await until(() => prompts.length === 1, "cancel close prompt");
   await sleep(50);
