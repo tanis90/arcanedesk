@@ -24,7 +24,8 @@ test('bundled builder bytes match the reviewed public source and dependency rece
 test('detached skill builds prepared content without npm or repository dependencies',async t=>{
   const root=await temporary(t),detached=path.join(root,'detached');await fs.cp(skill,detached,{recursive:true});
   const input=path.join(root,'input.json');await fs.writeFile(input,JSON.stringify(bundle()));
-  const cli=path.join(detached,'scripts/mod-manager.mjs');
+  const alias=path.join(root,'alias');await fs.symlink(detached,alias,process.platform==='win32'?'junction':'dir');
+  const cli=path.join(alias,'scripts/mod-manager.mjs');
   const invoke=async args=>JSON.parse((await exec(process.execPath,[cli,...args],{cwd:root,env:{...process.env,NODE_PATH:''}})).stdout);
   const before=await fs.readdir(root);
   const inspected=await invoke(['bundle-inspect','--input',input]);

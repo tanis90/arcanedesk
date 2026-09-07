@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { extractZip, listZipEntries, readZipEntryText } from "./archive-zip.mjs";
 import { writeModuleBundle, writeModuleArchive } from "@arcanedesk/foundry-pack-builder";
@@ -2173,8 +2173,10 @@ export async function runCli(argv = process.argv.slice(2)) {
   }
 }
 
-const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
-if (invokedPath === import.meta.url) {
+const invokedPath = process.argv[1]
+  ? await fsp.realpath(path.resolve(process.argv[1])).catch(() => null)
+  : null;
+if (invokedPath === await fsp.realpath(fileURLToPath(import.meta.url))) {
   runCli()
     .then((result) => process.stdout.write(`${JSON.stringify(result, null, 2)}\n`))
     .catch((error) => {

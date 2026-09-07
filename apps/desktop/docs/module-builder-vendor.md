@@ -1,6 +1,6 @@
 # Desktop 离线模块构建器
 
-模块实现真源在公开 `arcanedesk-fvtt-mods` 的 foundry-pack-builder。Desktop 携带生成的运行副本，不能直接修改其源码或原生依赖。当前 source.json 固定公开提交 b1292ca6e6e873af3fd9079d7f67f432bad71e19；根 package-lock.json 固定 classic-level、fflate 及其传递依赖。
+模块实现的开发真源在私有模组仓库的 public/，经审核导出到公开 `arcanedesk-fvtt-mods` 的 foundry-pack-builder。Desktop 只从公开提交生成运行副本，不能直接修改其源码或原生依赖。当前 source.json 固定公开提交 b1292ca6e6e873af3fd9079d7f67f432bad71e19；根 package-lock.json 固定 classic-level、fflate 及其传递依赖。
 
 维护文件位于 `scripts/module-builder-vendor/`，生成器是 `scripts/vendor-module-builder.mjs`。更新时先审查公开提交并修改 source.json；在仓库根目录执行 `npm ci --ignore-scripts`，使用 lockfile 的 npm 完整性校验安装依赖。然后对精确检出该公开提交的仓库运行：
 
@@ -18,6 +18,8 @@ node apps/desktop/scripts/vendor-module-builder.mjs --check
 `bundle-inspect` 只读已准备的 arcane-module-bundle v1 的身份和输入哈希；`bundle-build` 锁定该哈希并调用同一 writeModuleBundle/writeModuleArchive。构建输出是新目录和 ZIP，不更改现有 Foundry，也不执行输入中的脚本。它不编译任意第三方原始内容，不授予内容分发权。
 
 测试将完整 skill 复制到仓库外，清空 NODE_PATH，在子进程里构建原创内容并核对合集描述与 ZIP 回执，确保不会回退到工作区依赖。Windows 原生 DLL 在进程存活期间不能删除，因此独立导入测试也使用子进程并等退出后清理。
+
+CLI 入口比较解析后的真实路径，避免 macOS 临时目录 /var 与 /private/var 的别名导致命令静默退出。脱离仓库测试通过目录符号链接（Windows junction）调用入口，覆盖这一问题；作为库导入时仍不执行 CLI。
 
 ## 本次验证
 
