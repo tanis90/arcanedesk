@@ -47,7 +47,7 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
-  sessionSnapshot: (sessionId) => ipcRenderer.invoke("sessions:snapshot", sessionId),
+  sessionSnapshot: (sessionId, historyQuery) => ipcRenderer.invoke("sessions:snapshot", sessionId, historyQuery),
   activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),
   getDesktopNotifications: () => ipcRenderer.invoke("notifications:get"),
   setDesktopNotifications: (enabled) => ipcRenderer.invoke("notifications:set", enabled),

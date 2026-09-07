@@ -19,6 +19,7 @@ import { claimSessionMode, isPathInside, readSessionMode, sessionDirForMode, Ses
 import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
+import { HistoryIndex } from "./sync/history-index.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { InputJournal } from "./tasks/input-journal.js";
 
@@ -528,59 +529,22 @@ export class AgentHost {
     }
   }
 
-  /** 把 session.messages 映射成 renderer 能直接渲染的历史条目。 */
-  buildHistory() {
-    if (!this.session) return [];
-    const out = [];
-    // Model context drops older messages after compaction; the branch retains user history.
-    const branch = this.sessionManager?.getBranch?.();
-    const records = branch ? branch.filter(entry => entry.type === "message")
-      : (this.session.messages ?? []).map(message => ({ message }));
-    for (const record of records) {
-      const message = record.message;
-      const identity = { key: message.arcaneMessageKey ?? (record.id ? `entry:${record.id}` : messageKey(message)),
-        legacyKey: `${message.role}:${message.timestamp}` };
-      if (message.role === "user") {
-        const parts = Array.isArray(message.content) ? message.content : [];
-        const text =
-          typeof message.content === "string"
-            ? message.content
-            : parts
-                .filter((part) => part?.type === "text")
-                .map((part) => part.text)
-                .join("");
-        const images = parts
-          .filter((part) => part?.type === "image" && part.data)
-          .map((part) => ({ data: /** @type {any} */ (part).data, mimeType: /** @type {any} */ (part).mimeType ?? "image/png" }));
-        if (text.trim() || images.length > 0) out.push({ role: "user", text, images, ts: message.timestamp, ...identity });
-      } else if (message.role === "assistant") {
-        const text = extractText(message);
-        const thinking = extractThinking(message);
-        const toolCalls = (Array.isArray(message.content) ? message.content : [])
-          .filter((part) => part?.type === "toolCall")
-          .map((part) => ({ id: part.id, name: part.name, args: part.arguments, hasResult: false }));
-        if (text || thinking || toolCalls.length > 0) out.push({ role: "assistant", text, thinking, toolCalls, ts: message.timestamp, ...identity });
-      } else if (message.role === "toolResult") {
-        const text = (Array.isArray(message.content) ? message.content : [])
-          .filter((part) => part?.type === "text")
-          .map((part) => part.text)
-          .join("\n");
-        // 回填到最近的同名 toolCall 上,renderer 据此画四态卡片
-        for (let i = out.length - 1; i >= 0; i--) {
-          const call = /** @type {any} */ (out[i].toolCalls?.find((t) => t.id === message.toolCallId));
-          if (call) {
-            call.hasResult = true;
-            call.isError = Boolean(message.isError);
-            call.resultText = text;
-            break;
-          }
-        }
-      }
-    }
-    return out;
+  historyIndex() {
+    if (!this.session) return new HistoryIndex([]);
+    const manager = this.sessionManager;
+    const leaf = manager?.getLeafId?.();
+    if (manager?.getLeafId && this._historyCache?.manager === manager && this._historyCache.leaf === leaf) return this._historyCache.index;
+    const branch = manager?.getBranch?.();
+    const records = this.session ? (branch ? branch.filter(entry => entry.type === "message")
+      : (this.session.messages ?? []).map(message => ({ message }))) : [];
+    const index = new HistoryIndex(records);
+    if (manager?.getLeafId) this._historyCache = { manager, leaf, index };
+    return index;
   }
 
-  currentPayload() {
+  buildHistory() { return this.historyIndex().all(); }
+
+  currentPayload(historyQuery = undefined) {
     return {
       attentions: this.tasks?.snapshotAttentions() ?? [],
       approvals: structuredClone([...this.approvalSnapshots.values()]),
@@ -590,12 +554,11 @@ export class AgentHost {
       task: this.task ? { ...this.task } : null,
       inFlight: this.projection.snapshot(),
       session: this.describeCurrent(),
-      history: this.buildHistory(),
+      ...(historyQuery === undefined ? { history: this.buildHistory() } : this.historyIndex().page(historyQuery)),
       modelLabel: this.modelLabel ?? null,
       supportsImages: this.supportsImages ?? true,
     };
   }
-
   async newSession() {
     await this.abort();
     this.detach();

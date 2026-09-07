@@ -39,7 +39,7 @@ interface ArcaneBridge {
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions(context?: ArcaneModeContext): Promise<any>;
   currentSession(): Promise<any>;
-  sessionSnapshot(sessionId: string): Promise<any>;
+  sessionSnapshot(sessionId: string, historyQuery?: { before?: string; after?: string; around?: string; limit?: number }): Promise<any>;
   activitySnapshot(): Promise<any>;
   getDesktopNotifications(): Promise<any>;
   setDesktopNotifications(enabled: boolean): Promise<any>;
