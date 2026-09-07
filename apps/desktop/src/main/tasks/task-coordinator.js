@@ -19,6 +19,7 @@ export class TaskCoordinator {
     this.journal = journal;
     this.commands = new Map();
     this.inputs = new Map();
+    this.inputBindings = new Map();
     this.task = null;
     this.run = null;
     this.dispatching = null;
@@ -41,6 +42,9 @@ export class TaskCoordinator {
         this.commands.set(record.commandId, record);
         this.inputs.set(record.input.id, record.input);
         this.task = record.task;
+      } else if (record.type === "input_metadata") {
+        const input = this.inputs.get(record.inputId);
+        if (input) input.metadata = record.metadata;
       } else if (record.type === "input_state") {
         const input = this.inputs.get(record.inputId);
         if (input) input.state = record.state;
@@ -184,6 +188,18 @@ export class TaskCoordinator {
     this.journal.append(record);
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
+    if (this.adapter.captureInput) {
+      // Start before scheduling or steering; persist separately because page reads are async.
+      let capture;
+      try { capture = this.adapter.captureInput(); } catch { capture = null; }
+      const binding = Promise.resolve(capture).catch(() => null).then(metadata => {
+        this.journal.append({ type: "input_metadata", inputId: input.id, metadata });
+        input.metadata = metadata;
+        return metadata;
+      });
+      this.inputBindings.set(input.id, binding);
+      binding.catch(() => {}); // Tools/dispatch observe persistence failures, never unhandled rejection.
+    }
     this.task = task;
     if (!supplement) this.resourceWaits.clear();
     if (!supplement && this.scheduler) this.admission = new TaskAdmission(this.scheduler,
@@ -211,6 +227,15 @@ export class TaskCoordinator {
       else this.compact();
     });
     this.run.catch(() => {});
+  }
+
+  /** Snapshot the input identity now, before an awaited tool can consume later steering. */
+  currentInputBinding() {
+    const input = [...this.inputs.values()].filter(value => value.taskId === this.task?.id
+      && ["context", "consumed"].includes(value.state)).at(-1);
+    if (!input) return { inputId: null, taskId: this.task?.id, metadata: Promise.resolve(null) };
+    return { inputId: input.id, taskId: input.taskId,
+      metadata: this.inputBindings.get(input.id) ?? Promise.resolve(input.metadata ?? null) };
   }
 
   queueSteer(input) {
@@ -271,6 +296,8 @@ export class TaskCoordinator {
         this.normalEnd = false; this.aborted = false; this.lastError = null;
         this.dispatching = input;
         this.setInputState(input, "dispatching");
+        await this.inputBindings.get(input.id);
+        if (this.task.state === "stopping") break;
         await this.adapter.prompt(input.executionText ?? input.text, input.images);
         await this.adapter.settleTask?.(taskId);
         await Promise.all([...this.queueWrites]);
@@ -293,7 +320,11 @@ export class TaskCoordinator {
         if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, this.task.state === "stopping" ? "cancelled" : "failed");
       }
       this.setTaskState(this.task.state === "stopping" ? admission && !admission.started ? "cancelled" : "stopped" : "failed", error.message);
-    } finally { this.dispatching = null; admission?.release(); }
+    } finally {
+      // A cancelled steering input may still be persisting its capture. Deletion waits for run.
+      await Promise.allSettled([...this.inputBindings.values()]);
+      this.dispatching = null; admission?.release();
+    }
   }
 
   async stop(taskId) {

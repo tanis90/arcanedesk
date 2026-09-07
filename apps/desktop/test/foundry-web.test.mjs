@@ -147,7 +147,10 @@ test("agent page tools and structured runtime share admission and reacquire the 
 
 test("AgentHost stop stays stopping until an aborted page script actually finishes", async () => {
   const r = new ResourceCoordinator(), raw = deferred(), started = deferred(), abort = new AbortController();
-  const wc = new FakeWebContents(() => { started.resolve(); return raw.promise; });
+  const wc = new FakeWebContents(code => {
+    if (code !== "slow") return Promise.resolve(null); // Admission identity read is not the slow write.
+    started.resolve(); return raw.promise;
+  });
   const h = new AgentHost({ resources: r, profile: { mode: "prep" }, getFoundryView: () => ({ webContents: wc }),
     sendToRenderer() {}, log() {} });
   h.sessionManager = { getSessionId: () => "A", getSessionName: () => "A" };

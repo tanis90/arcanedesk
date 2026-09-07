@@ -8,7 +8,8 @@ function historyMissing(file) {
 
 /** Durable deletion intent bridges the history unlink and associated-data cleanup. */
 export class SessionDeletions {
-  constructor({ file, tasksDir }) {
+  constructor({ file, tasksDir, operationsDir = null }) {
+    this.operationsDir = operationsDir;
     this.tasksDir = tasksDir; this.entries = new Map(); this.error = null;
     try {
       this.journal = new InputJournal(file);
@@ -44,8 +45,10 @@ export class SessionDeletions {
     if (!entry) return;
     if (!entry.deleted) { this.append({ type: "commit", id }); entry.deleted = true; }
     if (!entry.clean) {
-      try { unlinkSync(path.join(this.tasksDir, `${id}.jsonl`)); }
-      catch (error) { if (error.code !== "ENOENT") throw error; }
+      for (const directory of [this.tasksDir, this.operationsDir].filter(Boolean)) {
+        try { unlinkSync(path.join(directory, `${id}.jsonl`)); }
+        catch (error) { if (error.code !== "ENOENT") throw error; }
+      }
       this.append({ type: "clean", id }); entry.clean = true;
     }
     this.compact();

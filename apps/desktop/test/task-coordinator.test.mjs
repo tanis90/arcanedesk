@@ -9,6 +9,57 @@ import { InputJournal } from "../src/main/tasks/input-journal.js";
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("input binding starts at acceptance, persists before prompt, and excludes unconsumed steering", async () => {
+  const first = deferred(), second = deferred(), finish = deferred();
+  let captures = 0, prompts = 0;
+  const journal = new InputJournal();
+  const c = new TaskCoordinator({ sessionId: "A", journal, adapter: {
+    captureInput: () => (++captures === 1 ? first.promise : second.promise),
+    prompt: async () => { prompts++; c.observe({ type: "message_start", message: { role: "user", content: "first", timestamp: 1 } });
+      c.observe({ type: "message_start", message: { role: "assistant" } }); await finish.promise; },
+    isStreaming: () => true, steer: () => {},
+  } });
+  const a = c.submit({ commandId: "a", text: "first" });
+  assert.equal(captures, 1); await tick(); assert.equal(prompts, 0);
+  first.resolve({ selectedTokenUuids: ["original"] }); await tick();
+  assert.equal(prompts, 1);
+  assert.equal(c.currentInputBinding().inputId, a.inputId);
+  const pinned = c.currentInputBinding();
+  const b = c.submit({ commandId: "b", text: "later" });
+  assert.equal(captures, 2);
+  assert.equal(c.currentInputBinding().inputId, a.inputId);
+  second.resolve({ selectedTokenUuids: ["later"] }); await tick();
+  assert.deepEqual(await pinned.metadata, { selectedTokenUuids: ["original"] });
+  assert.equal(journal.records.filter(r => r.type === "input_metadata").length, 2);
+  c.setInputState(c.inputs.get(b.inputId), "consumed");
+  assert.equal(c.currentInputBinding().inputId, b.inputId);
+  finish.resolve(); await c.run;
+  const restored = new TaskCoordinator({ sessionId: "A", journal, adapter: {} });
+  assert.deepEqual(restored.inputs.get(a.inputId).metadata, { selectedTokenUuids: ["original"] });
+});
+
+test("input metadata disk failure stops before the model sees the instruction", async () => {
+  const journal = new InputJournal(), append = journal.append.bind(journal);
+  journal.append = record => { if (record.type === "input_metadata") throw Error("metadata disk full"); append(record); };
+  let prompts = 0;
+  const c = new TaskCoordinator({ sessionId: "A", journal, adapter: {
+    captureInput: async () => ({ world: { id: "w" } }), prompt: () => { prompts++; },
+  } });
+  c.submit({ text: "write" }); await c.run;
+  assert.equal(prompts, 0); assert.equal(c.task.state, "failed");
+});
+
+test("stop during identity capture never starts a model after the capture settles", async () => {
+  const capture = deferred(); let prompts = 0;
+  const c = new TaskCoordinator({ sessionId: "A", adapter: {
+    captureInput: () => capture.promise, prompt: () => { prompts++; }, abort: async () => {},
+  } });
+  c.submit({ text: "write" }); await tick();
+  const stopped = c.stop(c.task.id);
+  capture.resolve({ world: { id: "w" } }); await stopped;
+  assert.equal(prompts, 0); assert.equal(c.task.state, "stopped");
+});
+
 test("stopping retains execution capacity and waits for actual tool settlement", async () => {
   const { ExecutionScheduler } = await import("../src/main/scheduling/execution-scheduler.js");
   const scheduler = new ExecutionScheduler({ capacity: 1 }), raw = deferred(), prompt = deferred();

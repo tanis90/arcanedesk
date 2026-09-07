@@ -22,6 +22,8 @@ import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { InputJournal } from "./tasks/input-journal.js";
+import { captureFoundryInputContext } from "./foundry-input-context.js";
+import { FoundryServices } from "./foundry-services.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -229,11 +231,12 @@ export class AgentHost {
    *   profile?: Record<string, any>,
    *   getLocale?: () => string,
    *   taskStorageDir?: string,
+   *   operationStorageDir?: string,
    *   scheduler?: any,
    *   resources?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler, resources } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler, resources } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
@@ -259,6 +262,8 @@ export class AgentHost {
     this.messageIdentity = new MessageIdentity();
     this.tasks = null;
     this.taskStorageDir = taskStorageDir;
+    this.operationStorageDir = operationStorageDir;
+    this._foundryServices = null;
     this.approvals = new Map();
     this.approvalSnapshots = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
@@ -456,6 +461,7 @@ export class AgentHost {
     const { session } = await createAgentSession(options);
     this.session = session;
     this.sessionManager = sessionManager;
+    this._foundryServices = null;
     this.projection = new SessionProjection({ sessionId: sessionManager.getSessionId() });
     this.messageIdentity = new MessageIdentity();
     this.tasks = null;
@@ -733,12 +739,28 @@ export class AgentHost {
   get task() { return this.tasks?.task ?? null; }
   get busy() { return this.tasks?.busy ?? false; }
 
+  foundryServices() {
+    if (this._foundryServices) return this._foundryServices;
+    const sessionId = this.describeCurrent()?.id;
+    this._foundryServices = new FoundryServices({ sessionId, directory: this.operationStorageDir,
+      mode: this.profile.mode,
+      withPage: (signal, operation) => this.withResources(["foundry:page"], signal, operation),
+      call: (action, args, options) => {
+        if (!this.foundryRuntime?.call) throw new Error("Foundry runtime unavailable");
+        return this.foundryRuntime.callForSession
+          ? this.foundryRuntime.callForSession(this.telemetry, this.profile.mode, action, args, options)
+          : this.foundryRuntime.call(action, args, options);
+      } });
+    return this._foundryServices;
+  }
+
   taskCoordinator() {
     if (this.tasks) return this.tasks;
     const sessionId = this.describeCurrent()?.id ?? "unattached";
     const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
     this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, journal: new InputJournal(file), emit: event => this.emit(event),
       adapter: {
+        captureInput: () => captureFoundryInputContext(this.getFoundryView?.()?.webContents),
         beginTask: async (pending) => {
           if (!pending) return;
           const result = await this.setCurrentModel(pending.providerId, pending.modelId, true);

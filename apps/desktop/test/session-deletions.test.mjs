@@ -25,6 +25,17 @@ test("deletion intent preserves task data until history unlink, then removes onl
   assert.deepEqual(restored.snapshot().sessionIds, ["A"]); assert.equal(restored.isDeleted(f.history), true);
 });
 
+test("deleting history cleans the matching Foundry operation journal and preserves other sessions", () => {
+  const f = fixture(), operationsDir = path.join(path.dirname(f.file), "foundry-operations");
+  mkdirSync(operationsDir);
+  const a = path.join(operationsDir, "A.jsonl"), b = path.join(operationsDir, "B.jsonl");
+  writeFileSync(a, "operations A"); writeFileSync(b, "operations B");
+  const log = new SessionDeletions({ ...f.options, operationsDir });
+  log.begin("A", f.history); assert.equal(existsSync(a), true);
+  unlinkSync(f.history); log.commit("A");
+  assert.equal(existsSync(a), false); assert.equal(existsSync(b), true);
+});
+
 test("registry deletion invokes durable intent and cleanup at the actual unlink boundary", async () => {
   const f = fixture(), deletions = new SessionDeletions(f.options);
   let disposed = false;

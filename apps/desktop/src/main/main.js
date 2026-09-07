@@ -717,7 +717,7 @@ app.whenReady().then(async () => {
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
   const resources = new ResourceCoordinator();
-  const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks") });
+  const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks"), operationsDir: configPath("foundry-operations") });
   const hosts = {
     combat: new SessionRegistry({ deletions, createHost: () => new AgentHost({
       foundryRuntime,
@@ -728,6 +728,7 @@ app.whenReady().then(async () => {
       telemetry: telemetry?.forSession(), scheduler, resources,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
+      operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
       profile: {
         getCwd: () => combatWorkspace,
@@ -744,6 +745,7 @@ app.whenReady().then(async () => {
       telemetry: telemetry?.forSession(), scheduler, resources,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
+      operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
       profile: {
         mode: "prep",
