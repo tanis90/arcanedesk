@@ -72,6 +72,7 @@ function saveWorkspace() {
     open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
   }));
   workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest,
+    outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })),
     anchor: anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null,
     expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
 }
@@ -100,10 +101,33 @@ async function installSnapshot(payload) {
   restoringView = false;
   if (replay === null) { void resyncSelected(); return; }
   for (const event of replay) receiveEvent(event, true);
+  for (const item of payload.inputs ?? []) {
+    const historyNode = item.messageKey ? messages.querySelector('[data-item-key="' + CSS.escape(item.messageKey) + '"]') : null;
+    if (historyNode instanceof HTMLElement) {
+      historyNode.dataset.commandId = item.commandId;
+      updateInputReceipt(item.commandId, item.state);
+      continue;
+    }
+    if (["accepted", "queued", "dispatching", "context"].includes(item.state)) {
+      const node = addMessage("user", item.text, undefined, "input:" + item.commandId);
+      node.dataset.commandId = item.commandId;
+      updateInputReceipt(item.commandId, item.state);
+    }
+  }
   let saved;
   try { saved = await workspaceStore.load(id); } catch { saved = {}; }
   if (token !== snapshotRequest || selectedSessionId !== id) return;
   workspaceReady.add(id);
+  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, item])));
+  const acceptedCommands = new Set((payload.inputs ?? []).map(item => item.commandId));
+  for (const [commandId, submission] of outboxFor(id)) {
+    if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
+    const node = submissionNode(submission);
+    updateInputReceipt(commandId, "uncertain");
+    const retry = el("button", "retry-input", t("chat.input.retry"));
+    retry.addEventListener("click", () => { void sendSubmission(submission); });
+    node.appendChild(retry);
+  }
   if (revision === draftRevision) {
     input.value = saved.draft ?? "";
     pendingImages = saved.images ?? [];
@@ -890,9 +914,13 @@ function onEvent(event) {
     && event.type !== "session_switched"
     && !(event.type === "task_state" && event.task.state === "running")) return;
   switch (event.type) {
+    case "input_state":
+      updateInputReceipt(event.commandId, event.state);
+      break;
     case "task_state":
       selectedTaskId = event.task.id;
       setBusy(event.task.state === "running" || event.task.state === "stopping");
+      if (event.task.state === "failed" && event.task.error) addStatus(t("chat.status.sendFailed", { error: event.task.error }));
       break;
     case "message": {
       // 终稿:替换对应流式草稿气泡(同 key),否则新建消息。
@@ -1304,57 +1332,84 @@ function autosize() {
   input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
 }
 
+const outboxBySession = new Map();
+const inputStateKeys = {
+  sending: "chat.input.sending", accepted: "chat.input.accepted", queued: "chat.input.queued",
+  dispatching: "chat.input.dispatching", context: "chat.input.context", consumed: "chat.input.consumed",
+  handled: "chat.input.handled", failed: "chat.input.failed", cancelled: "chat.input.cancelled",
+  interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
+};
+function outboxFor(id) {
+  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map());
+  return outboxBySession.get(id);
+}
+function updateInputReceipt(commandId, state) {
+  const node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(commandId) + '"]'));
+  if (!node) return;
+  let receipt = node.querySelector(".input-state");
+  if (!receipt) { receipt = el("div", "input-state status-line"); node.appendChild(receipt); }
+  receipt.textContent = t(inputStateKeys[state] ?? inputStateKeys.uncertain);
+  node.dataset.inputState = state;
+}
+function submissionNode(submission) {
+  let node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(submission.context.commandId) + '"]'));
+  if (!node) {
+    node = addMessage("user", submission.text, submission.images, "input:" + submission.context.commandId);
+    node.dataset.commandId = submission.context.commandId;
+  }
+  return node;
+}
+async function sendSubmission(submission) {
+  const id = submission.context.sessionId;
+  if (submission.sending) return;
+  submission.sending = true;
+  if (selectedSessionId === id) {
+    submissionNode(submission).querySelector(".retry-input")?.remove();
+    updateInputReceipt(submission.context.commandId, "sending");
+  }
+  let result;
+  try { result = await window.arcane.prompt(submission.text, submission.images, submission.context); }
+  catch { result = { ok: false, uncertain: true }; }
+  submission.sending = false;
+  if (result?.ok) {
+    outboxFor(id).delete(submission.context.commandId);
+    if (selectedSessionId === id) {
+      const node = submissionNode(submission);
+      if (!["consumed", "handled", "cancelled", "failed"].includes(node.dataset.inputState)) {
+        updateInputReceipt(submission.context.commandId, result.compacted ? "handled" : "accepted");
+      }
+      if (result.compacted) setBusy(false);
+    }
+  } else if (selectedSessionId === id) {
+    const node = submissionNode(submission);
+    updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "failed");
+    const retry = el("button", "retry-input", t("chat.input.retry"));
+    retry.addEventListener("click", () => { void sendSubmission(submission); });
+    node.appendChild(retry);
+    if (result?.code === "MODEL_PROVIDER_KEY_REQUIRED") addModelSetupCard(result);
+  }
+  if (selectedSessionId === id) saveWorkspace();
+  else {
+    try {
+      const saved = await workspaceStore.load(id);
+      saved.outbox = [...outboxFor(id).values()].map(item => ({ ...item, sending: false }));
+      await workspaceStore.save(id, saved);
+    } catch { /* The in-memory outbox still owns the retry command. */ }
+  }
+}
+
 async function submit() {
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
-  if (!text && images.length === 0) return;
-  try {
-    const access = await window.arcane.getModelAccess(modeContext());
-    if (access?.missingKey) {
-      addModelSetupCard(access.missingKey);
-      return;
-    }
-  } catch {
-    // Main process repeats this guard; a transient preflight failure must not block chat.
-  }
-  closeSlash();
-  input.value = "";
-  autosize();
-  const echoImages = pendingImages.slice();
-  pendingImages = [];
-  draftRevision++;
-  workspaceReady.add(selectedSessionId);
-  saveWorkspace();
-  renderAttachStrip();
-  const outbound = text || t("chat.imagePlaceholder"); // pi 总会带 text part,空串会被部分 provider 拒绝
-  const userMessage = addMessage("user", outbound, echoImages);
-  if (!busy) setBusy(true);
-  const context = modeContext();
-  const result = await window.arcane.prompt(outbound, images, context);
-  // 请求已绑定旧模式并可在后台继续；切换后的 UI 不接收它的完成态副作用。
-  if (!sameModeContext(context)) return;
-  if (!result?.ok) {
-    // 发送失败:恢复附件与文本,别让用户重贴
-    pendingImages = echoImages;
-    renderAttachStrip();
-    if (!input.value) {
-      input.value = text;
-      autosize();
-    }
-    setBusy(false);
-    // /compact 的失败已由 compaction_end 事件透出,不重复报
-    if (result?.code === "MODEL_PROVIDER_KEY_REQUIRED") {
-      userMessage.remove();
-      addModelSetupCard(result);
-    } else if (!result?.compacted) {
-      addStatus(t("chat.status.sendFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknownError") }));
-    }
-  } else if (result.compacted) {
-    // /compact 不产生 agent_end(compaction 不走 turn),这里手动解除 busy
-    setBusy(false);
-  } else if (result.steered) {
-    addStatus(t("chat.status.steered"));
-  }
+  if ((!text && images.length === 0) || !selectedSessionId) return;
+  const context = { ...modeContext(), commandId: crypto.randomUUID() };
+  const submission = { context, text: text || t("chat.imagePlaceholder"), images, sending: false };
+  // Capture the target before any await; a preflight response cannot steal B's draft.
+  outboxFor(context.sessionId).set(context.commandId, submission);
+  closeSlash(); input.value = ""; pendingImages = []; draftRevision++;
+  workspaceReady.add(selectedSessionId); autosize(); renderAttachStrip(); saveWorkspace();
+  submissionNode(submission);
+  await sendSubmission(submission);
 }
 
 send.addEventListener("click", submit);

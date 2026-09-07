@@ -1,0 +1,127 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, appendFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { TaskCoordinator } from "../src/main/tasks/task-coordinator.js";
+import { InputJournal } from "../src/main/tasks/input-journal.js";
+
+function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test("acceptance precedes execution; identical command retry executes once and changed content conflicts", async () => {
+  const gate = deferred(); const calls = [];
+  const coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    prompt: async text => { calls.push(text); await gate.promise; },
+  } });
+  const ack = coordinator.submit({ commandId: "one", text: "hello" });
+  assert.equal(ack.status, "accepted");
+  assert.deepEqual(calls, []);
+  assert.equal(coordinator.submit({ commandId: "one", text: "hello" }).duplicate, true);
+  assert.equal(coordinator.submit({ commandId: "one", text: "different" }).code, "COMMAND_CONFLICT");
+  await tick(); assert.deepEqual(calls, ["hello"]);
+  gate.resolve(); await coordinator.run;
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("queued input is consumed when the model starts; a missed end-of-turn steer is drained", async () => {
+  const gate = deferred(); const calls = [];
+  let coordinator;
+  const adapter = {
+    isStreaming: () => true,
+    async prompt(text) {
+      calls.push(text);
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      if (text === "first") await gate.promise;
+    },
+    steer(text) { coordinator.observe({ type: "queue_update", steering: [text] }); },
+    clearQueue() {},
+  };
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter });
+  const first = coordinator.submit({ commandId: "first", text: "first" });
+  await tick();
+  const second = coordinator.submit({ commandId: "second", text: "second" });
+  assert.equal(second.taskId, first.taskId);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "queued");
+  gate.resolve(); await coordinator.run;
+  assert.deepEqual(calls, ["first", "second"]);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
+});
+
+test("a journal failure after acceptance stops scheduling without executing unrecorded work", async () => {
+  let writes = 0; let calls = 0;
+  const journal = { records: [], append() { if (++writes > 1) throw new Error("disk full"); } };
+  const coordinator = new TaskCoordinator({ sessionId: "A", journal,
+    adapter: { prompt: async () => { calls++; } } });
+  assert.equal(coordinator.submit({ text: "work" }).ok, true);
+  await coordinator.run;
+  assert.equal(coordinator.task.state, "failed");
+  assert.equal(calls, 0);
+  await tick();
+  assert.equal(coordinator.run, null);
+});
+
+test("already consumed steering is not prompted a second time", async () => {
+  const gate = deferred(); const calls = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    async prompt(text) { calls.push(text); coordinator.observe({ type: "message_start", message: { role: "user", content: text } }); coordinator.observe({ type: "message_start", message: { role: "assistant" } }); await gate.promise; },
+    steer(text) {
+      coordinator.observe({ type: "queue_update", steering: [text] });
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+    }, clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const ack = coordinator.submit({ text: "second" });
+  assert.equal(coordinator.inputs.get(ack.inputId).state, "consumed");
+  gate.resolve(); await coordinator.run;
+  assert.deepEqual(calls, ["first"]);
+});
+
+test("stop cancels undelivered inputs and an old task cannot stop the next one", async () => {
+  const gate = deferred();
+  const coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    prompt: () => gate.promise, abort: async () => gate.resolve(), clearQueue() {},
+  } });
+  const first = coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const stopped = coordinator.stop(first.taskId);
+  assert.equal(coordinator.submit({ text: "too late" }).code, "TASK_STOPPING");
+  await stopped;
+  assert.equal(coordinator.inputs.get(second.inputId).state, "cancelled");
+  const third = coordinator.submit({ text: "third" });
+  assert.notEqual(third.taskId, first.taskId);
+  assert.equal((await coordinator.stop(first.taskId)).code, "STALE_TASK");
+  await coordinator.run;
+});
+
+test("input submitted on the terminal event starts a subsequent task despite the old promise cleanup", async () => {
+  const calls = []; let coordinator; let next;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: { prompt: async text => { calls.push(text); } },
+    emit: event => {
+      if (event.type === "task_state" && event.task.state === "completed" && !next) {
+        next = true; coordinator.submit({ text: "second" });
+      }
+    } });
+  coordinator.submit({ text: "first" });
+  await tick(); await tick();
+  assert.deepEqual(calls, ["first", "second"]);
+});
+
+test("journal recovery keeps acceptance identity, marks interrupted, and never replays work", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-input-test-"));
+  const file = path.join(dir, "journal.jsonl");
+  const gate = deferred();
+  const original = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: { prompt: () => gate.promise } });
+  const ack = original.submit({ commandId: "stable", text: "write once" });
+  await tick();
+  appendFileSync(file, '{"type":"partial');
+  const recovered = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: { prompt: () => assert.fail("must not replay") } });
+  assert.equal(recovered.task.state, "interrupted");
+  assert.equal(recovered.submit({ commandId: "stable", text: "write once" }).inputId, ack.inputId);
+  assert.equal(recovered.run, null);
+  gate.resolve(); await original.run;
+});

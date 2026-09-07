@@ -1,0 +1,186 @@
+import { createHash, randomUUID } from "node:crypto";
+import { InputJournal } from "./input-journal.js";
+
+const activeStates = new Set(["running", "stopping", "waiting_user", "queued", "waiting_resource"]);
+const pendingStates = new Set(["accepted", "queued", "dispatching", "context"]);
+const messageText = message => typeof message?.content === "string" ? message.content
+  : (message?.content ?? []).filter(p => p.type === "text").map(p => p.text).join("");
+
+/** One owner for a session's commands and task lifecycle. No view selection state. */
+export class TaskCoordinator {
+  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal}} options */
+  constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal() }) {
+    this.sessionId = sessionId;
+    this.adapter = adapter;
+    this.emit = emit;
+    this.journal = journal;
+    this.commands = new Map();
+    this.inputs = new Map();
+    this.task = null;
+    this.run = null;
+    this.dispatching = null;
+    this.queueing = null;
+    this.normalEnd = false;
+    this.aborted = false;
+    this.lastError = null;
+    this.queueWrites = new Set();
+    for (const record of journal.records) {
+      if (record.type === "accepted") {
+        this.commands.set(record.commandId, record);
+        this.inputs.set(record.input.id, record.input);
+        this.task = record.task;
+      } else if (record.type === "input_state") {
+        const input = this.inputs.get(record.inputId);
+        if (input) input.state = record.state;
+      } else if (record.type === "task_state") this.task = record.task;
+    }
+    if (this.busy) {
+      this.setTaskState("interrupted");
+      for (const input of this.inputs.values()) if (pendingStates.has(input.state)) this.setInputState(input, "interrupted");
+    }
+  }
+
+  get busy() { return activeStates.has(this.task?.state); }
+  snapshotInputs() {
+    return [...this.inputs.values()].map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
+  }
+  setTaskState(state, error = null) {
+    this.task = { ...this.task, state, error, endedAt: activeStates.has(state) ? null : Date.now() };
+    this.journal.append({ type: "task_state", task: this.task });
+    this.emit({ type: "task_state", task: { ...this.task } });
+  }
+  setInputState(input, state) {
+    this.journal.append({ type: "input_state", inputId: input.id, state });
+    input.state = state;
+    this.emit({ type: "input_state", inputId: input.id, commandId: input.commandId, taskId: input.taskId, state });
+  }
+
+  /** Accept synchronously after durable registration; execution is asynchronous. */
+  submit({ commandId = randomUUID(), text, images = [], prepare = null }) {
+    const fingerprint = createHash("sha256").update(JSON.stringify({ text, images })).digest("hex");
+    const previous = this.commands.get(commandId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) return { ok: false, code: "COMMAND_CONFLICT", error: "Command content changed" };
+      return { ...previous.ack, duplicate: true };
+    }
+    if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
+    const executionText = prepare ? prepare(text, images) : text;
+    const supplement = this.busy;
+    const task = supplement ? this.task : { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null };
+    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
+    const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
+      taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
+    const record = { type: "accepted", commandId, fingerprint, input, task, ack };
+    this.journal.append(record);
+    this.commands.set(commandId, record);
+    this.inputs.set(input.id, input);
+    this.task = task;
+    this.emit({ type: "task_state", task: { ...task } });
+    this.emit({ type: "input_state", inputId: input.id, commandId, taskId: task.id, state: "accepted" });
+    if (!this.run) this.schedule();
+    else if (supplement && this.adapter.isStreaming?.()) {
+      this.queueSteer(input);
+    }
+    return ack;
+  }
+
+  schedule() {
+    const taskId = this.task.id;
+    this.run = Promise.resolve().then(() => this.drain(taskId)).catch(error => {
+      // Persistence failures must stop scheduling, not spin retrying the same write.
+      this.task = { ...this.task, state: "failed", error: error.message, endedAt: Date.now() };
+      this.emit({ type: "task_state", task: { ...this.task } });
+    }).finally(() => {
+      this.run = null;
+      if (this.busy && [...this.inputs.values()].some(i => i.taskId === this.task.id && pendingStates.has(i.state))) this.schedule();
+    });
+    this.run.catch(() => {});
+  }
+
+  queueSteer(input) {
+    this.queueing = input;
+    let pending;
+    try { pending = this.adapter.steer(input.executionText ?? input.text, input.images); }
+    catch { pending = Promise.reject(new Error("Unable to queue input")); }
+    this.queueing = null;
+    const write = Promise.resolve(pending).catch(() => {
+      // The app retains this input and will dispatch it after the current run.
+      if (input.state === "queued") this.setInputState(input, "accepted");
+    }).finally(() => this.queueWrites.delete(write));
+    this.queueWrites.add(write);
+  }
+
+  observe(event) {
+    if (!this.busy) return;
+    if (event.type === "queue_update" && this.queueing && event.steering?.length) {
+      this.queueing.expandedText = event.steering.at(-1);
+      this.setInputState(this.queueing, "queued");
+    }
+    if (event.type === "message_start" && event.message?.role === "user") {
+      const text = messageText(event.message);
+      let input = [...this.inputs.values()].find(i => i.taskId === this.task.id && i.state === "queued" && i.expandedText === text);
+      if (!input && this.dispatching && this.dispatching.state === "dispatching") input = this.dispatching;
+      if (input) {
+        input.messageKey = `user:${event.message.timestamp}`;
+        this.setInputState(input, "context");
+      }
+    }
+    if (event.type === "message_start" && event.message?.role === "assistant") {
+      // A user message can enter SDK history during abort without a model call.
+      // Only an assistant stream starting proves the queued context reached a model.
+      for (const input of this.inputs.values()) {
+        if (input.taskId === this.task.id && input.state === "context") this.setInputState(input, "consumed");
+      }
+    }
+    if (event.type === "message_end" && event.message?.role === "assistant") {
+      this.aborted ||= event.message.stopReason === "aborted";
+      if (event.message.errorMessage && event.message.stopReason !== "aborted") this.lastError = event.message.errorMessage;
+    }
+    if (event.type === "agent_end" && !event.willRetry) this.normalEnd = !this.aborted && !this.lastError;
+    if (event.type === "auto_retry_start") this.normalEnd = false;
+    if (event.type === "auto_retry_end" && event.success) this.lastError = null;
+  }
+
+  async drain(taskId) {
+    try {
+      while (this.task.id === taskId && this.task.state !== "stopping") {
+        const input = [...this.inputs.values()].find(i => i.taskId === taskId && pendingStates.has(i.state));
+        if (!input) break;
+        this.adapter.clearQueue?.();
+        this.normalEnd = false; this.aborted = false; this.lastError = null;
+        this.dispatching = input;
+        this.setInputState(input, "dispatching");
+        await this.adapter.prompt(input.executionText ?? input.text, input.images);
+        await Promise.all([...this.queueWrites]);
+        if (input.state === "dispatching") this.setInputState(input, "handled"); // extension commands may consume input without a model message
+        this.dispatching = null;
+        if (this.aborted) { this.setTaskState("stopping"); break; }
+        if (this.lastError) throw new Error(this.lastError);
+      }
+      this.adapter.clearQueue?.();
+      const hasPending = [...this.inputs.values()].some(i => i.taskId === taskId && pendingStates.has(i.state));
+      const state = this.task.state === "stopping" && !(this.normalEnd && !this.aborted && !hasPending) ? "stopped" : "completed";
+      for (const input of this.inputs.values()) {
+        if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, "cancelled");
+      }
+      this.setTaskState(state);
+    } catch (error) {
+      this.adapter.clearQueue?.();
+      for (const input of this.inputs.values()) {
+        if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, "failed");
+      }
+      this.setTaskState(this.task.state === "stopping" ? "stopped" : "failed", error.message);
+    } finally { this.dispatching = null; }
+  }
+
+  async stop(taskId) {
+    if (taskId && taskId !== this.task?.id) return { ok: false, code: "STALE_TASK" };
+    if (!this.busy) return { ok: true, task: this.task };
+    this.setTaskState("stopping");
+    this.adapter.clearQueue?.();
+    await this.adapter.abort();
+    this.adapter.clearQueue?.();
+    await this.run;
+    return { ok: true, task: this.task };
+  }
+}

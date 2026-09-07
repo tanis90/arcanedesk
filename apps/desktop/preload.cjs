@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("arcane", {
     generation: context?.generation,
     sessionId: context?.sessionId,
     taskId: context?.taskId,
+    commandId: context?.commandId,
   }),
   /** Slash 候选:app 命令 + 当前会话的 skills / prompt 模板(按活动模式路由)。 */
   listSlash: (context) => ipcRenderer.invoke("slash:list", context),

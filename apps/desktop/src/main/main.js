@@ -667,6 +667,7 @@ app.whenReady().then(async () => {
       providerStore,
       telemetry,
       runtimeReady: fvttOpsRuntimeReady,
+      taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
       profile: {
         getCwd: () => combatWorkspace,
@@ -682,6 +683,7 @@ app.whenReady().then(async () => {
       providerStore,
       telemetry,
       runtimeReady: fvttOpsRuntimeReady,
+      taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
       profile: {
         mode: "prep",
@@ -1145,10 +1147,10 @@ app.whenReady().then(async () => {
 
   // 备团模式收到图片:除视觉输入外,落盘到 cwd/.arcane/inbox/ 并把路径写进 prompt——
   // agent 有 bash/read/write,拿到文件路径才能做"换头像"这类文件操作(模型无法输出二进制)。
-  function savePrepInboxImages(host, images) {
+  function savePrepInboxImages(host, images, commandId) {
     const dir = path.join(host.cwd(), ".arcane", "inbox");
     mkdirSync(dir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const stamp = /^[a-zA-Z0-9-]{1,80}$/.test(commandId ?? "") ? commandId : new Date().toISOString().replace(/[:.]/g, "-");
     return images.map((img, i) => {
       const file = path.join(dir, `${stamp}-${i + 1}.${IMAGE_MIME_EXT[img.mimeType]}`);
       writeFileSync(file, Buffer.from(img.data, "base64"));
@@ -1178,14 +1180,6 @@ app.whenReady().then(async () => {
           ...missingKey,
         };
       }
-      if (images.length > 0 && mode === "prep") {
-        try {
-          const files = savePrepInboxImages(host, images);
-          message += `\n\n[附带图片已存为本地文件:${files.join("; ")}]`;
-        } catch (error) {
-          console.log("[agent] save inbox images failed:", error.message); // 落盘失败不阻塞视觉输入
-        }
-      }
       // app 级命令:/compact [instructions] → pi 手动压缩;compaction 期间禁止并发 prompt
       if (message === "/compact" || message.startsWith("/compact ")) {
         if (host.busy) return { ok: false, error: err("err.chat.busyCompact"), compacted: true };
@@ -1198,17 +1192,24 @@ app.whenReady().then(async () => {
           return { ok: false, error: error.message, compacted: true };
         }
       }
-      if (host.busy) {
-        if (host.task.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
+      const prepare = (text) => {
+        if (images.length > 0 && mode === "prep") {
+          try {
+            const files = savePrepInboxImages(host, images, payload?.commandId);
+            text += `\n\n[附带图片已存为本地文件:${files.join("; ")}]`;
+          } catch (error) {
+            console.log("[agent] save inbox images failed:", error.message);
+          }
+        }
+        return text;
+      };
+      const result = host.submitInput(message, images, payload?.commandId, prepare);
+      if (result.ok && !result.duplicate) {
+        if (result.disposition === "new_task") telemetry?.turnStarted(mode);
+        else telemetry?.turnSteered(mode);
         telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
-        telemetry?.turnSteered(mode);
-        await host.steer(message, images);
-        return { ok: true, steered: true, ...modeController.publicSnapshot(context) };
       }
-      telemetry?.turnStarted(mode);
-      telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
-      await host.prompt(message, images);
-      return { ok: true, ...modeController.publicSnapshot(context) };
+      return { ...result, ...modeController.publicSnapshot(context) };
     } catch (error) {
       telemetry?.turnFailed(mode, error);
       const message = String(error?.message ?? error);

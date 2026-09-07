@@ -23,8 +23,16 @@ function snapshot(mode) {
 }
 let mode = "prep";
 let generation = 0;
+const submittedCommands = new Set();
+let submitAttempts = 0;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "chat:prompt") {
+    submitAttempts++;
+    submittedCommands.add(input.commandId);
+    if (submitAttempts === 1) return { ok: false, uncertain: true };
+    return { ok: true, status: "accepted", commandId: input.commandId, inputId: "accepted-input", taskId: "retry-task", sessionId: input.sessionId, duplicate: true };
+  }
   if (channel === "sessions:current") return { ...snapshot(mode), generation };
   if (channel === "sessions:snapshot") return snapshot(input === "A" ? "prep" : "combat");
   if (channel === "mode:set") { mode = input; return { ...snapshot(mode), generation: ++generation }; }
@@ -85,7 +93,13 @@ app.whenReady().then(async () => {
     await until('selectedSessionId === "A" && !busy && document.getElementById("messages").textContent.includes("A final reply")');
     assert.equal(await evaluate('document.querySelectorAll(".streaming").length'), 0);
     assert.equal(await evaluate('[...document.querySelectorAll(".msg.assistant")].filter(e => e.textContent === "A final reply").length'), 1);
-    console.log("PASS Electron: A/B/A, live text/tool restore, drafts, attachments, IndexedDB reload, background completion without duplicates");
+    await evaluate('input.value = "retry me"; pendingImages = []; submit()');
+    await until('!!document.querySelector(".retry-input")');
+    await evaluate('document.querySelector(".retry-input").click()');
+    await until('outboxFor("A").size === 0');
+    assert.equal(submitAttempts, 2);
+    assert.equal(submittedCommands.size, 1);
+    console.log("PASS Electron: A/B/A, live restore, drafts/attachments, IndexedDB reload, background completion, stable retry command");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

@@ -17,6 +17,8 @@ import { err, errorToIpc, I18nError } from "./i18n-error.mjs";
 import { claimSessionMode, isPathInside, readSessionMode, sessionDirForMode, SessionModeError } from "./session-mode.js";
 import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
+import { TaskCoordinator } from "./tasks/task-coordinator.js";
+import { InputJournal } from "./tasks/input-journal.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -223,9 +225,10 @@ export class AgentHost {
    *   log?: (...data: any[]) => void,
    *   profile?: Record<string, any>,
    *   getLocale?: () => string,
+   *   taskStorageDir?: string,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir } = {}) {
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
@@ -244,7 +247,8 @@ export class AgentHost {
     this.sessionManager = null;
     this.unsubscribe = null;
     this.projection = new SessionProjection();
-    this.task = null;
+    this.tasks = null;
+    this.taskStorageDir = taskStorageDir;
     this.approvals = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
@@ -429,6 +433,8 @@ export class AgentHost {
     this.session = session;
     this.sessionManager = sessionManager;
     this.projection = new SessionProjection({ sessionId: sessionManager.getSessionId() });
+    this.tasks = null;
+    this.taskCoordinator();
     this._lastMessageKey = null;
     this.unsubscribe = session.subscribe((event) => this.forwardEvent(event));
     // ref/label 一律以会话实际持有的模型为准:恢复出的会话模型或 SDK 兜底
@@ -554,6 +560,7 @@ export class AgentHost {
 
   currentPayload() {
     return {
+      inputs: this.tasks?.snapshotInputs() ?? [],
       busy: this.busy,
       task: this.task ? { ...this.task } : null,
       inFlight: this.projection.snapshot(),
@@ -711,24 +718,41 @@ export class AgentHost {
     return { ok: true, tokensBefore: result?.tokensBefore };
   }
 
-  get busy() { return this.task?.state === "running" || this.task?.state === "stopping"; }
+  get task() { return this.tasks?.task ?? null; }
+  get busy() { return this.tasks?.busy ?? false; }
+
+  taskCoordinator() {
+    if (this.tasks) return this.tasks;
+    const sessionId = this.describeCurrent()?.id ?? "unattached";
+    const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
+    this.tasks = new TaskCoordinator({ sessionId, journal: new InputJournal(file), emit: event => this.emit(event),
+      adapter: {
+        prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
+        steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
+        isStreaming: () => Boolean(this.session?.isStreaming),
+        clearQueue: () => this.session?.clearQueue?.(),
+        abort: async () => {
+          for (const id of this.approvals.keys()) this.respondApproval(id, false);
+          await this.session?.abort();
+        },
+      } });
+    return this.tasks;
+  }
+
+  submitInput(text, images, commandId, prepare = null) {
+    if (!this.session) throw new Error("agent session not started");
+    const result = this.taskCoordinator().submit({ commandId, text, images, prepare });
+    if (result.ok && !result.duplicate && !this.sessionManager?.getSessionName()) {
+      try { this.sessionManager?.appendSessionInfo(text.trim().replace(/\s+/g, " ").slice(0, 24)); } catch { /* naming is best effort */ }
+    }
+    return result;
+  }
 
   async prompt(text, images) {
     if (!this.session) throw new Error("agent session not started");
     if (this.busy) throw new Error("Task already running");
-    const task = this.task = { id: randomUUID(), state: "running", startedAt: Date.now(), endedAt: null };
-    this.emit({ type: "task_state", task: { ...task } });
-    const opts = images?.length ? { images } : undefined;
-    try {
-      await this.session.prompt(text, opts);
-      task.state = task.state === "stopping" ? "stopped" : this._lastError ? "failed" : "completed";
-    } catch (error) {
-      task.state = task.state === "stopping" ? "stopped" : "failed";
-      throw error;
-    } finally {
-      task.endedAt = Date.now();
-      this.emit({ type: "task_state", task: { ...task } });
-    }
+    this.submitInput(text, images, randomUUID());
+    await this.tasks.run;
     // 首轮结束后用首条用户消息做会话标题(best-effort;侧栏展示用)
     try {
       if (this.sessionManager && !this.sessionManager.getSessionName()) {
@@ -742,18 +766,12 @@ export class AgentHost {
 
   async steer(text, images) {
     if (!this.session) throw new Error("agent session not started");
-    await this.session.steer(text, images?.length ? images : undefined);
+    return this.submitInput(text, images, randomUUID());
   }
 
   async abort(taskId = null) {
     if (!this.session) return;
-    if (taskId && taskId !== this.task?.id) return { ok: false, code: "STALE_TASK" };
-    if (this.busy) {
-      this.task.state = "stopping";
-      this.emit({ type: "task_state", task: { ...this.task } });
-    }
-    await this.session.abort();
-    return { ok: true };
+    return this.taskCoordinator().stop(taskId);
   }
 
   dispose() {
@@ -792,6 +810,7 @@ export class AgentHost {
   // ---- events -> renderer ----
 
   forwardEvent(event) {
+    this.tasks?.observe(event);
     // 遥测适配器在 UI 转换、去重与 early return 之前消费原始 SDK 生命周期事件,
     // 只读元数据,不碰 extractText/event.args/event.result(§16.2);内部自吞错误。
     // 例外:read 工具的 args.path 瞬时用于 skill.loaded 归属判定,路径不留存
