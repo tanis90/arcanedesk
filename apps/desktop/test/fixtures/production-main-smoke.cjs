@@ -11,6 +11,7 @@ const longTool = process.argv.includes("--long-tool");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
+const nativeReview = process.argv.includes("--native-review");
 let delayedReply = null;
 if (navigationScenario) {
   const handle = ipcMain.handle.bind(ipcMain);
@@ -47,10 +48,10 @@ let pickedDirectory = null;
 dialog.showOpenDialog = async () => ({ canceled: !pickedDirectory, filePaths: pickedDirectory ? [pickedDirectory] : [] });
 const setContextMenu = Tray.prototype.setContextMenu;
 Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; return setContextMenu.call(this, value); };
-dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
+if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
-  value.hide(); value.on("show", () => value.hide());
+  if (!nativeReview) { value.hide(); value.on("show", () => value.hide()); }
   value.webContents.setBackgroundThrottling(false);
 });
 const streams = new Map();
@@ -104,6 +105,14 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (nativeReview) {
+      assert.equal(hostB.tasks.task.state, "stopped");
+      assert.equal(hostB.busy, false);
+      assert.ok(tray.isDestroyed());
+      assert.deepEqual(requests, ["A"]);
+      console.log("PASS native review: real dialog stop-and-exit settles task and destroys tray");
+      return;
+    }
     if (navigationScenario) {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
@@ -146,6 +155,21 @@ app.on("will-quit", () => {
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (nativeReview) {
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await evaluate('input.value = "production-A"; submit()');
+    await ui('busy && messages.textContent.includes("A partial")');
+    window.setTitle("ArcaneDesk — Native acceptance");
+    window.show();
+    console.log(`NATIVE visible=${window.isVisible()} minimized=${window.isMinimized()}`);
+    window.on("minimize", () => console.log(`NATIVE minimized busy=${hostB.busy}`));
+    window.on("restore", () => console.log(`NATIVE restored busy=${hostB.busy}`));
+    window.on("hide", () => console.log(`NATIVE hidden busy=${hostB.busy}`));
+    window.on("show", () => console.log(`NATIVE shown busy=${hostB.busy}`));
+    finalExit = true;
+    console.log("READY native review: use the actual window controls and native dialog");
+    return;
+  }
   if (navigationScenario) {
     const a = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('input.value = "production-A"; submit()');
