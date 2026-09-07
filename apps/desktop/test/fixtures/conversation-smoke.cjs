@@ -16,6 +16,7 @@ let epochA = "test";
 let migratedHistory = false;
 let interrupted = false;
 let taskOverride = null;
+let overrideSeq = 0;
 const abortRequests = [];
 function snapshot(mode) {
   const id = mode === "prep" ? "A" : "B";
@@ -28,7 +29,7 @@ function snapshot(mode) {
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
       ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])].map(row => migratedHistory
         ? { ...row, key: `entry:${row.role}-${row.ts}`, legacyKey: `${row.role}:${row.ts}` } : row) : [],
-    inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
+    inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: id === "A" && taskOverride ? overrideSeq : epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
       tools: id === "A" ? [{ toolCallId: "tool-A", toolName: "bash", state: finished ? "succeeded" : "running", startedAt }] : [] } };
 }
@@ -224,7 +225,41 @@ app.whenReady().then(async () => {
     await new Promise(resolve => setTimeout(resolve, 60));
     assert.equal(await evaluate('document.getElementById("composer-stop-feedback").hidden'), true);
     assert.equal(await evaluate('send.disabled'), false, "old stop receipt cannot block the next task");
-    console.log("PASS Electron: conversation restore, scoped input, recovery and stopping draft protection");
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    taskOverride = { id: "later-task", state: "failed", error: "Server unavailable\nDetails: <b>timeout</b>" };
+    overrideSeq = 1;
+    const failedEvent = { type: "task_state", task: taskOverride, taskId: taskOverride.id, sessionId: "A", mode: "prep", runtimeEpoch: "reloaded", seq: overrideSeq };
+    window.webContents.send("arcane:event", failedEvent);
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A" && !busy && !!document.querySelector(".task-terminal-reason")');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason b")'), null, "reason is plain text");
+    window.webContents.send("arcane:event", failedEvent);
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelectorAll(".task-terminal-reason").length'), 1);
+    await evaluate('input.value = "retain this"; document.querySelector(".recover-task").click(); saveWorkspace()');
+    const failureDraft = await evaluate('input.value');
+    assert.equal(failureDraft, "retain this\n\n" + await evaluate('t("chat.terminal.failedPrompt")'));
+    const terminalReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await terminalReloaded;
+    await until('selectedSessionId === "A" && !!document.querySelector(".task-terminal-reason") && workspaceReady.has("A")');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
+    assert.equal(await evaluate('input.value'), failureDraft);
+    assert.equal(await evaluate('pendingImages.length'), 1);
+    taskOverride = { id: "later-task", state: "stopped", error: "Tool stopped after its operation settled" };
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
+    delete taskOverride.error;
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), await evaluate('t("chat.terminal.stoppedReason")'));
+    taskOverride = { id: "next-task", state: "running" };
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
+    assert.equal(submitAttempts, 2, "terminal recovery prepares a draft without executing work");
+    console.log("PASS Electron: conversation restore, scoped input, stopping protection and durable terminal details");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

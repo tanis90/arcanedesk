@@ -69,13 +69,18 @@ function showTaskState(task) {
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task;
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
-  if (task?.state === "interrupted") {
-    taskIndicator.appendChild(el("span", null, " · " + t("chat.recovery.explanation") + " "));
+  if (["failed", "stopped", "cancelled"].includes(task?.state)) {
+    const reason = el("div", "task-terminal-reason", task.error || t(`chat.terminal.${task.state}Reason`));
+    taskIndicator.appendChild(reason);
+    taskIndicator.appendChild(el("div", "task-terminal-next", t(`chat.terminal.${task.state}Next`)));
+  }
+  if (["interrupted", "failed", "stopped"].includes(task?.state)) {
+    if (task.state === "interrupted") taskIndicator.appendChild(el("span", null, " · " + t("chat.recovery.explanation") + " "));
     const target = { sessionId: selectedSessionId, taskId: task.id };
     const recover = el("button", "recover-task", t("chat.recovery.action"));
     recover.addEventListener("click", () => {
       if (selectedSessionId !== target.sessionId || selectedTaskId !== target.taskId || busy) return;
-      const instruction = t("chat.recovery.prompt");
+      const instruction = t(task.state === "interrupted" ? "chat.recovery.prompt" : `chat.terminal.${task.state}Prompt`);
       if (!input.value.includes(instruction)) input.value += (input.value.trim() ? "\n\n" : "") + instruction;
       draftRevision++; autosize(); scheduleWorkspaceSave(); input.focus();
     });
@@ -1230,7 +1235,6 @@ function onEvent(event) {
       selectedTaskId = event.task.id;
       setBusy(["running", "stopping", "waiting_user", "queued", "waiting_resource"].includes(event.task.state));
       showTaskState(event.task);
-      if (event.task.state === "failed" && event.task.error) addStatus(t("chat.status.sendFailed", { error: event.task.error }));
       break;
     case "message": {
       // 终稿:替换对应流式草稿气泡(同 key),否则新建消息。
@@ -3069,7 +3073,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
 // 语言热切换:静态文案由 i18n.js 的 applyI18n 回填,状态派生标签在这里重跑。
 // 已渲染的聊天记录/会话标题是用户与 LLM 的数据,刻意不回翻。
 window.ArcaneI18n.onLocaleChange(() => {
-  updateComposerAction();
+  showTaskState(displayedTask);
   if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();

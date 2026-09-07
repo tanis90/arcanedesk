@@ -54,3 +54,5 @@ body.sidebar-pinned #shutdown-status { margin-left: 264px; }
 #composer-stop-feedback { padding: 4px 12px; text-align: left; color: var(--err); }
 #composer-stop-feedback[hidden] { display: none; }
 #send:disabled, #stop:disabled { opacity: .5; cursor: default; }
+.task-terminal-reason { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow-y: auto; color: var(--err); }
+.task-terminal-next { margin: 4px 0; }

@@ -206,7 +206,8 @@ app.whenReady().then(async () => {
     await until('selectedTaskId === "task-B-queued" && busy');
     assert.equal(await evaluate('taskIndicator.textContent'), await evaluate('t("activity.capacityQueue")'));
     send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
-    await until('!busy && taskIndicator.textContent === t("activity.cancelled")');
+    await until('!busy && taskIndicator.textContent.startsWith(t("activity.cancelled"))');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-next").textContent'), await evaluate('t("chat.terminal.cancelledNext")'));
     send("B", { type: "task_state", task: { id: "task-B-resource", state: "running" } });
     send("B", { type: "task_state", task: { id: "task-B-resource", state: "waiting_resource",
       waitingFor: { resources: ["fs:c:/workspace/shared"], holders: [{ sessionId: "A", taskId: "task-A", name: "Session A" }] } } });
