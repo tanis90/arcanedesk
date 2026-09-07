@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, Menu, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,8 @@ import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
 import { SessionRegistry } from "./conversations/session-registry.js";
 import { ActivityCenter } from "./conversations/activity-center.js";
+import { DesktopNotifications } from "./conversations/desktop-notifications.js";
+import "../shared/i18n/messages.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
@@ -81,6 +83,7 @@ let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设�
 let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
+let desktopNotifications = null;
 
 function sendToRenderer(event) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -91,6 +94,8 @@ function sendToRenderer(event) {
     try { activityCenter?.observe(event); }
     catch (error) { console.error("[activity] event projection failed", error.message); }
   }
+  if (event.type === "activity_update") desktopNotifications?.reconcile(event.summary.sessionId);
+  if (event.type === "activity_removed") desktopNotifications?.reconcile(event.sessionId);
 }
 
 function isTrustedChatIpc(event) {
@@ -716,9 +721,31 @@ app.whenReady().then(async () => {
       return host ? { ...host.describeCurrent(), mode: host.profile.mode } : null;
     },
     emit: sendToRenderer,
-    notify: notice => sendToRenderer({ type: "activity_notice", notice }),
+    notify: notice => {
+      sendToRenderer({ type: "activity_notice", notice });
+      desktopNotifications?.deliver(notice);
+    },
     log: console.error,
   });
+  desktopNotifications = new DesktopNotifications({ file: configPath("notifications.json"),
+    supported: () => Notification.isSupported(),
+    foreground: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && mainWindow.isVisible() && !mainWindow.isMinimized()),
+    create: options => new Notification({ ...options, icon: ARCANE_APP_ICON }),
+    lookup: id => activityCenter.get(id),
+    text: kind => {
+      const key = { completed: "chat.task.completed", failed: "chat.task.failed", waiting_user: "chat.task.waitingUser" }[kind];
+      return globalThis.ARCANE_MESSAGES[resolveLocale()][key];
+    },
+    activate: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show(); mainWindow.focus();
+      sendToRenderer({ type: "notification_target" });
+    }, log: console.error,
+  });
+  ipcMain.handle("notifications:get", event => isTrustedChatIpc(event) ? { ok: true, ...desktopNotifications.status() } : { ok: false });
+  ipcMain.handle("notifications:set", (event, enabled) => isTrustedChatIpc(event) ? desktopNotifications.setEnabled(enabled) : { ok: false });
+  ipcMain.handle("notifications:take-target", event => isTrustedChatIpc(event) ? desktopNotifications.takeTarget() : null);
   ipcMain.handle("activity:snapshot", event => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     return { ok: true, ...activityCenter.snapshot() };

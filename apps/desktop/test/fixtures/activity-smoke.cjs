@@ -4,6 +4,7 @@ const { tmpdir } = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const desktop = path.resolve(__dirname, "../..");
 const scratch = mkdtempSync(path.join(tmpdir(), "arcane-activity-ui-"));
 app.setPath("userData", scratch);
@@ -12,6 +13,7 @@ app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const { ActivityCenter } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/activity-center.js")));
   const { SessionProjection } = await import(pathToFileURL(path.join(desktop, "src/main/sync/session-projection.js")));
+  const { DesktopNotifications } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/desktop-notifications.js")));
   const window = new BrowserWindow({ show: false, width: 1200, height: 820,
     webPreferences: { preload: path.join(desktop, "preload.cjs"), contextIsolation: true, backgroundThrottling: false, offscreen: true } });
   const sessions = new Map([ ["A", { name: "今晚的冒险素材", mode: "prep" }], ["B", { name: "支线剧情", mode: "prep" }], ["C", { name: "战场态势", mode: "combat" }] ]);
@@ -19,8 +21,18 @@ app.whenReady().then(async () => {
     projection: new SessionProjection({ sessionId: id, epoch: "activity-test" }) });
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
+  let notificationBroker;
+  const nativeNotifications = [];
   const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
-    emit, notify: notice => { notices++; emit({ type: "activity_notice", notice }); } });
+    emit, notify: notice => { notices++; emit({ type: "activity_notice", notice }); notificationBroker?.deliver(notice); } });
+  notificationBroker = new DesktopNotifications({ file: path.join(scratch, "notifications.json"),
+    supported: () => true, foreground: () => focused, lookup: id => center.get(id), text: kind => kind,
+    activate: () => { focused = true; emit({ type: "notification_target" }); },
+    create: options => {
+      const native = new EventEmitter(); native.options = options;
+      native.show = () => {}; native.close = () => native.emit("close");
+      nativeNotifications.push(native); return native;
+    } });
   function snapshot(id) {
     const row = sessions.get(id);
     return { ok: true, session: { id, name: row.name, path: row.path }, mode: row.mode, generation,
@@ -37,6 +49,9 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+    if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };
+    if (channel === "notifications:set") return notificationBroker.setEnabled(input);
+    if (channel === "notifications:take-target") return notificationBroker.takeTarget();
     if (channel === "activity:snapshot") return { ok: true, ...center.snapshot() };
     if (channel === "activity:read") return center.markRead(input, focused);
     if (channel === "sessions:current") return snapshot(selected);
@@ -142,8 +157,29 @@ app.whenReady().then(async () => {
     send("A", { type: "task_state", task: { id: "task-A2", state: "running" } });
     center.flush();
     await until('activityView.rows.get("A").taskId === "task-A2" && !activityView.loading');
+    await evaluate('refreshNotificationSettings()');
+    assert.equal(await evaluate('notificationsSwitch.getAttribute("aria-checked")'), "false");
+    await evaluate('notificationsSwitch.click()');
+    await until('notificationsSwitch.getAttribute("aria-checked") === "true"');
+    assert.equal(notificationBroker.enabled, true);
+    focused = false;
+    send("A", { type: "task_state", task: { id: "task-A2", state: "completed" } });
+    assert.equal(nativeNotifications.length, 1);
+    assert.equal(await evaluate('selectedSessionId'), "B");
+    nativeNotifications[0].emit("click");
+    await until('selectedSessionId === "A" && !openingNotification');
+    assert.equal(notificationBroker.takeTarget(), null);
+    focused = false;
+    sessions.get("B").attentions = [];
+    send("B", { type: "task_state", task: { id: "task-B-native", state: "completed" } });
+    await evaluate('activityReady = false');
+    nativeNotifications[1].emit("click");
+    const rebuilt = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await rebuilt;
+    await until('selectedSessionId === "B" && activityReady && !openingNotification');
+    assert.equal(notificationBroker.takeTarget(), null);
     assert.equal(errors.length, 0, errors.join("\n"));
-    console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload and gap recovery");
+    console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);
   } catch (error) {
     console.error(error);

@@ -263,6 +263,7 @@ async function resyncSelected() {
 }
 
 function receiveEvent(event, replay = false) {
+  if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
   if (!replay) eventInbox.record(event);
   if (event.sessionId && event.sessionId === selectedSessionId && Number.isInteger(event.seq)) {
@@ -1906,6 +1907,22 @@ async function openActivity(row, notice = null) {
   }
 }
 
+let openingNotification = false;
+async function openNotificationTarget() {
+  if (openingNotification) return;
+  openingNotification = true;
+  try {
+    while (true) {
+      const navigation = navigationRequest;
+      const target = await window.arcane.takeNotificationTarget();
+      if (navigation !== navigationRequest) break;
+      if (!target?.row) break;
+      await openActivity(target.row, target.notice);
+    }
+  } catch { /* Activity navigation remains available if a window is being rebuilt. */ }
+  finally { openingNotification = false; }
+}
+
 document.getElementById("sessions-toggle").addEventListener("click", () =>
   setDrawer(!drawer.classList.contains("open"))
 );
@@ -1936,6 +1953,25 @@ const telemetryConsentAccept = /** @type {HTMLButtonElement} */ (document.getEle
 const telemetryConsentDecline = /** @type {HTMLButtonElement} */ (document.getElementById("telemetry-consent-decline"));
 const telemetrySettingSwitch = /** @type {HTMLButtonElement} */ (document.getElementById("telemetry-setting-switch"));
 const telemetrySettingStatus = document.getElementById("telemetry-setting-status");
+const notificationsSwitch = /** @type {HTMLButtonElement} */ (document.getElementById("notifications-switch"));
+const notificationsStatus = document.getElementById("notifications-status");
+function showNotificationSettings(status) {
+  notificationsSwitch.setAttribute("aria-checked", String(Boolean(status.enabled)));
+  notificationsSwitch.disabled = typeof status.enabled !== "boolean" || (!status.supported && !status.enabled);
+  notificationsStatus.textContent = t(!status.ok || status.storageError ? "notifications.saveFailed"
+    : !status.supported ? "notifications.unsupported" : status.deliveryFailed ? "notifications.deliveryFailed"
+      : status.enabled ? "notifications.enabled" : "notifications.disabled");
+}
+async function refreshNotificationSettings() {
+  try { showNotificationSettings(await window.arcane.getDesktopNotifications()); }
+  catch { showNotificationSettings({ ok: false }); }
+}
+notificationsSwitch.addEventListener("click", async () => {
+  const enabled = notificationsSwitch.getAttribute("aria-checked") !== "true";
+  notificationsSwitch.disabled = true;
+  try { showNotificationSettings(await window.arcane.setDesktopNotifications(enabled)); }
+  catch { await refreshNotificationSettings(); notificationsStatus.textContent = t("notifications.saveFailed"); }
+});
 const providerList = document.getElementById("provider-list");
 const providerFormWrap = document.getElementById("provider-form-wrap");
 const defaultModelSelect = /** @type {HTMLSelectElement} */ (document.getElementById("default-model-select"));
@@ -2191,6 +2227,7 @@ async function setSettingsOpen(open) {
 }
 
 async function refreshSettings() {
+  void refreshNotificationSettings();
   const settings = await window.arcane.getSettings();
   refreshVoiceSettings(); // 语音分区与 provider 同页,一并刷新
   refreshWebPermissions();
@@ -2821,4 +2858,4 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { vo
 window.addEventListener("focus", () => { void activityView.load(); activityView.scheduleRead(); });
 void activityView.load();
 refreshSessions();
-pullCurrentSession();
+pullCurrentSession().then(() => openNotificationTarget());

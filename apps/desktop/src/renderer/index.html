@@ -1771,6 +1771,16 @@
         </div>
         <div class="settings-pane" id="pane-general" hidden>
           <section>
+            <div class="telemetry-setting-row">
+              <div class="telemetry-setting-copy">
+                <h3 id="notifications-title" data-i18n="notifications.title">系统通知</h3>
+                <p class="settings-note" data-i18n="notifications.note">应用不在前台时，提醒任务完成、失败或需要你处理。通知只显示会话标题和状态。</p>
+              </div>
+              <button class="telemetry-switch" id="notifications-switch" type="button" role="switch" aria-checked="false" aria-labelledby="notifications-title"></button>
+            </div>
+            <p class="settings-note" id="notifications-status" aria-live="polite"></p>
+          </section>
+          <section>
             <h3 data-i18n="settings.general.language">界面语言</h3>
             <select id="locale-select">
               <option value="auto" data-i18n="settings.general.languageAuto">跟随系统</option>
