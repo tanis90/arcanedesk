@@ -163,13 +163,18 @@ function forgetSession(id) {
   deletedSessions.add(id); eventInbox.remove(id); snapshotCache.delete(id);
   workspaceReady.delete(id); syncingSessions.delete(id); outboxBySession.delete(id);
   for (const [mode, selected] of lastSessionByMode) if (selected === id) lastSessionByMode.delete(mode);
-  void workspaceStore.remove(id).catch(() => {});
+  const cleanup = workspaceStore.remove(id).catch(() => {});
   if (selectedSessionId === id) {
     snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
     document.getElementById("conversation-title").textContent = "";
   }
+  return cleanup;
+}
+async function syncDeletedSessions() {
+  const result = await window.arcane.deletedSessions?.();
+  await Promise.all((result?.sessionIds ?? []).map(forgetSession));
 }
 const lastSessionByMode = new Map();
 let workspaceSaveTimer;
@@ -2916,7 +2921,9 @@ new ResizeObserver(() => {
 }).observe(messages);
 messages.addEventListener("scroll", () => activityView.scheduleRead());
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.scheduleRead(); } });
-window.addEventListener("focus", () => { void activityView.load(); activityView.scheduleRead(); });
+window.addEventListener("focus", () => { void syncDeletedSessions().catch(() => {}); void activityView.load(); activityView.scheduleRead(); });
 void activityView.load();
-refreshSessions();
-pullCurrentSession().then(() => openNotificationTarget());
+syncDeletedSessions().catch(() => {}).finally(() => {
+  refreshSessions();
+  pullCurrentSession().then(() => openNotificationTarget());
+});

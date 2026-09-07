@@ -16,6 +16,7 @@ import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
 import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
 import { PanelCommands } from "./scheduling/panel-commands.js";
+import { SessionDeletions } from "./conversations/session-deletions.js";
 import "../shared/i18n/messages.js";
 import { configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
@@ -676,8 +677,9 @@ app.whenReady().then(async () => {
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
   const resources = new ResourceCoordinator();
+  const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks") });
   const hosts = {
-    combat: new SessionRegistry({ createHost: () => new AgentHost({
+    combat: new SessionRegistry({ deletions, createHost: () => new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
       openFoundry: openFoundryView,
@@ -691,7 +693,7 @@ app.whenReady().then(async () => {
         getCwd: () => combatWorkspace,
       },
     }) }),
-    prep: new SessionRegistry({ createHost: () => {
+    prep: new SessionRegistry({ deletions, createHost: () => {
       const cwd = prepStore.data.lastCwd ?? prepFallbackWorkspace;
       return new AgentHost({
       foundryRuntime,
@@ -733,6 +735,7 @@ app.whenReady().then(async () => {
     },
     log: console.error,
   });
+  for (const id of deletions.snapshot().sessionIds) activityCenter.remove(id);
   desktopNotifications = new DesktopNotifications({ file: configPath("notifications.json"),
     supported: () => Notification.isSupported(),
     foreground: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && mainWindow.isVisible() && !mainWindow.isMinimized()),
@@ -874,6 +877,7 @@ app.whenReady().then(async () => {
     if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
     return { ok: true, ...activityHostPayload(host), mode: host.profile.mode, cwd: host.cwd() };
   });
+  ipcMain.handle("sessions:deleted", event => isTrustedChatIpc(event) ? deletions.snapshot() : { ok: false, sessionIds: [] });
   ipcMain.handle("sessions:new", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;

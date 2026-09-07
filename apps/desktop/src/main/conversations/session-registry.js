@@ -5,9 +5,10 @@ const unavailable = () => Object.assign(new Error("Session is being deleted or h
 
 /** A mode's resident sessions. Navigation never disposes a running host. */
 export class SessionRegistry {
-  /** @param {{createHost: () => any}} options */
-  constructor({ createHost }) {
+  /** @param {{createHost: () => any, deletions?: any}} options */
+  constructor({ createHost, deletions }) {
     this.createHost = createHost;
+    this.deletions = deletions;
     this.hosts = new Map();
     this.activeHost = null;
     this.pending = new Map();
@@ -29,7 +30,8 @@ export class SessionRegistry {
     if (this.deleted.has(key)) return { ok: true };
     const target = this.allHosts().find(h => pathKey(h.describeCurrent().path) === key);
     // Validate ownership even for an unloaded history file.
-    (target ?? this.activeHost).openSessionManager(sessionPath);
+    const manager = (target ?? this.activeHost).openSessionManager(sessionPath);
+    const sessionId = target?.describeCurrent().id ?? manager?.getSessionId();
     if (target) target.deleting = true;
     const operation = Promise.resolve().then(async () => {
       try {
@@ -39,9 +41,14 @@ export class SessionRegistry {
           const stopped = await target.abort(target.task?.id);
           if (stopped?.ok === false || target.busy) throw new Error("Session task has not stopped");
         }
+        this.deletions?.begin(sessionId, path.resolve(sessionPath));
         try { await unlink(sessionPath); }
-        catch (error) { if (error.code !== "ENOENT") throw error; }
+        catch (error) {
+          if (error.code !== "ENOENT") { this.deletions?.cancel(sessionId); throw error; }
+        }
         this.deleted.add(key);
+        let warning;
+        try { this.deletions?.commit(sessionId); } catch (error) { warning = error.message; }
         if (target) {
           target.dispose();
           this.hosts.delete(target.describeCurrent().id);
@@ -52,7 +59,7 @@ export class SessionRegistry {
             if (next && selection === this.selection) next.emit({ type: "session_switched", ...next.currentPayload() });
           }
         }
-        return { ok: true };
+        return { ok: true, ...(warning ? { warning } : {}) };
       } catch (error) {
         if (this.deleted.has(key)) return { ok: true, warning: error.message };
         if (target && !this.deleted.has(key)) target.deleting = false;
@@ -65,7 +72,7 @@ export class SessionRegistry {
 
   async select(sessionPath, fresh = false, selection = ++this.selection) {
     const requestedKey = sessionPath ? pathKey(sessionPath) : null;
-    if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey))) throw unavailable();
+    if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey) || this.deletions?.isDeleted(requestedKey))) throw unavailable();
     let host = requestedKey ? this.allHosts().find(h => pathKey(h.describeCurrent().path) === requestedKey) : null;
     if (!host) {
       const key = requestedKey ?? (fresh ? Symbol("new") : "initial");

@@ -25,6 +25,7 @@ app.whenReady().then(async () => {
   const { PanelCommands } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/panel-commands.js")));
   const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
   let recoveryApproved = false, finishOldPage;
+  const deletedIds = [];
   const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
     operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
   let notificationBroker;
@@ -55,6 +56,7 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+    if (channel === "sessions:deleted") return { ok: true, sessionIds: deletedIds };
     if (channel === "panel:open") return panelCommands.request("open");
     if (channel === "panel:command-state") return panelCommands.snapshot();
     if (channel === "panel:cancel-command") return panelCommands.cancel(input);
@@ -237,6 +239,12 @@ app.whenReady().then(async () => {
     assert.deepEqual(await evaluate('(async () => { const fresh = new ArcaneConversationState.WorkspaceStore(); await fresh.save("A", { draft: "late resurrection" }); return fresh.load("A"); })()'), {});
     await evaluate('Promise.all([workspaceStore.save("delete-race", { images: [{ data: "secret" }] }), workspaceStore.remove("delete-race")])');
     assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("delete-race")'), {});
+    await evaluate('workspaceStore.save("offline-session", { draft: "missed deletion", images: [{ data: "secret" }] })');
+    deletedIds.push("A", "offline-session");
+    const deletionReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
+    window.reload(); await deletionReload;
+    await until('deletedSessions.has("offline-session") && selectedSessionId === "B"');
+    assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("offline-session")'), {});
     assert.equal(errors.length, 0, errors.join("\n"));
     console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);

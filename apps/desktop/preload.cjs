@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("arcane", {
   getPanelCommand: () => ipcRenderer.invoke("panel:command-state"),
   cancelPanelCommand: id => ipcRenderer.invoke("panel:cancel-command", id),
   recoverPanel: () => ipcRenderer.invoke("panel:recover"),
+  deletedSessions: () => ipcRenderer.invoke("sessions:deleted"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth: (px) => ipcRenderer.invoke("panel:set-chat-width", px),
   /** While dragging the splitter, let mouse events pass through the Foundry view. */
