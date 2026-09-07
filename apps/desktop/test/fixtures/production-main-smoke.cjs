@@ -8,6 +8,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const longTool = process.argv.includes("--long-tool");
+const toolRecovery = process.argv.includes("--tool-recovery");
 const deletionScenario = process.argv.includes("--deletion-scenario");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
@@ -84,6 +85,7 @@ const server = http.createServer(async (req, res) => {
   res.on("close", () => { entry.closed = true; });
   streams.set(tag, entry);
   write({ role: "assistant", content: `${tag} partial` });
+  if (toolRecovery && tag === "B") require("./production-tool-recovery.cjs").respond({ data, entry, write, res, scratch, psLiteral });
   if (foundryScenario) {
     const result = data.messages.find(row => row.role === "tool" && row.tool_call_id === `world-${tag}`);
     if (result) {
@@ -121,6 +123,12 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    if (toolRecovery) {
+      assert.deepEqual(requests, ["A", "B", "B", "B"]);
+      assert.equal(hostB.tasks.task.state, "stopped");
+      console.log("PASS production tool recovery: failed shell stays in task, successful artifact survives stop and reload");
+      return;
+    }
     if (deletionScenario) {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
@@ -404,6 +412,10 @@ app.on("will-quit", () => {
   await ui('busy && messages.textContent.includes("B partial")');
   hostB = globalThis.__arcaneHosts.prep.get(idB);
   assert.ok(hostA.busy && hostB.busy);
+  if (toolRecovery) {
+    await require("./production-tool-recovery.cjs").verify({ hostA, hostB, streams, scratch, window, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
   if (deletionScenario) {
     await require("./production-deletion.cjs")({ hostA, hostB, streams, evaluate, ui, until });
     finalExit = true; app.quit(); return;
