@@ -1624,19 +1624,23 @@
     <p class="telemetry-consent-foot" data-i18n="telemetry.consent.foot">不影响任何功能；之后可在「设置 → 通用」中随时更改。</p>
   </section>
   <aside id="session-drawer">
-    <div class="drawer-head"><span data-i18n="activity.title">活动</span><button id="drawer-close" data-i18n-title="settings.close" title="关闭">×</button></div>
-    <div id="activity-list"></div>
-    <p id="activity-empty" class="drawer-empty" data-i18n="activity.empty">后台进展会显示在这里</p>
-    <div class="drawer-head"><span data-i18n="sessions.drawerTitle">会话</span><button id="session-new" title="新会话" data-i18n-title="sessions.new">+</button></div>
+    <div class="drawer-head"><span data-i18n="sessions.drawerTitle">会话</span><div><button id="session-new" title="新会话" data-i18n-title="sessions.new">+</button><button id="drawer-close" data-i18n-title="settings.close" title="关闭">×</button></div></div>
+    <button id="navigation-retry" type="button" data-i18n="navigation.storageFailed" hidden></button>
     <div id="session-list"></div>
+    <button id="session-archives" type="button" data-i18n="navigation.archives">已归档</button>
   </aside>
   <div id="drawer-backdrop"></div>
   <div id="activity-bar">
-    <button id="activity-toggle" type="button" aria-controls="session-drawer" data-i18n="activity.title">活动</button>
     <button id="activity-notice" type="button" aria-live="polite" hidden></button>
     <button id="activity-dismiss" type="button" data-i18n-title="activity.dismiss" title="收起提示" hidden>×</button>
     <button id="activity-error" type="button" data-i18n="activity.syncFailed" hidden>活动暂不可用，重试</button>
   </div>
+  <section id="archive-page" hidden aria-labelledby="archive-title">
+    <div class="archive-head"><h1 id="archive-title" data-i18n="navigation.archives">已归档</h1><button id="archive-back" type="button" data-i18n="navigation.back">返回对话</button></div>
+    <div id="archive-list"></div><p id="archive-empty" data-i18n="navigation.emptyArchives">没有已归档会话</p>
+  </section>
+  <div id="navigation-toast" role="status" hidden></div>
+  <div id="archive-readonly" hidden><span data-i18n="navigation.readOnly">此会话已归档，恢复后可继续对话</span><button id="archive-restore" type="button" data-i18n="navigation.restore">恢复会话</button></div>
   <div id="conversation-title"></div>
   <div id="shutdown-status" role="status" hidden><span></span><button type="button" id="cancel-exit" data-i18n="lifecycle.cancelExit">取消退出</button></div>
   <div id="panel-command" role="status" hidden><span></span><button type="button" id="panel-command-cancel" data-i18n="panel.cancel">取消等待</button><button type="button" id="panel-command-recover" data-i18n="panel.recover">重置页面…</button><button type="button" id="panel-command-dismiss" data-i18n="panel.dismiss">收起</button></div>
@@ -1670,7 +1674,6 @@
       <input type="file" id="attach-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       <div class="composer-bar">
         <button id="plus" title="更多操作(添加图片…)" data-i18n-title="composer.more.title">+</button>
-        <span id="composer-action" class="status-line" aria-live="polite"></span>
         <button id="mic" title="按住说话(或按住 F9)" data-i18n-title="composer.mic.title" data-i18n-dynamic>🎙</button>
         <button id="stop" title="中止当前任务" data-i18n-title="composer.stop.title">■</button>
         <button id="send" title="发送(Enter)" data-i18n-dynamic>↑</button>
@@ -1828,7 +1831,9 @@
   <script src="../../generated/renderer-assets/mermaid/dist/mermaid.min.js"></script>
   <script src="markdown.js"></script>
   <script src="conversations/session-state.js"></script>
+  <link rel="stylesheet" href="conversations/navigation.css"/>
   <script src="conversations/activity-view.js"></script>
+  <script src="conversations/navigation-view.js"></script>
   <script src="chat.js"></script>
   <script src="voice.js"></script>
 </body>

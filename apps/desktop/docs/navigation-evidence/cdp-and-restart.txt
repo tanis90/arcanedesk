@@ -1,0 +1,40 @@
+
+[skills] skills refresh failed; keeping current skills: fetch failed
+[fvtt-ops] Node 22.23.2 ready at C:\Users\yangqi\AppData\Local\Temp\arcane-sidebar-acceptance-LWg6k5\local\arcane-desktop\runtime\node\22.23.2\win-x64\node.exe (bundled)
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+[agent] system prompt: system-prompts/combat.md (6223 chars)
+[agent:combat] session ready (7 custom tools, builtin off, approvals off, id=01a07bd6)
+[agent:prep] event queue_update
+[agent:prep] event agent_start
+[agent:prep] event turn_start
+[agent:prep] event message_start
+[agent:prep] event message_start
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+[agent:prep] event queue_update
+[agent:prep] event agent_start
+[agent:prep] event turn_start
+[agent:prep] event message_start
+[agent:prep] event message_start
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+[agent] turn ended; messages=2; lastError=none
+[agent] settled; lastError=none
+[agent:prep] event queue_update
+[agent] turn ended; messages=2; lastError=none
+[agent] settled; lastError=none
+[agent:prep] event queue_update
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+PASS production sidebar: CDP menus, projects, archive, restore, delete and execution isolation
+
+[skills] skills refresh failed; keeping current skills: fetch failed
+[fvtt-ops] Node 22.23.2 ready at C:\Users\yangqi\AppData\Local\Temp\arcane-sidebar-acceptance-LWg6k5\local\arcane-desktop\runtime\node\22.23.2\win-x64\node.exe (reused)
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+[agent] system prompt: system-prompts/combat.md (6223 chars)
+[agent:combat] session ready (7 custom tools, builtin off, approvals off, id=01a07bd6)
+[agent] prep preamble: system-prompts/prep.md (1391 chars)
+[agent:prep] session ready (8 custom tools, builtin ON, approvals off, id=01a07bd6)
+PASS sidebar restart: durable archive, pin, title, project and workspace without model calls

@@ -1,388 +1,129 @@
-# Desktop 多会话架构设计
+# Desktop 多会话唯一技术方案
 
-状态：实施中；设计契约与实施前调查保留。当前实现和验收进度见 [milestones](milestones.md)，逐项缺口见 [验收审计](acceptance-audit.md)。
+日期：2026-09-07。状态：当前有效方案；新导航、归档与既有执行底座已实现，静态及 CDP 验收通过。系统原生交互按用户要求交付人工表单，未冒充实测通过。
 
-日期：2026-09-07
+本文是本轮多会话改造唯一技术方案。体验要求见 [spec](spec.md)，实现状态和验收缺口统一见 [acceptance-audit](acceptance-audit.md)。[原架构](architecture-history.md)、[原审计](acceptance-audit-history.md)、[milestones](milestones.md) 和 [最初调查](model-and-session-isolation-spec.md) 仅保存历史证据；其中活动双列表、计数横栏、关闭三选一及直接删除运行会话的旧产品流程不再实施。Kimi 资料只作参考，不构成第二套方案。
 
-体验契约：[spec.md](spec.md)
+## 1. 最终交互
 
-历史调查：[会话模型隔离与切换问题记录](model-and-session-isolation-spec.md)
+### 1.1 导航
 
-## 1. 设计结论
+一个左侧栏分成上下两区：上方手动置顶，下方按项目文件夹聚合。保留新建会话入口，底部提供“已归档”入口。右侧仍为对话及既有 Foundry 面板，不增加新的一列。
 
-采用应用内模块化架构：主进程拥有会话、任务和可恢复运行现场；前端拥有导航与阅读交互，通过带版本的快照和事件维护投影。
+- 置顶后只在置顶区出现；取消置顶回原项目。置顶不更改目录、模式或任务状态。
+- 项目以规范化的绝对工作目录为标识，文件夹名用于展示。同名不同路径不合并，必要时展示父目录；历史目录缺失的记录归入“未指定目录”。第一版按路径聚合，不自动合并符号链接别名。
+- 置顶按用户置顶顺序排列，新置顶追加；项目及会话以载入时的稳定顺序显示。流片、完成、未读变化只更新原行。新建会话插入所属组顶部，恢复和取消置顶插回所属组，不重排其他行。
+- 项目可折叠并持久保存。主动打开某会话时展开所属项目；后台更新不展开。项目内新建沿用该项目目录，模式取当前明确选择；换目录创建新会话。
+- 列表合并备团和战斗会话，打开时自动进入会话所属模式。模式不再过滤掉另一模式的导航记录。
+- 会话行只有紧凑标题和固定状态位，普通活动只显示小转圈。取消旧活动列表、顶部“运行 N / 待处理 N”横栏及“任务进行中”副标题。
+- running、queued、waiting_resource、stopping 使用转圈，悬停或进入对话查看实际阶段；waiting_user 使用静态需回应标记；失败用静态错误标记，未读用小点。状态优先级为需回应、进行中、失败、未读、无标记；对话内保留完整状态。折叠项目可在同一状态位显示子会话聚合标记。
+- 窄屏保留普通侧栏展开按钮。普通进展不弹通知；完成、失败、需要回应沿用既有去重和不抢焦点策略。
 
-**会话选择、任务执行、界面同步是三套不同的状态，不能共用一个 active 或 busy 标记。**
+### 1.2 菜单、归档与删除
 
-先保持 Electron 主进程与 Pi SDK 的现有运行方式，不引入独立服务、消息中间件或全量事件溯源系统。模块边界允许将来迁移执行进程，但本轮不以此为前提。
+普通会话右键和悬停“⋯”打开同一个菜单：置顶／取消置顶、重命名、归档会话。无需用户掌握右键才能发现操作。
 
-本文主体保留实施前的职责设计与接口示意；§1.1 记录当前落地方式，第 11 节保留实施前调查。接口示意不应直接用作调用文档，实际调用以 preload 和主进程 handler 为准。验收仍以 spec 的行为契约为准。
-
-### 1.1 当前实现对应关系（M8o4 后复核）
-
-| 设计职责 | 当前实现与边界 |
+| 操作 | 行为 |
 | --- | --- |
-| 会话管理 | [SessionRegistry](../src/main/conversations/session-registry.js) 按会话持有 resident AgentHost；每模式保留 activeHost 作为导航/默认选择指针，该指针不拥有后台任务的生命周期。运行命令按明确会话路由 |
-| 任务与 SDK 适配 | [TaskCoordinator](../src/main/tasks/task-coordinator.js) 拥有任务、输入和等待状态；[AgentHost](../src/main/agent-host.js) 提供 SDK adapter，没有另建 PiSessionAdapter 服务。停止时保留实际残留资源等待详情 |
-| 同步与工作区 | [SessionProjection](../src/main/sync/session-projection.js) 保存权威现场和事件版本；[session-state](../src/renderer/conversations/session-state.js) 管理事件收件箱、有界缓存及 IndexedDB 工作区；[chat](../src/renderer/chat.js) 负责导航、快照校准和渲染 |
-| 活动与生命周期 | [ActivityCenter](../src/main/conversations/activity-center.js)、[DesktopNotifications](../src/main/conversations/desktop-notifications.js)、[ShutdownCoordinator](../src/main/conversations/shutdown-coordinator.js) 位于 conversations 目录，由 [main](../src/main/main.js) 组合 |
-| 调度与资源 | [ExecutionScheduler](../src/main/scheduling/execution-scheduler.js) 管理额度；[ResourceCoordinator](../src/main/scheduling/resource-coordinator.js) 独立管理租约，不能把取消请求当成实际操作退出 |
+| 置顶／取消置顶 | 更新导航位置，持久保存；不触发模型调用或任务停止 |
+| 重命名 | 修改展示标题，空白标题不提交；后续自动摘要不覆盖用户名称 |
+| 归档 | 从两区移出，清除置顶，保留历史、目录、模式、模型、草稿附件和阅读位置；展示“已归档 · 撤销”，无确认框 |
+| 查看已归档 | 独立列表按归档时间倒序，可查看历史；不自动恢复、不执行模型请求，输入区提供“恢复会话” |
+| 恢复／撤销归档 | 回到原项目，默认不重新置顶；原目录缺失仍保留原归属，执行前沿用目录有效性检查 |
+| 永久删除 | 只在已归档页提供；确认“永久删除此会话？对话记录无法恢复，项目文件不会删除。”后执行 |
 
-当前 IPC 名称及参数见 [preload](../preload.cjs)：提交为 chat:prompt，停止为 chat:abort，打开/删除沿用经过主进程模式归属校验的会话路径，快照以 sessionId 查询。§4 的点号命令是职责示意，不是现有 IPC 的逐字段 schema；提交和回答有 commandId 幂等记录，不能据此宣称全部导航和设置操作都使用同一幂等协议。
+有未结束任务（含排队、等待用户、等待资源、停止中）的会话不能归档；菜单禁用并说明“任务结束后可归档”。后端也必须检查，不能只依赖按钮。归档不暗中停止任务，不引入“完成后自动归档”的隐藏队列。
 
-后台事件当前通过 arcane:event 发往聊天 renderer，再由前端按会话缓存和按当前选择渲染；尚未实现 §5.3 描述的按会话正文订阅裁剪。已有缓存上限、流片合并与性能测量，不能将它们写成已实现的订阅服务。附件在工作区中保存可序列化内容，而非必须采用 §7 原建议的独立文件引用。
+归档请求的迟到完成不能覆盖用户随后打开归档页或其他会话的选择。归档当前会话后展示原项目的下一可用会话；没有则展示新建入口，不自动提交任务。对后台会话归档不改变当前选择。空归档页显示空态。旧通知指向归档会话时打开只读历史，不自动恢复；指向已删除会话时说明已删除，不打开其他会话冒充目标。
 
-会话身份复用原生 SessionManager 稳定 ID；第一轮持久化、消息身份及分支历史已经实际验收，无须新增第二套 ID 映射。具体证据、平台限制和未完成项见 [验收审计](acceptance-audit.md)，尤其系统托盘与通知的真实点击仍未通过。
+### 1.3 关闭与退出
 
-## 2. 模块及职责
+- × 无论忙闲直接隐藏到托盘，不弹选择框，任务继续。托盘创建失败保留窗口并说明，不能让用户失去恢复入口。
+- 点击托盘图标或菜单“打开 ArcaneDesk”恢复原窗口及现场。
+- 从托盘“退出 ArcaneDesk”发起退出，不再二次确认。冻结新任务、停止现有任务、等待真实操作退出和持久化后退出。
+- 收尾超过一秒显示进度及取消退出入口；取消只解除退出，不撤回已执行的停止。失败保留窗口和原因。
+- 操作系统结束进程、崩溃不承诺后台继续；重启恢复历史并标记中断，不自动重放工具。
 
-| 模块 | 所在位置 | 拥有的事实 | 对外职责 | 不承担的职责 |
-| --- | --- | --- | --- | --- |
-| SessionRegistry 会话管理 | 主进程 | 会话身份、模式、工作目录、模型配置、运行实例引用 | 创建、查找、加载、删除会话，回收已结束实例 | 不维护用户当前选中项，不因切换停止任务 |
-| TaskCoordinator 任务执行 | 主进程 | 任务状态、输入归属、待处理项、停止结果 | 接收命令、运行状态机、管理 Pi 适配器 | 不直接操作 DOM，不发送产品通知 |
-| SessionSync 状态同步 | 主进程 + 前端 | 运行现场投影、版本、订阅与同步游标 | 快照、增量更新、去重、断档恢复 | 不自行推断任务成功或停止 |
-| ConversationWorkspace 会话工作台 | 前端 | 选中会话、草稿、附件、阅读位置、展开状态 | 导航、输入、渲染及读到哪里 | 不拥有运行生命周期 |
-| ActivityCenter 活动与通知 | 主进程 + 前端 | 未读游标、通知消费记录；任务摘要为派生数据 | 跨模式活动列表、待处理入口、通知 | 不维护另一套可写的任务状态 |
-| ExecutionScheduler 执行调度 | 主进程 | 执行额度、等待队列、资源租约 | 公平排队、资源协调、取消等待 | 不接管对话、模型或视图 |
+## 2. 保留的架构与模块边界
 
-这六项是职责边界，不要求各自成为 npm 包或服务。ActivityCenter 与 SessionSync 在两端各有不同职责，不共享可变对象。
+主进程拥有执行事实，renderer 拥有选择和阅读状态。会话选择、任务执行、界面同步不能共用一个 busy 标记。继续使用 Electron 主进程和 Pi SDK，不新增服务或消息中间件。
 
-### 2.1 支撑边界
+| 模块 | 当前文件／目标变化 |
+| --- | --- |
+| 会话注册表 | [SessionRegistry](../src/main/conversations/session-registry.js) 按模式持有多个 resident AgentHost；activeHost 只作选择指针。补充跨模式目录摘要及归档准入，不因导航停止其他任务 |
+| 任务执行 | [TaskCoordinator](../src/main/tasks/task-coordinator.js) 管理任务、输入、提问、停止和终态；[AgentHost](../src/main/agent-host.js) 保留 SDK adapter，不再另建 PiSessionAdapter 服务 |
+| 运行同步 | [SessionProjection](../src/main/sync/session-projection.js) 提供带版本的现场；[session-state](../src/renderer/conversations/session-state.js) 管理缓存、事件和持久工作区 |
+| 导航元数据 | [SessionNavigation](../src/main/conversations/session-navigation.js) 提供轻量存储，负责用户标题、置顶、归档；合并两个 registry 的摘要，不复制正文，不拥有任务状态 |
+| 导航视图 | [NavigationView](../src/renderer/conversations/navigation-view.js) 从 [chat](../src/renderer/chat.js) 提取分组和菜单投影，复用原导航校准、草稿和阅读恢复；替换旧 ActivityView 的常驻列表与横栏 |
+| 活动事实与通知 | [ActivityCenter](../src/main/conversations/activity-center.js) 和 [DesktopNotifications](../src/main/conversations/desktop-notifications.js) 保留未读、摘要、通知去重；前端展示为会话行标记和必要提示，不再另有活动列表 |
+| 资源与调度 | [ExecutionScheduler](../src/main/scheduling/execution-scheduler.js) 管额度，[ResourceCoordinator](../src/main/scheduling/resource-coordinator.js) 管资源租约；取消请求不等于实际退出 |
+| 生命周期 | [ShutdownCoordinator](../src/main/conversations/shutdown-coordinator.js) 及 [main](../src/main/main.js) 负责托盘与退出，复用已有实现 |
 
-- `PiSessionAdapter` 隶属任务执行模块，封装 SDK 的 prompt、steer、abort、事件与 SessionManager。其他模块不访问 SDK 私有字段。
-- `AppLifecycle` 是入口层的协调器：关闭、退出、恢复时调用上述模块，自己不维护任务状态。
-- 持久化由各事实所有者通过存储接口写入，不建立一个可以随意修改所有模块状态的全局 store。
-- 现有 Foundry runtime、工具和权限机制继续使用；资源协调在受控操作的执行入口接入。
+这些是职责边界，不要求独立 npm 包。归档与元数据写入接入同会话串行边界；不要另造第二套任务状态机。
 
-### 2.2 依赖方向
+## 3. 数据与命令
 
-```mermaid
-flowchart LR
-  UI[会话工作台] -->|明确目标的命令| IPC[Preload / IPC 边界]
-  IPC --> Registry[会话管理]
-  IPC --> Tasks[任务执行]
-  Tasks --> Registry
-  Tasks --> Adapter[Pi 适配器]
-  Tasks --> Scheduler[执行调度]
-  Registry -->|会话变更| Sync[状态同步]
-  Tasks -->|规范化事件| Sync
-  Sync -->|快照 / 事件| Store[前端会话投影]
-  Store --> UI
-  Sync -->|摘要变化| Activity[活动与通知]
-  Activity --> UI
-```
+### 3.1 数据来源与持久化
 
-SDK 事件先归属任务，再更新主进程投影，最后发布给前端。前端收不到某条事件，不影响主进程中的运行现场。
+- 会话稳定 ID、模式、工作目录、模型及历史继续来自原生 SessionManager／现有 registry。工作目录取会话自身元数据，不从当前全局目录猜测。跨项目发现使用 `SessionManager.listAll(modeSessionDir)` 后逐项校验路径和模式标记；SDK 的 `list(cwd, dir)` 会过滤其他目录，不能用于全项目导航。恢复实例以该会话的原始 cwd 初始化。
+- 导航元数据按 sessionId 保存：`customTitle?`、`pinnedOrder?`、`archivedAt?`。置顶与归档互斥；旧记录缺字段即未置顶、未归档，现有标题继续可用。
+- 主进程原子写入 `config/session-navigation.json`（schemaVersion=1）的导航文件，成功后才回执并发布变更。写失败保留原列表、原元数据，允许重试。
+- 草稿附件、阅读锚点、展开内容继续按会话在 IndexedDB 保存；项目折叠也存于 renderer 工作区。归档不清理这些数据。
+- 永久删除沿用删除日志和恢复机制，再清理导航、已读和前端缓存；只回收应用拥有且无引用的附件，不删除项目目录或用户源文件。删除失败保留可追踪记录。
 
-## 3. 身份和状态归属
+### 3.2 接口边界
 
-### 3.1 身份
+当前调用以 [preload](../preload.cjs) 与 main handler 为准：`chat:prompt`、`chat:abort`、`sessions:snapshot` 及既有打开／删除路由继续兼容，不为命名统一重写执行链路。
 
-| 字段 | 生命周期 | 用途 |
+本轮接口已在 preload、类型和 main 同步实现：
+
+| 接口 | 输入与结果 |
+| --- | --- |
+| sessions:navigation | 返回两个模式统一摘要，含 sessionId、mode、cwd、标题、导航元数据和权威任务摘要；不得隐式创建任务 |
+| sessions:setPinned | sessionId、pinned；设置目标值而非 toggle，重复调用安全；归档项拒绝置顶 |
+| sessions:rename | sessionId、title；主进程校验标题并持久化 |
+| sessions:archive | sessionId；串行确认没有未结束任务、清除置顶并登记 archivedAt；重复归档返回已有结果 |
+| sessions:restore | sessionId；清除 archivedAt，不自动置顶或执行 |
+| sessions:deleteArchived | sessionId；已归档页使用的删除入口，只接受已归档且无未结束任务的会话，复用删除屏障和删除日志 |
+| sessions:delete（保留旧 IPC 名称） | 继续验证模式和路径，但同样只允许已归档且无未结束任务的会话；不保留旧的直接停止并删除入口 |
+
+主进程通过稳定身份解析所属 registry 和已验证路径，不能接受 renderer 提供的任意删除路径。旧路径 IPC 保持所属模式和路径校验，再补充归档检查。
+
+归档与 submit 并发时：先接收任务则归档返回 SESSION_BUSY；先归档则 submit 返回 SESSION_ARCHIVED，并保留输入草稿。归档状态未知或同步失败时不得乐观允许新执行。恢复、删除、置顶并发同样串行；删除中的会话拒绝其他变更。读取历史与恢复执行分开，查看归档不得借打开逻辑自动新建或提交。
+
+## 4. 不变的执行与同步协议
+
+- sessionId 定位会话，taskId 定位一次任务，commandId 对提交和回答提供幂等；messageId/toolCallId 保持流式与历史身份，attentionId 定位问题。
+- 提交回执区分新任务和补充；accepted 仅表示持久接收，消费必须有 SDK 证据。停止中拒绝提交并保留草稿；任务结束与补充的归属由主进程串行决定。
+- 主进程 runtimeEpoch + seq 标识现场版本；先监听事件再取得一致快照，丢弃已包含的事件、按序补齐，断档退回快照，旧 epoch 与迟到旧快照不得回退现场。
+- selectionToken 只控制当前视图，A 的迟到回执仍更新 A，不污染 B。导航没有 abort、重新 prompt 或释放运行实例步骤。
+- 后台完成可直接从快照恢复；半截文本、工具状态和起始时间保持身份。草稿、附件、阅读锚点和展开状态分别恢复，不抢历史滚动位置。
+- 停止先显示请求／停止中，等待 SDK 和受控残留操作真实退出；失败或慢停止显示原因。已完成外部成果保留。
+- 异常重启标记 interrupted，命令日志可查询，不自动调用模型或重放外部动作。幂等接收不等于外部副作用 exactly-once。
+- 停止／中断只展示简洁状态，失败保留真实原因；不渲染“核对进展后继续”按钮和固定指导说明，不自动向输入框添加提示词。普通 abort 回执不作为停止后的红色错误重复展示。
+- 输入接收与消费状态继续持久化，但 consumed／handled 在 renderer 移除回执节点；等待、发送失败、未消费取消／中断和状态不确定才显示简短提示。发送失败与执行侧未处理分开表达。重试成功清除重试入口，迟到的接收回执不得覆盖消费或终态；快照恢复沿用相同投影。
+- 不向正文添加 agent_settled 就绪提示，不常驻输入动作说明；空置顶区隐藏。同步异常仍可见，校准时间放在悬停详情，正文使用用户可理解的进展文案。
+- ActivityCenter 的已读位置只在内容实际可见时推进；通知按会话、任务和具体转换去重，历史同步不重新通知。
+
+当前后台正文仍通过 arcane:event 到 renderer，已有有界缓存和流片合并。按会话裁剪正文订阅尚未实现，列为性能优化储备；既有性能门槛仍有效，不将可选架构手段误报为已完成能力或另立必须交付模块。
+
+## 5. 调度与资源边界
+
+当前默认并发 2，上限 16。切换视图不改变额度或队列优先级。waiting_user 释放执行额度，回答后重新申请；取消排队后不得意外启动。
+
+受控 Foundry 页面、世界写入和文件／同工作区 shell 冲突经资源协调。租约只能在操作实际退出后释放，不能在 evaluate 超时或收到取消请求时提前释放。通用 shell 对其他目录的任意副作用及外部应用不在全局隔离保证内。
+
+## 6. 实施顺序与完成条件
+
+| 阶段 | 工作 | 必须验证 |
 | --- | --- | --- |
-| sessionId | 会话创建至删除 | 一切会话操作的目标；在首条消息落盘前也存在 |
-| taskId | 一次用户任务 | 停止、输入归属、事件隔离；与 SDK 的内部 turn 不等价 |
-| commandId | 一次用户操作及其重试 | 幂等接收；同 ID 不允许换 payload |
-| messageId / toolCallId | 一条内容或一次工具调用 | 历史、运行快照、流式更新共用身份 |
-| attentionId | 一个需要用户回应的事项 | 明确回答或权限决策的目标，防止过期回答误用 |
-| runtimeEpoch | 每次会话运行投影创建 | 识别进程重启或同进程实例回收重载；seq 重新计数时旧同步游标失效 |
-| seq | 同 epoch 内单会话递增 | 快照边界、事件顺序与去重 |
-| selectionToken | 前端每次导航 | 只防迟到导航响应覆盖当前选择，不作为执行授权 |
+| N1 导航数据 | 跨模式摘要、目录归属、元数据存储、置顶、用户标题、归档／恢复／删除准入 | 旧数据兼容、持久化失败不丢记录、并发归档与提交只有一个生效、已归档无法绕过 IPC 执行 |
+| N2 侧栏及菜单 | 置顶／项目两区、折叠、行状态、右键和 ⋯、移除活动横栏与列表 | 同名路径不误并、会话只一份、状态变化不重排、跨模式导航和草稿锚点保留 |
+| N3 归档流程 | 归档页、撤销、恢复、确认永久删除、过期通知目标 | 历史查看不执行、恢复回原项目、原成果保留、当前／后台归档不误导航、重启后状态一致 |
+| N4 最终验收 | 新侧栏多尺寸／分屏与性能复核、Windows 托盘／通知真实点击 | 新设计完整闭环；mock 或程序触发回调不冒充物理点击证据 |
 
-会话路径是内部存储位置，不作为前端传入的任意文件路径。Registry 根据 sessionId 查找路径，并继续执行现有模式归属与路径校验。
+先保证数据和执行边界，再接 UI，不重写已验收的任务底座。新测试针对数据丢失、竞争和跨会话隔离等实质风险；布局用真实渲染检查，不能只断言 HTML 字符串。
 
-优先复用 Pi 的稳定会话 ID；若新建时机或导入格式不能满足条件，由应用生成 ID 并维护映射。该选择需经 SDK 实验确认。
+性能门槛保留：选中反馈 P95 ≤100 ms，缓存现场 ≤300 ms，本地同步 ≤1 s，状态呈现 P95 ≤500 ms；在原约定长历史及最大并发基准复核。新界面未测试前，不沿用旧截图声称新界面通过。
 
-已有消息使用持久化 entry ID；新消息在流式开始时分配稳定应用 ID，并在原生消息落盘前保存为 arcaneMessageKey，历史与流式共享该身份。旧阅读位置可通过时间戳兼容定位，但不能继续把可能重复的时间戳当作唯一身份。聊天历史来自当前会话分支的原始记录，不以模型压缩后的上下文替代用户历史。
-
-### 3.2 三类状态
-
-```text
-TaskState     = queued | running | waiting_resource | waiting_user
-              | stopping | completed | failed | stopped | cancelled | interrupted
-SyncState     = syncing | current | stale | unavailable
-ViewState     = selectedSessionId + draft + attachments + readingAnchor + expansions
-```
-
-`idle` 是会话没有当前任务时的展示状态。`cancelled` 与 `interrupted` 对应 spec 中的取消排队、异常退出，不以 completed 替代。
-
-以下操作必须在同会话的短临界区内串行：创建任务、认领输入、切换任务状态、登记停止、设置删除标记。临界区不等待模型或长工具完成，否则停止和补充输入会被阻塞。
-
-不同会话独立串行，不使用覆盖整个执行过程的全局锁。共享资源的锁只由调度模块管理。
-
-### 3.3 任务与 SDK 生命周期
-
-- 一个用户任务可能经历多次模型调用、工具执行、自动重试及用户回应。不能将每次 SDK `agent_end` 都映射为产品任务完成。
-- PiSessionAdapter 输出规范化的 `execution_idle`、`execution_failed`、`execution_stopped` 等事实；TaskCoordinator 结合待处理输入、重试和待回答事项决定任务终态。
-- 助手的普通文本不能被正则匹配成“需要你处理”。该状态必须来自结构化提问或已有权限请求。
-- 若 SDK 没有可恢复的结构化提问能力，增加受控提问工具：保存问题与 attentionId 后结束当前执行片段，任务保持 waiting_user；回应触发同一任务的下一片段。
-- waiting_user 任务保留上下文，不占可执行额度；回应后先重新申请额度。未解决的提问不能因一次 SDK idle 被误标完成。
-
-## 4. 命令边界
-
-IPC 接收层检查来源、字段、目标会话是否存在及允许的操作。会话模式、路径与工具能力从 Registry 读取，不能信任前端自行声明的 mode。
-
-| 命令 | 关键输入 | 确认与效果 |
-| --- | --- | --- |
-| sessions.create | commandId, mode, workspaceRef | 返回稳定 sessionId；不停止其他会话 |
-| sessions.open | sessionId | 返回元数据并准备读取；不发 prompt，不改变其他实例 |
-| tasks.submit | commandId, sessionId, content, attachmentRefs | 执行侧决定新任务或补充输入，返回归属 taskId |
-| tasks.respond | commandId, sessionId, taskId, attentionId, response | 只回应指定且未解决事项 |
-| tasks.stop | commandId, sessionId, taskId | 确认接受停止请求；终态另由事件及快照确认 |
-| sessions.setModel | commandId, sessionId, modelRef | 任务中变更保存为下一任务配置；空闲时更新会话配置 |
-| sessions.delete | commandId, sessionId, expectedTaskId, stopIfRunning | 有活跃任务时必须明确停止并删除，防止误删更新后的任务 |
-| sessions.sync | sessionId, runtimeEpoch?, afterSeq? | 返回可衔接的增量或完整运行快照 |
-| activity.markRead | sessionId, visibleContentCursor | 只推进确实已看到内容的游标 |
-
-当前 IPC `sessions:snapshot(sessionId, historyQuery?)` 支持按消息身份读取历史窗口：before、after、around 三选一，limit 为 1–200，默认 100。响应 historyPage 包含首尾身份、总条数及是否还有前后页；游标不在当前分支时明确返回 HISTORY_CURSOR_NOT_FOUND。所有运行快照默认只带最近 100 条历史；前端按保存的阅读锚点补取对应窗口，并提供前后翻页和返回最新入口。原锚点已不在分支时明确提示后展示最近消息，加载失败保留锚点供重试。
-
-快照 inputs 只包含页内已处理回执和未消费输入；acceptedCommandIds 保留全部已接收输入命令的身份。前端使用身份清单校准 outbox，页外已接收输入不应被误判成尚未发送。原始记录、幂等指纹及回执保留在执行侧日志。
-
-选择会话是前端行为，不再用“当前模式的 host”推导命令目标。携带合法 A 身份的操作，在用户切到 B 后仍属于 A。
-
-### 4.1 接收回执
-
-```typescript
-type SubmitAck = {
-  commandId: string;
-  sessionId: string;
-  taskId: string;
-  inputId: string;
-  disposition: "new_task" | "supplement";
-  status: "accepted";
-};
-```
-
-`accepted` 表示输入已持久登记并被任务认领，不表示模型已经消费，更不表示任务完成。IPC 不再等待整轮模型执行后才返回发送结果。
-
-- 任务结束与提交相遇：同会话串行边界决定归属，回执明确告诉前端结果。
-- 被接收的补充尚未交付时，任务不能进入 completed。若 SDK 已 idle，由协调器安排同任务下一执行片段；不得悄悄丢弃队列。
-- 停止中提交返回 `TASK_STOPPING`，前端保留草稿。任务已结束后再提交则创建新任务。
-- 停止旧 taskId 返回已结束或过期结果，不能停止同一会话里后来启动的任务。
-- 同 commandId 同内容返回原回执；同 commandId 不同内容返回冲突。超时重试必须复用原 ID。
-- 崩溃发生在登记与 SDK 调用之间时，重启后输入标记待核对或执行中断，不自动再次调用工具。幂等保证命令认领，不宣称外部副作用 exactly-once。
-
-## 5. 快照与事件协议
-
-### 5.1 主进程可恢复现场
-
-```typescript
-type SessionSnapshot = {
-  sessionId: string;
-  runtimeEpoch: string;
-  seq: number;
-  metadata: SessionMetadata;
-  task: TaskSnapshot | null;
-  history: HistoryPage;
-  liveMessages: LiveMessage[];
-  tools: ToolSnapshot[];
-  pendingInputs: InputSnapshot[];
-  attentions: AttentionSnapshot[];
-};
-
-type SessionEvent = {
-  sessionId: string;
-  taskId?: string;
-  runtimeEpoch: string;
-  seq: number;
-  type: string;
-  payload: unknown;
-};
-```
-
-上述为数据边界示意，实施前补充可验证的具体 schema，不能将 unknown 原样作为未经校验的产品协议。
-
-- task 包含状态、阶段、起始时间、失败或等待原因。
-- tools 显式区分 pending、running、succeeded、failed、cancelled、unknown，不能从缺少错误字段推导成功。
-- history 按稳定消息 ID 分页；快照至少包含当前任务的相关消息及工具调用，使 live 数据有完整挂载位置。
-- 流式完成时将同一 messageId 从 live 转成 finalized，不能先删掉半截再追加一条重复终稿。
-- 第一版流式事件使用累计内容替换，降低丢片与重放风险；可限频合并尚未发布的内容更新，最终版本必须发布。seq 在合并后发布边界分配，不制造虚假断档。
-
-### 5.2 首次连接与切换协议
-
-1. 前端先注册 IPC 事件监听，并按会话暂存尚未校准的事件。
-2. 调用 `sessions.sync`。主进程在投影的同一逻辑版本获取快照 S 和 seq=N；不能在任意 await 两侧拼装互不一致的历史、任务状态与现场。
-3. 前端安装 S，丢弃同 epoch 下 seq≤N 的缓存事件，按顺序应用 seq>N 的事件。
-4. 检测到序号缺口时请求补齐。主进程保留有界事件缓冲；超出缓冲范围则返回新快照，不能无限堆积 delta。
-5. epoch 变化时废弃旧事件游标并完整同步。迟到旧 epoch 的事件不得覆盖新现场。
-6. 有本地较新投影时，迟到较旧快照不能覆盖它；导航 selectionToken 只决定是否切视图，不阻止有效数据进入对应会话缓存。
-
-历史分页不在每次流式事件上重读 JSONL。主进程维护当前现场投影；加载旧页使用历史版本及稳定游标，历史发生压缩或分支变化时显式使旧页失效。
-
-主进程与前端通过轻量同步健康检查发现通道停滞；没有正文增量本身不是异常。UI 失联时标记同步状态，不改写最后确认的任务状态。检测间隔在性能验证后确定。
-
-### 5.3 后台数据规模
-
-- 每个运行中或待处理会话都有完整主进程现场。前端始终接收跨会话摘要，正文只订阅当前会话及有限缓存集。
-- 取消正文订阅只减少传输和渲染，不停止执行，也不清除主进程现场。
-- 后台正文未订阅期间以 dirty 标记提示缓存可能过期；返回时执行同一同步协议。
-- 活动摘要采用独立全局 revision 与快照重同步，不能拿稀疏摘要的序号冒充正文 seq。
-
-## 6. 关键时序
-
-### 6.1 A 执行 → B → A
-
-```mermaid
-sequenceDiagram
-  participant W as 工作台
-  participant T as 任务执行
-  participant S as 状态同步
-  W->>T: submit(A, commandId)
-  T-->>W: accepted(A, taskId)
-  T->>S: A 的运行事件
-  W->>W: 选择 B，保存 A 的阅读状态
-  T->>S: A 继续推进并更新现场
-  S-->>W: A 的活动摘要
-  W->>W: 选择 A，展示缓存并标记同步中
-  W->>S: sync(A, epoch, seq)
-  S-->>W: 增量或快照及版本
-  W->>W: 补齐现场，恢复阅读位置
-```
-
-这个时序没有 abort、detach 或重新提交 A 的步骤。
-
-### 6.2 停止与任务完成竞态
-
-1. 用户对 A/task-1 点击停止，前端立即显示“正在请求停止”。
-2. 协调器串行检查 task-1：若已终止返回当前结果；否则登记 stopping，取消未开始的额度和资源请求，并调用适配器停止。
-3. 用户切到 B，所有后续停止回执仍更新 A/task-1。
-4. 收到可验证的退出结果后写 stopped；若已有明确正常完成证据且停止没有生效则写 completed。确认 SDK 的实际证据映射后固定优先级，不能仅看 abort Promise 是否 resolve。
-5. 停止超时展示待退出操作，保留 stopping；不得释放仍在执行的资源租约后启动冲突任务。
-
-### 6.3 退出与异常恢复
-
-- AppLifecycle 先冻结新任务准入，再对未结束任务逐个发停止；等待各协调器确认后落盘并退出。
-- 关闭按钮只隐藏窗口到托盘，不触发退出或询问；托盘退出直接调用 ShutdownCoordinator。慢退出时展示收尾进度，用户取消退出时解除准入冻结，已发出的停止不撤销。
-- 新进程启动生成新 epoch；扫描上次未终止任务，记录 interrupted。旧命令回执可查询，但旧执行不自动重放。
-- 原任务成果从 Pi 历史及已确认工具结果恢复。无法确认的外部操作标明未知，继续前需要核对，不将其臆定为成功或失败。
-
-## 7. 持久化和恢复
-
-第一版保留 Pi JSONL 作为对话历史来源，新增应用侧元数据及任务日志，避免在两套存储中各存一份全量正文。
-
-| 数据 | 所有者 | 持久化策略 |
-| --- | --- | --- |
-| 对话历史、会话模型历史 | PiSessionAdapter | 继续使用 Pi SessionManager |
-| ID 映射、模式、目录、下一任务模型 | SessionRegistry | 应用元数据，原子替换，schemaVersion |
-| 任务、命令回执、输入队列、待处理项 | TaskCoordinator | 有界或可压缩的追加日志，接收确认前持久化 |
-| 运行半截及工具现场 | SessionSync | 内存权威投影；可写检查点，但不能据此重放执行 |
-| 草稿、附件引用、阅读锚点、展开状态 | ConversationWorkspace | 按 sessionId 保存；输入防抖，切换前提交保存 |
-| 已读位置、通知消费键 | ActivityCenter | 单调更新及持久去重 |
-
-应用日志必须处理截断尾记录、写入失败及 schema 升级。历史与应用日志不具备跨文件原子事务，恢复流程需做一致性核对：缺终态时宁可标记 interrupted，也不能重复执行来“补齐”。
-
-待发送附件先保存为应用管理的文件引用，禁止把失效的 renderer 对象当作可恢复附件。删除草稿或会话时仅回收已无引用的应用附件，不删除用户原始文件。
-
-会话删除先设 deleting 标记阻止新提交，停止对应任务、取消等待并清理持久记录，成功后发布删除事件；失败保留可诊断记录。通知及点击入口须识别已删除会话。
-
-## 8. 调度、资源和通知
-
-### 8.1 执行额度与资源租约分开
-
-- 执行额度限制同时推进的任务数；初始额度是配置参数，第一版验证至少两个独立会话并发。
-- 队列采用 FIFO 作为起点；选中会话不隐式插队。waiting_user 释放额度，恢复后重新排队。
-- 等待工具资源默认仍占该任务执行额度，第一版不在 SDK 调用栈中强行挂起再恢复；后续优化须独立证明正确性。
-- 资源租约保护某段操作，带 sessionId、taskId、resourceKey、申请时间与取消信号。多资源按固定顺序获取，避免循环等待。
-- 租约只能在操作确实结束后释放，取消请求本身不等于操作停止。
-
-### 8.2 资源边界
-
-- Foundry 页面级导航、执行脚本、截图根据冲突范围协调，导航不能打断另一任务正在执行的受控页面操作。
-- 世界写操作按实际 world/server 标识协调；沿用并审查现有 runtime 队列，避免再包一层不可重入锁造成死锁。
-- 文件写入按规范化路径或工作目录归属协调；通用 shell 的副作用难以精确分析，保守策略是同工作区 shell 串行。
-- 资源协调必须在工具实际入口生效。若 SDK 内置工具暂时无法接入，第一阶段限制同工作区并发并显示排队，不能宣称已实现文件级隔离。
-- 不保证协调不受控的外部应用或任意 shell 对其他工作区的写入；需实验确认可落实的边界，再确定生产并发策略。
-
-### 8.3 活动与通知
-
-- 活动摘要只从 Registry 元数据与 TaskCoordinator 事实派生，包含 taskId、状态、阶段、待处理数量及最后有效进展位置。
-- 已读使用可见内容的稳定游标，不能直接用 seq；seq 也包含工具心跳及内部状态，不能等同于用户看过的文字。
-- 前端提供焦点、可见会话与实际可见内容信息；主进程集中决定系统通知，避免多个视图重复通知。
-- 通知键使用 sessionId + taskId + 具体状态转换 ID；waiting_user 多次发生时每个 attentionId 独立提醒。
-- 快照重建不触发通知。仅新的有效转换进入通知流程，历史重放只校准状态。
-- 通知消费记录在发送前登记，优先避免重启后重复打扰；崩溃窗口可能漏一次系统提醒，持久活动列表仍必须保留待处理项。系统通知不承诺 exactly-once。
-
-## 9. 当前代码如何迁移
-
-| 当前位置 | 当前职责混合 | 目标归属 |
-| --- | --- | --- |
-| `src/main/agent-host.js` | 会话发现、单实例切换、工具构造、SDK 调用、事件转 UI | 会话发现移 Registry；执行与工具构造保留并收敛为 PiSessionAdapter；事件经 Coordinator 归属后进入 Sync |
-| `src/main/mode-host-controller.js` | 模式选择、两个 host 常驻、generation 校验 | 模式能力与工厂配置保留；运行实例改由 Registry 按会话管理；导航防竞态留前端 |
-| `src/main/main.js` | 当前 host 路由、busyByMode、长时间 prompt IPC、应用生命周期 | 入口组合根及 IPC 校验；执行状态交 Coordinator；生命周期交 AppLifecycle |
-| `preload.cjs` / `types/global.d.ts` | 以 mode/generation 为命令上下文 | 显式会话/任务身份、命令回执、快照与订阅协议 |
-| `src/renderer/chat.js` | DOM、运行标志、流式缓存、导航、历史恢复 | 拆会话投影、工作台、活动展示；工具/Markdown 渲染函数逐步复用 |
-| `src/main/telemetry/*` | 现有调用多按模式归属 | 核查并发后按会话/任务关联，避免同模式多任务混计；继续最小化记录 |
-
-建议目录：
-
-```text
-src/main/conversations/   # registry、元数据、会话实例装载
-src/main/tasks/           # coordinator、状态机、Pi 适配器、输入登记
-src/main/sync/            # 现场投影、事件缓冲、快照
-src/main/scheduling/      # 额度及资源协调
-src/main/activity/        # 摘要、已读及通知策略
-src/main/app-lifecycle.js
-src/shared/conversation-protocol.js
-src/renderer/conversations/  # 投影 store、导航、阅读与草稿
-src/renderer/activity/      # 活动列表及提示
-```
-
-先按行为抽离，避免为目录整齐一次性重写所有工具、样式和 SDK 接入。旧入口可以暂时作为 facade，但同一任务不能同时由 busyByMode 与新协调器各自判定状态。
-
-## 10. 实施顺序和验证边界
-
-### 第一条完整链路：A → B → A，且能准确停止 A
-
-包含稳定身份、按会话持有实例、任务状态机、显式目标命令、完整运行快照、版本同步和最小工作台投影。两会话用独立工作区或受控测试工具；共享资源未经验证时先串行准入。
-
-完成标准：同模式与跨模式切换都不停止；切回文本和工具现场连续；后台完成能恢复；停止目标准确；前端刷新不重新 prompt。没有这条完整链路，不算核心问题已修复。
-
-### 后续闭环
-
-1. 补充输入及结构化待处理：接收、消费、结束竞态、等待用户和恢复。
-2. 工作台体验与活动中心：草稿、附件、锚点、未读、跨模式摘要、通知。
-3. 调度与资源边界：额度、冲突排队、取消、公平性，并发工具验证。
-4. 生命周期及持久恢复：删除、退出、后台驻留、异常重启及日志一致性。
-
-持久身份和命令登记接口从第一条链路建立，异常恢复的完整产品流程可后续交付。分步验收不改变 spec 的最终范围。
-
-### 测试分层
-
-- 状态机单测：任务结束与补充输入、停止与完成、旧 taskId、重复 commandId、deleting 竞态。
-- 同步协议测试：在每个快照边界注入事件，模拟重复、断档、迟到响应、epoch 变化及缓冲溢出。
-- 适配器实验：用可控流式响应与可取消工具验证真实 SDK 的消费、重试、idle 和停止证据。
-- Electron 集成测试：同模式 A→B→A、跨模式、后台完成、前端重载、阅读位置及草稿隔离。
-- 持久恢复测试：在接收确认、调用 SDK、写终态等边界中断进程，证明不自动重复执行外部动作。
-- 最后按 [spec 的体验验收](spec.md#11-体验验收) 检查完整流程及性能。
-
-## 11. 已知事实与待验证假设
-
-### 实施前已确认的源码事实（历史基线）
-
-以下记录最初调查时的实现，不描述当前版本。按会话注册表、任务协调器和恢复协议已分阶段落地；当前证据与尚未通过的条款以 [验收审计](acceptance-audit.md) 为准。
-
-- 调查时每模式一个 AgentHost；同模式 open/new 会话主动 abort、detach，跨模式由两个 host 常驻。
-- 调查时命令主要用 mode/generation 定位，busyByMode 按模式记录；不足以表达同模式多任务。
-- 调查时 renderer 忽略非当前模式事件，恢复历史不包含完整运行现场，并将无结果的历史工具调用收尾。
-- 安装的 Pi SDK 有 steer、abort、waitForIdle、agent_settled 和带 willRetry 的 agent_end 相关逻辑；存在 API 不代表已证明其满足本文语义。
-
-### 实施前的定向实验
-
-| 待验证点 | 最小实验 | 不满足时的处理 |
-| --- | --- | --- |
-| 多 Pi Session 真正隔离 | 同进程两个实例，用不同模型配置、目录与长工具并发，检查事件、取消、扩展状态 | 将共享可变依赖改为实例级；无法隔离时评估执行进程边界 |
-| 补充输入消费证据 | 在流式、工具中、重试中及结束边界 steer，观察队列与消费事件 | 自维护输入登记并映射；无可证实消费时不显示“已交给助手处理” |
-| 稳定任务终态 | 正常结束、失败、自动重试、abort 与完成竞态，观察 prompt Promise 和事件顺序 | 在适配器集中归一化，不让 UI 根据单个 SDK 事件判断 |
-| 停止覆盖范围 | 分别取消流式、shell、Foundry 调用、资源等待和用户等待 | 保留 stopping，补工具取消协议；不能用 dispose 冒充停止确认 |
-| 新会话 ID 与消息映射 | 首次落盘前、重开历史、流式转终稿及压缩后检查 ID | 增加应用身份映射与历史版本失效协议 |
-| 内置工具资源协调 | 验证 shell/read/write 等是否可包装、取消信号是否贯穿 | 保守按工作区限制并发，明确支持范围 |
-| 提问及继续同一任务 | 结构化问题后 idle，再接收回答，确认上下文与额度释放 | 添加受控提问工具及应用侧 execution fragment 管理 |
-| 后台驻留与重开 | Windows/macOS 关闭最后窗口后继续，通知点击或托盘重新打开 | 不暴露未实现的后台继续选项 |
-
-本阶段不依赖下载其他开源项目。先通过本地依赖源码和小实验验证上述边界；只有具体问题尚未解决时，再定向参考其他实现。
-
-## 12. 设计完成标准
-
-后续模块详细设计必须回答：它拥有什么状态、谁可以修改、命令何时算接收、失败后如何恢复、重复或迟到消息如何处理，以及如何证明没有影响其他会话。
-
-模块数量本身不是成果。最终判断标准仍是：用户离开 A 后，A 继续工作；用户回来时，看到准确、连续、可操作的现场。
+当前已完成与剩余工作仅在 [acceptance-audit](acceptance-audit.md) 维护。此技术方案完成不等于产品改造完成。

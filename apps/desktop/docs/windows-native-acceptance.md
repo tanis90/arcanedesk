@@ -10,7 +10,11 @@
 
 交互入口 `node apps/desktop/test/review-native-lifecycle.mjs --system` 已按新规则准备：关闭→单击托盘恢复→再次关闭→点击完成通知→关闭并从托盘菜单退出。此前的真实点击轮次没有通过，新规则也尚未完成该人工验收。
 
-## 可复现入口
+## 以下为旧三选一交互的历史记录
+
+下述操作与命令说明仅用于复查旧证据，当前验收使用上方修订的 `--system` 入口。文末“Foundry 尚未验收”也是当时状态；后续已完成，见 [实际资源验收](foundry-resource-acceptance.md)。
+
+### 旧可复现入口
 
 在仓库根目录执行 `node apps/desktop/test/review-native-lifecycle.mjs`。这是交互入口，不是无人值守 smoke：窗口出现后需要实际操作窗口按钮与系统对话框。
 

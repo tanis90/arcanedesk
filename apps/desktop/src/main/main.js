@@ -1,5 +1,5 @@
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DirectFoundryRuntime } from "./direct-foundry-runtime.js";
@@ -10,6 +10,7 @@ import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
+import { SessionNavigation, projectKey } from "./conversations/session-navigation.js";
 import { SessionRegistry } from "./conversations/session-registry.js";
 import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
@@ -721,8 +722,12 @@ app.whenReady().then(async () => {
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
   const resources = new ResourceCoordinator();
   const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks") });
+  const navigation = new SessionNavigation({ file: configPath("session-navigation.json"), emit: sendToRenderer });
+  for (const id of deletions.snapshot().sessionIds) {
+    if (Object.keys(navigation.get(id)).length) { try { navigation.patch(id, null); } catch (error) { navigation.error = error.message; } }
+  }
   const hosts = {
-    combat: new SessionRegistry({ deletions, createHost: () => new AgentHost({
+    combat: new SessionRegistry({ deletions, navigation, createHost: (directory) => new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
       openFoundry: openFoundryView,
@@ -733,11 +738,11 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
       profile: {
-        getCwd: () => combatWorkspace,
+        getCwd: () => directory ?? combatWorkspace,
       },
     }) }),
-    prep: new SessionRegistry({ deletions, createHost: () => {
-      const cwd = prepStore.data.lastCwd ?? prepFallbackWorkspace;
+    prep: new SessionRegistry({ deletions, navigation, createHost: (directory) => {
+      const cwd = directory ?? prepStore.data.lastCwd ?? prepFallbackWorkspace;
       return new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
@@ -784,6 +789,7 @@ app.whenReady().then(async () => {
     foreground: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && mainWindow.isVisible() && !mainWindow.isMinimized()),
     create: options => new Notification({ ...options, icon: ARCANE_APP_ICON }),
     lookup: id => activityCenter.get(id),
+    isDeleted: id => deletions.snapshot().sessionIds.includes(id),
     text: kind => {
       const key = { completed: "chat.task.completed", failed: "chat.task.failed", waiting_user: "chat.task.waitingUser" }[kind];
       return globalThis.ARCANE_MESSAGES[resolveLocale()][key];
@@ -900,6 +906,52 @@ app.whenReady().then(async () => {
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
+  // Navigation spans modes; commands resolve an owned session rather than the selected view.
+  async function navigationRows() {
+    const result = await Promise.all(["prep", "combat"].map(async mode => {
+      await modeController.ensureStarted(mode);
+      return (await hosts[mode].listSessions()).map(row => ({ ...row, mode, projectKey: projectKey(row.cwd), activity: activityCenter.get(row.id) }));
+    }));
+    return result.flat();
+  }
+  async function navigationTarget(id) {
+    const row = (await navigationRows()).find(row => row.id === id);
+    if (!row) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
+    const registry = hosts[row.mode];
+    if (!registry.get(id)) await registry.select(row.path, false, -1);
+    const host = registry.get(id);
+    if (!host || deletions.isDeleted(row.path)) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
+    return { row, registry, host };
+  }
+  ipcMain.handle("sessions:navigation", async event => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try { return { ok: !navigation.error, sessions: await navigationRows(), error: navigation.error }; }
+    catch (error) { return { ok: false, code: error.code, error: error.message }; }
+  });
+  for (const [channel, action] of [["setPinned", "pin"], ["rename", "rename"], ["archive", "archive"], ["restore", "restore"]]) {
+    ipcMain.handle("sessions:" + channel, async (event, request) => {
+      if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+      try {
+        const { row, host } = await navigationTarget(request?.sessionId);
+        const metadata = navigation.mutate(row.id, action, action === "pin" ? request.pinned : request.title, host);
+        return { ok: true, sessionId: row.id, metadata };
+      } catch (error) { return { ok: false, code: error.code ?? "NAVIGATION_FAILED", error: error.message }; }
+    });
+  }
+  ipcMain.handle("sessions:deleteArchived", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try {
+      const { row, registry, host } = await navigationTarget(request?.sessionId);
+      navigation.assertDeletable(row.id, host);
+      const result = await registry.deleteSession(row.path);
+      if (result.ok) {
+        activityCenter.remove(row.id);
+        try { navigation.patch(row.id, null); } catch (error) { result.warning = error.message; }
+      }
+      return result;
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_DELETE_FAILED", error: error.message }; }
+  });
+
   // ---- 会话管理(按活动模式路由；模式由 Pi sessionDir + JSONL marker 固有隔离) ----
   ipcMain.handle("sessions:list", async (_event, request) => {
     const validated = await validateModeRequest(request);
@@ -934,7 +986,13 @@ app.whenReady().then(async () => {
     const context = validated.context;
     const selection = ++hosts[context.mode].selection;
     await modeController.ensureStarted(context.mode);
-    const nextHost = await hosts[context.mode].select(null, true, selection);
+    let directory;
+    if (request?.cwd != null) {
+      directory = String(request.cwd);
+      try { if (!path.isAbsolute(directory) || !statSync(directory).isDirectory()) throw new Error("Project directory is unavailable"); }
+      catch (error) { return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message }; }
+    }
+    const nextHost = await hosts[context.mode].select(null, true, selection, directory);
     return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
@@ -963,10 +1021,15 @@ app.whenReady().then(async () => {
     if (!list.some((s) => s.path === sessionPath)) {
       return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
     }
-    const result = await hosts[context.mode].deleteSession(sessionPath);
+    let result;
+    try { result = await hosts[context.mode].deleteSession(sessionPath); }
+    catch (error) { return { ok: false, code: error.code, error: error.message }; }
     if (result.ok) {
       const deleted = list.find(row => row.path === sessionPath);
-      if (deleted) activityCenter.remove(deleted.id);
+      if (deleted) {
+        activityCenter.remove(deleted.id);
+        try { navigation.patch(deleted.id, null); } catch (error) { result.warning = error.message; }
+      }
     }
     return result;
   });
@@ -1288,6 +1351,9 @@ app.whenReady().then(async () => {
     const { mode, host } = context;
     try {
       await modeController.ensureStarted(mode);
+      navigation.assertWritable(host.describeCurrent()?.id);
+      try { if (!statSync(host.cwd()).isDirectory()) throw new Error("Missing directory"); }
+      catch { return { ok: false, code: "PROJECT_UNAVAILABLE", error: err("navigation.missingProject") }; }
       const missingKey = host.missingApiKeyForCurrentModel();
       if (missingKey) {
         return {
@@ -1337,7 +1403,7 @@ app.whenReady().then(async () => {
           ...(missingKey ?? {}),
         };
       }
-      return { ok: false, error: message };
+      return { ok: false, error: message, ...(error?.code ? { code: error.code } : {}) };
     }
   });
 

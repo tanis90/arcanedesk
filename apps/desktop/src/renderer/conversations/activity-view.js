@@ -22,7 +22,7 @@
       this.dismiss = document.getElementById("activity-dismiss");
       this.error = document.getElementById("activity-error");
       this.jump = document.getElementById("activity-jump");
-      this.toggle.addEventListener("click", () => drawer());
+      this.toggle?.addEventListener("click", () => drawer());
       this.noticeButton.addEventListener("click", () => {
         const notice = [...this.notices.values()].at(-1);
         if (notice) void open(this.rows.get(notice.sessionId), notice);
@@ -89,32 +89,6 @@
     render() {
       const view = this.getView();
       const rows = [...this.rows.values()];
-      const selectedRow = this.rows.get(view.sessionId);
-      if (selectedRow?.name) document.getElementById("conversation-title").textContent = selectedRow.name;
-      const running = rows.filter(row => activeStates.has(row.state) && !row.needsAttention).length;
-      const waiting = rows.filter(row => row.needsAttention).length;
-      this.toggle.textContent = this.t("activity.counts", { running, waiting });
-      this.toggle.classList.toggle("needs-attention", waiting > 0);
-      const displayed = rows.filter(row => activeStates.has(row.state) || row.unread);
-      const ids = new Set(displayed.map(row => row.sessionId));
-      for (const [id, item] of this.items) if (!ids.has(id)) { item.remove(); this.items.delete(id); }
-      for (const row of displayed) {
-        let item = this.items.get(row.sessionId);
-        if (!item) {
-          item = node("button", "activity-item");
-          item.type = "button"; item.dataset.sessionId = row.sessionId;
-          item.append(node("span", "activity-title"), node("span", "activity-meta"));
-          item.addEventListener("click", () => { void this.open(this.rows.get(row.sessionId)); });
-          this.items.set(row.sessionId, item); this.list.appendChild(item);
-        }
-        item.classList.toggle("active", row.sessionId === view.sessionId);
-        item.setAttribute("aria-current", row.sessionId === view.sessionId ? "true" : "false");
-        item.dataset.state = row.state;
-        item.querySelector(".activity-title").textContent = row.name || this.t("sessions.untitled");
-        item.querySelector(".activity-meta").textContent = this.t("header.mode." + row.mode + "Short") + " · " + this.stateLabel(row.state)
-          + (row.unread ? " · " + this.t("activity.unread") : "");
-      }
-      document.getElementById("activity-empty").hidden = displayed.length > 0;
       for (const [key, notice] of this.notices) {
         const row = this.rows.get(notice.sessionId);
         if (!row || (notice.kind === "waiting_user" ? !row.needsAttention : !row.unread || row.taskId !== notice.taskId)) this.notices.delete(key);

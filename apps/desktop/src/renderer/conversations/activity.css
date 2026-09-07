@@ -50,11 +50,9 @@ body.sidebar-pinned #panel-command { margin-left: 264px; }
 body.sidebar-pinned #shutdown-status { margin-left: 264px; }
 .history-page-button { display: block; flex: none; align-self: center; margin: 12px auto; padding: 7px 16px; border: 1px solid var(--border); border-radius: 16px; color: var(--text); background: var(--panel); font: var(--fs-meta)/1.5 var(--font-ui); cursor: pointer; }
 .history-page-button:disabled { opacity: .5; cursor: progress; }
-#composer-action { min-width: 0; text-align: left; font: var(--fs-meta)/1.4 var(--font-ui); }
 #composer-stop-feedback { padding: 4px 12px; text-align: left; color: var(--err); }
 #composer-stop-feedback[hidden] { display: none; }
 #send:disabled, #stop:disabled { opacity: .5; cursor: default; }
 .task-terminal-reason { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 120px; overflow-y: auto; color: var(--err); }
-.task-terminal-next { margin: 4px 0; }
 #conversation-retry { text-align: left; padding: 2px 16px; }
 body.sidebar-pinned #conversation-retry { margin-left: 264px; }

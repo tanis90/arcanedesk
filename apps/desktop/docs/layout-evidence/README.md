@@ -1,8 +1,8 @@
 # 多尺寸渲染布局验收
 
-2026-09-07，M8n4 初验，M8o5 增补输入中合并提示。执行 `node apps/desktop/test/review-layout.mjs`，通过。
+2026-09-07，新侧栏改造后重新执行 `node apps/desktop/test/review-layout.mjs`，通过。
 
-使用实际 Electron renderer、preload 和生产 ActivityCenter，模型与会话 IPC 使用受控数据。任务 A 持续运行，输入框保留草稿；活动入口显示运行 1。在输入保持焦点时收到 B/C 两项完成提示，验证合并提示保留草稿和焦点，且位于输入区上方。逐项检查活动入口、合并提示、任务状态、输入框、停止及发送按钮的非零尺寸、可见性和视口边界，并人工查看全部截图。
+使用实际 Electron renderer、preload 和生产 ActivityCenter，模型与会话 IPC 使用受控数据。任务 A 持续运行，输入框保留草稿；保留普通侧栏展开按钮，旧活动计数入口已移除。在输入保持焦点时收到 B/C 两项完成提示，验证合并提示保留草稿和焦点，且位于输入区上方。逐项检查侧栏入口、合并提示、任务状态、输入框、停止及发送按钮的非零尺寸、可见性和视口边界，截图保留供复查；新侧栏内容与菜单的实际 CDP 截图另外见 [navigation-evidence](../navigation-evidence/README.md)。
 
 | 场景 | 内容尺寸 | 聊天宽度 | 截图 |
 | --- | --- | --- | --- |

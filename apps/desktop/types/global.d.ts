@@ -37,6 +37,12 @@ interface ArcaneBridge {
   /** Pick a prep directory via OS dialog; switching dir starts a NEW prep session. */
   prepChooseDir(context?: ArcaneModeContext): Promise<any>;
   /** Session management (Pi SessionManager JSONL sessions). */
+  sessionNavigation(): Promise<any>;
+  setSessionPinned(sessionId: string, pinned: boolean): Promise<any>;
+  renameSession(sessionId: string, title: string): Promise<any>;
+  archiveSession(sessionId: string): Promise<any>;
+  restoreSession(sessionId: string): Promise<any>;
+  deleteArchivedSession(sessionId: string): Promise<any>;
   listSessions(context?: ArcaneModeContext): Promise<any>;
   currentSession(): Promise<any>;
   sessionSnapshot(sessionId: string, historyQuery?: { before?: string; after?: string; around?: string; limit?: number }): Promise<any>;
@@ -46,7 +52,7 @@ interface ArcaneBridge {
   takeNotificationTarget(): Promise<any>;
   markActivityRead(request: { sessionId: string; runtimeEpoch: string; seq: number; visible: boolean; atBottom: boolean; readKey?: string }): Promise<any>;
   respondToTask(request: { sessionId: string; taskId: string; attentionId: string; commandId: string; response: string }): Promise<any>;
-  newSession(context?: ArcaneModeContext): Promise<any>;
+  newSession(context?: ArcaneModeContext & { cwd?: string }): Promise<any>;
   openSession(path: string, context?: ArcaneModeContext): Promise<any>;
   deleteSession(path: string, context?: ArcaneModeContext): Promise<any>;
   /** Settings: provider management + default model. */

@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
       if (failPage) return { ok: false, code: "HISTORY_LOAD_FAILED" };
       try { return payload(host, query); } catch (error) { return { ok: false, code: error.code }; }
     }
-    if (channel === "sessions:list") return { sessions: [] };
+    if (channel === "sessions:list" || channel === "sessions:navigation") return { ok: true, sessions: [] };
     if (channel === "voice:get-config") return { enabled: false };
     if (channel === "ui:get-locale") return { pref: "en-US", resolved: "en-US" };
     if (channel === "slash:list") return { skills: [], templates: [], commands: [] };

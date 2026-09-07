@@ -76,6 +76,12 @@ app.whenReady().then(async () => {
     if (channel === "sessions:snapshot") return payload(hosts.find(host => host.describeCurrent().id === input), query);
     if (channel === "sessions:open") { const host = hosts.find(host => host.describeCurrent().path === input.path); selected[mode] = host; return payload(host); }
     if (channel === "mode:set") { mode = input; generation++; return payload(selected[mode]); }
+    if (channel === "sessions:navigation") {
+      const start = performance.now();
+      const sessions = (await Promise.all(["prep", "combat"].map(async mode => (await registries[mode].listSessions()).map(row => ({ ...row, mode, projectKey: mode, cwd: "C:/benchmark/" + mode, activity: center.get(row.id) }))))).flat();
+      metadataDurations.push(performance.now() - start);
+      return { ok: true, sessions };
+    }
     if (channel === "sessions:list") {
       const targetMode = input?.mode ?? mode, start = performance.now(), registry = registries[targetMode];
       registry.activeHost = selected[targetMode];
@@ -101,7 +107,7 @@ app.whenReady().then(async () => {
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await evaluate(`new Promise((resolve, reject) => {
       const end = performance.now() + 10000;
-      const poll = () => activityReady && document.querySelectorAll(".session-item").length === 8 ? resolve() : performance.now() > end ? reject(Error("initial view timeout")) : requestAnimationFrame(poll); poll();
+      const poll = () => activityReady && document.querySelectorAll(".session-item").length === 16 ? resolve() : performance.now() > end ? reject(Error("initial view timeout")) : requestAnimationFrame(poll); poll();
     })`);
     await evaluate(`globalThis.bench = { progress: [], states: [], switches: [] };
       const originalInstall = installSnapshot;

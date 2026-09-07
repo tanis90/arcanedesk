@@ -1,0 +1,60 @@
+/* A quiet project index; execution stays on the conversation row. */
+#activity-bar { min-height: 0; }
+#activity-bar:not(:has(button:not([hidden]))) { display: none; }
+.nav-section-title { margin: 18px 8px 6px; font: 500 var(--fs-meta)/1.5 var(--font-ui); color: var(--muted); }
+.nav-empty { margin: 6px 8px 16px; color: var(--muted); font-size: var(--fs-meta); line-height: 1.6; }
+.nav-project-header { display: flex; align-items: center; min-height: 34px; }
+.nav-project-toggle { flex: 1; display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 8px; }
+.nav-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
+.nav-chevron { font-size: 18px; line-height: 1; transition: transform .15s; }
+.nav-chevron.expanded { transform: rotate(90deg); }
+.nav-project-new, .s-menu { flex: none; width: 26px; height: 26px; opacity: 0; border-radius: 5px; }
+.nav-project-header:hover .nav-project-new, .nav-project-header:focus-within .nav-project-new,
+.session-item:hover .s-menu, .session-item:focus-within .s-menu { opacity: 1; }
+.nav-project-sessions { padding-left: 13px; }
+.nav-project-header button, .session-item .s-menu, #session-archives, #navigation-retry,
+#archive-page button, #archive-readonly button, #navigation-toast button { border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.session-item { padding: 4px 5px 4px 8px; gap: 4px; min-height: 34px; border-radius: 6px; }
+.session-item .s-body { padding: 2px 0; }
+.session-item .s-title { display: block; line-height: 1.5; }
+.session-item .s-meta { display: block; font-size: var(--fs-meta); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-item .s-meta:empty { display: none; }
+.s-state { display: inline-block; flex: none; width: 10px; height: 10px; margin: 0 3px; border-radius: 50%; box-sizing: border-box; }
+.s-state[data-kind="running"] { border: 1.5px solid var(--border); border-top-color: var(--accent); animation: nav-spin .9s linear infinite; }
+.s-state[data-kind="attention"] { background: var(--warn); border-radius: 2px; }
+.s-state[data-kind="failed"] { background: var(--err); }
+.s-state[data-kind="unread"] { width: 6px; height: 6px; margin: 0 5px; background: var(--accent); }
+.nav-project-toggle[aria-expanded="true"] .s-state { visibility: hidden; }
+@keyframes nav-spin { to { transform: rotate(360deg); } }
+#session-archives { text-align: left; padding: 14px 18px; border-top: 1px solid var(--border-soft); font-size: var(--fs-ui); }
+#session-archives:hover, .nav-project-header button:hover, .s-menu:hover { background: var(--panel-2); }
+#navigation-retry { color: var(--err); padding: 10px; }
+#archive-page { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.archive-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.archive-head h1 { font: 600 22px/1.5 var(--font-display); }
+#archive-list { max-width: 840px; margin: 12px auto; }
+#archive-empty { text-align: center; margin: 60px 0; color: var(--muted); }
+#archive-readonly, #navigation-toast { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); font-size: var(--fs-ui); }
+body.with-panel #navigation-toast { left: calc((100% - var(--panel-w, 0px)) / 2); max-width: calc(100% - var(--panel-w, 0px) - 24px); }
+#archive-readonly span, #navigation-toast span { flex: 1; }
+#navigation-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 85; max-width: min(560px, calc(100vw - 24px)); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 20px var(--shadow); }
+body.sidebar-pinned :is(#archive-page, #archive-readonly) { margin-left: 264px; }
+body.show-archives > :is(#messages, #composer-wrap, #conversation-title, #conversation-task-status, #conversation-retry, #conversation-sync, #conversation-model-pending, #archive-readonly, #activity-jump, #scroll-bottom) { display: none !important; }
+body.archived-session #composer-wrap { display: none; }
+#archive-page[hidden], #archive-readonly[hidden], #navigation-toast[hidden], #navigation-retry[hidden], .nav-project-sessions[hidden], .nav-empty[hidden], #archive-empty[hidden] { display: none; }
+.session-menu { position: fixed; z-index: 100; min-width: 180px; max-width: calc(100vw - 16px); padding: 5px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 6px 24px var(--shadow); border-radius: 8px; }
+.session-menu button { display: block; width: 100%; text-align: left; border: 0; padding: 8px 12px; background: transparent; color: var(--text); font: var(--fs-ui)/1.5 var(--font-ui); cursor: pointer; border-radius: 4px; }
+.session-menu button:hover, .session-menu button:focus-visible { background: var(--panel-2); }
+.session-menu button:disabled { opacity: .45; cursor: default; }
+.menu-explanation { display: block; padding: 6px 12px 0; color: var(--muted); }
+.session-dialog { width: min(420px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; }
+.session-dialog::backdrop { background: #0006; }
+.session-dialog h2 { margin: 0 0 16px; font: 600 18px/1.5 var(--font-display); }
+.session-dialog input { width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 5px; font: inherit; }
+.session-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.session-dialog button { font: inherit; padding: 7px 12px; color: var(--text); background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; }
+.session-menu .danger, .session-dialog .danger { color: var(--err); }
+.nav-empty-selection { align-self: center; margin-top: 48px; color: var(--muted); }
+:is(.nav-project, .session-item, .session-menu, .session-dialog, #archive-page, #archive-readonly, #session-drawer, #navigation-toast) :is(button, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: none) { .nav-project-new, .s-menu { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .s-state[data-kind="running"] { animation: none; } .nav-chevron { transition: none; } }

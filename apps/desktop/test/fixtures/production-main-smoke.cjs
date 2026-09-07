@@ -7,6 +7,8 @@ const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const sidebarRestart = process.argv.includes("--sidebar-restart");
+const sidebarScenario = process.argv.includes("--sidebar-scenario");
 const trayLifecycle = process.argv.includes("--tray-lifecycle");
 const longTool = process.argv.includes("--long-tool");
 const toolRecovery = process.argv.includes("--tool-recovery");
@@ -20,12 +22,12 @@ let trayClicks = 0, notificationClicks = 0, notificationShows = 0;
 const metadataScenario = process.argv.includes("--metadata-scenario");
 const foundryScenario = process.argv.includes("--foundry-scenario");
 let delayedReply = null;
-if (navigationScenario) {
+if (navigationScenario || sidebarScenario) {
   const handle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel, listener) => handle(channel, async (...args) => {
     const result = await listener(...args);
     const gate = delayedReply;
-    if (gate && channel === gate.channel && result.session?.id === gate.sessionId && !gate.captured) {
+    if (gate && channel === gate.channel && (result.session?.id ?? result.sessionId) === gate.sessionId && !gate.captured) {
       gate.captured = structuredClone(result);
       await new Promise(resolve => { gate.release = resolve; });
       gate.delivered = true;
@@ -69,7 +71,7 @@ Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; if
 if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: 0 }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
-  if (!nativeReview && !foundryScenario) { value.hide(); value.on("show", () => value.hide()); }
+  if (!nativeReview && !foundryScenario && !sidebarScenario && !deletionScenario) { value.hide(); value.on("show", () => value.hide()); }
   value.webContents.setBackgroundThrottling(false);
 });
 const streams = new Map();
@@ -133,12 +135,14 @@ async function until(check, label) {
   while (Date.now() < deadline) { if (await check()) return; await sleep(40); }
   throw new Error(`Timed out: ${label}`);
 }
-const evaluate = code => window.webContents.executeJavaScript(code);
+const evaluate = async code => { try { return await window.webContents.executeJavaScript(code); } catch (error) { throw new Error(code + "\n" + error.message); } };
 const ui = code => until(async () => { try { return await evaluate(code); } catch { return false; } }, code);
 const openHost = host => evaluate(`(async () => { const result = await window.arcane.openSession(${JSON.stringify(host.describeCurrent().path)}, modeContext()); if (!result.ok) throw new Error(result.error); await installSnapshot(result); })()`);
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow an explicit exit action");
+    if (sidebarRestart) { assert.deepEqual(requests, []); console.log("PASS sidebar restart: durable archive, pin, title, project and workspace without model calls"); return; }
+    if (sidebarScenario) { assert.deepEqual(requests, ["A", "B"]); console.log("PASS production sidebar: CDP menus, projects, archive, restore, delete and execution isolation"); return; }
     if (trayLifecycle) {
       assert.deepEqual(requests, ["A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
@@ -156,7 +160,7 @@ app.on("will-quit", () => {
     if (deletionScenario) {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
-      console.log("PASS production deletion: running task remains tracked until stop, then deletion preserves independent B");
+      console.log("PASS production deletion: active archive/delete rejected; explicit stop, archive and confirmed delete preserve B");
       return;
     }
     if (nativeSystem) {
@@ -233,6 +237,24 @@ app.on("will-quit", () => {
   }
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (sidebarRestart) {
+    const checkpoint = JSON.parse(readFileSync(path.join(scratch, "sidebar-checkpoint.json"), "utf8"));
+    await evaluate('refreshSessions()');
+    assert.ok(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.a)}).pinnedOrder != null`));
+    assert.ok(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).archivedAt != null`));
+    assert.equal(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).customTitle`), "Restart archive");
+    assert.equal(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).cwd`), checkpoint.cwd);
+    assert.ok(await evaluate(`navigationView.collapsed.has(${JSON.stringify(checkpoint.collapsed)})`));
+    await evaluate(`openActivity(navigationView.rows.get(${JSON.stringify(checkpoint.c)}))`);
+    await ui(`selectedSessionId === ${JSON.stringify(checkpoint.c)} && selectedArchived && workspaceReady.has(selectedSessionId)`);
+    assert.equal(await evaluate('input.value'), "Restart retained draft");
+    assert.equal((await evaluate(`window.arcane.prompt('production-C', [], {...modeContext(), commandId:crypto.randomUUID()})`)).code, "SESSION_ARCHIVED");
+    finalExit = true; app.quit(); return;
+  }
+  if (sidebarScenario) {
+    await require("./production-sidebar.cjs")({ window, scratch, streams, requests, until, ui, evaluate, delayReply: gate => { delayedReply = gate; } });
+    finalExit = true; app.quit(); return;
+  }
   if (foundryScenario) {
     const a = globalThis.__arcaneHosts.prep.activeHost;
     assert.equal((await a.openFoundry("http://127.0.0.1:30219")).ok, true);
@@ -273,23 +295,23 @@ app.on("will-quit", () => {
     await evaluate('input.value = "production-A"; submit()');
     await ui('busy && messages.textContent.includes("A partial")');
     const row = host => `sessionList.querySelector('[data-session-id="${host.describeCurrent().id}"]')`;
-    await ui(`${row(a)}.querySelector('.s-title').textContent === "production-A" && ${row(a)}.querySelector('.s-meta').textContent.includes("1 条")`);
+    await ui(`${row(a)}.querySelector('.s-title').textContent === "production-A" && navigationView.rows.get(${JSON.stringify(a.describeCurrent().id)}).messageCount === 1`);
     await evaluate('document.getElementById("session-new").click()');
     await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('refreshSessions()');
     await evaluate('setDrawer(true)');
     await evaluate('refreshSessions()');
-    await evaluate('globalThis.metadataRows = [...sessionList.children]; input.value = "production-B"; submit()');
-    await ui(`${row(hostB)}.querySelector('.s-title').textContent === "production-B" && ${row(hostB)}.querySelector('.s-meta').textContent.includes("1 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "first-turn metadata patches rows in place");
+    await evaluate('globalThis.metadataRows = [...sessionList.querySelectorAll(".session-item")]; input.value = "production-B"; submit()');
+    await ui(`${row(hostB)}.querySelector('.s-title').textContent === "production-B" && navigationView.rows.get(${JSON.stringify(hostB.describeCurrent().id)}).messageCount === 1`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "first-turn metadata patches rows in place");
     streams.get("A").finish();
     await until(() => a.tasks.task.state === "completed", "background A completes");
-    await ui(`${row(a)}.querySelector('.s-meta').textContent.includes("2 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "background completion does not reorder rows");
+    await ui(`navigationView.rows.get(${JSON.stringify(a.describeCurrent().id)}).messageCount === 2`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "background completion does not reorder rows");
     streams.get("B").finish();
-    await ui(`!busy && ${row(hostB)}.querySelector('.s-meta').textContent.includes("2 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "visible drawer keeps its order after current task completion");
+    await ui(`!busy && navigationView.rows.get(${JSON.stringify(hostB.describeCurrent().id)}).messageCount === 2`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "visible drawer keeps its order after current task completion");
     finalExit = true; app.quit(); return;
   }
   if (nativeReview) {
@@ -421,15 +443,14 @@ app.on("will-quit", () => {
   if (crashPhase === "recover") {
     const saved = JSON.parse(readFileSync(path.join(scratch, "crash-checkpoint.json"), "utf8"));
     await openHost({ describeCurrent: () => saved.b });
-    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && !!document.querySelector(".recover-task")`);
+    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && displayedTask?.state === "interrupted"`);
     const restoredB = globalThis.__arcaneHosts.prep.get(saved.b.id);
     assert.equal(restoredB.tasks.task.state, "interrupted");
     assert.equal(restoredB.tasks.task.id, saved.taskId);
     assert.ok(await evaluate('messages.textContent.includes("production-B")'), "accepted input remains visible");
-    await evaluate('document.querySelector(".recover-task").click(); saveWorkspace()');
-    assert.ok(await evaluate('input.value.includes(t("chat.recovery.prompt"))'));
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     await sleep(300);
-    assert.deepEqual(requests, [], "restart and recovery preparation do not replay model requests");
+    assert.deepEqual(requests, [], "restart does not replay model requests");
     await evaluate('input.value += " production-C"; submit()');
     await ui('busy && messages.textContent.includes("C partial")');
     assert.notEqual(restoredB.tasks.task.id, saved.taskId, "explicit continuation starts a new task in the same session");
@@ -589,6 +610,7 @@ app.on("will-quit", () => {
   const createHost = prepRegistry.createHost;
   prepRegistry.createHost = () => ({ start: async () => { throw new Error("injected replacement failure"); }, dispose() {} });
   try {
+    await evaluate(`window.arcane.archiveSession(${JSON.stringify(hostA.describeCurrent().id)})`);
     const deleted = await evaluate(`window.arcane.deleteSession(${JSON.stringify(hostA.describeCurrent().path)}, modeContext())`);
     assert.equal(deleted.ok, true);
     assert.equal(deleted.warning, "injected replacement failure");
@@ -611,6 +633,13 @@ app.on("will-quit", () => {
   menu.items[1].click();
 })().catch(async error => {
   console.error(error);
+  if (sidebarScenario) {
+    try {
+      const output = path.resolve(__dirname, "../../docs/navigation-evidence"); mkdirSync(output, { recursive: true });
+      writeFileSync(path.join(output, "failure.png"), (await window.webContents.capturePage()).toPNG());
+      console.error(await evaluate('JSON.stringify({selectedSessionId,archivePage:!navigationView.archivePage.hidden,menu:document.querySelector(".session-menu")?.textContent,toast:document.getElementById("navigation-toast").textContent,rows:[...navigationView.rows.values()].map(row=>({id:row.id,name:row.name,archivedAt:row.archivedAt}))})'));
+    } catch {}
+  }
   if (longTool) {
     writeFileSync(toolRelease, "release after test failure");
     await Promise.allSettled(Object.values(globalThis.__arcaneHosts ?? {}).flatMap(registry => registry.allHosts()).map(host => host.abort(host.task?.id)));

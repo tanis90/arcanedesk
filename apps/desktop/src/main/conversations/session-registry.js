@@ -5,10 +5,10 @@ const unavailable = () => Object.assign(new Error("Session is being deleted or h
 
 /** A mode's resident sessions. Navigation never disposes a running host. */
 export class SessionRegistry {
-  /** @param {{createHost: () => any, deletions?: any}} options */
-  constructor({ createHost, deletions }) {
+  /** @param {{createHost: (cwd?: string) => any, deletions?: any, navigation?: any}} options */
+  constructor({ createHost, deletions, navigation }) {
     this.createHost = createHost;
-    this.deletions = deletions;
+    this.deletions = deletions; this.navigation = navigation;
     this.closing = false;
     this.hosts = new Map();
     this.activeHost = null;
@@ -61,6 +61,7 @@ export class SessionRegistry {
     // Validate ownership even for an unloaded history file.
     const manager = (target ?? this.activeHost).openSessionManager(sessionPath);
     const sessionId = target?.describeCurrent().id ?? manager?.getSessionId();
+    this.navigation?.assertDeletable(sessionId, target);
     if (target) target.deleting = true;
     const operation = Promise.resolve().then(async () => {
       try {
@@ -100,7 +101,7 @@ export class SessionRegistry {
     return operation;
   }
 
-  async select(sessionPath, fresh = false, selection = ++this.selection) {
+  async select(sessionPath, fresh = false, selection = ++this.selection, cwd = undefined) {
     if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
     const requestedKey = sessionPath ? pathKey(sessionPath) : null;
     if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey) || this.deletions?.isDeleted(requestedKey))) throw unavailable();
@@ -110,7 +111,8 @@ export class SessionRegistry {
       let pending = this.pending.get(key);
       if (!pending) {
         pending = (async () => {
-          const created = this.createHost();
+          const created = this.createHost(cwd);
+          created.navigation = this.navigation;
           try {
             await created.start({ sessionPath, fresh });
             if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
@@ -159,6 +161,6 @@ export class SessionRegistry {
       }
       rows.set(session.id, { ...row, ...live, busy: host.busy, deleting: Boolean(host.deleting), task: host.task, active: host === this.activeHost });
     }
-    return [...rows.values()];
+    return [...rows.values()].map(row => ({ ...row, ...this.navigation?.get(row.id), name: this.navigation?.get(row.id).customTitle ?? row.name }));
   }
 }

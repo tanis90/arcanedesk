@@ -11,6 +11,8 @@ const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
 let displayedTask = null;
+let navigationView = null;
+let selectedArchived = false;
 let displayedRetry = null;
 function showRetry(retry) {
   displayedRetry = retry;
@@ -25,7 +27,8 @@ function showSyncStatus(key, id = selectedSessionId) {
   if (id !== selectedSessionId) return;
   const at = confirmedAt.get(id);
   const time = at ? new Date(at).toLocaleTimeString() : t("chat.syncNeverConfirmed");
-  syncIndicator.textContent = t(key) + " · " + t("chat.syncLastConfirmed", { time });
+  syncIndicator.textContent = t(key);
+  syncIndicator.title = t("chat.syncLastConfirmed", { time });
   syncIndicator.dataset.status = key;
   syncIndicator.hidden = false;
 }
@@ -50,9 +53,8 @@ function updateComposerAction() {
   const stopping = composerStopping();
   const key = stopping ? "composer.stopping" : activeTaskStates.has(displayedTask?.state) ? "composer.supplement" : "composer.newTask";
   const label = t(key);
-  document.getElementById("composer-action").textContent = label;
   send.title = label; send.setAttribute("aria-label", label);
-  send.toggleAttribute("disabled", stopping || !selectedSessionId);
+  send.toggleAttribute("disabled", stopping || !selectedSessionId || selectedArchived);
   stop.toggleAttribute("disabled", stopping);
   const feedback = document.getElementById("composer-stop-feedback");
   feedback.hidden = stopRequests.get(selectedSessionId)?.state !== "failed";
@@ -95,22 +97,10 @@ function showTaskState(task) {
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task;
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
-  if (["failed", "stopped", "cancelled"].includes(task?.state)) {
-    const reason = el("div", "task-terminal-reason", task.error || t(`chat.terminal.${task.state}Reason`));
-    taskIndicator.appendChild(reason);
-    taskIndicator.appendChild(el("div", "task-terminal-next", t(`chat.terminal.${task.state}Next`)));
-  }
-  if (["interrupted", "failed", "stopped"].includes(task?.state)) {
-    if (task.state === "interrupted") taskIndicator.appendChild(el("span", null, " · " + t("chat.recovery.explanation") + " "));
-    const target = { sessionId: selectedSessionId, taskId: task.id };
-    const recover = el("button", "recover-task", t("chat.recovery.action"));
-    recover.addEventListener("click", () => {
-      if (selectedSessionId !== target.sessionId || selectedTaskId !== target.taskId || busy) return;
-      const instruction = t(task.state === "interrupted" ? "chat.recovery.prompt" : `chat.terminal.${task.state}Prompt`);
-      if (!input.value.includes(instruction)) input.value += (input.value.trim() ? "\n\n" : "") + instruction;
-      draftRevision++; autosize(); scheduleWorkspaceSave(); input.focus();
-    });
-    taskIndicator.appendChild(recover);
+  if (task?.state === "failed") {
+    taskIndicator.appendChild(el("div", "task-terminal-reason", task.error || t("chat.terminal.failedReason")));
+  } else if (["stopped", "cancelled"].includes(task?.state) && task.error && !/^(?:AbortError:\s*)?This operation was aborted\.?$/i.test(task.error.trim())) {
+    taskIndicator.appendChild(el("div", "task-terminal-reason", task.error));
   }
   if (["waiting_resource", "stopping"].includes(task?.state) && task.waitingFor) {
     const holder = task.waitingFor.holders?.[0];
@@ -347,6 +337,8 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   restoringView = true;
   syncIndicator.hidden = true;
   selectedSessionId = id;
+  selectedArchived = (navigationView?.rows.get(id)?.archivedAt ?? payload.session?.archivedAt) != null;
+  updateArchivedView();
   if (!fromCache) confirmedAt.set(id, Date.now());
   else showSyncStatus("chat.syncCached", id);
   workspaceStore.setActive(id);
@@ -498,6 +490,15 @@ async function resyncSelected() {
 }
 
 function receiveEvent(event, replay = false) {
+  if (event.type === "navigation_changed") {
+    if (navigationView?.rows.has(event.sessionId)) {
+      const row = navigationView.rows.get(event.sessionId);
+      delete row.archivedAt; delete row.pinnedOrder; delete row.customTitle;
+      Object.assign(row, event.metadata);
+      updateArchivedView();
+    }
+    void refreshSessions(); return;
+  }
   if (event.type === "shutdown_state") { showShutdown(event); return; }
   if (event.type === "activity_removed") forgetSession(event.sessionId);
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
@@ -1393,7 +1394,6 @@ function onEvent(event) {
     case "agent_settled":
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
-      addStatus(t("chat.status.agentReady"));
       break;
     case "agent_end":
       closeWorkBlock();
@@ -1716,8 +1716,8 @@ function pruneOutboxes() {
 }
 const inputStateKeys = {
   sending: "chat.input.sending", accepted: "chat.input.accepted", queued: "chat.input.queued",
-  dispatching: "chat.input.dispatching", context: "chat.input.context", consumed: "chat.input.consumed",
-  handled: "chat.input.handled", failed: "chat.input.failed", cancelled: "chat.input.cancelled",
+  dispatching: "chat.input.dispatching", context: "chat.input.context",
+  failed: "chat.input.failed", send_failed: "chat.input.sendFailed", cancelled: "chat.input.cancelled",
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
 function outboxFor(id) {
@@ -1728,10 +1728,15 @@ function outboxFor(id) {
 function updateInputReceipt(commandId, state) {
   const node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(commandId) + '"]'));
   if (!node) return;
+  node.dataset.inputState = state;
+  if (!["failed", "send_failed", "uncertain"].includes(state)) node.querySelector(".retry-input")?.remove();
+  if (["consumed", "handled"].includes(state)) {
+    node.querySelector(".input-state")?.remove();
+    return;
+  }
   let receipt = node.querySelector(".input-state");
   if (!receipt) { receipt = el("div", "input-state status-line"); node.appendChild(receipt); }
   receipt.textContent = t(inputStateKeys[state] ?? inputStateKeys.uncertain);
-  node.dataset.inputState = state;
 }
 function submissionNode(submission) {
   let node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(submission.context.commandId) + '"]'));
@@ -1758,14 +1763,14 @@ async function sendSubmission(submission) {
     outboxFor(id).delete(submission.context.commandId);
     if (selectedSessionId === id) {
       const node = submissionNode(submission);
-      if (!["consumed", "handled", "cancelled", "failed"].includes(node.dataset.inputState)) {
+      if (!["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
         updateInputReceipt(submission.context.commandId, result.compacted ? "handled" : "accepted");
       }
       if (result.compacted) setBusy(false);
     }
   } else if (selectedSessionId === id) {
     const node = submissionNode(submission);
-    updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "failed");
+    updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "send_failed");
     const retry = el("button", "retry-input", t("chat.input.retry"));
     retry.addEventListener("click", () => { void sendSubmission(submission); });
     node.appendChild(retry);
@@ -1783,7 +1788,7 @@ async function sendSubmission(submission) {
 }
 
 async function submit() {
-  if (composerStopping()) return;
+  if (composerStopping() || selectedArchived) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
@@ -2100,121 +2105,66 @@ let sessionRefreshRequest = 0;
 let sessionMetadataTimer = null;
 let sessionMetadataBusy = false;
 let sessionMetadataDirty = false;
-function sessionRowMeta(s) {
-  const when = s.modified ? new Date(s.modified) : null;
-  const count = t("sessions.count", { count: s.messageCount });
-  return when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")} · ${count}` : count;
-}
 function scheduleSessionMetadata() {
-  sessionMetadataDirty = true;
-  if (sessionMetadataTimer || sessionMetadataBusy) return;
-  sessionMetadataTimer = setTimeout(async () => {
-    sessionMetadataTimer = null;
-    sessionMetadataBusy = true; sessionMetadataDirty = false;
-    const context = modeContext(), revision = sessionRefreshRequest;
-    try {
-      const result = await window.arcane.listSessions(context);
-      if (!result?.ok || context.mode !== currentMode || context.generation !== currentModeGeneration || revision !== sessionRefreshRequest) return;
-      for (const s of result.sessions ?? []) {
-        const item = sessionList.querySelector('[data-session-id="' + CSS.escape(s.id) + '"]');
-        if (!item) continue;
-        item.querySelector(".s-title").textContent = s.name || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage) || t("sessions.untitled");
-        item.querySelector(".s-meta").textContent = sessionRowMeta(s);
-      }
-    } catch { /* Navigation still provides an explicit metadata refresh. */ }
-    finally { sessionMetadataBusy = false; if (sessionMetadataDirty) scheduleSessionMetadata(); }
-  }, 100);
+  if (sessionMetadataTimer) return;
+  sessionMetadataTimer = setTimeout(() => { sessionMetadataTimer = null; void refreshSessions(); }, 100);
+}
+function updateArchivedView() {
+  const row = navigationView?.rows.get(selectedSessionId);
+  if (row) selectedArchived = row.archivedAt != null;
+  document.getElementById("archive-readonly").hidden = !selectedArchived;
+  document.body.classList.toggle("archived-session", selectedArchived);
+  if (row) document.getElementById("conversation-title").textContent = navigationView.title(row);
+  updateComposerAction();
+}
+function showEmptyConversation() {
+  saveWorkspace(); snapshotRequest++; navigationRequest++;
+  selectedSessionId = null; selectedTaskId = null; selectedArchived = false;
+  workspaceStore.setActive(null); historyPage = null; pendingHistoryAnchor = null;
+  resetConversation(); input.value = ""; pendingImages = []; renderAttachStrip();
+  showTaskState(null); showPendingModel(null); updateArchivedView();
+  document.getElementById("conversation-title").textContent = "";
+  messages.append(el("p", "nav-empty-selection", t("navigation.emptySelection")));
+}
+async function createProjectSession(cwd = undefined) {
+  setDrawer(false); navigationView?.showArchives(false);
+  const context = modeContext(), navigation = ++navigationRequest;
+  const result = await window.arcane.newSession({ ...context, cwd });
+  if (navigation !== navigationRequest) return;
+  if (result?.ok) { await installSnapshot(result); await refreshSessions(); navigationView?.reveal(result.session.id); }
+  else addStatus(result?.code === "PROJECT_UNAVAILABLE" ? t("navigation.missingProject") : t("sessions.newFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+  input.focus();
 }
 
 function setDrawer(open) {
   drawer.classList.toggle("open", open);
   document.body.classList.toggle("drawer-open", open);
-  document.getElementById("activity-toggle").setAttribute("aria-expanded", String(open || document.body.classList.contains("sidebar-pinned")));
+  document.getElementById("sessions-toggle").setAttribute("aria-expanded", String(open || document.body.classList.contains("sidebar-pinned")));
   drawer.inert = !open && !document.body.classList.contains("sidebar-pinned");
   if (open) refreshSessions();
 }
 
-async function refreshSessions() {
-  const requestId = ++sessionRefreshRequest;
-  const context = modeContext();
-  const result = await window.arcane.listSessions(context);
-  if (requestId !== sessionRefreshRequest || !sameModeContext(context) || result?.ok === false) return;
-  const sessions = result?.sessions ?? [];
-  sessionList.innerHTML = "";
-  if (sessions.length === 0) {
-    sessionList.appendChild(el("div", "drawer-empty", t("sessions.empty")));
-    return;
-  }
-  for (const s of sessions) {
-    // 未落盘的新会话由 main 标 firstMessageI18n(sessions.unsaved),其余用真实首条消息
-    const sessionName = s.name
-      || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage)
-      || t("sessions.untitled");
-    const item = el("div", `session-item${s.active ? " active" : ""}`);
-    item.dataset.sessionId = s.id;
-    const body = el("button", "s-body");
-    body.type = "button";
-    body.appendChild(el("div", "s-title", sessionName));
-    body.appendChild(el("div", "s-meta", sessionRowMeta(s)));
-    body.appendChild(el("div", "s-activity"));
-    const del = el("button", "s-del", "×");
-    del.title = t("sessions.delete");
-    del.disabled = Boolean(s.deleting);
-    if (s.deleting) del.title = t("sessions.deleting");
-    del.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      if (!confirm(t("sessions.deleteConfirm", { name: sessionName }))) return;
-      if (!sameModeContext(context)) return;
-      del.disabled = true; del.title = t("sessions.deleting");
-      let result;
-      try { result = await window.arcane.deleteSession(s.path, context); }
-      catch (error) { result = { ok: false, error: error.message }; }
-      finally { del.disabled = false; del.title = t("sessions.delete"); }
-      if (!result?.ok) {
-        addStatus(t("sessions.deleteFailed", {
-          error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-        }));
-        return;
-      }
-      forgetSession(s.id);
-      refreshSessions();
-    });
-    item.append(body, del);
-    item.addEventListener("click", async () => {
-      setDrawer(false);
-      if (s.id !== selectedSessionId && context.mode === currentMode && context.generation === currentModeGeneration) {
-        const selectionContext = modeContext();
-        const navigation = ++navigationRequest;
-        const cached = snapshotCache.get(s.id);
-        if (cached) void installSnapshot(cached, null, true);
-        const result = await window.arcane.openSession(s.path, selectionContext);
-        if (navigation !== navigationRequest) return;
-        if (result?.ok) { await installSnapshot(result); refreshSessions(); }
-        if (!result?.ok) {
-          addStatus(t("sessions.openFailed", {
-            error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-          }));
-        }
-      }
-    });
-    sessionList.appendChild(item);
-  }
-  updateSessionActivity();
-}
-
-function updateSessionActivity() {
-  for (const item of sessionList.querySelectorAll(".session-item")) {
-    const id = /** @type {HTMLElement} */ (item).dataset.sessionId;
-    const row = activityView?.rows.get(id);
-    item.classList.toggle("active", id === selectedSessionId);
-    item.querySelector(".s-body")?.setAttribute("aria-current", String(id === selectedSessionId));
-    const status = item.querySelector(".s-activity");
-    if (status) status.textContent = row ? activityView.stateLabel(row.state) + (row.unread ? " · " + t("activity.unread") : "") : "";
-  }
-}
+async function refreshSessions() { await navigationView?.load(); }
+function updateSessionActivity() { navigationView?.updateActivities(activityView?.rows ?? new Map()); }
 
 async function openActivity(row, notice = null) {
   if (!row) return;
+  const id = row.sessionId ?? row.id;
+  if (deletedSessions.has(id)) { navigationView?.notify(t("navigation.deleted")); return; }
+  navigationView?.showArchives(false); navigationView?.reveal(id);
+  if (row.mode === currentMode) {
+    setDrawer(false);
+    const navigation = ++navigationRequest;
+    const context = modeContext();
+    const cached = snapshotCache.get(id);
+    if (cached && id !== selectedSessionId) void installSnapshot(cached, null, true);
+    const result = await window.arcane.openSession(row.path, context);
+    if (navigation !== navigationRequest) return;
+    if (result?.ok) { await installSnapshot(result); focusActivityTarget(row, notice); void refreshSessions(); }
+    else navigationView?.notify(t("sessions.openFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+    return;
+  }
+  row = { ...row, sessionId: id };
   const navigation = ++navigationRequest;
   ++modeSwitchRequest;
   setDrawer(false);
@@ -2234,16 +2184,20 @@ async function openActivity(row, notice = null) {
     requestedMode = currentMode;
     invalidateSlashItems();
     refreshSessions();
-    const attentionId = notice?.attentionId ?? row.attentionIds?.find(id => id.startsWith("question:"))?.slice(9);
-    const approvalId = notice?.approvalId ?? row.attentionIds?.find(id => id.startsWith("approval:"))?.slice(9);
-    const card = attentionId ? attentionCards.get(attentionId) : approvalId ? messages.querySelector('[data-approval-id="' + CSS.escape(approvalId) + '"]') : null;
-    if (card) { followLatest = false; card.scrollIntoView({ block: "center" }); }
+    focusActivityTarget(row, notice);
   } catch (error) {
     if (navigation === navigationRequest) {
       requestedMode = currentMode;
       addStatus(t("sessions.openFailed", { error: error.message }));
     }
   }
+}
+
+function focusActivityTarget(row, notice) {
+    const attentionId = notice?.attentionId ?? row.attentionIds?.find(id => id.startsWith("question:"))?.slice(9);
+    const approvalId = notice?.approvalId ?? row.attentionIds?.find(id => id.startsWith("approval:"))?.slice(9);
+    const card = attentionId ? attentionCards.get(attentionId) : approvalId ? messages.querySelector('[data-approval-id="' + CSS.escape(approvalId) + '"]') : null;
+    if (card) { followLatest = false; card.scrollIntoView({ block: "center" }); }
 }
 
 let openingNotification = false;
@@ -2255,6 +2209,7 @@ async function openNotificationTarget() {
       const navigation = navigationRequest;
       const target = await window.arcane.takeNotificationTarget();
       if (navigation !== navigationRequest) break;
+      if (target?.deleted) { navigationView?.notify(t("navigation.deleted")); continue; }
       if (!target?.row) break;
       await openActivity(target.row, target.notice);
     }
@@ -2268,19 +2223,9 @@ document.getElementById("sessions-toggle").addEventListener("click", () =>
 drawerBackdrop.addEventListener("click", () => setDrawer(false));
 document.getElementById("drawer-close").addEventListener("click", () => setDrawer(false));
 document.addEventListener("keydown", event => { if (event.key === "Escape") setDrawer(false); });
-document.getElementById("session-new").addEventListener("click", async () => {
-  setDrawer(false);
-  const context = modeContext();
-  const navigation = ++navigationRequest;
-  const result = await window.arcane.newSession(context);
-  if (navigation !== navigationRequest) return;
-  if (result?.ok) { await installSnapshot(result); refreshSessions(); }
-  if (!result?.ok) {
-    addStatus(t("sessions.newFailed", {
-      error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-    }));
-  }
-  input.focus();
+document.getElementById("session-new").addEventListener("click", () => {
+  const row = navigationView?.rows.get(selectedSessionId);
+  void createProjectSession(row?.cwd ?? undefined);
 });
 
 // ---------- settings:provider 管理 + 默认模型 ----------
@@ -3196,10 +3141,13 @@ setInterval(() => {
     }
   }
 }, 1000);
+navigationView = new (/** @type {any} */ (globalThis).ArcaneNavigationView)({ api: window.arcane, t,
+  selected: () => selectedSessionId, open: openActivity, create: createProjectSession,
+  changed: updateArchivedView, removed: forgetSession, empty: showEmptyConversation });
 activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: window.arcane, t,
   getView: () => ({ sessionId: selectedSessionId, runtimeEpoch: viewEpoch, seq: viewSeq,
     ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
-    visible: document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
+    visible: !document.body.classList.contains("show-archives") && document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
       && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
     atBottom: !historyPage?.hasNewer && !pendingHistoryAnchor && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
     readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,

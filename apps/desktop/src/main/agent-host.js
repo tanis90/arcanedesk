@@ -265,6 +265,8 @@ export class AgentHost {
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
     // 错误只能从 assistant 消息与 auto_retry 事件里跟踪。
     this._lastError = null;
+    /** @type {import("./conversations/session-navigation.js").SessionNavigation | undefined} */
+    this.navigation = undefined;
   }
 
   /** 本 host 的工作目录:session 分桶、内置工具、skills 扫描全部以它为锚。 */
@@ -303,7 +305,9 @@ export class AgentHost {
 
   /** 目录与 JSONL marker 双重验证；损坏/误放文件不进入 UI，也不会被自动认领。 */
   async listOwnedSessionInfos() {
-    const list = await SessionManager.list(this.cwd(), this.sessionDir());
+    // The explicit mode directory contains multiple projects. SDK list(cwd, dir)
+    // filters by cwd even with an explicit directory; listAll(dir) preserves the project index.
+    const list = await SessionManager.listAll(this.sessionDir());
     return list.filter((sessionInfo) => {
       try {
         if (!isPathInside(this.sessionDir(), sessionInfo.path)) return false;
@@ -364,6 +368,7 @@ export class AgentHost {
     try {
       const existing = await this.listOwnedSessionInfos();
       const recent = existing
+        .filter(row => this.navigation?.get(row.id).archivedAt == null)
         .slice()
         .sort((a, b) => (Number(b.modified) || 0) - (Number(a.modified) || 0))[0];
       manager = recent ? this.openSessionManager(recent.path) : this.createSessionManager();
@@ -372,6 +377,7 @@ export class AgentHost {
       manager = this.createSessionManager();
     }
     }
+    this.profile = { ...this.profile, getCwd: () => manager.getCwd() };
     await this.attach(manager);
     return this.session;
   }
@@ -495,7 +501,9 @@ export class AgentHost {
     return {
       id: this.sessionManager.getSessionId?.() ?? null,
       path: this.sessionManager.getSessionFile?.() ?? null,
-      name: this.sessionManager.getSessionName?.() ?? "",
+      name: this.navigation?.get(this.sessionManager.getSessionId?.()).customTitle ?? this.sessionManager.getSessionName?.() ?? "",
+      cwd: this.sessionManager.getCwd?.() ?? null,
+      ...this.navigation?.get(this.sessionManager.getSessionId?.()),
     };
   }
 
@@ -507,10 +515,11 @@ export class AgentHost {
         .map((s) => ({
           id: s.id,
           path: s.path,
+          cwd: s.cwd ?? null,
           name: s.name ?? "",
           firstMessage: (s.firstMessage ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
           // 结构化文案 key:仅"未保存新会话"占位用(见下方 unshift),真实首条消息是用户数据
-          firstMessageI18n: null,
+          firstMessageI18n: s.messageCount ? null : "sessions.unsaved",
           modified: s.modified instanceof Date ? s.modified.getTime() : Number(s.modified) || 0,
           messageCount: s.messageCount ?? 0,
           active: s.path === activePath,
@@ -523,6 +532,7 @@ export class AgentHost {
         mapped.unshift({
           id: this.sessionManager.getSessionId?.() ?? null,
           path: activePath,
+          cwd: this.cwd(),
           name: "",
           firstMessage: "",
           firstMessageI18n: "sessions.unsaved",
@@ -721,6 +731,7 @@ export class AgentHost {
 
   /** 手动压缩上下文(pi 原生 compact;自动压缩默认开启,这里只是手动入口)。 */
   async compact(instructions) {
+    this.navigation?.assertWritable(this.describeCurrent()?.id);
     this.operations++;
     try {
       if (!this.session) throw new Error("agent session not started");
@@ -768,6 +779,8 @@ export class AgentHost {
   }
 
   submitInput(text, images, commandId, prepare = null) {
+    try { this.navigation?.assertWritable(this.describeCurrent()?.id); }
+    catch (error) { return { ok: false, code: error.code, error: error.message }; }
     if (this.closing) return { ok: false, code: "APP_STOPPING" };
     if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
     if (!this.session) throw new Error("agent session not started");

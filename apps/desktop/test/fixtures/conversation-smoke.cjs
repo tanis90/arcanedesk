@@ -9,6 +9,7 @@ app.setPath("userData", mkdtempSync(path.join(tmpdir(), "arcane-conversation-smo
 app.disableHardwareAcceleration();
 const startedAt = Date.now() - 15000;
 let finished = false;
+let receiptInput = null;
 let question = null;
 let lastAnswer = null;
 let sendTestEvent = () => {};
@@ -25,11 +26,13 @@ function snapshot(mode) {
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
     busy: id === "A" && (taskOverride ? ["running", "stopping"].includes(taskOverride.state) : !finished || question?.state === "pending"),
     task: id === "A" ? taskOverride ?? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
+    inputs: id === "A" && receiptInput ? [receiptInput] : [],
     attentions: id === "A" && question ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
-      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])].map(row => migratedHistory
+      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : []),
+      ...(receiptInput ? [{ role: "user", ts: 900, text: "retry me" }] : [])].map(row => migratedHistory
         ? { ...row, key: `entry:${row.role}-${row.ts}`, legacyKey: `${row.role}:${row.ts}` } : row) : [],
     inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: id === "A" && taskOverride ? overrideSeq : epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
@@ -63,7 +66,7 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
     return snapshot(input === "A" ? "prep" : "combat");
   }
   if (channel === "mode:set") { mode = input; return { ...snapshot(mode), generation: ++generation }; }
-  if (channel === "sessions:list") return { sessions: [] };
+  if (channel === "sessions:list" || channel === "sessions:navigation") return { ok: true, sessions: [] };
   if (channel === "voice:get-config") return { enabled: false };
   if (channel === "ui:get-locale") return { pref: "en-US", resolved: "en-US" };
   if (channel === "slash:list") return { skills: [], templates: [], commands: [] };
@@ -141,6 +144,25 @@ app.whenReady().then(async () => {
     await until('outboxFor("A").size === 0');
     assert.equal(submitAttempts, 2);
     assert.equal(submittedCommands.size, 1);
+    assert.equal(await evaluate('document.querySelector(".retry-input")'), null, "successful receipt clears retry");
+    receiptInput = { commandId: [...submittedCommands][0], messageKey: "entry:user-900", text: "retry me", state: "context" };
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".input-state").textContent'), await evaluate('t("chat.input.context")'));
+    for (const state of ["consumed", "handled", "failed", "cancelled", "interrupted"]) {
+      receiptInput.state = state;
+      await evaluate('resyncSelected()');
+      assert.equal(await evaluate('!!document.querySelector(".input-state")'), !["consumed", "handled"].includes(state), "receipt visibility after snapshot: " + state);
+    }
+    receiptInput.state = "consumed";
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A"');
+    assert.equal(await evaluate('document.querySelector(".input-state")'), null, "returning to consumed history adds no caption");
+    await evaluate('onEvent({type: "agent_settled"})');
+    assert.equal(await evaluate('document.querySelector("#composer-action")'), null);
+    assert.equal(await evaluate('messages.textContent.includes("agent ready")'), false);
+
     question = { id: "question-A", taskId: "task-question", state: "pending", question: "Which scene?", options: ["Forest", "City"] };
     await evaluate('resyncSelected()');
     await until('!!document.querySelector("[data-attention-id] textarea")');
@@ -169,24 +191,24 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('messages.textContent.includes("STALE OLD INSTANCE")'), false);
     interrupted = true;
     await evaluate('resyncSelected()');
-    await until('!!document.querySelector(".recover-task")');
-    await evaluate('input.value = "keep my draft"; pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; document.querySelector(".recover-task").click(); document.querySelector(".recover-task").click();');
+    await until('displayedTask?.state === "interrupted"');
+    await evaluate('input.value = "keep my draft"; pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; input.dispatchEvent(new Event("input"));');
     const recoveryDraft = await evaluate('input.value');
-    assert.ok(recoveryDraft.startsWith("keep my draft\n\n"));
-    assert.equal(recoveryDraft, "keep my draft\n\n" + await evaluate('t("chat.recovery.prompt")'), "repeat clicks do not duplicate the recovery request");
+    assert.equal(recoveryDraft, "keep my draft", "interruption does not inject instructions");
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(submitAttempts, 2, "preparing recovery never submits a model request");
+    assert.equal(submitAttempts, 2, "interruption never submits a model request");
     await evaluate('saveWorkspace(); switchMode("combat")');
     await until('selectedSessionId === "B"');
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     await evaluate('switchMode("prep")');
-    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task")');
+    await until('selectedSessionId === "A" && displayedTask?.state === "interrupted"');
     assert.equal(await evaluate('input.value'), recoveryDraft);
     assert.equal(await evaluate('pendingImages.length'), 1);
     await evaluate('saveWorkspace()');
     const recoveryReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await recoveryReloaded;
-    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task") && pendingImages.length === 1');
+    await until('selectedSessionId === "A" && displayedTask?.state === "interrupted" && pendingImages.length === 1');
     assert.equal(await evaluate('input.value'), recoveryDraft);
     assert.equal(submitAttempts, 2, "reloading recovery does not replay an input");
     taskOverride = { id: "stop-task", state: "running" };
@@ -258,9 +280,11 @@ app.whenReady().then(async () => {
     window.webContents.send("arcane:event", failedEvent);
     await evaluate('resyncSelected()');
     assert.equal(await evaluate('document.querySelectorAll(".task-terminal-reason").length'), 1);
-    await evaluate('input.value = "retain this"; document.querySelector(".recover-task").click(); saveWorkspace()');
+    await evaluate('input.value = "retain this"; input.dispatchEvent(new Event("input")); saveWorkspace()');
     const failureDraft = await evaluate('input.value');
-    assert.equal(failureDraft, "retain this\n\n" + await evaluate('t("chat.terminal.failedPrompt")'));
+    assert.equal(failureDraft, "retain this");
+    assert.equal(await evaluate('document.querySelector(".recover-task, .task-terminal-next")'), null);
+    await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
     const terminalReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await terminalReloaded;
     await until('selectedSessionId === "A" && !!document.querySelector(".task-terminal-reason") && workspaceReady.has("A")');
@@ -272,12 +296,15 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
     delete taskOverride.error;
     await evaluate('resyncSelected()');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), await evaluate('t("chat.terminal.stoppedReason")'));
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
+    taskOverride.error = "This operation was aborted";
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
     taskOverride = { id: "next-task", state: "running" };
     await evaluate('resyncSelected()');
     assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
-    assert.equal(submitAttempts, 2, "terminal recovery prepares a draft without executing work");
+    assert.equal(submitAttempts, 2, "terminal states leave drafts unchanged without executing work");
     const lastConfirmation = await evaluate('confirmedAt.get("A")');
     await evaluate('installSnapshot(snapshotCache.get("A"), null, true)');
     assert.equal(await evaluate('confirmedAt.get("A")'), lastConfirmation, "rendering a cache is not new execution confirmation");
@@ -288,7 +315,7 @@ app.whenReady().then(async () => {
     await evaluate('void resyncSelected()');
     await until('!syncIndicator.hidden && syncIndicator.dataset.status === "chat.syncing"');
     assert.equal(await evaluate('busy'), true, "sync delay does not change execution state");
-    assert.ok(await evaluate('syncIndicator.textContent.includes(t("chat.syncLastConfirmed", {time: new Date(confirmedAt.get("A")).toLocaleTimeString()}))'));
+    assert.ok(await evaluate('syncIndicator.title.includes(t("chat.syncLastConfirmed", {time: new Date(confirmedAt.get("A")).toLocaleTimeString()}))'));
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B"');
     await evaluate('switchMode("prep")');

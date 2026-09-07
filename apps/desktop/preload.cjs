@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld("arcane", {
   prepChooseDir: (context) => ipcRenderer.invoke("prep:choose-dir", context),
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
+  sessionNavigation: () => ipcRenderer.invoke("sessions:navigation"),
+  setSessionPinned: (sessionId, pinned) => ipcRenderer.invoke("sessions:setPinned", { sessionId, pinned }),
+  renameSession: (sessionId, title) => ipcRenderer.invoke("sessions:rename", { sessionId, title }),
+  archiveSession: sessionId => ipcRenderer.invoke("sessions:archive", { sessionId }),
+  restoreSession: sessionId => ipcRenderer.invoke("sessions:restore", { sessionId }),
+  deleteArchivedSession: sessionId => ipcRenderer.invoke("sessions:deleteArchived", { sessionId }),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
   sessionSnapshot: (sessionId, historyQuery) => ipcRenderer.invoke("sessions:snapshot", sessionId, historyQuery),
   activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),

@@ -1,3 +1,5 @@
+> 历史调查，不作为当前技术方案或待办。当前唯一方案见 [architecture](architecture.md)，完成状态见 [acceptance-audit](acceptance-audit.md)。
+
 # 会话模型隔离与切换问题 Spec（2026-09-05）
 
 本轮工作源于两个用户报告：①会话之间模型不隔离（在 A 切模型导致 B 跟着变）；

@@ -80,6 +80,7 @@ app.whenReady().then(async () => {
     if (channel === "activity:read") return center.markRead(input, focused);
     if (channel === "sessions:current") return snapshot(selected);
     if (channel === "sessions:snapshot") return snapshot(input);
+    if (channel === "sessions:navigation") return { ok: true, sessions: [...sessions.values()].map(s => ({ id: s.id, name: s.name, path: s.path, mode: s.mode, projectKey: s.mode, cwd: "C:/test/" + s.mode, activity: center.get(s.id) })) };
     if (channel === "sessions:list") return { sessions: [...sessions.values()].filter(s => s.mode === input.mode).map(s => ({ id: s.id, name: s.name, path: s.path, active: s.id === selected, messageCount: s.history.length })) };
     if (channel === "mode:set") {
       mode = input; generation++;
@@ -153,15 +154,15 @@ app.whenReady().then(async () => {
     center.flush();
     await until('activityView.rows.get("B")?.needsAttention === true');
     assert.equal(await evaluate('selectedSessionId'), "C");
-    await evaluate('document.querySelector(".activity-item[data-session-id=B]").click()');
+    await evaluate('document.querySelector(".session-item[data-session-id=B] .s-body").click()');
     await until('selectedSessionId === "B" && !!document.querySelector("[data-attention-id=question-B] textarea")');
     assert.equal(await evaluate('currentMode'), "prep");
     assert.equal(await evaluate('input.value'), "B 的草稿");
     await capture("activity-wide-question");
     window.setSize(480, 820);
     await until('!document.body.classList.contains("sidebar-pinned")');
-    assert.equal(await evaluate('document.getElementById("activity-toggle").getBoundingClientRect().right <= document.body.clientWidth'), true);
-    await evaluate('document.getElementById("activity-toggle").click()');
+    assert.equal(await evaluate('document.getElementById("sessions-toggle").getBoundingClientRect().right <= document.body.clientWidth'), true);
+    await evaluate('document.getElementById("sessions-toggle").click()');
     await until('drawer.classList.contains("open")');
     await capture("activity-narrow");
     await evaluate('setDrawer(false)');
@@ -207,7 +208,7 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('taskIndicator.textContent'), await evaluate('t("activity.capacityQueue")'));
     send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
     await until('!busy && taskIndicator.textContent.startsWith(t("activity.cancelled"))');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-next").textContent'), await evaluate('t("chat.terminal.cancelledNext")'));
+    assert.equal(await evaluate('document.querySelector(".task-terminal-next, .recover-task")'), null);
     send("B", { type: "task_state", task: { id: "task-B-resource", state: "running" } });
     send("B", { type: "task_state", task: { id: "task-B-resource", state: "waiting_resource",
       waitingFor: { resources: ["fs:c:/workspace/shared"], holders: [{ sessionId: "A", taskId: "task-A", name: "Session A" }] } } });

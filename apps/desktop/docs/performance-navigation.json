@@ -1,0 +1,185 @@
+{
+  "measuredAt": "2026-09-07T11:25:01.677Z",
+  "device": {
+    "platform": "win32",
+    "osRelease": "10.0.22631",
+    "arch": "x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+    "logicalCpus": 16,
+    "totalMemoryGiB": 63.77081298828125,
+    "electron": "44.0.0",
+    "node": "24.18.1"
+  },
+  "workload": {
+    "sessions": 16,
+    "activeTasks": 16,
+    "historyMessagesPerSession": 10000,
+    "historicalInputReceiptsPerSession": 5000,
+    "historyWindow": 100,
+    "progressEventsPerSecond": 160,
+    "stateEventsPerSecond": 32,
+    "activityPersistence": true,
+    "taskJournalPersistence": true,
+    "viewport": [
+      1200,
+      850
+    ],
+    "offscreen": true,
+    "hardwareAcceleration": false,
+    "sameModeSwitches": 60,
+    "crossModeSwitches": 60
+  },
+  "metrics": {
+    "selection": {
+      "samples": 120,
+      "p50Ms": 20.400000005960464,
+      "p95Ms": 37.79999998211861,
+      "maxMs": 124.90000000596046
+    },
+    "content": {
+      "samples": 120,
+      "p50Ms": 20.400000005960464,
+      "p95Ms": 37.79999998211861,
+      "maxMs": 124.90000000596046
+    },
+    "calibration": {
+      "samples": 120,
+      "p50Ms": 58.30000001192093,
+      "p95Ms": 141.2999999821186,
+      "maxMs": 191.7000000178814
+    },
+    "progress": {
+      "samples": 221,
+      "p50Ms": 32,
+      "p95Ms": 123,
+      "maxMs": 184
+    },
+    "states": {
+      "samples": 44,
+      "p50Ms": 94,
+      "p95Ms": 150,
+      "maxMs": 184
+    }
+  },
+  "progressDiagnostic": {
+    "selectedSessionId": "01a07b9c-aeed-74ec-a0dd-f632ec369271",
+    "viewSeq": 339,
+    "viewEpoch": "9bd57d6e-c07a-4f14-b5aa-724684e417eb",
+    "activityReady": true,
+    "restoringView": false,
+    "historyPage": {
+      "total": 10012,
+      "firstKey": "message:0-9912",
+      "lastKey": "message:97466f0e-ee08-4ab2-a5ad-10a3ae49befd",
+      "hasOlder": true,
+      "hasNewer": false
+    },
+    "followLatest": true,
+    "streamKeys": [
+      "message:60db3797-955f-452f-9424-6d3f6a07ab73"
+    ],
+    "tail": "ing work. Update 242: ongoing work. Update 243: ongoing work. Update 244: ongoing work. Update 245: ongoing work. Update 246: ongoing work. Update 247: ongoing work. Update 248: ongoing work. Update 249: ongoing work. Update 250: ongoing work. Update 251: ongoing work. Update 252: ongoing work. Update 253: ongoing work. Update 254: ongoing work. Update 255: ongoing work. Update 256: ongoing work. "
+  },
+  "metadataReads": {
+    "samples": 294,
+    "p50Ms": 27.074899999999616,
+    "p95Ms": 38.99210000000312,
+    "maxMs": 63.03389999999854
+  },
+  "completedMessagesPerSecond": 16,
+  "metadataScope": "Production SessionRegistry scans native resident journals; discovery is cached, cold disk enumeration excluded. Full messages trigger coalesced renderer row updates while tasks remain active.",
+  "uncachedSwitches": 0,
+  "allSwitches": {
+    "selection": {
+      "samples": 120,
+      "p50Ms": 20.400000005960464,
+      "p95Ms": 37.79999998211861,
+      "maxMs": 124.90000000596046
+    },
+    "content": {
+      "samples": 120,
+      "p50Ms": 20.400000005960464,
+      "p95Ms": 37.79999998211861,
+      "maxMs": 124.90000000596046
+    },
+    "calibration": {
+      "samples": 120,
+      "p50Ms": 58.30000001192093,
+      "p95Ms": 141.2999999821186,
+      "maxMs": 191.7000000178814
+    }
+  },
+  "byNavigation": {
+    "sameMode": {
+      "selection": {
+        "samples": 60,
+        "p50Ms": 19.69999998807907,
+        "p95Ms": 38.400000005960464,
+        "maxMs": 124.90000000596046
+      },
+      "content": {
+        "samples": 60,
+        "p50Ms": 19.69999998807907,
+        "p95Ms": 38.400000005960464,
+        "maxMs": 124.90000000596046
+      },
+      "calibration": {
+        "samples": 60,
+        "p50Ms": 56.599999994039536,
+        "p95Ms": 143.59999999403954,
+        "maxMs": 191.7000000178814
+      }
+    },
+    "crossMode": {
+      "selection": {
+        "samples": 60,
+        "p50Ms": 20.799999982118607,
+        "p95Ms": 33.19999998807907,
+        "maxMs": 61.79999998211861
+      },
+      "content": {
+        "samples": 60,
+        "p50Ms": 20.799999982118607,
+        "p95Ms": 33.19999998807907,
+        "maxMs": 61.79999998211861
+      },
+      "calibration": {
+        "samples": 60,
+        "p50Ms": 60.20000001788139,
+        "p95Ms": 129.2999999821186,
+        "maxMs": 189.69999998807907
+      }
+    }
+  },
+  "memory": [
+    {
+      "type": "Browser",
+      "workingSetMiB": 509.05078125,
+      "peakWorkingSetMiB": 1078.5859375
+    },
+    {
+      "type": "GPU",
+      "workingSetMiB": 79.26171875,
+      "peakWorkingSetMiB": 88.69921875
+    },
+    {
+      "type": "Utility",
+      "workingSetMiB": 56.8515625,
+      "peakWorkingSetMiB": 57.63671875
+    },
+    {
+      "type": "Tab",
+      "workingSetMiB": 266.71875,
+      "peakWorkingSetMiB": 271.6328125
+    }
+  ],
+  "limitsMs": {
+    "selection": 100,
+    "content": 300,
+    "calibration": 1000,
+    "progress": 500,
+    "states": 500
+  },
+  "scope": "Production renderer/preload, AgentHost, TaskCoordinator, scheduler, projection, history index, activity center and native SessionManager; controlled prompt/IPC routing; first animation frame, not physical display; model and external tools excluded.",
+  "passed": true
+}
