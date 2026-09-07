@@ -88,8 +88,7 @@ let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设�
 let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
-let shutdown = null, backgroundTray = null, exitPrompt = false, quitAllowed = false;
-let hasLiveWork = () => false;
+let shutdown = null, backgroundTray = null, quitAllowed = false;
 function restoreMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -109,20 +108,18 @@ function enableBackgroundEntry() {
     return true;
   } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
 }
-async function requestExit(reason) {
+async function requestExit() {
   if (!shutdown || quitAllowed) { app.quit(); return; }
-  if (exitPrompt || shutdown.state.state === "stopping") { restoreMainWindow(); return; }
-  if (!hasLiveWork()) { void shutdown.stop(); return; }
-  exitPrompt = true;
+  if (shutdown.state.state === "stopping") return;
+  // Explicit tray exit needs no second decision. Only surface the window if
+  // shutdown is taking time, so its progress and cancellation remain reachable.
+  const feedback = setTimeout(() => {
+    if (shutdown.state.state === "stopping") restoreMainWindow();
+  }, 1000);
   try {
-    const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
-    const background = reason === "close" && enableBackgroundEntry();
-    const buttons = [text("lifecycle.cancel"), text("lifecycle.stopExit"), ...(background ? [text("lifecycle.background")] : [])];
-    const answer = await dialog.showMessageBox(mainWindow, { type: "question", title: text("lifecycle.quit"),
-      message: text("lifecycle.confirm"), buttons, defaultId: 0, cancelId: 0, noLink: true });
-    if (answer.response === 2 && background) mainWindow.hide();
-    else if (answer.response === 1) { restoreMainWindow(); void shutdown.stop(); }
-  } finally { exitPrompt = false; }
+    await shutdown.stop();
+    if (shutdown.state.state === "failed") restoreMainWindow();
+  } finally { clearTimeout(feedback); }
 }
 let desktopNotifications = null;
 
@@ -579,7 +576,13 @@ function createWindow() {
     foundryView = null;
   });
   mainWindow.on("close", event => {
-    if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("close"); }
+    if (quitAllowed) return;
+    event.preventDefault();
+    if (enableBackgroundEntry()) mainWindow.hide();
+    else {
+      const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
+      dialog.showErrorBox(text("lifecycle.quit"), text("lifecycle.trayUnavailable"));
+    }
   });
 }
 
@@ -1509,8 +1512,6 @@ app.whenReady().then(async () => {
   });
   const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
   reclaimTimer.unref();
-  hasLiveWork = () => allSessionHosts().some(host => host.busy) || resources.active.size > 0 || Boolean(panelCommands.run) ||
-    Object.values(hosts).some(registry => registry.pending.size || registry.deleting.size);
   ipcMain.handle("lifecycle:get", event => isTrustedChatIpc(event) ? shutdown.snapshot() : null);
   ipcMain.handle("lifecycle:cancel-exit", event => { if (isTrustedChatIpc(event)) shutdown.cancel(); return shutdown.snapshot(); });
 
@@ -1537,7 +1538,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", event => {
-  if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("quit"); return; }
+  if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit(); return; }
   backgroundTray?.destroy(); backgroundTray = null;
   activityCenter?.flush();
   clearFoundryPermissionState("app-quit");

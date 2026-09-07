@@ -1,5 +1,5 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
-const { app, dialog, Tray, ipcMain } = require("electron");
+const { app, dialog, Tray, Notification, ipcMain } = require("electron");
 const { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
@@ -7,13 +7,16 @@ const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const trayLifecycle = process.argv.includes("--tray-lifecycle");
 const longTool = process.argv.includes("--long-tool");
 const toolRecovery = process.argv.includes("--tool-recovery");
 const deletionScenario = process.argv.includes("--deletion-scenario");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
-const nativeReview = process.argv.includes("--native-review");
+const nativeSystem = process.argv.includes("--native-system");
+const nativeReview = process.argv.includes("--native-review") || nativeSystem;
+let trayClicks = 0, notificationClicks = 0, notificationShows = 0;
 const metadataScenario = process.argv.includes("--metadata-scenario");
 const foundryScenario = process.argv.includes("--foundry-scenario");
 let delayedReply = null;
@@ -47,12 +50,23 @@ if (retryScenario) {
   mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
   writeFileSync(path.join(process.env.PI_CODING_AGENT_DIR, "settings.json"), JSON.stringify({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 8000 } }));
 }
-let window, tray, menu, decision = 0, prompts = [], finalExit = false, hostB;
+if (nativeSystem) {
+  mkdirSync(path.join(scratch, "config"), { recursive: true });
+  writeFileSync(path.join(scratch, "config", "notifications.json"), JSON.stringify({ enabled: true }));
+  const show = Notification.prototype.show;
+  Notification.prototype.show = function () {
+    this.on("show", () => { notificationShows++; console.log("NATIVE notification shown"); });
+    this.on("click", () => { notificationClicks++; console.log("NATIVE notification clicked"); });
+    this.on("failed", (_event, error) => console.log("NATIVE notification failed: " + error));
+    return show.call(this);
+  };
+}
+let window, tray, menu, prompts = [], finalExit = false, hostB;
 let pickedDirectory = null;
 dialog.showOpenDialog = async () => ({ canceled: !pickedDirectory, filePaths: pickedDirectory ? [pickedDirectory] : [] });
 const setContextMenu = Tray.prototype.setContextMenu;
-Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; return setContextMenu.call(this, value); };
-if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
+Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; if (nativeSystem) this.on("click", () => { trayClicks++; console.log("NATIVE tray clicked"); }); return setContextMenu.call(this, value); };
+if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: 0 }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
   if (!nativeReview && !foundryScenario) { value.hide(); value.on("show", () => value.hide()); }
@@ -82,7 +96,9 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   const write = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: `smoke-${tag}`, object: "chat.completion.chunk", created: 1, model: "arcane-spark", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
   const entry = { closed: false, finish() { write({ content: ` ${tag} final result` }); write({}, "stop"); res.end("data: [DONE]\n\n"); } };
-  res.on("close", () => { entry.closed = true; });
+  // Interactive native reviews can wait several minutes for a physical click.
+  const heartbeat = nativeReview ? setInterval(() => res.write(": keepalive\n\n"), 10000) : null;
+  res.on("close", () => { entry.closed = true; if (heartbeat) clearInterval(heartbeat); });
   streams.set(tag, entry);
   write({ role: "assistant", content: `${tag} partial` });
   if (toolRecovery && tag === "B") require("./production-tool-recovery.cjs").respond({ data, entry, write, res, scratch, psLiteral });
@@ -122,7 +138,15 @@ const ui = code => until(async () => { try { return await evaluate(code); } catc
 const openHost = host => evaluate(`(async () => { const result = await window.arcane.openSession(${JSON.stringify(host.describeCurrent().path)}, modeContext()); if (!result.ok) throw new Error(result.error); await installSnapshot(result); })()`);
 app.on("will-quit", () => {
   try {
-    assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    assert.ok(finalExit, "exit must follow an explicit exit action");
+    if (trayLifecycle) {
+      assert.deepEqual(requests, ["A"]);
+      assert.equal(hostB.tasks.task.state, "stopped");
+      assert.equal(prompts.length, 0);
+      assert.ok(tray.isDestroyed());
+      console.log("PASS tray lifecycle: idle and busy close hide without prompts; explicit tray exit waits for stop");
+      return;
+    }
     if (toolRecovery) {
       assert.deepEqual(requests, ["A", "B", "B", "B"]);
       assert.equal(hostB.tasks.task.state, "stopped");
@@ -133,6 +157,13 @@ app.on("will-quit", () => {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
       console.log("PASS production deletion: running task remains tracked until stop, then deletion preserves independent B");
+      return;
+    }
+    if (nativeSystem) {
+      assert.equal(hostB.tasks.task.state, "completed");
+      assert.equal(trayClicks, 1); assert.equal(notificationClicks, 1); assert.equal(notificationShows, 1);
+      assert.ok(tray.isDestroyed()); assert.deepEqual(requests, ["A"]);
+      console.log("PASS native system: background continuation, actual tray and toast clicks, no focus stealing or repeated request");
       return;
     }
     if (foundryScenario) {
@@ -152,7 +183,7 @@ app.on("will-quit", () => {
       assert.equal(hostB.busy, false);
       assert.ok(tray.isDestroyed());
       assert.deepEqual(requests, ["A"]);
-      console.log("PASS native review: real dialog stop-and-exit settles task and destroys tray");
+      console.log("PASS native review: explicit tray exit settles task and destroys tray");
       return;
     }
     if (navigationScenario) {
@@ -195,6 +226,11 @@ app.on("will-quit", () => {
   process.env.ARCANE_SPARK_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
   await import(pathToFileURL(path.resolve(__dirname, "../../src/main/main.js")).href);
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
+  if (trayLifecycle) {
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await require("./tray-lifecycle.cjs")({ window, host:hostB, evaluate, ui, until, sleep, menu:() => menu, prompts, beforeExit:() => {finalExit=true;} });
+    return;
+  }
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
   if (foundryScenario) {
@@ -268,7 +304,28 @@ app.on("will-quit", () => {
     window.on("hide", () => console.log(`NATIVE hidden busy=${hostB.busy}`));
     window.on("show", () => console.log(`NATIVE shown busy=${hostB.busy}`));
     finalExit = true;
-    console.log("READY native review: use the actual window controls and native dialog");
+    console.log("READY native review: close the window to tray; use the tray menu to quit");
+    if (nativeSystem) {
+      const nativeUntil = async (check, label) => {
+        const deadline = Date.now() + 600000;
+        while (Date.now() < deadline) { if (await check()) return; await sleep(200); }
+        throw Error("Timed out: " + label);
+      };
+      console.log("READY system step 1: close the window directly, then click the ArcaneDesk tray icon");
+      await nativeUntil(() => !window.isVisible(), "first background close");
+      assert.ok(hostB.busy);
+      await nativeUntil(() => trayClicks === 1 && window.isVisible(), "actual tray restoration");
+      await ui('busy && messages.textContent.includes("A partial")');
+      console.log("READY system step 2: close the window directly again; click the completion notification");
+      await nativeUntil(() => !window.isVisible(), "second background close");
+      streams.get("A").finish();
+      await nativeUntil(() => hostB.tasks.task.state === "completed", "background completion");
+      assert.equal(window.isVisible(), false, "completion must not show the window");
+      assert.equal(window.isFocused(), false, "completion must not steal focus");
+      await nativeUntil(() => notificationClicks === 1 && window.isVisible(), "actual notification activation");
+      await ui('!busy && messages.textContent.includes("A final result")');
+      console.log("READY system step 3: close the window, then choose Quit ArcaneDesk from the tray menu");
+    }
     return;
   }
   if (navigationScenario) {
@@ -541,13 +598,8 @@ app.on("will-quit", () => {
   assert.equal(prepRegistry.get(idB), hostB, "recovery must reuse the live background B, not overwrite it with a second SDK session");
   assert.ok(hostB.busy && !streams.get("B").closed);
   window.close();
-  await until(() => prompts.length === 1, "cancel close prompt");
   await sleep(50);
-  assert.ok(!window.isDestroyed() && hostB.busy);
-  decision = 2; window.close();
-  await until(() => prompts.length === 2, "background close prompt");
-  await sleep(50);
-  assert.equal(prompts[1].buttons.length, 3);
+  assert.equal(prompts.length, 0, "close to tray never asks for a lifecycle choice");
   assert.ok(!tray.isDestroyed() && !window.isVisible() && hostB.busy);
   let shows = 0;
   window.on("show", () => { shows++; });
@@ -555,7 +607,7 @@ app.on("will-quit", () => {
   assert.equal(shows, 1, "native menu callback restores window");
   tray.emit("click");
   assert.equal(shows, 2, "tray click callback restores window");
-  decision = 1; finalExit = true;
+  finalExit = true;
   menu.items[1].click();
 })().catch(async error => {
   console.error(error);
