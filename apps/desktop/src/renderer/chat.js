@@ -24,7 +24,8 @@ function showTaskState(task) {
   if (task?.state === "waiting_resource" && task.waitingFor) {
     const holder = task.waitingFor.holders?.[0];
     const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
-    const name = resource?.slice(3).split("/").filter(Boolean).at(-1) ?? t("activity.resource");
+    const name = resource?.slice(3).split("/").filter(Boolean).at(-1)
+      ?? (task.waitingFor.resources?.includes("foundry:page") ? "Foundry" : t("activity.resource"));
     taskIndicator.textContent = t("activity.resourceWait", { resource: name,
       owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
   }

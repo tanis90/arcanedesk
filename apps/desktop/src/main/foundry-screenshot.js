@@ -1,3 +1,5 @@
+import { trackPageOperation } from "./foundry-web.js";
+
 const DEFAULT_CAPTURE_TIMEOUT_MS = 15_000;
 const MAX_SCREENSHOT_BYTES = 1_500_000;
 const BACKGROUND_CAPTURE_OPTIONS = {
@@ -39,6 +41,7 @@ export function capturePageNavigationSafe(
   return new Promise((resolve) => {
     let settled = false;
     let timer = null;
+    const captureEnded = trackPageOperation(webContents);
 
     const cleanup = () => {
       if (timer) clearTimeout(timer);
@@ -67,10 +70,10 @@ export function capturePageNavigationSafe(
     // Keep both handlers attached immediately: navigation may win while the
     // underlying capture promise later rejects as its old surface disappears.
     Promise.resolve()
-      .then(() => webContents.capturePage(undefined, BACKGROUND_CAPTURE_OPTIONS))
+      .then(() => signal?.aborted ? undefined : webContents.capturePage(undefined, BACKGROUND_CAPTURE_OPTIONS))
       .then(
-        (image) => finish({ status: "completed", image, url: webContents.getURL?.() ?? "" }),
-        (error) => finish({ status: "error", error: errorMessage(error) })
+        (image) => { captureEnded(); finish({ status: "completed", image, url: webContents.getURL?.() ?? "" }); },
+        (error) => { captureEnded(); finish({ status: "error", error: errorMessage(error) }); }
       );
   });
 }

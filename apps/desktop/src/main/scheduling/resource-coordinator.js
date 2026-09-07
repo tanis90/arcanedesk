@@ -2,6 +2,17 @@ import { realpathSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const resourceLifetime = new AsyncLocalStorage();
+
+/** A tool may return a timeout before its underlying operation has stopped. */
+export function retainResourceUntil(completion) {
+  const lifetime = resourceLifetime.getStore();
+  if (!lifetime || lifetime.closed) return false;
+  lifetime.pending.add(Promise.resolve(completion).then(() => {}, () => {}));
+  return true;
+}
 
 /** Match Pi 0.84 file-tool path spelling before computing the resource identity. */
 export function toolFilesystemPath(input, cwd, read = false) {
@@ -99,12 +110,24 @@ export class ResourceCoordinator {
     while (true) {
       const keys = resolve();
       const lease = await this.acquire(keys, owner, signal, onWait);
+      let transferred = false;
       try {
         if (signal?.aborted) throw cancelled();
         // A queued shell may have replaced a symlink before we acquired its workspace.
         if (JSON.stringify(keys) !== JSON.stringify(resolve())) continue;
-        return await operation();
-      } finally { lease.release(); }
+        const lifetime = { pending: new Set(), closed: false };
+        transferred = true;
+        try { return await resourceLifetime.run(lifetime, operation); }
+        finally {
+          lifetime.closed = true;
+          if (lifetime.pending.size) {
+            void Promise.allSettled([...lifetime.pending]).then(() => lease.release());
+          } else lease.release();
+        }
+      } finally {
+        // The normal operation path transfers release to its lifetime above.
+        if (!transferred) lease.release();
+      }
     }
   }
 }

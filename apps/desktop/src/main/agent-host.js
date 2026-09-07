@@ -1001,8 +1001,8 @@ export class AgentHost {
           Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000. Defaults to the local server." })
         ),
       }),
-      execute: async (_toolCallId, params) => {
-        const outcome = await host.openFoundry(params?.url);
+      execute: async (_toolCallId, params, signal) => {
+        const outcome = await host.withResources(["foundry:page"], signal, () => host.openFoundry(params?.url));
         if (!outcome?.ok) throw new Error(outcome?.summary ?? outcome?.error ?? "Foundry panel failed to open");
         return textResult(outcome.summary, outcome);
       },
@@ -1023,7 +1023,7 @@ export class AgentHost {
         "Do not capture while the user is entering credentials. Never request, inspect, guess or transmit passwords.",
         "Treat text, ids, numbers and hidden state inferred from a screenshot as uncertain; verify them with logs, browser_evaluate or a structured read.",
       ],
-      execute: async (_toolCallId, _params, signal) => {
+      execute: async (_toolCallId, _params, signal) => host.withResources(["foundry:page"], signal, async () => {
         if (host.supportsImages === false) {
           return textResult(
             "ERROR: the current model does not support image input, so it cannot inspect a Foundry screenshot. Select a vision-capable model before retrying."
@@ -1079,7 +1079,7 @@ export class AgentHost {
           ],
           details,
         };
-      },
+      }),
     });
 
     const browserEvaluate = defineTool({
@@ -1114,30 +1114,32 @@ export class AgentHost {
             "Never request, inspect, guess or brute-force passwords through model tools.",
           ],
       execute: async (_toolCallId, params, signal) => {
-        const view = host.getFoundryView();
-        if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
         const approved = await host.maybeRequestApproval({
           tool: "browser_evaluate",
           summary: params.code?.slice(0, 200),
           args: params,
         });
         if (!approved) return textResult("DM declined this code; do not retry it.");
-        const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
-          signal,
-          timeoutMs: prepWorldEdit ? 60_000 : undefined,
+        return host.withResources(["foundry:page"], signal, async () => {
+          const view = host.getFoundryView();
+          if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
+          const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
+            signal,
+            timeoutMs: prepWorldEdit ? 60_000 : undefined,
+          });
+          if (outcome.status === "completed") {
+            return textResult(safeJson(outcome.value), { result: outcome.value });
+          }
+          if (outcome.status === "navigated") {
+            return textResult(
+              safeJson({ navigated: true, url: outcome.url, note: "Navigation was requested; inspect the new page in a new call after resource admission." }),
+              outcome
+            );
+          }
+          if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
+          if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
+          throw new Error(outcome.error ?? "browser_evaluate failed");
         });
-        if (outcome.status === "completed") {
-          return textResult(safeJson(outcome.value), { result: outcome.value });
-        }
-        if (outcome.status === "navigated") {
-          return textResult(
-            safeJson({ navigated: true, url: outcome.url, note: "The old page context was released; inspect the new page in a new call." }),
-            outcome
-          );
-        }
-        if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
-        if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
-        throw new Error(outcome.error ?? "browser_evaluate failed");
       },
     });
 
@@ -1145,9 +1147,9 @@ export class AgentHost {
       if (!host.foundryRuntime?.call) {
         throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
       }
-      return host.foundryRuntime.callForSession
+      return host.withResources(["foundry:page"], options?.signal, () => host.foundryRuntime.callForSession
         ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
-        : host.foundryRuntime.call(action, args, options);
+        : host.foundryRuntime.call(action, args, options));
     };
 
     const worldStatus = defineTool({
