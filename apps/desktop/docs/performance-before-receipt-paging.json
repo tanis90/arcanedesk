@@ -1,0 +1,105 @@
+{
+  "measuredAt": "2026-09-07T07:52:30.948Z",
+  "device": {
+    "platform": "win32",
+    "osRelease": "10.0.22631",
+    "arch": "x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+    "logicalCpus": 16,
+    "totalMemoryGiB": 63.77081298828125,
+    "electron": "44.0.0",
+    "node": "24.18.1"
+  },
+  "workload": {
+    "sessions": 16,
+    "activeTasks": 16,
+    "historyMessagesPerSession": 10000,
+    "historicalInputReceiptsPerSession": 5000,
+    "historyWindow": 100,
+    "progressEventsPerSecond": 160,
+    "stateEventsPerSecond": 32,
+    "activityPersistence": true,
+    "taskJournalPersistence": true,
+    "viewport": [
+      1200,
+      850
+    ],
+    "offscreen": true,
+    "samples": 60
+  },
+  "metrics": {
+    "selection": {
+      "samples": 0
+    },
+    "content": {
+      "samples": 0
+    },
+    "calibration": {
+      "samples": 0
+    },
+    "progress": {
+      "samples": 192,
+      "p50Ms": 2,
+      "p95Ms": 68,
+      "maxMs": 181
+    },
+    "states": {
+      "samples": 38,
+      "p50Ms": 12,
+      "p95Ms": 103,
+      "maxMs": 181
+    }
+  },
+  "uncachedSwitches": 60,
+  "allSwitches": {
+    "selection": {
+      "samples": 60,
+      "p50Ms": 55.79999998211861,
+      "p95Ms": 89.30000001192093,
+      "maxMs": 134.5
+    },
+    "content": {
+      "samples": 60,
+      "p50Ms": 55.79999998211861,
+      "p95Ms": 89.30000001192093,
+      "maxMs": 134.5
+    },
+    "calibration": {
+      "samples": 60,
+      "p50Ms": 55.79999998211861,
+      "p95Ms": 89.30000001192093,
+      "maxMs": 134.5
+    }
+  },
+  "memory": [
+    {
+      "type": "Browser",
+      "workingSetMiB": 466.2890625,
+      "peakWorkingSetMiB": 1044.02734375
+    },
+    {
+      "type": "GPU",
+      "workingSetMiB": 65.8125,
+      "peakWorkingSetMiB": 78.44921875
+    },
+    {
+      "type": "Utility",
+      "workingSetMiB": 50.9921875,
+      "peakWorkingSetMiB": 51.84375
+    },
+    {
+      "type": "Tab",
+      "workingSetMiB": 367.6640625,
+      "peakWorkingSetMiB": 404.20703125
+    }
+  ],
+  "limitsMs": {
+    "selection": 100,
+    "content": 300,
+    "calibration": 1000,
+    "progress": 500,
+    "states": 500
+  },
+  "scope": "Production renderer/preload, AgentHost, TaskCoordinator, scheduler, projection, history index, activity center and native SessionManager; controlled prompt/IPC routing; first animation frame, not physical display; model and external tools excluded.",
+  "passed": false
+}

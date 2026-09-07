@@ -123,6 +123,11 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('pendingImages.length'), 1);
     await evaluate('showHistoryPage({}, "latest")');
     await until('activityReady && !historyPage.hasNewer');
+    hosts.prep.taskCoordinator().inputs.set("historic-sent", { id: "historic-sent", commandId: "historic-sent", taskId: "past-task", state: "consumed", text: "Already accepted outside this page", messageKey: "message:prep-0" });
+    await evaluate(`outboxFor(selectedSessionId).set("historic-sent", { context: { sessionId: selectedSessionId, commandId: "historic-sent" }, text: "Already accepted outside this page", images: [], sending: false }); saveWorkspace(); resyncSelected();`);
+    await until('activityReady && !syncingSessions.has(selectedSessionId) && outboxFor(selectedSessionId).size === 0');
+    assert.equal(hosts.prep.currentPayload().inputs.length, 0);
+    assert.equal(await evaluate('!!document.querySelector(".retry-input")'), false);
     const installs = await evaluate('snapshotRequest');
     hosts.prep.emit({ type: "session_switched", ...hosts.prep.currentPayload() });
     await until(`activityReady && snapshotRequest === ${installs + 1} && viewSeq === ${hosts.prep.projection.seq}`);

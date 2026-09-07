@@ -545,16 +545,19 @@ export class AgentHost {
   buildHistory() { return this.historyIndex().all(); }
 
   currentPayload(historyQuery = {}) {
+    const page = this.historyIndex().page(historyQuery);
+    const messageKeys = new Set(page.history.flatMap(row => [row.key, row.legacyKey]));
     return {
       attentions: this.tasks?.snapshotAttentions() ?? [],
       approvals: structuredClone([...this.approvalSnapshots.values()]),
       pendingModel: this.tasks?.pendingModel ?? null,
-      inputs: this.tasks?.snapshotInputs() ?? [],
+      inputs: this.tasks?.snapshotInputs(messageKeys) ?? [],
+      acceptedCommandIds: this.tasks?.snapshotInputCommandIds?.() ?? [],
       busy: this.busy,
       task: this.task ? { ...this.task } : null,
       inFlight: this.projection.snapshot(),
       session: this.describeCurrent(),
-      ...this.historyIndex().page(historyQuery),
+      ...page,
       modelLabel: this.modelLabel ?? null,
       supportsImages: this.supportsImages ?? true,
     };

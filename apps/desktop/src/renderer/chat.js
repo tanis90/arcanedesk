@@ -346,7 +346,7 @@ async function installSnapshot(payload, pageIntent = null) {
   }
   workspaceReady.add(id);
   if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, item])));
-  const acceptedCommands = new Set((payload.inputs ?? []).map(item => item.commandId));
+  const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
   for (const [commandId, submission] of outboxFor(id)) {
     if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
     const node = submissionNode(submission);

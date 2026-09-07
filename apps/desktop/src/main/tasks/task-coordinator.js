@@ -141,8 +141,11 @@ export class TaskCoordinator {
     this.attentionResolvers.delete(attentionId);
     return ack;
   }
-  snapshotInputs() {
-    return [...this.inputs.values()].map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
+  snapshotInputCommandIds() { return [...this.inputs.values()].map(input => input.commandId); }
+  snapshotInputs(messageKeys = null) {
+    return [...this.inputs.values()].filter(input => !messageKeys || messageKeys.has(input.messageKey)
+      || !["consumed", "handled"].includes(input.state))
+      .map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
   }
   resourceWaiting(id, details) {
     if (details) this.resourceWaits.set(id, details); else this.resourceWaits.delete(id);

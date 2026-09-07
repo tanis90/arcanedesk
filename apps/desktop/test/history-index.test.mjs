@@ -6,6 +6,24 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 const records = count => Array.from({ length: count }, (_, i) => ({ id: String(i), message: { role: "user", timestamp: i, content: `Message ${i}` } }));
 
+test("paged snapshots bound receipt text while preserving every accepted command identity", () => {
+  const host = new AgentHost({ sendToRenderer() {}, log() {} });
+  host.sessionManager = SessionManager.inMemory(); host.session = { messages: [] };
+  const tasks = host.taskCoordinator();
+  for (let i = 0; i < 200; i++) {
+    host.sessionManager.appendMessage({ role: "user", timestamp: i, arcaneMessageKey: `message:${i}`, content: `Input ${i}` });
+    tasks.inputs.set(String(i), { id: String(i), commandId: `command:${i}`, taskId: "one-task", state: "consumed", text: `Input ${i}`, messageKey: `message:${i}` });
+  }
+  tasks.inputs.set("pending", { id: "pending", commandId: "pending", state: "queued", text: "Keep queued text" });
+  const latest = host.currentPayload({ limit: 10 });
+  assert.equal(latest.inputs.length, 11); assert.equal(latest.acceptedCommandIds.length, 201);
+  assert.ok(latest.acceptedCommandIds.includes("command:0"));
+  assert.ok(latest.inputs.some(input => input.commandId === "pending"));
+  const older = host.currentPayload({ around: "message:5", limit: 10 });
+  assert.ok(older.inputs.some(input => input.commandId === "command:0"));
+  assert.equal(tasks.snapshotInputs().length, 201);
+});
+
 test("stable cursors walk a 10000-message history without gaps or duplicates", () => {
   const index = new HistoryIndex(records(10000));
   let page = index.page({ limit: 200 });
