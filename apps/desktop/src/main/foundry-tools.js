@@ -164,7 +164,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_conditions_set", label: "Set Conditions",
-      description: "Set or remove named system conditions, including explicitly ending concentration. Supply active true/false, never toggle. Selected means the Tokens selected when the user submitted their message. Play targets must have a Token in the current focus; actor/actors selectors are prep-only. Source-managed effects are protected.",
+      description: 'Set or remove named system conditions, including explicitly ending concentration. Supply active true/false, never toggle. Prep Actor example: {"targets":[{"kind":"actor","actorUuid":"Actor.ID"}],"conditions":[{"key":"prone","active":true}]}. Selected means the Tokens selected when the user submitted their message. Play targets must have a Token in the current focus; actor/actors selectors are prep-only. Source-managed effects are protected.',
       parameters: exact({
         targets: Type.Array(source, { minItems: 1, maxItems: 20 }),
         conditions: Type.Array(exact({ key: ref(), active: Type.Boolean() }), { minItems: 1, maxItems: 8 }),
