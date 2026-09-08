@@ -124,7 +124,7 @@ export function createFoundryTools(host) {
       "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     defineTool({
       name: "foundry_content_search", label: "Search Foundry Content",
-      description: "Search world Actors/Scenes or compendium Actors/Items. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
+      description: "Search world Actors/Scenes or compendium Actors/Items. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
       parameters: exact({ scope: Type.Union([Type.Literal("world"), Type.Literal("compendium")]),
         documentType: Type.Union([Type.Literal("Actor"), Type.Literal("Item"), Type.Literal("Scene")]),
         query: Type.String({ maxLength: 256 }), packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
