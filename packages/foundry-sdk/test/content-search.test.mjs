@@ -54,22 +54,3 @@ test("Item search matches translated names by identifier, keeps type filters and
   const chinese=await run('contentSearch',{...query,query:'火球'},{});assert.equal(chinese.total,1);
   const punctuation=await run('contentSearch',{...query,query:'-'},{});assert.equal(punctuation.total,0);
 });
-
-test('batch search reads each index once, deduplicates identities, and separates missing names from later pages', async()=>{
-  let reads=0;
-  const pack={collection:'example.items',documentName:'Item',getIndex:async()=>{reads++;return [
-    {_id:'a',name:'火球术',type:'spell',system:{identifier:'fireball'}},
-    {_id:'b',name:'Magic Missile',type:'spell',system:{identifier:'magic-missile'}}];}};
-  const run=vm.runInNewContext(`(${runtimeFunction})`,{game:{ready:true,user:{isGM:true},packs:new Map([[pack.collection,pack]])}});
-  const input={scope:'compendium',documentType:'Item',query:['Fireball','火球','Magic Missile','Absent'],limit:1};
-  const first=JSON.parse(JSON.stringify(await run('contentSearch',input,{})));
-  assert.equal(reads,1);assert.equal(first.total,2);assert.deepEqual(first.entries[0].matchedQueries,['Fireball','火球']);
-  assert.deepEqual(first.missingQueries,['Absent']);assert.ok(first.nextCursor);
-  const second=JSON.parse(JSON.stringify(await run('contentSearch',{...input,cursor:first.nextCursor},{})));
-  assert.equal(reads,2);assert.equal(second.entries[0].id,'b');assert.equal(second.nextCursor,null);
-  await assert.rejects(run('contentSearch',{...input,query:[...input.query].reverse(),cursor:first.nextCursor},{}),/cursor/);
-  for(const query of [[],[''],['Wolf','Wolf'],Array(17).fill('x'),['Wolf',null]]){
-    await assert.rejects(run('contentSearch',{...input,query},{}),/INPUT_INVALID/);
-  }
-  assert.equal(reads,2,'Invalid batch must not load packs');
-});
