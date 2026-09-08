@@ -27,10 +27,10 @@
 | E5 | [history fixture](../test/fixtures/history-smoke.cjs)、`node apps/desktop/test/smoke-history.mjs` | 原生 SessionManager/真实页面，1,200 条历史、翻页、锚点、展开状态、失败重试、缓存回收后 IndexedDB 恢复。M8e 通过 |
 | E6 | [session projection tests](../test/session-projection.test.mjs)、[renderer protocol tests](../test/conversation-renderer.test.mjs) | 快照/事件顺序、断档、epoch、迟到事件、缓存和持久工作区竞争。模块级证据 |
 | E7 | [registry tests](../test/session-registry.test.mjs)、[mode controller tests](../test/mode-host-controller.test.mjs)、[reclamation tests](../test/session-reclamation.test.mjs) | 目标隔离、最后选择生效、停止/删除竞争、实例回收。M8k 已覆盖空选择恢复与并发合并，G5 已关闭 |
-| E8 | [task tests](../test/task-coordinator.test.mjs)、[SDK tests](../test/task-sdk.test.mjs)、[journal tests](../test/journal-compaction.test.mjs) | 持久接收、幂等、真实 SDK 消费边界、终态竞争、回答、取消、中断无自动重放。SDK 测试为受控 provider |
-| E9 | [scheduler tests](../test/execution-scheduler.test.mjs)、[resource tests](../test/resource-coordinator.test.mjs)、[Foundry fixture](../test/fixtures/foundry-resources-smoke.cjs) | 额度、公平排队、受控文件冲突、取消、页面操作实际生命周期。Foundry fixture 使用受控页面，不证明实际世界操作的完整行为 |
+| E8 | [task tests](../test/task-coordinator.test.mjs)、[SDK tests](../test/task-sdk.test.mjs)、journal tests（历史文件，已删除） | 持久接收、幂等、真实 SDK 消费边界、终态竞争、回答、取消、中断无自动重放。SDK 测试为受控 provider |
+| E9 | [scheduler tests](../test/execution-scheduler.test.mjs)、resource tests（历史文件，已删除）、[Foundry fixture](../test/fixtures/foundry-resources-smoke.cjs) | 额度、公平排队、受控文件冲突、取消、页面操作实际生命周期。Foundry fixture 使用受控页面，不证明实际世界操作的完整行为 |
 | E10 | [activity tests](../test/activity-center.test.mjs)、[notification tests](../test/desktop-notifications.test.mjs) | 未读、持久提醒去重、偏好、失效目标、通知失败。native API 为替身，不证明平台展示 |
-| E11 | [deletion tests](../test/session-deletions.test.mjs)、[shutdown tests](../test/shutdown-coordinator.test.mjs) | 删除日志恢复、停止/退出准入与等待、取消退出。生产组装和 OS 范围另见 E1/E2 |
+| E11 | deletion tests（历史文件，已删除）、shutdown tests（历史文件，已删除） | 删除日志恢复、停止/退出准入与等待、取消退出。生产组装和 OS 范围另见 E1/E2 |
 | E12 | [telemetry tests](../test/telemetry-events.test.mjs)、[性能方法和结果](performance-baseline.md) | 会话/任务范围诊断和字段边界；16 并发、每会话一万条历史的隐藏 Electron 基准。M8e；不是所有硬件或任意单条输出大小的承诺 |
 | E13 | [production tool runner](../test/smoke-production-tool.mjs)、E1 fixture 的 long-tool 分支 | Windows 真实 PowerShell 工具等待隔离文件信号；跨模式/刷新同一工具实例与原始起点，停止 A 不影响 B，工具结果回到 SDK 后生成终稿，结束耗时刷新前后一致。M8m1 通过；不是实际 Foundry 或其他平台 shell 验收 |
 | E14 | [production context runner](../test/smoke-production-context.mjs)、E1 fixture 的 context-isolation 分支 | 真实目录/模型/provider/default IPC；原生 SessionManager 目录与 host 目录一致；A/B/C 三次真实 SDK HTTP 请求分别携带预期模型；现有空会话模型不被默认覆盖，新会话使用新默认，B 当前任务不被延后设置中途改变。目录选择结果由 fixture 提供，不是人工对话框验收 |
@@ -49,7 +49,7 @@ E20：[生产删除 runner](../test/smoke-production-deletion.mjs)、[删除场�
 
 E21：[工具恢复 runner](../test/smoke-production-tool-recovery.mjs)、[实际工具场景](../test/fixtures/production-tool-recovery.cjs)。M8o3 使用生产 IPC/renderer/真实 SDK 和 PowerShell。先 exit 1，确认失败结果进入模型上下文、工具卡失败而任务继续；同 taskId 再执行成功写文件，随后停止，文件与两张过程卡在刷新后保留。A 不受影响并正常完成，HTTP 请求 A/B/B/B。模型决策受控，实际工具没有替身；不代表任意外部系统具有事务恢复能力。
 
-E22：[慢停止 runner](../test/smoke-production-slow-stop.mjs)、E21 场景的 slow-stop 分支。真实 Electron WebContentsView 执行可释放的页面 Promise，evaluateNavigationSafe 已超时但任务资源仍被实际页面操作持有。通过生产 IPC 停止真实 SDK，验证 stopping 与 Foundry 等待说明，刷新仍未确认停止；页面释放后才进入 stopped。页面操作由测试直接登记到该任务的生产 ResourceCoordinator，未经过模型调用 browser_evaluate，也不是实际 Foundry 世界；实际世界工具调用见 E18。两者分别证明工具集成和残留页面生命周期，不能混称同一个端到端场景。
+E22：慢停止 runner（历史资源锁验收，已删除）、E21 场景的 slow-stop 分支。真实 Electron WebContentsView 执行可释放的页面 Promise，evaluateNavigationSafe 已超时但任务资源仍被实际页面操作持有。通过生产 IPC 停止真实 SDK，验证 stopping 与 Foundry 等待说明，刷新仍未确认停止；页面释放后才进入 stopped。页面操作由测试直接登记到该任务的生产 ResourceCoordinator，未经过模型调用 browser_evaluate，也不是实际 Foundry 世界；实际世界工具调用见 E18。两者分别证明工具集成和残留页面生命周期，不能混称同一个端到端场景。
 
 `自动化覆盖` 表示已有相关断言及已记录通过结果，并不等于跨平台最终验收。`缺口` 表示当前代码与条款不符；`待集成` 表示证据范围不足，仍不可计为整体完成。
 

@@ -1,0 +1,47 @@
+{
+  "startedAt": "2026-09-08T13:33:03.933Z",
+  "model": "qwen3.7-plus",
+  "provider": "alibaba-token-plan",
+  "endpoint": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+  "scope": "Production renderer/preload/main/TaskCoordinator/Pi SDK/real provider, native read tool, DOM and conversation file",
+  "checks": [
+    {
+      "name": "real_streamed_text",
+      "elapsedMs": 1433,
+      "state": "completed",
+      "deltas": 11,
+      "toolStarts": 0,
+      "toolEnds": 0,
+      "expectedVisible": true,
+      "expectedInAnswer": true,
+      "expectedInHistoryFile": true,
+      "toolNames": []
+    },
+    {
+      "name": "real_read_tool_roundtrip",
+      "elapsedMs": 3427,
+      "state": "completed",
+      "deltas": 42,
+      "toolStarts": 1,
+      "toolEnds": 1,
+      "expectedVisible": true,
+      "expectedInAnswer": true,
+      "expectedInHistoryFile": true,
+      "toolNames": [
+        "read"
+      ]
+    }
+  ],
+  "actualModel": "qwen3.7-plus",
+  "actualProvider": "alibaba-token-plan",
+  "ok": true,
+  "finishedAt": "2026-09-08T13:33:20.539Z",
+  "limitations": [
+    "One sample per case; elapsed time is not P95 or time-to-first-token",
+    "No real Foundry world interaction or physical desktop clicks",
+    "Runs in an isolated profile with copied encrypted credentials and matching Local State",
+    "Text prompt differs from the earlier baseline; these timings do not establish a speedup",
+    "Initial marker/read prompts produced noncompliant model output; explicit read instruction and a simple arithmetic text case passed",
+    "The harness was corrected to check text parts only, excluding thinking content, and wait for renderer completion"
+  ]
+}

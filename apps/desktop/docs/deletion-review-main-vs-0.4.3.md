@@ -16,7 +16,7 @@
 
 **质疑的要求：同一项目中的工具操作必须由应用统一串行化。**
 
-证据：[agent-host.js:858](../src/main/agent-host.js#L858) 的 coordinateWorkspaceTool 为操作加入整个 cwd 的资源键，再加入具体文件路径；[resource-coordinator.js:49](../src/main/scheduling/resource-coordinator.js#L49) 按父子路径判冲突。这使同项目不同文件的操作、包括读取，也可能互相等待。该锁是 0.4.3 之后新增的。
+证据：[agent-host.js:858](../src/main/agent-host.js#L858) 的 coordinateWorkspaceTool 为操作加入整个 cwd 的资源键，再加入具体文件路径；resource-coordinator.js:49（历史文件，已删除） 按父子路径判冲突。这使同项目不同文件的操作、包括读取，也可能互相等待。该锁是 0.4.3 之后新增的。
 
 建议：删除这层资源仲裁，不替换为更精细的文件锁。跨多个工具调用的“读取→思考→写回”并不受当前单调用锁保护；项目目录内工具实际访问的所有外部路径也不能由 cwd 一把锁完整代表。
 
@@ -66,7 +66,7 @@
 
 **质疑的要求：用户已经选择退出后，还需要取消退出、显示剩余任务数、重新打开窗口等待所有资源完成。**
 
-证据：[shutdown-coordinator.js](../src/main/conversations/shutdown-coordinator.js) 的 generation/cancel/failed 状态；[main.js:114](../src/main/main.js#L114) 退出超过一秒重新显示窗口；[main.js:1526](../src/main/main.js#L1526) 等待面板命令、删除操作和资源完成。
+证据：shutdown-coordinator.js（历史文件，已删除） 的 generation/cancel/failed 状态；[main.js:114](../src/main/main.js#L114) 退出超过一秒重新显示窗口；[main.js:1526](../src/main/main.js#L1526) 等待面板命令、删除操作和资源完成。
 
 建议：删掉取消退出、退出进度状态机与强制重新显示窗口。采用一次有上限的 best-effort 停止和必要状态保存，然后退出。原审查提出过，本轮给出明确删除建议，但尚未在会话中对齐。
 
@@ -78,7 +78,7 @@
 
 **质疑的要求：打开、关闭、刷新一个面板，需要独立的命令 ID、revision、queued/running/completed 状态和查询 IPC。**
 
-证据：[panel-commands.js](../src/main/scheduling/panel-commands.js) 为三种操作构建命令状态；[main.js:1472](../src/main/main.js#L1472) 接入。renderer 的 showPanelCommand 已无实际展示（前轮确认）。request 在任一操作进行时，将不同的新操作也当 existing 返回。
+证据：panel-commands.js（历史文件，已删除） 为三种操作构建命令状态；[main.js:1472](../src/main/main.js#L1472) 接入。renderer 的 showPanelCommand 已无实际展示（前轮确认）。request 在任一操作进行时，将不同的新操作也当 existing 返回。
 
 建议：在已确定移除 Foundry 锁和面板展示空壳之后，连 PanelCommands 整体删掉，三个 IPC 直接调用实际操作并返回结果。只保留已证明需要的同一操作 Promise 合并，不给面板按钮建立任务系统。
 

@@ -74,8 +74,8 @@ flowchart LR
 | 导航元数据 | [SessionNavigation](../src/main/conversations/session-navigation.js) 提供轻量存储，负责用户标题、置顶、归档；合并两个 registry 的摘要，不复制正文，不拥有任务状态 |
 | 导航视图 | [NavigationView](../src/renderer/conversations/navigation-view.js) 从 [chat](../src/renderer/chat.js) 提取分组和菜单投影，复用原导航校准、草稿和阅读恢复；替换旧 ActivityView 的常驻列表与横栏 |
 | 活动事实与通知 | [ActivityCenter](../src/main/conversations/activity-center.js) 和 [DesktopNotifications](../src/main/conversations/desktop-notifications.js) 保留未读、摘要、通知去重；前端展示为会话行标记和必要提示，不再另有活动列表 |
-| 资源与调度 | [ExecutionScheduler](../src/main/scheduling/execution-scheduler.js) 管额度，[ResourceCoordinator](../src/main/scheduling/resource-coordinator.js) 管资源租约；取消请求不等于实际退出 |
-| 生命周期 | [ShutdownCoordinator](../src/main/conversations/shutdown-coordinator.js) 及 [main](../src/main/main.js) 负责托盘与退出，复用已有实现 |
+| 资源与调度 | [ExecutionScheduler](../src/main/scheduling/execution-scheduler.js) 管额度，ResourceCoordinator（历史文件，已删除） 管资源租约；取消请求不等于实际退出 |
+| 生命周期 | ShutdownCoordinator（历史文件，已删除） 及 [main](../src/main/main.js) 负责托盘与退出，复用已有实现 |
 
 这些是职责边界，不要求独立 npm 包。归档与元数据写入接入同会话串行边界；不要另造第二套任务状态机。
 

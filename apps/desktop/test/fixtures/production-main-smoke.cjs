@@ -178,7 +178,7 @@ app.on("will-quit", () => {
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
-      console.log("PASS production Foundry: actual Document write, queued task cancellation and single execution");
+      console.log("PASS production Foundry: actual Document write, concurrent calls and explicit stop");
       return;
     }
     if (metadataScenario) {
