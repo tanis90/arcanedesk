@@ -372,6 +372,7 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     else if (!keepReading) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
     updateScrollButton();
     activityReady = true;
+    if (changed || pageIntent === "latest") void activityView?.opened(id);
     syncIndicator.hidden = true;
 
     if (revision !== draftRevision) saveWorkspace();
@@ -407,7 +408,7 @@ async function resyncSelected() {
     } finally {
       clearTimeout(indicatorTimer);
       if (syncingSessions.get(id) === request) syncingSessions.delete(id);
-      activityView?.scheduleRead();
+      activityView?.updateReading();
     }
   });
 }
@@ -442,12 +443,12 @@ function receiveEvent(event, replay = false) {
     if (!replay) lastContactAt = Date.now();
     if (historyPage?.hasNewer && ["message", "message_delta", "tool_start", "tool_end", "agent_settled", "compaction_start", "compaction_end"].includes(event.type)
       && !toolCards.has(event.toolCallId) && !streamBubbles.has(event.key) && !thinkBlocks.has(event.key)) {
-      updateScrollButton(); activityView?.scheduleRead(); return;
+      updateScrollButton(); activityView?.updateReading(); return;
     }
   }
   onEvent(event);
   if (event.sessionId === selectedSessionId && event.type === "agent_end" && historyPage && messages.children.length > 220) void resyncSelected();
-  activityView?.scheduleRead();
+  activityView?.updateReading();
 }
 /** @type {"combat" | "prep"} */
 let requestedMode = currentMode;
@@ -3105,23 +3106,19 @@ navigationView = new (/** @type {any} */ (globalThis).ArcaneNavigationView)({ ap
   selected: () => selectedSessionId, open: openActivity, create: createProjectSession,
   changed: updateArchivedView, removed: forgetSession, empty: showEmptyConversation });
 activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: window.arcane, t,
-  getView: () => ({ sessionId: selectedSessionId, runtimeEpoch: viewEpoch, seq: viewSeq,
-    ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
-    visible: !document.body.classList.contains("show-archives") && document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
-      && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
-    atBottom: !historyPage?.hasNewer && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
-    readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
-    toLatest: () => scrollToEnd(true) }), changed: updateSessionActivity });
+  getView: () => ({ sessionId: selectedSessionId,
+    atBottom: !historyPage?.hasNewer && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8 }),
+  changed: updateSessionActivity });
 applyPanelLayout();
 setDrawer(false);
 new ResizeObserver(() => {
   updateScrollButton();
   drawer.inert = !drawer.classList.contains("open") && !document.body.classList.contains("sidebar-pinned");
-  activityView.scheduleRead();
+  activityView.updateReading();
 }).observe(messages);
-messages.addEventListener("scroll", () => activityView.scheduleRead());
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.scheduleRead(); } });
-window.addEventListener("focus", () => { void reconcileWorkspaces().catch(() => {}); void activityView.load(); activityView.scheduleRead(); });
+messages.addEventListener("scroll", () => activityView.updateReading());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.updateReading(); } });
+window.addEventListener("focus", () => { void reconcileWorkspaces().catch(() => {}); void activityView.load(); if (activityReady) void activityView.opened(selectedSessionId); });
 void activityView.load();
 reconcileWorkspaces().catch(() => {}).finally(() => {
   refreshSessions();

@@ -11,8 +11,6 @@
 .card.attention button:hover { border-color: var(--accent); }
 .card.attention button.primary { margin-left: auto; background: var(--accent); color: var(--accent-contrast); }
 .card.attention button:disabled { opacity: .55; cursor: default; }
-.unread-divider { display: flex; align-items: center; gap: 12px; padding: 12px 0; font-size: var(--fs-meta); color: var(--accent); }
-.unread-divider::before, .unread-divider::after { content: ""; height: 1px; background: var(--border); flex: 1; }
 body:has(#activity-jump:not([hidden])) #scroll-bottom { display: none; }
 .session-item .s-body { text-align: left; background: transparent; border: 0; cursor: pointer; font: inherit; }
 .session-item:focus-within .s-del { opacity: 1; }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ActivityCenter } from "../src/main/conversations/activity-center.js";
@@ -17,8 +17,7 @@ function fixture(options = {}) {
     center.observe(event);
     return event;
   };
-  const read = (id, overrides = {}, focused = true) => center.markRead({ sessionId: id,
-    runtimeEpoch: "boot-1", seq: projections.get(id).seq, visible: true, atBottom: true, ...overrides }, focused);
+  const read = id => center.opened(id);
   return { center, notices, updates, send, read, projections };
 }
 
@@ -38,7 +37,6 @@ test("same-mode and cross-mode activity are independent; read never erases task 
   f.send("A", { type: "message_delta", key: "assistant:1", text: "half" });
   f.send("B", { type: "task_state", task: { id: "b", state: "failed" } });
   f.send("A", { type: "task_state", task: { id: "a", state: "completed" } });
-  assert.equal(f.center.get("A").firstUnreadKey, "assistant:1");
   assert.equal(f.read("A").ok, true);
   assert.equal(f.center.get("A").unread, false);
   assert.equal(f.center.get("A").state, "completed");
@@ -49,18 +47,21 @@ test("same-mode and cross-mode activity are independent; read never erases task 
   f.center.flush();
 });
 
-test("opening, reading history, stale/future cursors and background focus cannot clear new progress", () => {
-  const f = fixture();
-  const first = f.send("A", { type: "message_delta", key: "m", text: "first" });
-  f.send("A", { type: "message", key: "m", text: "final" });
-  for (const request of [{ atBottom: false }, { visible: false }, { seq: first.seq }, { seq: 999 }, { runtimeEpoch: "old" }]) {
-    assert.equal(f.read("A", request).ok, false);
-  }
-  assert.equal(f.read("A", {}, false).ok, false);
+test("opening clears the coarse dot, background progress lights it again, foreground progress does not", () => {
+  let foreground = false;
+  const f = fixture({ foreground: () => foreground });
+  f.send("A", { type: "message_delta", text: "first" });
   assert.equal(f.center.get("A").unread, true);
-  f.send("A", { type: "input_state", input: { state: "consumed" } });
-  assert.equal(f.read("A", { seq: 2, readKey: "m" }).ok, true);
-  assert.equal(f.center.get("A").readKey, "m");
+  f.read("A");
+  assert.equal(f.center.get("A").unread, false);
+  foreground = true;
+  f.send("A", { type: "message_delta", text: "visible" });
+  assert.equal(f.center.get("A").unread, false);
+  foreground = false;
+  f.send("A", { type: "attention", attention: { id: "q", state: "pending" } });
+  assert.equal(f.center.get("A").unread, true);
+  f.read("A");
+  assert.equal(f.center.get("A").needsAttention, true);
   f.center.flush();
 });
 
@@ -83,27 +84,22 @@ test("question and approval notifications are per item, not duplicated by waitin
   f.center.flush();
 });
 
-test("durable notice consumption precedes dispatch; restart and new-epoch snapshot never re-notify", () => {
+test("completed notifications are memory-only; restart and live snapshots do not replay alerts", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-activity-"));
   const file = path.join(dir, "activity.json");
   try {
-    const f = fixture({ file, notify: notice => {
-      const data = JSON.parse(readFileSync(file, "utf8"));
-      assert.ok(data.rows[0].notices.includes(notice.key));
-    } });
-    const done = f.send("A", { type: "task_state", task: { id: "a", state: "completed" } });
-    assert.equal(f.read("A").durable, true);
+    const f = fixture({ file });
+    f.send("A", { type: "task_state", task: { id: "a", state: "running" } });
+    f.send("A", { type: "task_state", task: { id: "a", state: "completed" } });
+    assert.equal(f.notices.length, 1);
+    assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), []);
     const restored = fixture({ file });
-    assert.equal(restored.center.get("A").unread, false);
-    restored.center.observe(done);
+    assert.equal(restored.center.get("A"), null);
     restored.center.reconcile({ session: { id: "A", name: "A" }, task: { id: "a", state: "completed" },
       inFlight: { runtimeEpoch: "boot-2", seq: 0 } }, "prep");
-    restored.center.observe({ ...done, runtimeEpoch: "boot-2", seq: 1 });
-    restored.center.observe({ ...done, task: { id: "a", state: "running" }, seq: 100 });
-    assert.equal(restored.center.get("A").state, "completed");
+    restored.center.observe({ sessionId: "A", runtimeEpoch: "boot-2", seq: 1, type: "task_state", task: { id: "a", state: "completed" } });
     assert.equal(restored.notices.length, 0);
-    assert.equal(restored.center.get("A").unread, false);
-    restored.center.flush();
+    f.center.flush(); restored.center.flush();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -120,43 +116,65 @@ test("restart does not claim running tasks survived and a live snapshot reconcil
     assert.equal(restored.center.get("A").unread, true);
     restored.center.reconcile({ session: { id: "A" }, task: { id: "a", state: "interrupted" },
       inFlight: { runtimeEpoch: "boot-2", seq: 0 } }, "prep");
-    assert.equal(restored.center.markRead({ sessionId: "A", runtimeEpoch: "boot-2", seq: 0,
-      visible: true, atBottom: true }, true).ok, true);
+    assert.equal(restored.center.opened("A").ok, true);
     assert.equal(restored.notices.length, 0);
     restored.center.flush();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("stream updates coalesce, retain ordering and never persist text or tool arguments", () => {
-  let persisted;
-  const f = fixture({ persist: data => { persisted = structuredClone(data); } });
-  for (let i = 0; i < 500; i++) f.send("A", { type: "message_delta", key: "m", text: `PRIVATE_TEXT_${i}` });
-  f.send("A", { type: "tool_start", toolCallId: "t", toolName: "bash", args: { command: "PRIVATE_COMMAND" } });
-  assert.equal(f.updates.length, 0);
-  assert.equal(f.notices.length, 0);
-  f.center.flush();
-  assert.equal(f.updates.length, 1);
-  assert.equal(f.center.get("A").unread, true);
-  assert.equal(JSON.stringify(persisted).includes("PRIVATE"), false);
-  const snapshot = f.center.snapshot();
-  snapshot.rows[0].attentionIds.push("mutated");
+test("streaming and read updates never write; only task membership changes persist the minimal summary", () => {
+  const writes = [];
+  const f = fixture({ persist: data => writes.push(structuredClone(data)) });
+  f.send("A", { type: "task_state", task: { id: "a", state: "running" } });
+  for (let i = 0; i < 500; i++) {
+    f.send("A", { type: "message_delta", text: `PRIVATE_${i}` });
+    f.center.flush();
+  }
+  f.read("A");
+  f.send("A", { type: "task_state", task: { id: "a", state: "waiting_user" } });
+  assert.equal(writes.length, 1);
+  assert.deepEqual(Object.keys(writes[0][0]).sort(), ["mode", "name", "path", "sessionId", "taskId"]);
+  assert.equal(JSON.stringify(writes).includes("PRIVATE"), false);
+  f.send("A", { type: "task_state", task: { id: "a", state: "completed" } });
+  assert.deepEqual(writes[1], []);
+  const snapshot = f.center.snapshot(); snapshot.rows[0].attentionIds.push("mutated");
   assert.deepEqual(f.center.get("A").attentionIds, []);
+  f.center.flush();
 });
 
-test("storage failure preserves visible activity, suppresses uncommitted notifications, and permits recovery", () => {
+test("summary write failure neither hides activity nor blocks notifications", () => {
   let fail = true;
   const f = fixture({ persist: () => { if (fail) throw new Error("disk full"); } });
+  f.send("A", { type: "task_state", task: { id: "a", state: "running" } });
   const done = f.send("A", { type: "task_state", task: { id: "a", state: "completed" } });
   assert.equal(f.center.snapshot().storageError, true);
   assert.equal(f.center.get("A").unread, true);
-  assert.equal(f.notices.length, 0);
-  assert.equal(f.read("A").durable, false);
+  assert.equal(f.notices.length, 1);
+  f.read("A");
+  assert.equal(f.center.get("A").unread, false);
   fail = false;
-  f.center.flush();
+  f.center.reconcile({ session: { id: "A" }, task: { id: "a", state: "completed" }, inFlight: { runtimeEpoch: "boot-1", seq: done.seq } }, "prep");
   f.center.observe(done);
   assert.equal(f.center.snapshot().storageError, false);
-  assert.equal(f.notices.length, 0);
+  assert.equal(f.notices.length, 1);
   f.center.remove("A");
   assert.equal(f.center.get("A"), null);
   assert.equal(f.updates.at(-1).type, "activity_removed");
+});
+
+test("legacy activity data keeps only interruption identities and drops old notification/read history", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-activity-legacy-"));
+  const file = path.join(dir, "activity.json");
+  try {
+    writeFileSync(file, JSON.stringify({version: 1, rows: [
+      {sessionId:"A", mode:"prep", name:"A", state:"waiting_user", taskId:"a", notices:["old"], readRevision:99, retiredEpochs:["old"], attentionIds:["question:q"]},
+      {sessionId:"B", mode:"prep", state:"completed"}
+    ]}));
+    const f = fixture({file});
+    assert.equal(f.center.get("A").state, "interrupted");
+    assert.equal(f.center.get("A").needsAttention, false);
+    assert.equal(f.center.get("B"), null);
+    assert.equal(f.notices.length, 0);
+    assert.deepEqual(JSON.parse(readFileSync(file,"utf8")), [{sessionId:"A", mode:"prep", name:"A", path:null, taskId:"a"}]);
+  } finally { rmSync(dir, {recursive:true, force:true}); }
 });

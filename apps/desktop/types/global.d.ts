@@ -47,7 +47,7 @@ interface ArcaneBridge {
   getDesktopNotifications(): Promise<any>;
   setDesktopNotifications(enabled: boolean): Promise<any>;
   takeNotificationTarget(): Promise<any>;
-  markActivityRead(request: { sessionId: string; runtimeEpoch: string; seq: number; visible: boolean; atBottom: boolean; readKey?: string }): Promise<any>;
+  activityOpened(sessionId: string): Promise<any>;
   respondToTask(request: { sessionId: string; taskId: string; attentionId: string; commandId: string; response: string }): Promise<any>;
   newSession(context?: ArcaneModeContext & { cwd?: string }): Promise<any>;
   openSession(path: string, context?: ArcaneModeContext): Promise<any>;

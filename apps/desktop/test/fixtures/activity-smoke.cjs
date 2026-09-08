@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
   const submissions = [];
   let notificationBroker;
   const nativeNotifications = [];
-  const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
+  const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id), foreground: id => focused && selected === id,
     emit, notify: notice => { notices++; emit({ type: "activity_notice", notice }); notificationBroker?.deliver(notice); } });
   notificationBroker = new DesktopNotifications({ file: path.join(scratch, "notifications.json"),
     supported: () => true, foreground: () => focused, lookup: id => center.get(id), text: kind => kind,
@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
     if (channel === "notifications:set") return notificationBroker.setEnabled(input);
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
     if (channel === "activity:snapshot") return { ok: true, ...center.snapshot() };
-    if (channel === "activity:read") return center.markRead(input, focused);
+    if (channel === "activity:opened") return center.opened(input);
     if (channel === "chat:prompt") {
       submissions.push(input);
       const row = sessions.get(input.sessionId);
@@ -115,7 +115,7 @@ app.whenReady().then(async () => {
     sessions.get("A").history = Array.from({ length: 40 }, (_, i) => ({ role: "user", ts: i + 10, text: `素材 ${i}：古堡、森林与失踪的商队。` }));
     send("A", { type: "task_state", task: { id: "task-A", state: "running" } });
     send("A", { type: "message", role: "assistant", key: "assistant:100", text: "正在整理素材。" });
-    center.markRead({ sessionId: "A", runtimeEpoch: "activity-test", seq: 2, visible: true, atBottom: true, readKey: "assistant:100" }, true);
+    center.opened("A");
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "B" && activityReady && activityView.rows.has("A")');
     if (process.env.ARCANE_SMOKE_INPUT_RECOVERY === "1") {
@@ -262,7 +262,7 @@ app.whenReady().then(async () => {
     await until('document.getElementById("shutdown-status").hidden');
     finishExitStop(); await exiting; assert.equal(didQuit, false); assert.equal(exitAdmission, false);
     assert.equal(errors.length, 0, errors.join("\n"));
-    console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
+    console.log("PASS Electron activity: foreground isolation, coarse unread, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);
   } catch (error) {
     console.error(error);

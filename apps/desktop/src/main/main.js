@@ -778,6 +778,8 @@ app.whenReady().then(async () => {
   const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
   activityCenter = new ActivityCenter({
     file: configPath("activity.json"),
+    foreground: id => Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()
+      && modeController.snapshot().host?.describeCurrent()?.id === id),
     describe: id => {
       const host = allSessionHosts().find(host => host.describeCurrent()?.id === id);
       return host ? { ...host.describeCurrent(), mode: host.profile.mode } : null;
@@ -813,10 +815,10 @@ app.whenReady().then(async () => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     return { ok: true, ...activityCenter.snapshot() };
   });
-  ipcMain.handle("activity:read", (event, request) => {
+  ipcMain.handle("activity:opened", (event, sessionId) => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
-    if (!request || typeof request !== "object") return { ok: false, code: "INVALID_REQUEST" };
-    return activityCenter.markRead(request, Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()));
+    if (typeof sessionId !== "string") return { ok: false, code: "INVALID_REQUEST" };
+    return activityCenter.opened(sessionId);
   });
 
   function staleModeResponse() {

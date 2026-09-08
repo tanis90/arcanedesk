@@ -56,7 +56,7 @@ contextBridge.exposeInMainWorld("arcane", {
   getDesktopNotifications: () => ipcRenderer.invoke("notifications:get"),
   setDesktopNotifications: (enabled) => ipcRenderer.invoke("notifications:set", enabled),
   takeNotificationTarget: () => ipcRenderer.invoke("notifications:take-target"),
-  markActivityRead: (request) => ipcRenderer.invoke("activity:read", request),
+  activityOpened: (sessionId) => ipcRenderer.invoke("activity:opened", sessionId),
   respondToTask: (request) => ipcRenderer.invoke("tasks:respond", request),
   newSession: (context) => ipcRenderer.invoke("sessions:new", context),
   openSession: (path, context) => ipcRenderer.invoke("sessions:open", {

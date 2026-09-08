@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
       return { ok: true, sessions: sessions.map(row => ({ ...row, activity: center.get(row.id) })) };
     }
     if (channel === "activity:snapshot") return center.snapshot();
-    if (channel === "activity:read") return center.markRead(input, true);
+    if (channel === "activity:opened") return center.opened(input);
     if (channel === "voice:get-config") return { enabled: false };
     if (channel === "ui:get-locale") return { pref: "en-US", resolved: "en-US" };
     if (channel === "slash:list") return { skills: [], templates: [], commands: [] };
