@@ -9,6 +9,29 @@ Validated on Foundry 13 / dnd5e 5.3.3. Check the actual system version; inspect 
 Operate through browser_evaluate on the connected GM page. Use public Document APIs, await writes,
 and keep temporary variables inside an async function so declarations do not collide between calls.
 
+## Organize the work before making calls
+
+Decide the requested NPC configuration and a reasonable resource list first. Treat related lookups as one
+discovery phase, not a new planning turn for each spell. Use search to discover unknown sources; once the
+relevant packs are known, read each needed pack index once in a single browser script and match all required
+names against it. Independent index reads may run with Promise.all. Include known language alternatives in
+the same matching pass. Return compact selected references plus missing or ambiguous entries, not full indices.
+Only unresolved entries need another lookup. Do not alternate search and equivalent index scans for resolved items.
+
+Once resources are resolved, write one awaited async script for the dependent execution sequence:
+check the target, load chosen source documents, create/update the NPC, import items with intended preparation
+and equipment fields already set, fill derived resources if needed, and return a compact verification snapshot.
+These are separate native operations inside one script, not an atomic transaction. A tool call boundary is not
+required between every operation. Preserve source data and use the current fields below on the first write.
+Do not postpone a known preparation setting solely to a later correction call.
+
+Verify within that script after the writes. If all requested fields match, report the result without another
+model round trip to read the same data. If a step throws or a check fails, stop dependent writes and return
+the created Actor UUID, completed steps and unresolved issue. Never catch an error and replay the whole sequence.
+Do not combine operations whose target or safety depends on unresolved discovery or a DM answer. Shorter flow
+must not remove validation or conceal partial completion. These instructions are a batching strategy, not a
+target call count; use additional calls when evidence requires them.
+
 ## Discover resources, then import them
 
 Use foundry_content_search to locate world actors and compendium Actor/Item entries. Follow its schema:

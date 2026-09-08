@@ -11,9 +11,11 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const allCases=["npc_wizard","create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>c!=="npc_wizard");
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision","native-skill"].includes(comparison));
-  if(comparison==="native-skill")assert.deepEqual(cases,["npc_wizard"]);
-  const arms=comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  assert.ok(["js","revision","native-skill","skill-revision"].includes(comparison));
+  if(["native-skill","skill-revision"].includes(comparison))assert.deepEqual(cases,["npc_wizard"]);
+  const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
+  if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
+  const arms=comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
   report.experiment={arms,comparison,kind:"same-code tool ablation",cases,samplesPerCase:samples,model:report.model,
@@ -25,6 +27,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   report.experiment.promptPolicy=promptMode==="production"?"Production Prep prompt for tools; neutral native-JS instructions for control":"Same neutral instructions with arm-specific routing";
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
+  if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
   report.experiment.suiteVersion=cases.includes("npc_wizard")?"prep-npc-intent-draft1":"prep-v1-draft2";
   report.experiment.taskTimeoutMs=cases.includes("npc_wizard")?300000:120000;
   report.experiment.imageSha256=imageHash;
@@ -69,6 +72,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     await cleanup(trial.fixture);trial.cleaned=true;save();
   }
   for(let sample=0;sample<samples;sample++)for(const caseId of cases)for(const arm of sample%2?[...arms].reverse():arms){
+    const nativeSkillArm=arm.startsWith("native_skill");
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
     const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${caseId==="npc_wizard"?"-"+arm:""}`;const f=await setup(label);
@@ -79,23 +83,23 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       trial.prompt=`把世界角色“${label} 角色1”的头像、原型 Token 和所有已放置 Token 图片换成本地文件 ${localImage}。不要改变 Token 名称、位置、尺寸，也不要影响其他角色。`;save();
     }
     const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
-    if(arm==="native_skill"){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
+    if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
-      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>arm==="native_skill"?[path.dirname(skillPath)]:[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
+      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>nativeSkillArm?[path.dirname(skillPath)]:[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     setHost(host);await host.start({fresh:true});
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
-    if(arm==="native_skill")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
+    if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    assert.equal(trial.activeTools.length,arm==="native_skill"?16:arm==="js"?8:18,"Ablated tool count changed");
+    assert.equal(trial.activeTools.length,nativeSkillArm?16:arm==="js"?8:18,"Ablated tool count changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
     assert.ok(host.session.systemPrompt.includes(productionPrep),"Prep preamble anchor changed");
     let prompt=promptMode==="production"&&arm!=="js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
-    if(arm==="native_skill"){
+    if(nativeSkillArm){
       assert.ok(host.session.systemPrompt.includes("fvtt-native-npc"),"Skill metadata must be loaded through resource loader");
       prompt=host.session.systemPrompt.replace(productionPrep,common+" 创建或修改 NPC 前先读取可用的 fvtt-native-npc skill。使用 foundry_content_search 发现资源，普通角色创建和修改使用 browser_evaluate 原生 API；其他已开放工具按需要使用。不要调用未开放的 actor_create 或 actor_update。");
     }

@@ -78,6 +78,11 @@ NPC 原生 skill 工作流实验使用 `--comparison=native-skill --cases=npc_wi
 [fvtt-native-npc](../test/fixtures/prep-native-npc-skill/SKILL.md)，尚未安装到产品默认模式。
 此比较使用独立审计摘要，不交给只支持 js/revision 两臂的旧汇总器。
 
+只比较 skill 正文时使用 `--comparison=skill-revision --cases=npc_wizard --samples=2 --baseline-skill=<旧版SKILL.md>`。
+两臂均使用相同 16 工具及原生路由，分别复制旧／当前正文，通过真实 skill 机制读取；报告记录各自 hash。
+旧稿可从 51bb226 提取，当前合并指引仍为实验稿。[首次合并实验](prep-skill-batching-results.json)
+两版各 1/2 通过，不能将减少调用等同于稳定可靠。
+
 | 用例 | 用户意图 | 当前独立验收 |
 | --- | --- | --- |
 | create_npc | 从 Wolf 创建 NPC，并设置角色和原型名；同名不重复 | 单个目标、两个名字、Wolf HP 与 Bite |
