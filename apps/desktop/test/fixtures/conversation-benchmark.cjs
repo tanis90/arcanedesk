@@ -157,7 +157,7 @@ app.whenReady().then(async () => {
         host.benchmarkAt = Date.now();
         host.stream.content[0].text += `Update ${tick}: ongoing work. `;
         host.forwardEvent({ type: "message_update", message: structuredClone(host.stream) });
-        if (tick % 5 === 0) host.tasks.setTaskState(tick % 10 === 0 ? "running" : "waiting_resource");
+        if (tick % 5 === 0) host.tasks.setTaskState(tick % 10 === 0 ? "running" : "queued");
         host.benchmarkAt = null;
       }
     }, 100);

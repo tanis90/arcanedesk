@@ -29,7 +29,7 @@ test("pin, custom title, archive and restore survive process-independent reload 
 });
 test("admission ordering: work accepted first prevents archive; archive first prevents execution", t => {
   const { store } = fixture(t);
-  for (const state of ["queued", "running", "waiting_resource", "waiting_user", "stopping"]) {
+  for (const state of ["queued", "running", "waiting_user", "stopping"]) {
     assert.throws(() => store.mutate("a", "archive", null, { busy: true, task: { state } }), { code: "SESSION_BUSY" });
     assert.equal(store.get("a").archivedAt, undefined);
   }

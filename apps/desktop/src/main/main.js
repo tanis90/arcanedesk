@@ -15,9 +15,6 @@ import { SessionRegistry } from "./conversations/session-registry.js";
 import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
-import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
-import { loadPageWithRetry } from "./load-page.js";
-import { PanelCommands } from "./scheduling/panel-commands.js";
 import { SessionDeletions } from "./conversations/session-deletions.js";
 import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
 import "../shared/i18n/messages.js";
@@ -417,7 +414,7 @@ async function loadFoundryPage(url) {
     }).catch(() => {});
   };
   try {
-    await loadPageWithRetry(contents, url);
+    await contents.loadURL(url);
   } catch (error) {
     if (error.code !== "ERR_ABORTED") await failedPage();
     return {
@@ -729,7 +726,6 @@ app.whenReady().then(async () => {
   // Each mode owns a registry; command contexts capture an actual session host.
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
-  const resources = new ResourceCoordinator();
   const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks") });
   const navigation = new SessionNavigation({ file: configPath("session-navigation.json"), emit: sendToRenderer });
   for (const id of deletions.snapshot().sessionIds) {
@@ -742,7 +738,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler, resources,
+      telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
@@ -758,7 +754,7 @@ app.whenReady().then(async () => {
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler, resources,
+      telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       getLocale: resolveLocale,
@@ -1469,7 +1465,7 @@ app.whenReady().then(async () => {
   });
 
   // 顶栏"面板"开关:用户手动打开/关闭 Foundry 面板,不必经过 agent。
-  const panelCommands = new PanelCommands({ resources, emit: state => sendToRenderer({ type: "panel_command", ...state }), operations: {
+  const panelOperations = {
     open: () => openFoundryView(),
     close: () => {
       if (!foundryView) return { ok: true };
@@ -1488,11 +1484,14 @@ app.whenReady().then(async () => {
       if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
       return loadFoundryPage(/^https?:/.test(foundryView.webContents.getURL()) ? foundryView.webContents.getURL() : foundryTargetUrl);
     },
-  } });
+  };
   for (const action of ["open", "close", "reload"]) {
-    ipcMain.handle(`panel:${action}`, event => isTrustedChatIpc(event) ? panelCommands.request(action) : { ok: false });
+    ipcMain.handle(`panel:${action}`, async event => {
+      if (!isTrustedChatIpc(event)) return { ok: false };
+      try { return await panelOperations[action](); }
+      catch (error) { return { ok: false, error: error.message }; }
+    });
   }
-  ipcMain.handle("panel:command-state", event => isTrustedChatIpc(event) ? panelCommands.snapshot() : null);
 
 
   // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整 Foundry view 宽度。
@@ -1530,13 +1529,9 @@ app.whenReady().then(async () => {
         registry.closing = closing;
         for (const host of registry.allHosts()) host.closing = closing;
       }
-      panelCommands.closing = closing;
     },
     quiesce: async () => {
-      if (panelCommands.state?.state === "queued") panelCommands.cancel(panelCommands.state.id);
-      await panelCommands.run;
       await Promise.all(Object.values(hosts).flatMap(registry => [...registry.deleting.values()]));
-      while (resources.active.size) await Promise.all([...resources.active.values()].map(entry => entry.finished));
     },
     finish: () => {
       activityCenter.flush();

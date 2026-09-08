@@ -9,34 +9,23 @@ import { InputJournal } from "../src/main/tasks/input-journal.js";
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test("stopping retains execution capacity and waits for actual tool settlement", async () => {
+test("stopping retains capacity until the SDK prompt settles", async () => {
   const { ExecutionScheduler } = await import("../src/main/scheduling/execution-scheduler.js");
-  const scheduler = new ExecutionScheduler({ capacity: 1 }), raw = deferred(), prompt = deferred();
-  let settling = false;
+  const scheduler = new ExecutionScheduler({ capacity: 1 }), prompt = deferred();
   const c = new TaskCoordinator({ sessionId: "A", scheduler, adapter: {
-    prompt: () => prompt.promise, abort: async () => prompt.resolve(),
-    settleTask: async id => {
-      settling = true;
-      c.resourceWaiting(`settle:${id}`, { resources: ["foundry:page"], holders: [{ sessionId: "A", taskId: id }] });
-      await raw.promise;
-      c.resourceWaiting(`settle:${id}`, null);
-    },
+    prompt: () => prompt.promise, abort: async () => {},
   } });
   c.submit({ text: "run" }); await tick();
   const stop = c.stop(c.task.id); await tick();
-  assert.equal(settling, true); assert.equal(c.task.state, "stopping");
-  assert.equal(scheduler.active.size, 1);
-  assert.deepEqual(c.task.waitingFor.resources, ["foundry:page"]);
-  c.resourceWaiting("cancelled-request", { resources: ["fs:unowned"], holders: [] });
-  assert.deepEqual(c.task.waitingFor.resources, ["foundry:page"], "stopping only describes operations still owned by this task");
-  raw.resolve(); await stop; assert.equal(c.task.state, "stopped"); assert.equal(scheduler.active.size, 0);
-  assert.equal(c.task.waitingFor, null);
+  assert.equal(c.task.state, "stopping"); assert.equal(scheduler.active.size, 1);
+  prompt.resolve(); await stop;
+  assert.equal(c.task.state, "stopped"); assert.equal(scheduler.active.size, 0);
 });
 
-test("supplement received while actual tools settle continues the same task", async () => {
+test("supplement received during a prompt continues the same task", async () => {
   const gate = deferred(), calls = [];
   const c = new TaskCoordinator({ sessionId: "A", adapter: {
-    prompt: async text => { calls.push(text); }, settleTask: () => gate.promise,
+    prompt: async text => { calls.push(text); await gate.promise; },
   } });
   const first = c.submit({ text: "first" }); await tick();
   const second = c.submit({ text: "second" }); assert.equal(second.taskId, first.taskId);

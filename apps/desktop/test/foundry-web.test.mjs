@@ -3,7 +3,6 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 
 import { evaluateNavigationSafe, readFoundryPageState } from "../src/main/foundry-web.js";
-import { ResourceCoordinator } from "../src/main/scheduling/resource-coordinator.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -73,92 +72,25 @@ test("Foundry page state reports direct runtime readiness without module state",
   assert.doesNotMatch(expression, /arcane-agent-bridge|moduleActive/);
 });
 
-test("timed-out page execution retains its resource until the underlying promise settles", async () => {
-  const raw = deferred(), r = new ResourceCoordinator();
-  const wc = new FakeWebContents(() => raw.promise);
-  const outcome = await r.run(["foundry:page"], { taskId: "A" }, null, () => {},
-    () => evaluateNavigationSafe(wc, "slow write", { timeoutMs: 5 }));
-  assert.equal(outcome.status, "timeout");
-  let calls = 0;
-  const next = r.run(["foundry:page"], { taskId: "B" }, null, () => {}, () => { calls++; });
-  await tick(); assert.equal(calls, 0); assert.equal(r.active.size, 1);
-  raw.resolve("written"); await next;
-  assert.equal(calls, 1); assert.equal(r.active.size, 0); assert.equal(wc.eventNames().length, 0);
-});
-
-test("abort after dispatch cannot release a page operation; a queued follower can be cancelled", async () => {
-  const raw = deferred(), started = deferred(), r = new ResourceCoordinator();
-  const wc = new FakeWebContents(() => { started.resolve(); return raw.promise; });
-  const abort = new AbortController();
-  const first = r.run(["foundry:page"], {}, abort.signal, () => {},
-    () => evaluateNavigationSafe(wc, "slow", { signal: abort.signal }));
-  await started.promise; abort.abort(); assert.equal((await first).status, "aborted");
-  const queued = new AbortController(); let calls = 0;
-  const second = r.run(["foundry:page"], {}, queued.signal, () => {}, () => { calls++; }).catch(e => e.name);
-  queued.abort(); assert.equal(await second, "AbortError"); assert.equal(calls, 0); assert.equal(r.active.size, 1);
-  raw.resolve(); await tick(); assert.equal(r.active.size, 0);
-});
-
-test("navigation request is insufficient: lease waits for committed navigation or destroyed renderer", async () => {
-  for (const event of ["did-navigate", "destroyed", "render-process-gone"]) {
-    const r = new ResourceCoordinator(), raw = deferred();
-    const wc = new FakeWebContents(() => raw.promise);
-    const work = r.run(["foundry:page"], {}, null, () => {}, () => evaluateNavigationSafe(wc, "navigate"));
-    await tick(); wc.emit("did-start-navigation", {}, "/game", false, true);
-    assert.equal((await work).status, "navigated");
-    raw.resolve(); await tick(); assert.equal(r.active.size, 1);
-    wc.emit(event); await tick(); assert.equal(r.active.size, 0); assert.equal(wc.eventNames().length, 0);
-  }
-});
-
-test("failed navigation does not release a still-running script", async () => {
-  const r = new ResourceCoordinator(), raw = deferred();
-  const wc = new FakeWebContents(() => raw.promise);
-  const work = r.run(["foundry:page"], {}, null, () => {}, () => evaluateNavigationSafe(wc, "navigate"));
-  await tick(); wc.emit("did-start-navigation", {}, "/game", false, true); await work;
-  wc.emit("did-fail-load", {}, -2, "failed", "/game", true);
-  await tick(); assert.equal(r.active.size, 1);
-  raw.resolve(); await tick(); assert.equal(r.active.size, 0); assert.equal(wc.eventNames().length, 0);
-});
-
-test("agent page tools and structured runtime share admission and reacquire the current view", async () => {
-  const r = new ResourceCoordinator(), raw = deferred(), started = deferred();
-  let view = { webContents: new FakeWebContents(() => { started.resolve(); return raw.promise; }) };
-  const create = id => {
-    const h = new AgentHost({ resources: r, profile: { mode: "prep" }, getFoundryView: () => view, sendToRenderer() {},
-      foundryRuntime: { call: async () => ({ ready: true }) }, openFoundry: async () => ({ ok: true, summary: "opened" }), log() {} });
-    h.sessionManager = { getSessionId: () => id, getSessionName: () => id };
-    h.taskCoordinator().task = { id, state: "running" }; return h;
-  };
-  const a = create("A"), b = create("B");
-  const tool = (h, name) => h.buildTools().find(t => t.name === name);
-  const first = tool(a, "browser_evaluate").execute("one", { code: "write" });
-  await started.promise;
-  const second = tool(b, "browser_evaluate").execute("two", { code: "read" });
-  await tick(); assert.equal(b.task.state, "waiting_resource"); assert.equal(b.task.waitingFor.holders[0].taskId, "A");
-  let newCalls = 0;
-  view = { webContents: new FakeWebContents(async () => { newCalls++; return "new-page"; }) };
-  raw.resolve("done"); await first; await second; assert.equal(newCalls, 1);
-  const held = await r.acquire(["foundry:page"], { taskId: "external" });
-  const structured = tool(b, "world_status").execute("status", {});
-  await tick(); assert.equal(b.task.state, "waiting_resource");
-  held.release(); await structured; assert.equal(b.task.state, "running");
-});
-
-test("AgentHost stop stays stopping until an aborted page script actually finishes", async () => {
-  const r = new ResourceCoordinator(), raw = deferred(), started = deferred(), abort = new AbortController();
-  const wc = new FakeWebContents(() => { started.resolve(); return raw.promise; });
-  const h = new AgentHost({ resources: r, profile: { mode: "prep" }, getFoundryView: () => ({ webContents: wc }),
+test("page tools execute concurrently and use the current view", async () => {
+  const raw = deferred(); let calls = 0;
+  let view = { webContents: new FakeWebContents(() => { calls++; return raw.promise; }) };
+  const create = () => new AgentHost({ profile: { mode: "prep" }, getFoundryView: () => view,
     sendToRenderer() {}, log() {} });
-  h.sessionManager = { getSessionId: () => "A", getSessionName: () => "A" };
-  h.session = {
-    prompt: () => h.buildTools().find(tool => tool.name === "browser_evaluate").execute("write", { code: "slow" }, abort.signal),
-    abort: async () => abort.abort(), clearQueue() {},
-  };
-  h.submitInput("write", [], "command"); await started.promise;
-  const stop = h.tasks.stop(h.task.id); await tick();
-  assert.equal(h.task.state, "stopping"); assert.equal(h.busy, true); assert.equal(r.active.size, 1);
-  assert.equal(h.submitInput("next", [], "next").code, "TASK_STOPPING");
-  raw.resolve("done"); await stop;
-  assert.equal(h.task.state, "stopped"); assert.equal(h.busy, false); assert.equal(r.active.size, 0);
+  const tool = h => h.buildTools().find(t => t.name === "browser_evaluate");
+  const a = tool(create()).execute("a", { code: "read" });
+  const b = tool(create()).execute("b", { code: "read" });
+  await tick(); assert.equal(calls, 2);
+  raw.resolve("old page"); await Promise.all([a, b]);
+  view = { webContents: new FakeWebContents(async () => "new page") };
+  assert.match(JSON.stringify(await tool(create()).execute("c", { code: "read" })), /new page/);
+});
+
+test("timeout removes listeners and does not block a later page operation", async () => {
+  const raw = deferred(); let calls = 0;
+  const wc = new FakeWebContents(() => ++calls === 1 ? raw.promise : Promise.resolve("second"));
+  assert.equal((await evaluateNavigationSafe(wc, "slow", { timeoutMs: 5 })).status, "timeout");
+  assert.equal((await evaluateNavigationSafe(wc, "read")).value, "second");
+  assert.equal(wc.eventNames().length, 0);
+  raw.resolve("late");
 });

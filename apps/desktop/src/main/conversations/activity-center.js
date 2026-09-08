@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-const activeStates = new Set(["running", "queued", "waiting_resource", "waiting_user", "stopping"]);
+const activeStates = new Set(["running", "queued", "waiting_user", "stopping"]);
 const noticeStates = new Set(["completed", "failed"]);
 const contentEvents = new Set(["message_delta", "message", "tool_start", "tool_end", "auto_retry_start", "auto_retry_end"]);
 

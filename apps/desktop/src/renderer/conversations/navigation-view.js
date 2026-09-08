@@ -4,7 +4,7 @@
     const element = /** @type {any} */ (document.createElement(tag));
     element.className = cls; element.textContent = text; return element;
   };
-  const running = new Set(["running", "queued", "waiting_resource", "stopping"]);
+  const running = new Set(["running", "queued", "stopping"]);
   const basename = directory => directory?.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) ?? "";
   class NavigationView {
     constructor({ api, t, selected, open, create, changed, removed, empty }) {
@@ -52,7 +52,7 @@
       const activity = this.activities.get(row.id) ?? row.activity ?? row.task;
       const state = activity?.state;
       if (state === "waiting_user" || activity?.needsAttention) return { kind: "attention", label: this.t("chat.task.waitingUser") };
-      if (running.has(state) || (!state && row.busy)) return { kind: "running", label: this.t(({ queued: "activity.queued", waiting_resource: "activity.waitingResource", stopping: "chat.task.stopping" })[state] ?? "chat.task.running") };
+      if (running.has(state) || (!state && row.busy)) return { kind: "running", label: this.t(({ queued: "activity.queued", stopping: "chat.task.stopping" })[state] ?? "chat.task.running") };
       if (state === "failed" || state === "interrupted") return { kind: "failed", label: this.t(state === "failed" ? "chat.task.failed" : "chat.task.interrupted") };
       if (activity?.unread) return { kind: "unread", label: this.t("activity.unread") };
       return { kind: "idle", label: "" };

@@ -40,7 +40,7 @@ async function fetchSessionSnapshot(id, query = {}) {
     })]);
   } finally { clearTimeout(timer); }
 }
-const activeTaskStates = new Set(["running", "queued", "waiting_user", "waiting_resource", "stopping"]);
+const activeTaskStates = new Set(["running", "queued", "waiting_user", "stopping"]);
 function reconcileStopRequest(id, task) {
   const request = stopRequests.get(id);
   if (request && (request.taskId !== task?.id || !activeTaskStates.has(task?.state))) stopRequests.delete(id);
@@ -60,7 +60,6 @@ function updateComposerAction() {
   feedback.hidden = stopRequests.get(selectedSessionId)?.state !== "failed";
   feedback.textContent = feedback.hidden ? "" : t("composer.stopFailed");
 }
-let panelCommandSnapshot = { revision: -1, command: null };
 function showShutdown(state) {
   const bar = document.getElementById("shutdown-status");
   bar.hidden = !["stopping", "failed"].includes(state?.state);
@@ -68,12 +67,6 @@ function showShutdown(state) {
   bar.querySelector("span").textContent = t(`lifecycle.${state.state}`, state);
   document.getElementById("cancel-exit").hidden = state.state !== "stopping";
 }
-function showPanelCommand(snapshot) {
-  if (!Number.isInteger(snapshot?.revision) || snapshot.revision < panelCommandSnapshot.revision) return;
-  panelCommandSnapshot = snapshot;
-
-}
-
 function showPendingModel(model) {
   pendingModelIndicator.hidden = !model;
   pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
@@ -83,7 +76,7 @@ function showTaskState(task) {
   displayedTask = task;
   reconcileStopRequest(selectedSessionId, task);
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
-    queued: "activity.capacityQueue", waiting_resource: "activity.waitingResource", cancelled: "activity.cancelled",
+    queued: "activity.capacityQueue", cancelled: "activity.cancelled",
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
   taskIndicator.hidden = !task || ["running", "completed"].includes(task.state);
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
@@ -92,14 +85,6 @@ function showTaskState(task) {
     taskIndicator.appendChild(errorDetail(task.error));
   } else if (["stopped", "cancelled"].includes(task?.state) && task.error && !/^(?:AbortError:\s*)?This operation was aborted\.?$/i.test(task.error.trim())) {
     taskIndicator.appendChild(errorDetail(task.error));
-  }
-  if (["waiting_resource", "stopping"].includes(task?.state) && task.waitingFor) {
-    const holder = task.waitingFor.holders?.[0];
-    const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
-    const name = resource?.slice(3).split("/").filter(Boolean).at(-1)
-      ?? (task.waitingFor.resources?.includes("foundry:page") ? "Foundry" : t("activity.resource"));
-    taskIndicator.textContent = t(task.state === "stopping" ? "chat.task.stoppingOperation" : "activity.resourceWait", { resource: name,
-      owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
   }
   updateComposerAction();
 }
@@ -1301,7 +1286,7 @@ function onEvent(event) {
       break;
     case "task_state":
       selectedTaskId = event.task.id;
-      setBusy(["running", "stopping", "waiting_user", "queued", "waiting_resource"].includes(event.task.state));
+      setBusy(["running", "stopping", "waiting_user", "queued"].includes(event.task.state));
       showTaskState(event.task);
       break;
     case "message": {
@@ -1354,9 +1339,6 @@ function onEvent(event) {
       panelOpen = Boolean(event.open);
       panelDot.classList.toggle("on", panelOpen);
       togglePanelBtn.classList.toggle("open", panelOpen);
-      break;
-    case "panel_command":
-      showPanelCommand(event);
       break;
     case "panel_layout":
       panelLayout.open = Boolean(event.open);
@@ -1845,7 +1827,8 @@ stop.addEventListener("click", async () => {
   }
 });
 togglePanelBtn.addEventListener("click", async () => {
-  showPanelCommand(await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel()));
+  const result = await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel());
+  if (result?.ok === false && result.error) addStatus(result.error);
 });
 input.addEventListener("input", () => {
   autosize();
@@ -3100,7 +3083,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
   chords: ["F5"],
   onTap: async () => {
     const result = await window.arcane.reloadPanel?.();
-    showPanelCommand(result);
+    if (result?.ok === false && result.error) addStatus(result.error);
   },
 });
 
@@ -3128,7 +3111,6 @@ input.focus();
 window.arcane.onEvent(receiveEvent);
 window.arcane.lifecycleState?.().then(showShutdown).catch(() => {});
 document.getElementById("cancel-exit").addEventListener("click", async () => showShutdown(await window.arcane.cancelExit()));
-window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });

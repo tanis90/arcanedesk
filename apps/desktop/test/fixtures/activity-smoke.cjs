@@ -21,9 +21,7 @@ app.whenReady().then(async () => {
     projection: new SessionProjection({ sessionId: id, epoch: "activity-test" }) });
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
-  const { ResourceCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/resource-coordinator.js")));
-  const { PanelCommands } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/panel-commands.js")));
-  const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
+  let panelNavigations = 0;
   const deletedIds = [];
   const { ShutdownCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/shutdown-coordinator.js")));
   let finishExitStop, didQuit = false, exitAdmission = false;
@@ -33,8 +31,6 @@ app.whenReady().then(async () => {
   const shutdown = new ShutdownCoordinator({ registries: [{ allHosts: () => [exitHost], pending: new Map() }],
     gate: value => { exitAdmission = value; }, quiesce: async () => {}, finish: () => { didQuit = true; },
     emit: state => emit({ type: "shutdown_state", ...state }) });
-  const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
-    operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
   let notificationBroker;
   const nativeNotifications = [];
   const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
@@ -66,8 +62,7 @@ app.whenReady().then(async () => {
     if (channel === "sessions:deleted") return { ok: true, sessionIds: deletedIds };
     if (channel === "lifecycle:get") return shutdown.snapshot();
     if (channel === "lifecycle:cancel-exit") { shutdown.cancel(); return shutdown.snapshot(); }
-    if (channel === "panel:open") return panelCommands.request("open");
-    if (channel === "panel:command-state") return panelCommands.snapshot();
+    if (channel === "panel:open") { panelNavigations++; return { ok: true }; }
     if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };
     if (channel === "notifications:set") return notificationBroker.setEnabled(input);
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
@@ -205,13 +200,6 @@ app.whenReady().then(async () => {
     send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
     await until('!busy && taskIndicator.textContent.startsWith(t("activity.cancelled"))');
     assert.equal(await evaluate('document.querySelector(".task-terminal-next, .recover-task")'), null);
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "running" } });
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "waiting_resource",
-      waitingFor: { resources: ["fs:c:/workspace/shared"], holders: [{ sessionId: "A", taskId: "task-A", name: "Session A" }] } } });
-    await until('busy && taskIndicator.textContent.includes("Session A") && taskIndicator.textContent.includes("shared")');
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "completed" } });
-    await until('!busy');
-    assert.equal(await evaluate("taskIndicator.hidden"), true);
     await evaluate(`showTaskState({ id: "error-test", state: "failed", error: '401: {"type":"invalid_authentication_error"}' })`);
     assert.equal(await evaluate('taskIndicator.querySelector(".error-summary").textContent'), await evaluate('t("chat.error.auth")'));
     assert.equal(await evaluate('taskIndicator.querySelector("details").open'), false);
@@ -225,20 +213,8 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('document.getElementById("navigation-toast").hidden'), true);
     assert.equal(await evaluate('document.activeElement === input'), true);
     await evaluate('showTaskState(null)');
-    const heldPage = await panelResources.acquire(["foundry:page"], { taskId: "page-owner", name: "Session A" });
     await evaluate('document.getElementById("toggle-panel").click()');
-    await until('panelCommandSnapshot.command?.state === "queued"');
-    assert.equal(await evaluate('!document.getElementById("panel-command")'), true);
-    assert.equal(await evaluate('document.querySelector("#panel-command button")'), null);
-    assert.equal(panelNavigations, 0);
-    heldPage.release();
-    await until('panelCommandSnapshot.command?.state === "completed"');
     assert.equal(panelNavigations, 1);
-    assert.equal(await evaluate('!document.getElementById("panel-command")'), true);
-    await evaluate('showPanelCommand({ revision: 100, command: { state: "failed", action: "open", error: "internal failure" } })');
-    assert.equal(await evaluate('document.getElementById("panel-command")'), null);
-    await evaluate('showPanelCommand({ revision: 101, command: { state: "running", action: "open" } })');
-    assert.equal(await evaluate('!document.getElementById("panel-command")'), true);
     const deletedSnapshot = snapshot("A");
     await evaluate('workspaceStore.save("A", { draft: "private draft", images: [{ data: "private image" }], outbox: [{ text: "pending" }] })');
     center.remove("A"); sessions.delete("A");

@@ -10,7 +10,6 @@ import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAgentSession, createBashTool, createPowerShellTool, createReadTool, createWriteTool, createEditTool, defineTool, DefaultResourceLoader, getAgentDir, isToolCallEventType, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { filesystemResource, toolFilesystemPath } from "./scheduling/resource-coordinator.js";
 import { Type } from "typebox";
 import { capturePageNavigationSafe, encodeFoundryScreenshot } from "./foundry-screenshot.js";
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
@@ -230,14 +229,12 @@ export class AgentHost {
    *   getLocale?: () => string,
    *   taskStorageDir?: string,
    *   scheduler?: any,
-   *   resources?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler, resources } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
-    this.resources = resources;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
@@ -395,8 +392,7 @@ export class AgentHost {
       if (!this.fvttOpsNode) throw new Error("Arcane FVTT Node is unavailable for the Agent shell");
       // SDK custom tools override built-ins with the same name. This keeps Pi's
       // native shell behavior/rendering while enforcing our spawn environment.
-      customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]
-        .map(tool => this.coordinateWorkspaceTool(tool)));
+      customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]);
     }
     const options = {
       cwd,
@@ -758,16 +754,6 @@ export class AgentHost {
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
-        settleTask: async taskId => {
-          const waitId = `settle:${taskId}`;
-          try {
-            await this.resources?.waitForOwner(sessionId, taskId, details => {
-              if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, details);
-            });
-          } finally {
-            if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, null);
-          }
-        },
         abort: async () => {
           for (const id of this.approvals.keys()) this.respondApproval(id, false);
           await this.session?.abort();
@@ -837,33 +823,6 @@ export class AgentHost {
     const file = this.sessionManager.getSessionFile();
     new InputJournal(file).compact([this.sessionManager.getHeader(), ...this.sessionManager.getEntries()]);
     this.tasks?.compact(true);
-  }
-
-  async withResources(keys, signal, operation) {
-    if (!this.resources) return operation();
-    const tasks = this.tasks;
-    const taskId = tasks?.task?.id;
-    const owner = { sessionId: this.describeCurrent()?.id, taskId, name: this.describeCurrent()?.name || "" };
-    const requestId = randomUUID();
-    const waiting = details => { if (tasks?.task?.id === taskId) tasks.resourceWaiting(requestId, details); };
-    try {
-      return await this.resources.run(keys, owner, signal, waiting, async () => {
-        waiting(null); return operation();
-      });
-    } finally { waiting(null); }
-  }
-
-  coordinateWorkspaceTool(tool) {
-    if (!this.resources) return tool;
-    return { ...tool, execute: (id, params, signal, onUpdate, context) => {
-      const cwd = this.cwd();
-      const keys = () => {
-        const resolved = [filesystemResource(cwd)];
-        if (typeof params?.path === "string") resolved.push(filesystemResource(toolFilesystemPath(params.path, cwd, tool.name === "read")));
-        return resolved;
-      };
-      return this.withResources(keys, signal, () => tool.execute(id, params, signal, onUpdate, context));
-    } };
   }
 
   // ---- approval gate(opt-in,默认关闭) ----
@@ -1037,7 +996,7 @@ export class AgentHost {
         ),
       }),
       execute: async (_toolCallId, params, signal) => {
-        const outcome = await host.withResources(["foundry:page"], signal, () => host.openFoundry(params?.url));
+        const outcome = await host.openFoundry(params?.url);
         if (!outcome?.ok) throw new Error(outcome?.summary ?? outcome?.error ?? "Foundry panel failed to open");
         return textResult(outcome.summary, outcome);
       },
@@ -1058,7 +1017,7 @@ export class AgentHost {
         "Do not capture while the user is entering credentials. Never request, inspect, guess or transmit passwords.",
         "Treat text, ids, numbers and hidden state inferred from a screenshot as uncertain; verify them with logs, browser_evaluate or a structured read.",
       ],
-      execute: async (_toolCallId, _params, signal) => host.withResources(["foundry:page"], signal, async () => {
+      execute: async (_toolCallId, _params, signal) => {
         if (host.supportsImages === false) {
           return textResult(
             "ERROR: the current model does not support image input, so it cannot inspect a Foundry screenshot. Select a vision-capable model before retrying."
@@ -1114,7 +1073,7 @@ export class AgentHost {
           ],
           details,
         };
-      }),
+      },
     });
 
     const browserEvaluate = defineTool({
@@ -1155,26 +1114,24 @@ export class AgentHost {
           args: params,
         });
         if (!approved) return textResult("DM declined this code; do not retry it.");
-        return host.withResources(["foundry:page"], signal, async () => {
-          const view = host.getFoundryView();
-          if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
-          const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
-            signal,
-            timeoutMs: prepWorldEdit ? 60_000 : undefined,
-          });
-          if (outcome.status === "completed") {
-            return textResult(safeJson(outcome.value), { result: outcome.value });
-          }
-          if (outcome.status === "navigated") {
-            return textResult(
-              safeJson({ navigated: true, url: outcome.url, note: "Navigation was requested; inspect the new page in a new call after resource admission." }),
-              outcome
-            );
-          }
-          if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
-          if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
-          throw new Error(outcome.error ?? "browser_evaluate failed");
+        const view = host.getFoundryView();
+        if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
+        const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
+          signal,
+          timeoutMs: prepWorldEdit ? 60_000 : undefined,
         });
+        if (outcome.status === "completed") {
+          return textResult(safeJson(outcome.value), { result: outcome.value });
+        }
+        if (outcome.status === "navigated") {
+          return textResult(
+            safeJson({ navigated: true, url: outcome.url, note: "Navigation was requested; inspect the new page in a new call." }),
+            outcome
+          );
+        }
+        if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
+        if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
+        throw new Error(outcome.error ?? "browser_evaluate failed");
       },
     });
 
@@ -1182,9 +1139,9 @@ export class AgentHost {
       if (!host.foundryRuntime?.call) {
         throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
       }
-      return host.withResources(["foundry:page"], options?.signal, () => host.foundryRuntime.callForSession
+      return host.foundryRuntime.callForSession
         ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
-        : host.foundryRuntime.call(action, args, options));
+        : host.foundryRuntime.call(action, args, options);
     };
 
     const worldStatus = defineTool({

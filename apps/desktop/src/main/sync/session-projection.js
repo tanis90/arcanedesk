@@ -31,7 +31,7 @@ export class SessionProjection {
         // Keep that stage until auto_retry_end or a task boundary.
         break;
       case "task_state":
-        if (this.taskId !== event.task?.id || !["queued", "running", "waiting_user", "waiting_resource", "stopping"].includes(event.task?.state)) this.retry = null;
+        if (this.taskId !== event.task?.id || !["queued", "running", "waiting_user", "stopping"].includes(event.task?.state)) this.retry = null;
         this.taskId = event.task?.id;
         break;
       case "message_delta":

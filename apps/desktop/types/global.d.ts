@@ -13,7 +13,6 @@ interface ArcaneBridge {
   closePanel(): Promise<any>;
   /** F5: reload the Foundry panel page (no-op when the panel is closed). */
   reloadPanel(): Promise<any>;
-  getPanelCommand(): Promise<any>;
   deletedSessions(): Promise<any>;
   lifecycleState(): Promise<any>;
   cancelExit(): Promise<any>;

@@ -135,7 +135,7 @@ export class TelemetryClient {
   taskState(mode, task) {
     return this.#safe("taskState", () => {
       if (!this.shared || !task?.id || this.released) return;
-      const active = ["running", "queued", "waiting_resource", "waiting_user", "stopping"].includes(task.state);
+      const active = ["running", "queued", "waiting_user", "stopping"].includes(task.state);
       if (active && this.observedTasks.get(mode) !== task.id) {
         this.observedTasks.set(mode, task.id);
         this.turnStarted(mode);

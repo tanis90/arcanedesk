@@ -21,7 +21,6 @@ contextBridge.exposeInMainWorld("arcane", {
   closePanel: () => ipcRenderer.invoke("panel:close"),
   /** F5: reload the Foundry panel page (no-op when the panel is closed). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
-  getPanelCommand: () => ipcRenderer.invoke("panel:command-state"),
   deletedSessions: () => ipcRenderer.invoke("sessions:deleted"),
   lifecycleState: () => ipcRenderer.invoke("lifecycle:get"),
   cancelExit: () => ipcRenderer.invoke("lifecycle:cancel-exit"),

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { InputJournal } from "./input-journal.js";
 import { TaskAdmission } from "../scheduling/execution-scheduler.js";
 
-const activeStates = new Set(["running", "stopping", "waiting_user", "queued", "waiting_resource"]);
+const activeStates = new Set(["running", "stopping", "waiting_user", "queued"]);
 const pendingStates = new Set(["accepted", "queued", "dispatching", "context"]);
 const messageText = message => typeof message?.content === "string" ? message.content
   : (message?.content ?? []).filter(p => p.type === "text").map(p => p.text).join("");
@@ -12,7 +12,6 @@ export class TaskCoordinator {
   /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal, scheduler?: any}} options */
   constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal(), scheduler = null }) {
     this.scheduler = scheduler; this.admission = null;
-    this.resourceWaits = new Map();
     this.sessionId = sessionId;
     this.adapter = adapter;
     this.emit = emit;
@@ -147,20 +146,8 @@ export class TaskCoordinator {
       || !["consumed", "handled"].includes(input.state))
       .map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
   }
-  resourceWaiting(id, details) {
-    if (details) this.resourceWaits.set(id, details); else this.resourceWaits.delete(id);
-    if (this.task?.state === "stopping" && id === `settle:${this.task.id}`) {
-      this.setTaskState("stopping");
-      return;
-    }
-    if (!this.busy || ["stopping", "waiting_user", "queued"].includes(this.task.state)) return;
-    if (this.resourceWaits.size) this.setTaskState("waiting_resource");
-    else if (this.task.state === "waiting_resource") this.setTaskState("running");
-  }
   setTaskState(state, error = null) {
-    this.task = { ...this.task, state, error, waitingFor: state === "waiting_resource" ? this.resourceWaits.values().next().value
-      : state === "stopping" ? this.resourceWaits.get(`settle:${this.task.id}`) ?? null : null,
-      endedAt: activeStates.has(state) ? null : Date.now() };
+    this.task = { ...this.task, state, error, endedAt: activeStates.has(state) ? null : Date.now() };
     this.journal.append({ type: "task_state", task: this.task });
     this.emit({ type: "task_state", task: { ...this.task } });
   }
@@ -190,7 +177,6 @@ export class TaskCoordinator {
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
     this.task = task;
-    if (!supplement) this.resourceWaits.clear();
     if (!supplement && this.scheduler) this.admission = new TaskAdmission(this.scheduler,
       { sessionId: this.sessionId, taskId: task.id }, state => {
         if (this.task?.id === task.id && this.busy && this.task.state !== "stopping" && this.task.state !== state) this.setTaskState(state);
@@ -277,7 +263,6 @@ export class TaskCoordinator {
         this.dispatching = input;
         this.setInputState(input, "dispatching");
         await this.adapter.prompt(input.executionText ?? input.text, input.images);
-        await this.adapter.settleTask?.(taskId);
         await Promise.all([...this.queueWrites]);
         if (input.state === "dispatching") this.setInputState(input, "handled"); // extension commands may consume input without a model message
         this.dispatching = null;
@@ -293,7 +278,6 @@ export class TaskCoordinator {
       this.setTaskState(state);
     } catch (error) {
       this.adapter.clearQueue?.();
-      await this.adapter.settleTask?.(taskId);
       for (const input of this.inputs.values()) {
         if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, this.task.state === "stopping" ? "cancelled" : "failed");
       }

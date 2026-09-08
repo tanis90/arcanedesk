@@ -113,7 +113,7 @@ const server = http.createServer(async (req, res) => {
     } else {
       const code = tag === "A"
         ? '(async () => { if (!game.ready || !game.user.isGM || game.world.id !== "test001") throw Error("Wrong test world"); globalThis.arcaneWriteEntered = true; await globalThis.arcaneWriteGate; const doc = await JournalEntry.create({name: "Arcane resource acceptance " + globalThis.arcaneProbeId, flags: {world: {arcaneProbe: globalThis.arcaneProbeId}}}); globalThis.arcaneCreatedId = doc.id; return {verified:"arcane-resource-verified", id:doc.id}; })()'
-        : '(async () => { globalThis.arcaneCancelledRan = true; throw Error("Cancelled resource waiter must never run"); })()';
+        : '(async () => { globalThis.arcaneConcurrentRan = true; return {verified:"arcane-resource-verified"}; })()';
       write({ tool_calls: [{ index: 0, id: `world-${tag}`, type: "function", function: { name: "browser_evaluate", arguments: JSON.stringify({ code }) } }] });
       write({}, "tool_calls"); res.end("data: [DONE]\n\n");
     }
@@ -280,18 +280,15 @@ app.on("will-quit", () => {
     await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('input.value = "production-B"; submit()');
-    await until(() => hostB.tasks.task.state === "waiting_resource", "B waits for A's actual page operation");
-    await ui('displayedTask.state === "waiting_resource"');
-    await evaluate('stop.click()');
-    await until(() => hostB.tasks.task.state === "stopped", "queued B cancellation settles");
+    await until(() => hostB.tasks.task.state === "completed", "B completes while A is still waiting in its script");
     assert.ok(a.busy);
-    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneConcurrentRan)'), true);
     await openHost(a);
     await wc.executeJavaScript('arcaneReleaseWrite(); true');
     await ui('!busy && messages.textContent.includes("A final result")');
     const documents = await wc.executeJavaScript('game.journal.filter(doc => doc.getFlag("world", "arcaneProbe") === globalThis.arcaneProbeId).map(doc=>doc.id)');
     assert.equal(documents.length, 1, "exactly one real document created");
-    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneConcurrentRan)'), true);
     await wc.executeJavaScript(`(async () => { const doc = game.journal.get(${JSON.stringify(documents[0])}); if (doc.getFlag("world", "arcaneProbe") !== globalThis.arcaneProbeId) throw Error("Unexpected document"); await doc.delete(); return true; })()`);
     finalExit = true; app.quit(); return;
   }
