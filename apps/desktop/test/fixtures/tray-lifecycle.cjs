@@ -31,8 +31,9 @@ module.exports = async ({ window, host, evaluate, ui, until, sleep, menu, prompt
   menu().items[1].click();
   await ui('displayedTask.state === "stopping"');
   assert.equal(prompts.length, 0, "tray exit is already an explicit decision");
-  await until(() => shows === 2, "slow shutdown surfaces progress after one second");
+  await sleep(1200);
+  assert.equal(shows, 1, "slow exit never reopens the window");
   assert.ok(host.busy && !window.isDestroyed());
-  assert.ok(await evaluate('!document.getElementById("shutdown-status").hidden'));
+  assert.equal(await evaluate('document.getElementById("shutdown-status")'), null);
   release();
 };

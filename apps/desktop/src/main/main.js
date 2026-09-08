@@ -18,7 +18,6 @@ import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
 import { StartupReconciler } from "./conversations/startup-reconciler.js";
-import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
 import "../shared/i18n/messages.js";
 import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
@@ -90,8 +89,9 @@ let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设�
 let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
-let shutdown = null, backgroundTray = null, quitAllowed = false;
+let prepareExit = null, backgroundTray = null, quitAllowed = false, exitRequested = false;
 function restoreMainWindow() {
+  if (exitRequested) return;
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show(); mainWindow.focus();
@@ -110,18 +110,14 @@ function enableBackgroundEntry() {
     return true;
   } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
 }
-async function requestExit() {
-  if (!shutdown || quitAllowed) { app.quit(); return; }
-  if (shutdown.state.state === "stopping") return;
-  // Explicit tray exit needs no second decision. Only surface the window if
-  // shutdown is taking time, so its progress and cancellation remain reachable.
-  const feedback = setTimeout(() => {
-    if (shutdown.state.state === "stopping") restoreMainWindow();
-  }, 1000);
-  try {
-    await shutdown.stop();
-    if (shutdown.state.state === "failed") restoreMainWindow();
-  } finally { clearTimeout(feedback); }
+function requestExit() {
+  if (exitRequested) return;
+  exitRequested = true;
+  // The deadline also covers pending loads, stop requests and Electron unload hooks.
+  setTimeout(() => app.exit(0), 2000);
+  void Promise.resolve().then(() => prepareExit?.()).catch(error => {
+    console.error("[quit] best-effort cleanup failed", error);
+  }).finally(() => { quitAllowed = true; app.quit(); });
 }
 let desktopNotifications = null;
 
@@ -588,10 +584,7 @@ function createWindow() {
     if (quitAllowed) return;
     event.preventDefault();
     if (enableBackgroundEntry()) mainWindow.hide();
-    else {
-      const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
-      dialog.showErrorBox(text("lifecycle.quit"), text("lifecycle.trayUnavailable"));
-    }
+    else requestExit();
   });
 }
 
@@ -1499,29 +1492,26 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
-  shutdown = new ShutdownCoordinator({ registries: Object.values(hosts),
-    emit: state => sendToRenderer({ type: "shutdown_state", ...state }),
-    gate: closing => {
-      for (const registry of Object.values(hosts)) {
-        registry.closing = closing;
-        for (const host of registry.allHosts()) host.closing = closing;
-      }
-    },
-    quiesce: async () => {
-      await Promise.all(Object.values(hosts).flatMap(registry => [...registry.deleting.values()]));
-    },
-    finish: () => {
-      activityCenter.flush();
-      for (const host of allSessionHosts()) {
-        try { host.dispose(); } catch (error) { console.error("[quit] host disposal failed after task settlement", error); }
-      }
-      quitAllowed = true; app.quit();
-    },
-  });
+  prepareExit = async () => {
+    const registries = Object.values(hosts);
+    for (const registry of registries) {
+      registry.closing = true;
+      for (const host of registry.allHosts()) host.closing = true;
+    }
+    const stopHosts = allSessionHosts().map(async host => {
+      try {
+        host.session?.abortCompaction?.();
+        await host.abort(host.task?.id);
+        await host.waitForOperations();
+        host.dispose();
+      } catch (error) { console.error("[quit] host cleanup failed", error); }
+    });
+    await Promise.allSettled([...stopHosts,
+      ...registries.flatMap(registry => [...registry.pending.values(), ...registry.deleting.values()]),
+      telemetry?.close()]);
+  };
   const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
   reclaimTimer.unref();
-  ipcMain.handle("lifecycle:get", event => isTrustedChatIpc(event) ? shutdown.snapshot() : null);
-  ipcMain.handle("lifecycle:cancel-exit", event => { if (isTrustedChatIpc(event)) shutdown.cancel(); return shutdown.snapshot(); });
 
   // agent session 的首次启动(拉起子进程,慢则秒级)必须放在所有 ipcMain.handle
   // 注册之后:await 会挂起 whenReady 回调,若注册被它截断,已加载的 renderer 的
@@ -1546,9 +1536,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", event => {
-  if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit(); return; }
+  if (!quitAllowed) { event.preventDefault(); requestExit(); return; }
   backgroundTray?.destroy(); backgroundTray = null;
   activityCenter?.flush();
   clearFoundryPermissionState("app-quit");
-  void telemetry?.close(); // best-effort flush,最多 500ms(§4.2)
 });

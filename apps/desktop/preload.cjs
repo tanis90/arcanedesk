@@ -23,8 +23,6 @@ contextBridge.exposeInMainWorld("arcane", {
   /** F5: reload the Foundry panel page (no-op when the panel is closed). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
   sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),
-  lifecycleState: () => ipcRenderer.invoke("lifecycle:get"),
-  cancelExit: () => ipcRenderer.invoke("lifecycle:cancel-exit"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth: (px) => ipcRenderer.invoke("panel:set-chat-width", px),
   /** While dragging the splitter, let mouse events pass through the Foundry view. */

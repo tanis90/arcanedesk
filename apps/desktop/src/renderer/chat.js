@@ -56,13 +56,6 @@ function updateComposerAction() {
   feedback.hidden = stopRequests.get(selectedSessionId)?.state !== "failed";
   feedback.textContent = feedback.hidden ? "" : t("composer.stopFailed");
 }
-function showShutdown(state) {
-  const bar = document.getElementById("shutdown-status");
-  bar.hidden = !["stopping", "failed"].includes(state?.state);
-  if (bar.hidden) return;
-  bar.querySelector("span").textContent = t(`lifecycle.${state.state}`, state);
-  document.getElementById("cancel-exit").hidden = state.state !== "stopping";
-}
 function showPendingModel(model) {
   pendingModelIndicator.hidden = !model;
   pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
@@ -423,7 +416,6 @@ function receiveEvent(event, replay = false) {
     }
     void refreshSessions(); return;
   }
-  if (event.type === "shutdown_state") { showShutdown(event); return; }
   if (event.type === "panel_pointer") { navigationView?.searchDialog?.close(); setDrawer(false); return; }
   if (event.type === "activity_removed") forgetSession(event.sessionId);
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
@@ -3079,8 +3071,6 @@ refreshTelemetryConsent();
 
 input.focus();
 window.arcane.onEvent(receiveEvent);
-window.arcane.lifecycleState?.().then(showShutdown).catch(() => {});
-document.getElementById("cancel-exit").addEventListener("click", async () => showShutdown(await window.arcane.cancelExit()));
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });

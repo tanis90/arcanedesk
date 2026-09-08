@@ -10,6 +10,8 @@ const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.s
 const panelUi = process.argv.includes("--panel-ui");
 const sidebarRestart = process.argv.includes("--sidebar-restart");
 const sidebarScenario = process.argv.includes("--sidebar-scenario");
+const quitProbe = process.argv.find(arg => arg.startsWith("--quit-probe="))?.split("=")[1];
+let quitStarted = 0, quitShows = 0;
 const trayLifecycle = process.argv.includes("--tray-lifecycle");
 const longTool = process.argv.includes("--long-tool");
 const toolRecovery = process.argv.includes("--tool-recovery");
@@ -68,7 +70,7 @@ let window, tray, menu, prompts = [], finalExit = false, hostB;
 let pickedDirectory = null;
 dialog.showOpenDialog = async () => ({ canceled: !pickedDirectory, filePaths: pickedDirectory ? [pickedDirectory] : [] });
 const setContextMenu = Tray.prototype.setContextMenu;
-Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; if (nativeSystem) this.on("click", () => { trayClicks++; console.log("NATIVE tray clicked"); }); return setContextMenu.call(this, value); };
+Tray.prototype.setContextMenu = function (value) { if (quitProbe === "tray-failure") throw Error("Injected tray failure"); tray = this; menu = value; if (nativeSystem) this.on("click", () => { trayClicks++; console.log("NATIVE tray clicked"); }); return setContextMenu.call(this, value); };
 if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: 0 }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
@@ -142,6 +144,7 @@ const openHost = host => evaluate(`(async () => { const result = await window.ar
 app.on("will-quit", () => {
   try {
     assert.ok(finalExit, "exit must follow an explicit exit action");
+    if (quitProbe) return;
     if (sidebarRestart) { assert.deepEqual(requests, []); console.log("PASS sidebar restart: durable archive, pin, title, project and workspace without model calls"); return; }
     if (sidebarScenario) { assert.deepEqual(requests, ["A", "B"]); console.log("PASS production sidebar: CDP menus, projects, archive, restore, delete and execution isolation"); return; }
     if (trayLifecycle) {
@@ -227,11 +230,36 @@ app.on("will-quit", () => {
     console.log("PASS production main: real SDK concurrent tasks, background completion, reload, native tray callbacks and graceful stop/quit");
   } catch (error) { console.error(error); process.exitCode = 1; }
 });
+app.on("quit", () => {
+  if (!quitProbe || !quitStarted) return;
+  try {
+    const elapsed = Date.now() - quitStarted;
+    assert.equal(quitShows, 0, "exit must not reopen the window");
+    assert.equal(prompts.length, 0);
+    assert.ok(elapsed < 3500, `exit exceeded deadline tolerance: ${elapsed}ms`);
+    if (["timeout", "unload"].includes(quitProbe)) assert.ok(elapsed >= 1900);
+    if (quitProbe === "timeout") assert.equal(hostB.busy, true);
+    console.log(`PASS exit ${quitProbe}: ${elapsed}ms, no dialog or window reopening`);
+  } catch (error) { console.error(error); }
+});
 (async () => {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   process.env.ARCANE_SPARK_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
   await import(pathToFileURL(path.resolve(__dirname, "../../src/main/main.js")).href);
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
+  if (quitProbe) {
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    if (!["tray-failure", "unload"].includes(quitProbe)) {
+      await evaluate('input.value = "production-A"; submit()');
+      await ui('busy && messages.textContent.includes("A partial")');
+      hostB.abort = quitProbe === "timeout" ? () => new Promise(() => {}) : async () => { throw Error("Injected stop failure"); };
+    }
+    if (quitProbe === "unload") await evaluate('window.onbeforeunload = () => false; void 0');
+    window.on("show", () => { quitShows++; });
+    finalExit = true; quitStarted = Date.now();
+    if (quitProbe === "tray-failure") window.close(); else app.quit();
+    return;
+  }
   if (trayLifecycle) {
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await require("./tray-lifecycle.cjs")({ window, host:hostB, evaluate, ui, until, sleep, menu:() => menu, prompts, beforeExit:() => {finalExit=true;} });
