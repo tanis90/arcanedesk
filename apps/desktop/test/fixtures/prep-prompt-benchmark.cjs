@@ -8,11 +8,14 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
-  const allCases=["create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
-  const cases=caseFilter?caseFilter.split(","):allCases;
+  const allCases=["npc_wizard","create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
+  const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>c!=="npc_wizard");
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision"].includes(comparison));
-  const arms=comparison==="revision"?["baseline","tools"]:["js","tools"];
+  assert.ok(["js","revision","native-skill"].includes(comparison));
+  if(comparison==="native-skill")assert.deepEqual(cases,["npc_wizard"]);
+  const arms=comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
+  if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
   report.experiment={arms,comparison,kind:"same-code tool ablation",cases,samplesPerCase:samples,model:report.model,
     promptPolicy:"same neutral Prep instructions; arm-specific route; Pi generates the matching active-tool preamble",newTools:[...newTools],connection:"warm authenticated target world",humanWait:"recorded; no automatic answers"};
   report.experiment.candidateCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:path.resolve(__dirname,"../../../.."),encoding:"utf8"}).trim();
@@ -21,7 +24,9 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   report.experiment.kind=promptMode==="production"?"same-code production tools versus native JS":"same-code tool ablation";
   report.experiment.promptPolicy=promptMode==="production"?"Production Prep prompt for tools; neutral native-JS instructions for control":"Same neutral instructions with arm-specific routing";
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
-  report.experiment.suiteVersion="prep-v1-draft2";
+  if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
+  report.experiment.suiteVersion=cases.includes("npc_wizard")?"prep-npc-intent-draft1":"prep-v1-draft2";
+  report.experiment.taskTimeoutMs=cases.includes("npc_wizard")?300000:120000;
   report.experiment.imageSha256=imageHash;
   report.prepTrials=[];
   if(resumePath){
@@ -45,13 +50,15 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const tokens=[];for(let i=0;i<3;i++)tokens.push((await actors[i].getTokenDocument({x:200+i*200,y:200,actorLink:true})).toObject());await s.createEmbeddedDocuments("Token",tokens);
     return {protectedEffects,actorIds:actors.map(a=>a.id),sceneId:s.id,label:${JSON.stringify(label)},newName:${JSON.stringify(label)}+" 霜牙",originalSceneId:canvas.scene.id};})()`);
   const prompts=(id,label)=>({
+    npc_wizard:`按2014版规则，创建一个五级的人类法师 NPC，18智力，其他分配要合理，法术保证有火球术。给他装备上一根长棍。命名为“${label} 霜牙”。其他未指定选项自行合理决定；只创建这个 NPC，不修改已有角色。`,
     create_npc:`在 dnd5e.monsters 合集中找到名字精确为 Wolf 的怪物，创建一个名为“${label} 霜牙”的 NPC，并把它的原型 Token 名称也设成“${label} 霜牙”。已有同名则不要重复创建。`,
     grant_items:`给“${label} 角色1”授予 arcane-dnd5e-2014-automation.basicweapons 合集的 Rapier 和 Longbow，各一件。已有同来源的物品原样跳过，不叠加数量；新授予的物品装备上。`,
     edit_image:`把“${label} 角色1”改名为“${label} 队长”，HP 设为当前8、最大18，AC设为固定14。头像、原型Token和所有已放置Token的图片统一换成已有Data路径 systems/dnd5e/tokens/beast/Wolf.webp。不要改变已放置Token的名称、位置或尺寸。`,
     scene_layout:`修改非当前场景“${label} 场景”：把“${label} Token1”移到(300,400)，“${label} Token2”移到(500,400)，删除“${label} Token3”；再放两个“${label} 角色1”的Token，分别叫“新守卫A”和“新守卫B”，位置(700,400)和(900,400)。不切换或激活场景。`,
     conditions:`给世界角色“${label} 角色1”和“${label} 角色2”都加上倒地和中毒状态，不影响“${label} 角色3”。`
   })[id];
-  const verify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
+  const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
+  const verify=(id,f)=>id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
   for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
@@ -64,27 +71,34 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   for(let sample=0;sample<samples;sample++)for(const caseId of cases)for(const arm of sample%2?[...arms].reverse():arms){
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
-    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}`;const f=await setup(label);
+    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${caseId==="npc_wizard"?"-"+arm:""}`;const f=await setup(label);
     const trial={sample,caseId,arm,fixture:f,prompt:prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
     if(caseId==="upload_image"){
       const localImage=path.join(cwd,"benchmark20260508180804.jpg");fs.copyFileSync(imageFile,localImage);
       trial.prompt=`把世界角色“${label} 角色1”的头像、原型 Token 和所有已放置 Token 图片换成本地文件 ${localImage}。不要改变 Token 名称、位置、尺寸，也不要影响其他角色。`;save();
     }
+    const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
+    if(arm==="native_skill"){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
-      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
+      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>arm==="native_skill"?[path.dirname(skillPath)]:[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     setHost(host);await host.start({fresh:true});
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
+    if(arm==="native_skill")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    assert.equal(trial.activeTools.length,arm==="js"?8:18,"Ablated tool count changed");
+    assert.equal(trial.activeTools.length,arm==="native_skill"?16:arm==="js"?8:18,"Ablated tool count changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
     assert.ok(host.session.systemPrompt.includes(productionPrep),"Prep preamble anchor changed");
-    const prompt=promptMode==="production"&&arm!=="js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
+    let prompt=promptMode==="production"&&arm!=="js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
+    if(arm==="native_skill"){
+      assert.ok(host.session.systemPrompt.includes("fvtt-native-npc"),"Skill metadata must be loaded through resource loader");
+      prompt=host.session.systemPrompt.replace(productionPrep,common+" 创建或修改 NPC 前先读取可用的 fvtt-native-npc skill。使用 foundry_content_search 发现资源，普通角色创建和修改使用 browser_evaluate 原生 API；其他已开放工具按需要使用。不要调用未开放的 actor_create 或 actor_update。");
+    }
     host.session._baseSystemPrompt=prompt;host.session.agent.state.systemPrompt=prompt;
     trial.systemPromptHash=crypto.createHash("sha256").update(prompt).digest("hex");trial.systemPromptChars=prompt.length;
     const start=performance.now();let firstEvent=false;
@@ -94,14 +108,14 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       if(e.type==="tool_execution_end"){const t=trial.tools.find(t=>t.id===e.toolCallId);if(t)Object.assign(t,{ms:performance.now()-t.start,isError:e.isError,status:e.result?.details?.status,bytes:Buffer.byteLength(JSON.stringify(e.result??null))});}
       if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage){trial.modelError="provider error";trial.providerFailure=/5-hour usage limit/i.test(e.message.errorMessage)?"quota_exhausted":"provider_error";}}
     });
-    const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},120000);
+    const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},report.experiment.taskTimeoutMs);
     trial.state="submitted";save();
     try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.state="returned";save();}
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
     trial.jsFallback=arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
-    host.dispose();setHost(null);await cleanup(f);trial.cleaned=true;save();
+    host.dispose();setHost(null);if(caseId==="npc_wizard"){trial.retainedForReview=true;}else{await cleanup(f);trial.cleaned=true;}save();
     if(trial.modelError)throw Error("Provider failure; batch paused after settled trial");
   }
   report.status="prep-benchmark-completed";save();

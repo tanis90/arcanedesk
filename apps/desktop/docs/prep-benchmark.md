@@ -65,6 +65,19 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 
 ## 固定任务与世界验收
 
+创建题的代表性与新增角色组合题设计见
+[创建角色 benchmark 代表性审查](prep-character-benchmark-review.md)。新题已通过 `--cases=npc_wizard`
+显式接入，版本 prep-npc-intent-draft1，单任务 300 秒、结果保留供人工复核；
+不算进现有 draft2 覆盖或成绩，默认六题与旧复制题继续保留。
+首次结果见 [NPC 预检](prep-npc-wizard-pilot-results.json)，两组均有就绪验收缺口，不标记稳定基线。
+
+NPC 原生 skill 工作流实验使用 `--comparison=native-skill --cases=npc_wizard --samples=2`。
+两臂为 tools（原 18 工具）和 native_skill（隐藏 actor_create/update，保留 16 工具及真实加载的 skill）。
+每题 skill 复制到该任务自己的工作目录，由资源加载器发现、由模型读取；读取计入任务耗时，记录正文 hash。
+两个样本交换先后顺序；它改变了工具暴露和指引，不是单因素实验。实验指南位于
+[fvtt-native-npc](../test/fixtures/prep-native-npc-skill/SKILL.md)，尚未安装到产品默认模式。
+此比较使用独立审计摘要，不交给只支持 js/revision 两臂的旧汇总器。
+
 | 用例 | 用户意图 | 当前独立验收 |
 | --- | --- | --- |
 | create_npc | 从 Wolf 创建 NPC，并设置角色和原型名；同名不重复 | 单个目标、两个名字、Wolf HP 与 Bite |
@@ -114,6 +127,17 @@ JPEG，231×223，5542 字节，SHA-256：
 任何“变快”结论都须附运行报告、提交身份、成功率及已知问题。
 
 ## 基线与供应商变更
+
+运行器可传 `--provider=<providerId> --model=<modelId>`，必须与该私有 qa-root 的默认选择一致；
+省略仍使用原 Kimi 配置。初始化脚本 prep-play-model-config.cjs 支持环境变量
+ARCANE_QA_PROVIDER_ID、ARCANE_QA_MODEL_ID、ARCANE_QA_BASE_URL、ARCANE_QA_PROVIDER_KEY，
+通过生产 SecretStorage 加密保存并用最小聊天请求预检。不同供应商使用独立 qa-root。
+运行报告记录无密钥的 endpoint／providerId／model；[阿里云六类预检](prep-aliyun-pilot-results.json)只证明链路可用。
+
+若原批次暂停后只补尚未执行的一臂，可显式 `--arm-only=tools`（或该 comparison 的有效对照臂），
+必须另建报告、使用新 fixture，不能与 --prep-resume 同用，不能将结果伪装成原批次连续执行。
+该单臂报告不是完整配对报告，不直接交给要求完整两臂的汇总器；须在人工审计摘要中关联原报告并披露暂停。
+[Qwen 裸 JS／工具预检](prep-aliyun-js-tools-pilot-results.json)保留一次上传超时及单独工具臂补测。
 
 基线分为两层：长期固定题目、fixture、验收协议和作为对照的代码版本；性能数值属于某次明确环境下的实验。
 同名模型不是相同服务环境的证明，也不保证相同速度。即使供应商不变，也不能假设不同时段的耗时稳定。

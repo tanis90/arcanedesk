@@ -22,7 +22,7 @@ process.env.ARCANE_TELEMETRY_DISABLED = "1";
 process.env.ARCANE_APPROVALS = "0";
 const runId = `benchmark-${Date.now()}`;
 const output = path.join(root, `${runId}.json`);
-const report = { runId, model: "kimi-for-coding-highspeed", thinking: "provider-default", samples, trials: [], status: "running" };
+const report = { runId, providerId: option("provider", "qa-kimi-coding"), model: option("model", "kimi-for-coding-highspeed"), thinking: "provider-default", samples, trials: [], status: "running" };
 const save = () => writeFileSync(output, JSON.stringify(report, null, 2));
 let socket, host;
 app.whenReady().then(async () => {
@@ -30,7 +30,8 @@ app.whenReady().then(async () => {
   const { ProviderStore } = await load(candidate, "apps/desktop/src/main/providers.js");
   const { SecretStorage } = await load(candidate, "apps/desktop/src/main/secret-storage.js");
   const store = new ProviderStore(path.join(root, "config/providers.json"), () => {}, {}, new SecretStorage(safeStorage));
-  assert.deepEqual(store.effectiveModel(), { providerId: "qa-kimi-coding", modelId: report.model });
+  assert.deepEqual(store.effectiveModel(), { providerId: report.providerId, modelId: report.model });
+  report.providerEnvironment = { providerId: report.providerId, model: report.model, baseUrl: store.data.providers.find(p => p.id === report.providerId)?.baseUrl, serverRevision: "unknown" };
   const fixture = JSON.parse(readFileSync(qaReportPath, "utf8"));
   assert.equal(fixture.worldId, target.worldId); if(option("prep-benchmark") !== "true") assert.ok(fixture.fixtures.combatUuid);
   const origin = target.origin;
