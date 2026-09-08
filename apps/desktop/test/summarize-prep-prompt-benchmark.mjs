@@ -8,6 +8,9 @@ const groups=r.experiment.cases.map(caseId=>{
   const arm=name=>{const all=r.prepTrials.filter(t=>t.caseId===caseId&&t.arm===name),ok=all.filter(t=>t.success);
     assert.equal(all.length,r.experiment.samplesPerCase);
     return {n:all.length,success:ok.length,successRate:ok.length/all.length,failed:all.filter(t=>!t.success).map(t=>t.sample),
+      experienceTargetMs:r.experiment.experienceTargetMs??120000,
+      withinExperienceTarget:ok.filter(t=>t.ms<=(r.experiment.experienceTargetMs??120000)).length,
+      withinExperienceTargetRate:ok.filter(t=>t.ms<=(r.experiment.experienceTargetMs??120000)).length/all.length,
       latencyMs:stats(ok.map(t=>t.ms)),allAttemptsMs:stats(all.map(t=>t.ms)),firstEventMs:stats(ok.map(t=>t.firstEventMs)),
       calls:stats(ok.map(t=>t.tools.length)),inputTokens:stats(ok.map(t=>t.usage.reduce((n,u)=>n+(u.input??0)+(u.cacheRead??0)+(u.cacheWrite??0),0))),
       modelResponses:stats(ok.map(t=>t.usage.length)),
@@ -30,7 +33,7 @@ const groups=r.experiment.cases.map(caseId=>{
     p95ChangePercent:js.latencyMs.p95&&tools.latencyMs.p95?(tools.latencyMs.p95/js.latencyMs.p95-1)*100:null,
     pairedChangePercent:stats(pairs.map(p=>p.changePercent)),pairedWins:pairs.filter(p=>p.changePercent<0).length,pairs};
 });
-const result={summaryVersion:2,model:r.model,experiment:r.experiment,thinkingLevels:[...new Set(r.prepTrials.map(t=>t.thinking))],groups,
+const result={summaryVersion:3,model:r.model,experiment:r.experiment,thinkingLevels:[...new Set(r.prepTrials.map(t=>t.thinking))],groups,
   caveats:["Use experiment.comparison and promptPolicy to distinguish tool, code and skill comparisons; arm labels are explicit.","Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.","First event includes reasoning/tool events, not necessarily first visible user-facing text.","Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.","Consult experiment.cases for upload coverage; repeated assets may be reused. NPC intent and transfer cases require manual review beyond automated checks."]};
 const output=file.replace(/\.json$/,".prep-summary.json");await writeFile(output,JSON.stringify(result,null,2));
 console.log(JSON.stringify({output,results:groups.map(g=>({case:g.caseId,controlArm:g.controlArm,candidateArm:g.candidateArm,controlSuccess:g.control.success,candidateSuccess:g.candidate.success,controlP50:g.control.latencyMs.p50,candidateP50:g.candidate.latencyMs.p50,p50ChangePercent:g.p50ChangePercent,p95ChangePercent:g.p95ChangePercent,controlCalls:g.control.calls.mean,candidateCalls:g.candidate.calls.mean,fallbacks:g.candidate.jsFallbacks}))},null,2));

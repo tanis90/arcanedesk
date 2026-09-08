@@ -60,7 +60,7 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 定向诊断可加 --cases=conditions（多个用例用英文逗号分隔）。工具迭代的单变量实验使用
 --comparison=revision --baseline=<旧版本工作树> --prompt-mode=production；两组均开放工具，
 分别加载旧／新 AgentHost 与 runtime，要求生产 prompt 文本相同。报告记录 baselineCommit 与候选提交。
-汇总格式 summaryVersion=2 以 controlArm / candidateArm 标识两臂，统计放在 control / candidate 字段。
+汇总格式 summaryVersion=3 以 controlArm / candidateArm 标识两臂，统计放在 control / candidate 字段。
 历史格式的 js / tools 字段不再用于新汇总；原始报告不变。
 默认使用本地安装的 Electron；若需其他路径，设置 ARCANE_QA_ELECTRON。启动器自动提供 ARCANE_QA_NODE，
 以隐藏窗口启动 Electron main。不能只用 node 执行 Electron fixture。无需旧 baseline worktree。
@@ -70,7 +70,7 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 
 创建题的代表性与新增角色组合题设计见
 [创建角色 benchmark 代表性审查](prep-character-benchmark-review.md)。新题已通过 `--cases=npc_wizard`
-显式接入，当前版本 prep-npc-intent-draft2，单任务默认 120 秒、结果保留供人工复核；
+显式接入，当前版本 prep-npc-intent-draft2，单任务默认 180 秒硬超时、120 秒体验目标，结果保留供人工复核；
 不算进现有 draft2 覆盖或成绩，默认六题与旧复制题继续保留。
 首次结果见 [NPC 预检](prep-npc-wizard-pilot-results.json)，两组均有就绪验收缺口，不标记稳定基线。
 
@@ -87,7 +87,7 @@ NPC 原生 skill 工作流实验使用 `--comparison=native-skill --cases=npc_wi
 旧稿可从 51bb226 提取，当前合并指引仍为实验稿。[首次合并实验](prep-skill-batching-results.json)
 两版各 1/2 通过，不能将减少调用等同于稳定可靠。
 
-用户要求后续默认 120 秒硬超时，NPC 新运行记为 prep-npc-intent-draft2；历史 draft1 的 300 秒报告不改写。
+修正后的 loop 默认 180 秒硬超时、120 秒体验目标；分别统计正确完成率和 120 秒内正确完成率。历史 120/300 秒报告不改写。
 `--task-timeout-ms` 可在 120000–300000 范围显式设置，仅在有数据说明默认上限失去区分度时用于后续配对块，
 不得为单条失败临时延长。超时保留现场，timeout_abort 与 provider_error 分开记账。
 
@@ -215,10 +215,14 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 
 ## 狼人迁移题
 
-`--cases=npc_werewolf --comparison=skill-revision --baseline-skill=<冻结旧稿> --samples=1` 使用同一 16 工具对比两份冻结指南。默认仍为 120 秒；独立指定 `--task-timeout-ms=180000` 只能用于预注册诊断块。题目、来源预检与验收边界见[狼人迁移协议](prep-werewolf-transfer.md)。Evaluator 读取来源快照但不把位置或答案传给模型。NPC 与 fixture 保留，超时停止、不重放。
+`--cases=npc_werewolf --comparison=skill-revision --baseline-skill=<冻结旧稿> --samples=1` 使用同一 16 工具对比两份冻结指南。新 loop 默认 180 秒硬超时，另计 120 秒内成功率。题目、来源预检与验收边界见[狼人迁移协议](prep-werewolf-transfer.md)。Evaluator 读取来源快照但不把位置或答案传给模型。NPC 与 fixture 保留，超时停止、不重放。
 
 `--reverse-first` 交换首次两臂顺序，后续 sample 仍交替；实际次序记录在 experiment.arms。可用于中断后另开完整反向对照块，不能用它重放已完成或不确定写入。
 
 ## 固定 NPC 指南比较工具版本
 
 使用 `--comparison=revision --native-npc --cases=npc_wizard --baseline=<冻结代码工作树>`。两臂都从当前实验 fixture 加载同一份指南，隐藏 actor_create/update，保留相同 16 工具和原生路由；分别加载 baseline/当前工作树的工具和 runtime。报告的 experiment.nativeNpc=true，逐次 skillHash 必须相同；同时记录 runtime 与工具文件 hash，尤其候选尚未提交时，不能只用 HEAD 标识它。不要在批次运行中修改 SDK、工具、指南或模型配置。
+
+### 修正后的迭代协议
+
+以[唯一技术方案 §14.26](foundry-prep-play-technical-plan.md#1426-修正后的-goal-与-loop)为准。每轮单因素，两臂各 3 次交错；迁移与既有题回归必须在冻结候选后执行。新增 `--thinking=off` 显式固定客户端档位；逐次 `modelConfiguration` 与 `requestModes` 保存模型能力和实际出站思考参数（不保存凭据或请求正文）。Qwen 基线校正后单独分组，不能与旧服务端默认思考报告混算提速。汇总 v3 新增 withinExperienceTarget / withinExperienceTargetRate。

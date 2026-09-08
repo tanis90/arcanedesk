@@ -33,6 +33,20 @@ function usableCredential(provider) {
   return target.ok && target.target === provider.credentialTarget;
 }
 
+function modelCompatibility(provider, model) {
+  // These hybrid models default to thinking on. Pi's generic OpenAI adapter
+  // otherwise omits the vendor flag when the user selects thinking off.
+  if ((provider.api ?? "openai-completions") !== "openai-completions"
+      || !["qwen3.7-plus", "qwen3.7-plus-2026-05-26"].includes(model.id)) return {};
+  try {
+    const url = new URL(provider.baseUrl);
+    const officialHosts = ["token-plan.cn-beijing.maas.aliyuncs.com", "dashscope.aliyuncs.com",
+      "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"];
+    if (url.protocol !== "https:" || !officialHosts.includes(url.hostname) || url.port) return {};
+    return { reasoning: true, compat: { thinkingFormat: "qwen", supportsReasoningEffort: false } };
+  } catch { return {}; }
+}
+
 export class ProviderStore {
   constructor(filePath, log = console.log, env = process.env, secretStorage = createUnavailableSecretStorage()) {
     this.filePath = filePath;
@@ -375,6 +389,7 @@ export class ProviderStore {
             cost: { ...ZERO_COST },
             contextWindow: m.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
             maxTokens: m.maxTokens ?? DEFAULT_MAX_TOKENS,
+            ...modelCompatibility(p, m),
           })),
         });
       } catch (error) {

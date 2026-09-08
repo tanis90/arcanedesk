@@ -34,7 +34,11 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and 16 tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft1":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
-  report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??120000);
+  report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??180000);
+  report.experiment.experienceTargetMs=120000;
+  const thinkingOverride=process.argv.find(a=>a.startsWith("--thinking="))?.slice(11);
+  if(thinkingOverride)assert.ok(["off","low","medium","high"].includes(thinkingOverride));
+  report.experiment.thinkingOverride=thinkingOverride??null;
   assert.ok(Number.isInteger(report.experiment.taskTimeoutMs)&&report.experiment.taskTimeoutMs>=120000&&report.experiment.taskTimeoutMs<=300000);
   report.experiment.imageSha256=imageHash;
   report.prepTrials=[];
@@ -102,6 +106,16 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>nativeSkillArm?[path.dirname(skillPath)]:[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     setHost(host);await host.start({fresh:true});
+    if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
+    trial.modelConfiguration={reasoning:host.session.model.reasoning,compat:host.session.model.compat??null};
+    trial.requestModes=[];
+    const priorPayload=host.session.agent.onPayload;
+    host.session.agent.onPayload=async(payload,model)=>{
+      const replacement=await priorPayload?.(payload,model);
+      const actual=replacement??payload;
+      trial.requestModes.push({enable_thinking:actual.enable_thinking??"omitted",reasoning_effort:actual.reasoning_effort??"omitted"});
+      return replacement;
+    };
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
@@ -129,6 +143,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
+    trial.withinExperienceTarget=trial.success&&trial.ms<=report.experiment.experienceTargetMs;
     trial.jsFallback=arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
     host.dispose();setHost(null);if(npcCases.includes(caseId)){trial.retainedForReview=true;}else{await cleanup(f);trial.cleaned=true;}save();
     if(trial.modelError)throw Error("Provider failure; batch paused after settled trial");
