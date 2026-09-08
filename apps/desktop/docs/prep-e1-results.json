@@ -1,0 +1,551 @@
+{
+  "model": "kimi-for-coding-highspeed",
+  "experiment": {
+    "arms": [
+      "baseline",
+      "tools"
+    ],
+    "comparison": "revision",
+    "kind": "paired tool revisions, fixed production prompt",
+    "cases": [
+      "conditions"
+    ],
+    "samplesPerCase": 10,
+    "model": "kimi-for-coding-highspeed",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "fbf38d4a9697b397930dca27a0ec336c3775ae5b",
+    "promptMode": "production",
+    "baselineCommit": "d65eeb33e93769caa4634e8ce2f8ee3e0e882bbe",
+    "suiteVersion": "prep-v1-draft2",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "thinkingLevels": [
+    "off"
+  ],
+  "groups": [
+    {
+      "caseId": "conditions",
+      "controlArm": "baseline",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 22459.611199999985,
+          "p95": 35189.60519999999,
+          "mean": 20965.15162
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 22459.611199999985,
+          "p95": 35189.60519999999,
+          "mean": 20965.15162
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 3202.8459000000003,
+          "p95": 8645.045400000003,
+          "mean": 4346.101640000005
+        },
+        "calls": {
+          "n": 10,
+          "p50": 4,
+          "p95": 7,
+          "mean": 4
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 31390,
+          "p95": 41262,
+          "mean": 31581
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 5,
+          "mean": 4
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 690,
+          "p95": 1638,
+          "mean": 777.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 277,
+          "p95": 1310,
+          "mean": 432.8
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 108.23180000000866,
+          "mean": 29.64939000000022
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 7,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 11234.940999999992,
+          "p95": 19984.451199999996,
+          "mean": 12926.515779999992
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 11234.940999999992,
+          "p95": 19984.451199999996,
+          "mean": 12926.515779999992
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 2719.220499999996,
+          "p95": 4757.897800000006,
+          "mean": 2982.0490699999973
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 7,
+          "mean": 3.5
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 30481,
+          "p95": 31657,
+          "mean": 28399.6
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 4,
+          "mean": 3.7
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 453,
+          "p95": 747,
+          "mean": 460.5
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 139,
+          "p95": 449,
+          "mean": 186.1
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 102.25280000001658,
+          "mean": 18.597560000003433
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 4,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "world_status",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": -49.9771349559248,
+      "p95ChangePercent": -43.20922020460747,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -36.20415566232068,
+        "p95": 29.100839253174282,
+        "mean": -29.09449573649571
+      },
+      "pairedWins": 8,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 29.100839253174282
+        },
+        {
+          "sample": 1,
+          "changePercent": -61.05455097583238
+        },
+        {
+          "sample": 2,
+          "changePercent": -5.973906123942041
+        },
+        {
+          "sample": 3,
+          "changePercent": -63.89202022761975
+        },
+        {
+          "sample": 4,
+          "changePercent": 6.195333839659223
+        },
+        {
+          "sample": 5,
+          "changePercent": -56.34178669330447
+        },
+        {
+          "sample": 6,
+          "changePercent": -57.24198183093938
+        },
+        {
+          "sample": 7,
+          "changePercent": -18.61594733908757
+        },
+        {
+          "sample": 8,
+          "changePercent": -26.9167816047443
+        },
+        {
+          "sample": 9,
+          "changePercent": -36.20415566232068
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.",
+    "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+    "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+    "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+    "Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."
+  ],
+  "selectorAudit": {
+    "baseline": [
+      {
+        "session": "2026-09-08T06-17-26-822Z_01a07faa-1026-709f-8b11-ec2c3e685eac.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-17-53-015Z_01a07faa-7677-7fa2-9c51-e3e2a4ce1d4d.jsonl",
+        "calls": 3,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-18-12-523Z_01a07faa-c2ab-75f8-9fb2-b54215188d42.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-18-37-764Z_01a07fab-2544-71b2-900d-a32526120206.jsonl",
+        "calls": 2,
+        "badKind": true
+      },
+      {
+        "session": "2026-09-08T06-19-09-447Z_01a07fab-a107-733d-bf3f-c4c8a42c1cb9.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-20-05-543Z_01a07fac-7c27-7bca-b2b0-4b749c542992.jsonl",
+        "calls": 2,
+        "badKind": true
+      },
+      {
+        "session": "2026-09-08T06-20-41-308Z_01a07fad-07dc-77cc-83e9-3ceff35b4a05.jsonl",
+        "calls": 3,
+        "badKind": true
+      },
+      {
+        "session": "2026-09-08T06-21-35-697Z_01a07fad-dc51-7740-8da7-be42b8e0acad.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-21-59-575Z_01a07fae-3997-71ab-8434-673845608357.jsonl",
+        "calls": 2,
+        "badKind": true
+      },
+      {
+        "session": "2026-09-08T06-22-55-559Z_01a07faf-1447-7aa9-960e-9a420c7b1a35.jsonl",
+        "calls": 2,
+        "badKind": true
+      }
+    ],
+    "tools": [
+      {
+        "session": "2026-09-08T06-17-34-768Z_01a07faa-2f30-7f64-b18c-97cd2ee35484.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-17-44-841Z_01a07faa-5689-7ac5-baa2-0ff921ac7008.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-18-19-390Z_01a07faa-dd7e-782a-8d12-26970b991cf5.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-18-25-828Z_01a07faa-f6a4-7632-9098-1cf25d2f6b16.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-19-28-820Z_01a07fab-ecb4-73b4-9345-76ec7125a051.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-19-49-516Z_01a07fac-3d8c-7233-beaa-beda608c456c.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-21-05-447Z_01a07fad-6627-71fb-9f58-66d8efb44439.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-21-16-170Z_01a07fad-900a-72db-b890-1ceffe4a3618.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-22-23-136Z_01a07fae-95a0-76a5-96e8-d3558595201b.jsonl",
+        "calls": 1,
+        "badKind": false
+      },
+      {
+        "session": "2026-09-08T06-22-40-441Z_01a07fae-d939-7b05-94f7-5bc8f56d07ac.jsonl",
+        "calls": 1,
+        "badKind": false
+      }
+    ]
+  },
+  "sourceReport": "benchmark-1788848242239.json"
+}
