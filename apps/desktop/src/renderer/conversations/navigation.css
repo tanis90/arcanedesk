@@ -1,6 +1,4 @@
 /* A quiet project index; execution stays on the conversation row. */
-#activity-bar { min-height: 0; }
-#activity-bar:not(:has(button:not([hidden]))) { display: none; }
 .nav-section-title { margin: 18px 8px 6px; font: 500 var(--fs-meta)/1.5 var(--font-ui); color: var(--muted); }
 .nav-empty { margin: 6px 8px 16px; color: var(--muted); font-size: var(--fs-meta); line-height: 1.6; }
 .nav-project-header { display: flex; align-items: center; min-height: 34px; }
@@ -78,3 +76,10 @@ body.with-panel .session-search { width: min(600px, calc(100vw - var(--panel-w, 
 .search-result .s-title, .search-result .s-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .search-result .s-meta { color: var(--muted); font-size: var(--fs-meta); }
 .session-search .search-result:hover, .session-search .search-result:focus-visible { background: var(--nav-hover); }
+
+#activity-error { border: 0; background: transparent; color: var(--err); padding: 10px; text-align: left; cursor: pointer; }
+#activity-error[hidden] { display: none; }
+.scroll-bottom.has-unread { width: auto; border-radius: 18px; padding: 0 12px; font: var(--fs-ui)/1.5 var(--font-ui); }
+.error-detail { margin-top: 4px; font: var(--fs-ui)/1.5 var(--font-ui); }
+.error-detail summary { cursor: pointer; color: var(--muted); }
+.error-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }

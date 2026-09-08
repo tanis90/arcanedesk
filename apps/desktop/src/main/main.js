@@ -82,6 +82,7 @@ if (app.isPackaged) {
 }
 
 let mainWindow = null;
+let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
 let foundryView = null; // 按需创建:agent 调 foundry_open 或用户点顶栏开关时才打开
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
@@ -327,6 +328,8 @@ async function openFoundryView(rawUrl) {
     };
   }
 
+  foundryTargetUrl = target;
+
   // 面板 renderer 可能已崩溃/被销毁:不可复用,重建
   if (foundryView && (!foundryView.webContents || foundryView.webContents.isDestroyed())) {
     foundryRuntime?.invalidate();
@@ -405,9 +408,18 @@ async function openFoundryView(rawUrl) {
 }
 
 async function loadFoundryPage(url) {
+  const contents = foundryView.webContents;
+  foundryTargetUrl = url;
+  const failedPage = async () => {
+    if (contents.isDestroyed() || foundryView?.webContents !== contents) return;
+    await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
+      query: { message: globalThis.ARCANE_MESSAGES[resolveLocale()]["panel.connectionFailed"], theme: resolveTheme() },
+    }).catch(() => {});
+  };
   try {
-    await loadPageWithRetry(foundryView.webContents, url);
+    await loadPageWithRetry(contents, url);
   } catch (error) {
+    if (error.code !== "ERR_ABORTED") await failedPage();
     return {
       ok: false,
       error: err("err.panel.loadFailed", { url, error: error.message }),
@@ -416,6 +428,7 @@ async function loadFoundryPage(url) {
   }
   const inspected = await readFoundryPageState(foundryView.webContents);
   if (!inspected.ok) {
+    await failedPage();
     return {
       ok: false,
       error: err("err.panel.inspectFailed", { error: inspected.error ?? inspected.status }),
@@ -423,6 +436,7 @@ async function loadFoundryPage(url) {
     };
   }
   if (!inspected.state?.detected) {
+    await failedPage();
     return {
       ok: false,
       error: err("err.panel.notFoundry", { url }),
@@ -1472,7 +1486,7 @@ app.whenReady().then(async () => {
     // Await navigation and inspection before reporting that reload finished.
     reload: async () => {
       if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
-      return loadFoundryPage(foundryView.webContents.getURL());
+      return loadFoundryPage(/^https?:/.test(foundryView.webContents.getURL()) ? foundryView.webContents.getURL() : foundryTargetUrl);
     },
   } });
   for (const action of ["open", "close", "reload"]) {

@@ -28,7 +28,7 @@ export class HistoryIndex {
       }
       const visible = message.role === "user"
         ? Boolean(textOf(message).trim() || parts.some(part => part?.type === "image" && part.data))
-        : message.role === "assistant" && Boolean(textOf(message) || parts.some(part => part?.type === "toolCall" || (part?.type === "thinking" && part.thinking)));
+        : message.role === "assistant" && Boolean((message.errorMessage && message.stopReason !== "aborted") || textOf(message) || parts.some(part => part?.type === "toolCall" || (part?.type === "thinking" && part.thinking)));
       if (!visible) continue;
       const position = this.records.length;
       this.records.push(record);
@@ -44,7 +44,8 @@ export class HistoryIndex {
   render(record) {
     const message = record.message, parts = partsOf(message);
     const row = { role: message.role, ts: message.timestamp, key: identity(record),
-      legacyKey: `${message.role}:${message.timestamp}`, text: textOf(message) };
+      legacyKey: `${message.role}:${message.timestamp}`, text: textOf(message),
+      ...(!textOf(message) && message.errorMessage && message.stopReason !== "aborted" ? { error: message.errorMessage } : {}) };
     if (message.role === "user") return { ...row, images: parts.filter(part => part?.type === "image" && part.data)
       .map(part => ({ data: part.data, mimeType: part.mimeType ?? "image/png" })) };
     return { ...row, thinking: parts.filter(part => part?.type === "thinking" && typeof part.thinking === "string").map(part => part.thinking).join(""),

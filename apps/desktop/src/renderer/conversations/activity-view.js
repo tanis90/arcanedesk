@@ -18,20 +18,9 @@
       this.frame = null; this.readPending = false; this.selected = null; this.boundary = null;
       this.list = document.getElementById("activity-list");
       this.toggle = document.getElementById("activity-toggle");
-      this.noticeButton = document.getElementById("activity-notice");
-      this.dismiss = document.getElementById("activity-dismiss");
       this.error = document.getElementById("activity-error");
-      this.jump = document.getElementById("activity-jump");
-      this.toggle?.addEventListener("click", () => drawer());
-      this.noticeButton.addEventListener("click", () => {
-        const notice = [...this.notices.values()].at(-1);
-        if (notice) void open(this.rows.get(notice.sessionId), notice);
-      });
-      this.dismiss.addEventListener("click", () => { this.notices.clear(); this.renderNotice(); });
+      this.jump = document.getElementById("scroll-bottom");
       this.error.addEventListener("click", () => { void this.load(); });
-      this.jump.addEventListener("click", () => {
-        const view = getView(); view.toLatest(); this.scheduleRead();
-      });
     }
 
     stateLabel(state) { return this.t(keys[state] ?? "activity.idle"); }
@@ -60,15 +49,7 @@
     }
 
     receive(event) {
-      if (event.type === "activity_notice") {
-        const view = this.getView();
-        if (!(view.sessionId === event.notice.sessionId && view.visible)) {
-          this.notices.set(event.notice.sessionId + ":" + event.notice.key, event.notice);
-          if (this.notices.size > 20) this.notices.delete(this.notices.keys().next().value);
-          this.renderNotice();
-        }
-        return true;
-      }
+      if (event.type === "activity_notice") return true;
       if (!["activity_update", "activity_removed"].includes(event.type)) return false;
       if (this.loading || event.activityEpoch !== this.epoch || event.activitySeq > this.seq + 1) {
         this.pending.push(event);
@@ -87,23 +68,7 @@
     }
 
     render() {
-      const view = this.getView();
-      const rows = [...this.rows.values()];
-      for (const [key, notice] of this.notices) {
-        const row = this.rows.get(notice.sessionId);
-        if (!row || (notice.kind === "waiting_user" ? !row.needsAttention : !row.unread || row.taskId !== notice.taskId)) this.notices.delete(key);
-      }
-      this.renderNotice(); this.updateReading(); this.changed(); this.scheduleRead();
-    }
-
-    renderNotice() {
-      const notice = [...this.notices.values()].at(-1);
-      this.noticeButton.hidden = !notice; this.dismiss.hidden = !notice;
-      if (!notice) return;
-      const title = notice.name || this.t("sessions.untitled");
-      this.noticeButton.textContent = title + " · " + this.stateLabel(notice.kind)
-        + (this.notices.size > 1 ? this.t("activity.more", { count: this.notices.size - 1 }) : "");
-      this.noticeButton.title = this.noticeButton.textContent;
+      this.updateReading(); this.changed(); this.scheduleRead();
     }
 
     updateReading() {
@@ -111,7 +76,10 @@
       if (this.selected !== view.sessionId) { this.selected = view.sessionId; this.boundary = null; }
       if (!this.boundary && row?.unread) this.boundary = { readKey: row.readKey, firstUnreadKey: row.firstUnreadKey };
       if (this.boundary && !this.boundary.firstUnreadKey && row?.firstUnreadKey) this.boundary.firstUnreadKey = row.firstUnreadKey;
-      this.jump.hidden = !(row?.unread && !view.atBottom);
+      this.jump.textContent = row?.unread && !view.atBottom ? this.t("activity.newProgress") : "↓";
+      this.jump.classList.toggle("has-unread", Boolean(row?.unread && !view.atBottom));
+      this.jump.title = row?.unread && !view.atBottom ? this.t("activity.newProgress") : this.t("scrollBottom.title");
+      this.jump.setAttribute("aria-label", this.jump.title);
       const container = view.messages;
       if (!container || !view.ready || container.querySelector(".unread-divider") || !this.boundary) return;
       const key = this.boundary.readKey || this.boundary.firstUnreadKey;

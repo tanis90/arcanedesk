@@ -84,3 +84,15 @@ test("native host caches a branch index, refreshes on append/result and rejects 
   assert.throws(() => host.currentPayload({ around: `entry:${second}` }), { code: "HISTORY_CURSOR_NOT_FOUND" });
   assert.equal(host.currentPayload({}).historyPage.total, 1);
 });
+
+
+test("model failures survive history paging without treating a normal abort as an error message", () => {
+  const index = new HistoryIndex([
+    { id: "failed", message: { role: "assistant", timestamp: 1, content: [], errorMessage: '401: {"type":"invalid_authentication_error"}', stopReason: "error" } },
+    { id: "stopped", message: { role: "assistant", timestamp: 2, content: [], errorMessage: "This operation was aborted", stopReason: "aborted" } },
+  ]);
+  const page = index.page({ limit: 10 });
+  assert.equal(page.history.length, 1);
+  assert.equal(page.history[0].error, '401: {"type":"invalid_authentication_error"}');
+  assert.equal(page.history[0].key, "entry:failed");
+});

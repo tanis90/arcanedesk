@@ -1629,15 +1629,11 @@
       <button id="session-search" class="drawer-action" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span data-i18n="navigation.search">搜索</span></button>
     </div>
     <button id="navigation-retry" type="button" data-i18n="navigation.storageFailed" hidden></button>
+    <button id="activity-error" type="button" data-i18n="activity.syncFailed" hidden></button>
     <div id="session-list"></div>
     <button id="session-archives" type="button" data-i18n="navigation.archives">已归档</button>
   </aside>
   <div id="drawer-backdrop"></div>
-  <div id="activity-bar">
-    <button id="activity-notice" type="button" aria-live="polite" hidden></button>
-    <button id="activity-dismiss" type="button" data-i18n-title="activity.dismiss" title="收起提示" hidden>×</button>
-    <button id="activity-error" type="button" data-i18n="activity.syncFailed" hidden>活动暂不可用，重试</button>
-  </div>
   <section id="archive-page" hidden aria-labelledby="archive-title">
     <div class="archive-head"><h1 id="archive-title" data-i18n="navigation.archives">已归档</h1><button id="archive-back" type="button" data-i18n="navigation.back">返回对话</button></div>
     <div id="archive-list"></div><p id="archive-empty" data-i18n="navigation.emptyArchives">没有已归档会话</p>
@@ -1646,7 +1642,6 @@
   <div id="archive-readonly" hidden><span data-i18n="navigation.readOnly">此会话已归档，恢复后可继续对话</span><button id="archive-restore" type="button" data-i18n="navigation.restore">恢复会话</button></div>
   <div id="conversation-title"></div>
   <div id="shutdown-status" role="status" hidden><span></span><button type="button" id="cancel-exit" data-i18n="lifecycle.cancelExit">取消退出</button></div>
-  <div id="panel-command" role="status" hidden><span></span></div>
   <div id="conversation-sync" class="status-line" role="status" hidden></div>
   <div id="conversation-task-status" class="status-line" role="status" hidden></div>
   <div id="conversation-retry" class="status-line" role="status" hidden></div>
@@ -1667,7 +1662,6 @@
     </div>
   </main>
   <button class="scroll-bottom" id="scroll-bottom" title="回到底部" data-i18n-title="scrollBottom.title">↓</button>
-  <button id="activity-jump" type="button" data-i18n="activity.newProgress" hidden>有新进展 ↓</button>
   <div id="splitter" title="拖拽调整左右宽度" data-i18n-title="splitter.title"></div>
   <footer class="composer-wrap" id="composer-wrap">
     <div id="slash-popup"></div>

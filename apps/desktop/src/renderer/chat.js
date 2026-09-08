@@ -71,10 +71,7 @@ function showShutdown(state) {
 function showPanelCommand(snapshot) {
   if (!Number.isInteger(snapshot?.revision) || snapshot.revision < panelCommandSnapshot.revision) return;
   panelCommandSnapshot = snapshot;
-  const bar = document.getElementById("panel-command"), command = snapshot.command;
-  if (!bar) return;
-  bar.hidden = command?.state !== "failed";
-  bar.querySelector("span").textContent = bar.hidden ? "" : t("panel.connectionFailed");
+
 }
 
 function showPendingModel(model) {
@@ -91,9 +88,10 @@ function showTaskState(task) {
   taskIndicator.hidden = !task || ["running", "completed"].includes(task.state);
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
   if (task?.state === "failed") {
-    taskIndicator.appendChild(el("div", "task-terminal-reason", task.error || t("chat.terminal.failedReason")));
+    taskIndicator.textContent = "";
+    taskIndicator.appendChild(errorDetail(task.error));
   } else if (["stopped", "cancelled"].includes(task?.state) && task.error && !/^(?:AbortError:\s*)?This operation was aborted\.?$/i.test(task.error.trim())) {
-    taskIndicator.appendChild(el("div", "task-terminal-reason", task.error));
+    taskIndicator.appendChild(errorDetail(task.error));
   }
   if (["waiting_resource", "stopping"].includes(task?.state) && task.waitingFor) {
     const holder = task.waitingFor.holders?.[0];
@@ -333,7 +331,7 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   selectedArchived = (navigationView?.rows.get(id)?.archivedAt ?? payload.session?.archivedAt) != null;
   updateArchivedView();
   if (!fromCache) confirmedAt.set(id, Date.now());
-  else showSyncStatus("chat.syncCached", id);
+
   workspaceStore.setActive(id);
   selectedTaskId = payload.task?.id ?? null;
   document.getElementById("conversation-title").textContent = payload.session.name || "";
@@ -434,10 +432,10 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   }
   updateScrollButton();
   activityReady = true;
-  syncIndicator.hidden = !restoreError && !anchorUnavailable && !fromCache;
+  syncIndicator.hidden = !restoreError && !anchorUnavailable;
   if (restoreError) showSyncStatus("chat.historyFailed", id);
   else if (anchorUnavailable) showSyncStatus("chat.historyMoved", id);
-  else if (fromCache) showSyncStatus("chat.syncCached", id);
+
   activityView?.render();
   pruneOutboxes();
   if (changed) refreshSessions();
@@ -645,6 +643,7 @@ function scrollToEnd(force = false) {
 }
 
 function updateScrollButton() {
+  scrollBottomBtn.style.bottom = `${Math.max(12, innerHeight - messages.getBoundingClientRect().bottom + 8)}px`;
   scrollBottomBtn.classList.toggle("show", Boolean(historyPage?.hasNewer) || (!nearBottom() && messages.scrollHeight > messages.clientHeight));
 }
 
@@ -744,6 +743,31 @@ function renderUserText(node, text) {
     const count = inbox[1].split(";").length;
     node.appendChild(el("div", "inbox-note", t("chat.inboxNote", { count })));
   }
+}
+
+function errorDetail(raw) {
+  const text = String(raw || "");
+  const key = /(?:\b401\b|invalid.api.key|invalid_authentication|expired.*key)/i.test(text) ? "chat.error.auth"
+    : /(?:\b403\b|AccessDenied|access.*denied|permission.*denied)/i.test(text) ? "chat.error.access"
+    : /(?:\b429\b|rate.limit|too many requests)/i.test(text) ? "chat.error.rate"
+    : /(?:timeout|timed out)/i.test(text) ? "chat.error.timeout"
+    : /(?:ECONN|ENOTFOUND|fetch failed|network error|ERR_CONNECTION)/i.test(text) ? "chat.error.connection" : "chat.error.generic";
+  const container = el("div", "error-message");
+  container.append(el("div", "error-summary", t(key)));
+  if (text) {
+    const details = el("details", "error-detail");
+    details.append(el("summary", "", t("chat.error.details")), el("pre", "", text));
+    container.append(details);
+  }
+  return container;
+}
+
+function addErrorMessage(raw, key) {
+  closeWorkBlock(); dismissWelcome();
+  const node = el("div", "msg assistant");
+  if (key) node.dataset.itemKey = key;
+  node.append(errorDetail(raw)); messages.append(node); scrollToEnd();
+  return node;
 }
 
 function addMessage(role, text, images, key = null) {
@@ -1283,6 +1307,12 @@ function onEvent(event) {
     case "message": {
       // 终稿:替换对应流式草稿气泡(同 key),否则新建消息。
       // textI18n:主进程结构化文案(如模型调用失败),显示前本地化。
+      if (event.textI18n?.key === "agent.modelCallFailed") {
+        streamBubbles.get(event.key)?.remove(); streamBubbles.delete(event.key);
+        addErrorMessage(event.textI18n.params?.error, event.key);
+        if (event.key) settleThinkBlock(event.key, event.thinking);
+        break;
+      }
       const finalText = event.textI18n ? t(event.textI18n.key, event.textI18n.params) : event.text;
       const bubble = event.key ? streamBubbles.get(event.key) : null;
       if (bubble) {
@@ -1709,8 +1739,6 @@ function pruneOutboxes() {
   }
 }
 const inputStateKeys = {
-  sending: "chat.input.sending", accepted: "chat.input.accepted", queued: "chat.input.queued",
-  dispatching: "chat.input.dispatching", context: "chat.input.context",
   failed: "chat.input.failed", send_failed: "chat.input.sendFailed", cancelled: "chat.input.cancelled",
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
@@ -1724,7 +1752,7 @@ function updateInputReceipt(commandId, state) {
   if (!node) return;
   node.dataset.inputState = state;
   if (!["failed", "send_failed", "uncertain"].includes(state)) node.querySelector(".retry-input")?.remove();
-  if (["consumed", "handled"].includes(state)) {
+  if (!["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state)) {
     node.querySelector(".input-state")?.remove();
     return;
   }
@@ -2044,7 +2072,8 @@ function renderHistory(entries, inFlight = {}, running = false, page = null) {
       for (const call of entry.toolCalls ?? []) restoreTool(call);
       const hasLiveTools = (entry.toolCalls ?? []).some(call => liveTools.get(call.id)?.state === "running");
       if (!hasLiveTools) closeWorkBlock(false);
-      if (entry.text) addMessage("assistant", entry.text, undefined, key);
+      if (entry.error) addErrorMessage(entry.error, key);
+      else if (entry.text) addMessage("assistant", entry.text, undefined, key);
     }
   }
   for (const tool of inFlight.tools ?? []) {
@@ -3081,7 +3110,6 @@ window.ArcaneI18n.onLocaleChange(() => {
   showTaskState(displayedTask);
   showRetry(displayedRetry);
   if (!syncIndicator.hidden && syncIndicator.dataset.status) showSyncStatus(syncIndicator.dataset.status);
-  if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();
   if (currentModelLabel) updateModelLabels(currentModelLabel);
@@ -3139,6 +3167,7 @@ activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: w
 applyPanelLayout();
 setDrawer(false);
 new ResizeObserver(() => {
+  updateScrollButton();
   drawer.inert = !drawer.classList.contains("open") && !document.body.classList.contains("sidebar-pinned");
   activityView.scheduleRead();
 }).observe(messages);

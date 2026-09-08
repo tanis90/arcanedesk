@@ -202,7 +202,14 @@
       this.archiveToastId = sessionId;
       const toast = document.getElementById("navigation-toast"); toast.replaceChildren(node("span", "", text)); toast.hidden = false;
       if (undo) { const button = node("button", "", this.t("navigation.undo")); button.onclick = () => void undo(); toast.append(button); }
-      const close = node("button", "", "×"); close.setAttribute("aria-label", this.t("navigation.close")); close.onclick = () => { toast.hidden = true; }; toast.append(close);
+      clearTimeout(this.toastTimer);
+      const expire = () => {
+        if (toast.matches(":hover") || toast.contains(document.activeElement)) {
+          this.toastTimer = setTimeout(expire, 1000); return;
+        }
+        toast.hidden = true;
+      };
+      this.toastTimer = setTimeout(expire, 5000);
     }
     async action(row, action) {
       const interaction = this.interaction;

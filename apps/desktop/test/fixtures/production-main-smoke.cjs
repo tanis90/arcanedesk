@@ -7,6 +7,7 @@ const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const panelUi = process.argv.includes("--panel-ui");
 const sidebarRestart = process.argv.includes("--sidebar-restart");
 const sidebarScenario = process.argv.includes("--sidebar-scenario");
 const trayLifecycle = process.argv.includes("--tray-lifecycle");
@@ -170,6 +171,7 @@ app.on("will-quit", () => {
       console.log("PASS native system: background continuation, actual tray and toast clicks, no focus stealing or repeated request");
       return;
     }
+    if (panelUi) { assert.equal(requests.length, 0); console.log("PASS panel UI: real connection retry, right-pane failure, agent recovery and reload"); return; }
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
@@ -237,6 +239,10 @@ app.on("will-quit", () => {
   }
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (panelUi) {
+    await require("./panel-ui.cjs")({ window, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
   if (sidebarRestart) {
     const checkpoint = JSON.parse(readFileSync(path.join(scratch, "sidebar-checkpoint.json"), "utf8"));
     await evaluate('refreshSessions()');
