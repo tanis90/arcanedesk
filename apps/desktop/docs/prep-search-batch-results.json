@@ -1,0 +1,260 @@
+{
+  "status": "model-block-complete-not-promoted",
+  "baselineCommit": "ddf1132",
+  "probe": {
+    "entries": [
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+        "id": "41JIhpDyM9Anm7cs",
+        "entryId": "41JIhpDyM9Anm7cs",
+        "name": "魔法飞弹 Magic Missile",
+        "type": "spell",
+        "documentType": "Item",
+        "packId": "arcane-dnd5e-2014-automation.spells",
+        "package": "arcane-dnd5e-2014-automation",
+        "matchedQueries": [
+          "Magic Missile"
+        ]
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.AoTTjapz1FsGOIZz",
+        "id": "AoTTjapz1FsGOIZz",
+        "entryId": "AoTTjapz1FsGOIZz",
+        "name": "延迟爆裂火球 Delayed Blast Fireball",
+        "type": "spell",
+        "documentType": "Item",
+        "packId": "arcane-dnd5e-2014-automation.spells",
+        "package": "arcane-dnd5e-2014-automation",
+        "matchedQueries": [
+          "Fireball"
+        ]
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.tEy4rtxkojrzSLm7",
+        "id": "tEy4rtxkojrzSLm7",
+        "entryId": "tEy4rtxkojrzSLm7",
+        "name": "吉姆的魔法飞弹 Jim's Magic Missile",
+        "type": "spell",
+        "documentType": "Item",
+        "packId": "arcane-dnd5e-2014-automation.spells",
+        "package": "arcane-dnd5e-2014-automation",
+        "matchedQueries": [
+          "Magic Missile"
+        ]
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+        "id": "Utk1OQRwYkMkFRD3",
+        "entryId": "Utk1OQRwYkMkFRD3",
+        "name": "法师之手 Mage Hand",
+        "type": "spell",
+        "documentType": "Item",
+        "packId": "arcane-dnd5e-2014-automation.spells",
+        "package": "arcane-dnd5e-2014-automation",
+        "matchedQueries": [
+          "Mage Hand"
+        ]
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+        "id": "ztgcdrWPshKRpFd0",
+        "entryId": "ztgcdrWPshKRpFd0",
+        "name": "火球术",
+        "type": "spell",
+        "documentType": "Item",
+        "packId": "arcane-dnd5e-2014-automation.spells",
+        "package": "arcane-dnd5e-2014-automation",
+        "matchedQueries": [
+          "Fireball"
+        ]
+      }
+    ],
+    "total": 5,
+    "missingQueries": [
+      "AbsentBenchmarkSpell"
+    ],
+    "nextCursor": null
+  },
+  "plan": {
+    "pairs": 2,
+    "cases": [
+      "npc_wizard"
+    ],
+    "timeoutMs": 120000,
+    "comparison": "revision --native-npc",
+    "skill": "Frozen 2d94e8c examples, unchanged in both arms"
+  },
+  "limits": [
+    "Same warm authenticated local COS; no cold-load claim.",
+    "Global result limit and cursor retained; missingQueries means no match anywhere, not no match on current page."
+  ],
+  "trials": [
+    {
+      "report": "benchmark-1788868330979.json",
+      "arm": "baseline",
+      "pair": 0,
+      "ms": 120015.5218,
+      "calls": 14,
+      "timedOut": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "revisionInputs": {
+        "baseline": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+          "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca"
+        },
+        "candidate": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+          "toolsFileSha256": "e54659750ad7a2b511ddff4e01dcba36772e7340f62d63621b0d15d22279c41f"
+        }
+      },
+      "postTimeoutAudit": {
+        "file": "batch-baseline-audit.json",
+        "ok": false,
+        "checks": {
+          "singleNpc": false
+        }
+      }
+    },
+    {
+      "report": "benchmark-1788868485217.json",
+      "arm": "tools",
+      "pair": 0,
+      "ms": 120023.26359999999,
+      "calls": 11,
+      "timedOut": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "revisionInputs": {
+        "baseline": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+          "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca"
+        },
+        "candidate": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+          "toolsFileSha256": "e54659750ad7a2b511ddff4e01dcba36772e7340f62d63621b0d15d22279c41f"
+        }
+      },
+      "postTimeoutAudit": {
+        "file": "batch-candidate-audit.json",
+        "ok": true,
+        "checks": {
+          "singleNpc": true,
+          "human": true,
+          "intelligence": true,
+          "spellcasting": true,
+          "slots": true,
+          "hp": true,
+          "fireball": true,
+          "staff": true,
+          "noShield": true
+        }
+      }
+    },
+    {
+      "report": "benchmark-1788868667894.json",
+      "arm": "tools",
+      "pair": 1,
+      "ms": 120017.8143,
+      "calls": 14,
+      "timedOut": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "revisionInputs": {
+        "baseline": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+          "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca"
+        },
+        "candidate": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+          "toolsFileSha256": "e54659750ad7a2b511ddff4e01dcba36772e7340f62d63621b0d15d22279c41f"
+        }
+      },
+      "postTimeoutAudit": {
+        "file": "batch-candidate-1-audit.json",
+        "ok": true,
+        "checks": {
+          "singleNpc": true,
+          "human": true,
+          "intelligence": true,
+          "spellcasting": true,
+          "slots": true,
+          "hp": true,
+          "fireball": true,
+          "staff": true,
+          "noShield": true
+        }
+      }
+    },
+    {
+      "report": "benchmark-1788868825482.json",
+      "arm": "baseline",
+      "pair": 1,
+      "ms": 120018.8334,
+      "calls": 11,
+      "timedOut": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "revisionInputs": {
+        "baseline": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+          "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca"
+        },
+        "candidate": {
+          "commit": "ddf1132ae6846ebe8cef04df419b01fcd1f5bb4c",
+          "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+          "toolsFileSha256": "e54659750ad7a2b511ddff4e01dcba36772e7340f62d63621b0d15d22279c41f"
+        }
+      },
+      "postTimeoutAudit": {
+        "file": "batch-baseline-1-audit.json",
+        "ok": false,
+        "checks": {
+          "singleNpc": false
+        }
+      }
+    }
+  ],
+  "modelInterfaceAudit": {
+    "actualArrayCallsInCandidateTrials": 0,
+    "candidateTrials": 2,
+    "observedQueries": [
+      "[\"Fireball\", \"Quarterstaff\"]",
+      "[\"mage\",\"archmage\"]",
+      "[\"fireball\",\"quarterstaff\"]"
+    ],
+    "observedType": "string",
+    "outgoingSchema": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 256
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      ]
+    },
+    "verification": "Real Pi openai-completions onPayload dry run, thrown before network; schema retained both branches.",
+    "conclusion": "All four samples timed out. Candidate usability failed: no real batch execution. Cannot estimate successful batch execution latency from these samples."
+  },
+  "environmentCaveat": {
+    "clientThinking": "off",
+    "outgoingEnableThinking": "omitted",
+    "providerAutoCompat": "openai",
+    "officialDefault": "qwen3.7-plus thinking enabled by default",
+    "source": "https://help.aliyun.com/zh/model-studio/deep-thinking/",
+    "next": "Explicit Qwen compatibility must be validated as a separate environment group; do not attribute its gain to search changes."
+  }
+}

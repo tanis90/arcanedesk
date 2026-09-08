@@ -428,7 +428,7 @@ export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; 
 export interface ContentSearchInput {
   scope: "world" | "compendium";
   documentType: "Actor" | "Item" | "Scene";
-  query: string;
+  query: string | string[];
   packIds?: string[];
   actorType?: string;
   itemType?: string;
@@ -437,8 +437,10 @@ export interface ContentSearchInput {
 }
 
 export interface ContentSearchResult {
+  /** Batch queries with no match across all pages, not merely the current page. */
+  missingQueries?: string[];
   entries: Array<{ uuid: string; id: string; name: string; type: string; documentType: string;
-    entryId?: string; packId?: string; package?: string }>;
+    entryId?: string; packId?: string; package?: string; matchedQueries?: string[] }>;
   total: number;
   nextCursor: string | null;
 }

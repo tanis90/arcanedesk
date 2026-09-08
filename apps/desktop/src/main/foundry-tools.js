@@ -124,10 +124,10 @@ export function createFoundryTools(host) {
       "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     defineTool({
       name: "foundry_content_search", label: "Search Foundry Content",
-      description: "Search world Actors/Scenes or compendium Actors/Items by name; Items also match their system identifier across translated names. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
+      description: "Search world Actors/Scenes or compendium Actors/Items by name; Items also match their system identifier across translated names. For multiple names, pass query as an array (up to 16) in one call; entries report matchedQueries and missingQueries lists names absent from all pages. Follow nextCursor for remaining matches. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
       parameters: exact({ scope: Type.Union([Type.Literal("world"), Type.Literal("compendium")]),
         documentType: Type.Union([Type.Literal("Actor"), Type.Literal("Item"), Type.Literal("Scene")]),
-        query: Type.String({ maxLength: 256 }), packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
+        query: Type.Union([Type.String({ maxLength: 256 }), Type.Array(Type.String({ minLength: 1, maxLength: 256 }), { minItems: 1, maxItems: 16, uniqueItems: true })]), packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
         actorType: Type.Optional(ref()), itemType: Type.Optional(ref()),
         limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
       execute: async (_id, params, signal) => textResult(await host.foundryServices().contentSearch(params, signal)),
