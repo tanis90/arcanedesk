@@ -77,6 +77,13 @@ app.whenReady().then(async () => {
     let allowedActions;
     if (label === "candidate" || option("comparison") === "revision") ({ DESKTOP_FOUNDRY_ACTIONS: allowedActions } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js"));
     revisions[label] = { AgentHost, DirectFoundryRuntime, ResourceCoordinator, ExecutionScheduler, runtimeSource, allowedActions };
+    const digest = value => require("node:crypto").createHash("sha256").update(value).digest("hex");
+    report.revisionInputs ??= {};
+    report.revisionInputs[label] = {
+      commit: require("node:child_process").execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf8" }).trim(),
+      runtimeSha256: digest(runtimeSource),
+      toolsFileSha256: digest(readFileSync(path.join(repo, "apps/desktop/src/main/foundry-tools.js"))),
+    };
   }
   if (option("scenarios", "false") === "true") {
     await require("./prep-play-model-scenarios.cjs")({ evaluate, sourceId, targetId, combatId, sceneId, fixtureNames,

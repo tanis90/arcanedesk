@@ -14,6 +14,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
   assert.ok(["js","revision","native-skill","skill-revision"].includes(comparison));
   if(["native-skill","skill-revision"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
+  const nativeRevision=process.argv.includes("--native-npc");
+  if(nativeRevision)assert.ok(comparison==="revision"&&cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
   const arms=comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
@@ -30,6 +32,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
   if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
+  if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and 16 tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   report.experiment.suiteVersion=cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??120000);
   assert.ok(Number.isInteger(report.experiment.taskTimeoutMs)&&report.experiment.taskTimeoutMs>=120000&&report.experiment.taskTimeoutMs<=300000);
@@ -78,7 +81,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     await cleanup(trial.fixture);trial.cleaned=true;save();
   }
   for(let sample=0;sample<samples;sample++)for(const caseId of cases)for(const arm of sample%2?[...arms].reverse():arms){
-    const nativeSkillArm=arm.startsWith("native_skill");
+    const nativeSkillArm=nativeRevision||arm.startsWith("native_skill");
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
     const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
@@ -90,6 +93,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     }
     const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
     if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
+    if(nativeRevision){report.experiment.nativeSkillHash??=trial.skillHash;assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Native revision comparison must freeze its skill");}
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});

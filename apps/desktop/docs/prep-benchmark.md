@@ -218,3 +218,7 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 `--cases=npc_werewolf --comparison=skill-revision --baseline-skill=<冻结旧稿> --samples=1` 使用同一 16 工具对比两份冻结指南。默认仍为 120 秒；独立指定 `--task-timeout-ms=180000` 只能用于预注册诊断块。题目、来源预检与验收边界见[狼人迁移协议](prep-werewolf-transfer.md)。Evaluator 读取来源快照但不把位置或答案传给模型。NPC 与 fixture 保留，超时停止、不重放。
 
 `--reverse-first` 交换首次两臂顺序，后续 sample 仍交替；实际次序记录在 experiment.arms。可用于中断后另开完整反向对照块，不能用它重放已完成或不确定写入。
+
+## 固定 NPC 指南比较工具版本
+
+使用 `--comparison=revision --native-npc --cases=npc_wizard --baseline=<冻结代码工作树>`。两臂都从当前实验 fixture 加载同一份指南，隐藏 actor_create/update，保留相同 16 工具和原生路由；分别加载 baseline/当前工作树的工具和 runtime。报告的 experiment.nativeNpc=true，逐次 skillHash 必须相同；同时记录 runtime 与工具文件 hash，尤其候选尚未提交时，不能只用 HEAD 标识它。不要在批次运行中修改 SDK、工具、指南或模型配置。

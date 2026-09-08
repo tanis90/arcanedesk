@@ -37,3 +37,20 @@ test("unsupported document combinations, mismatched packs and excessive limits r
   await assert.rejects(f.run({ scope: "compendium", documentType: "Item", query: "", packIds: ["example.monsters"] }), /PACK_NOT_FOUND/);
   await assert.rejects(f.run({ scope: "world", documentType: "Actor", query: "", limit: 101 }), /limit/);
 });
+
+test("Item search matches translated names by identifier, keeps type filters and bounded references", async () => {
+  const requested=[];
+  const pack={collection:'example.spells',documentName:'Item',metadata:{packageName:'example'},getIndex:async options=>{requested.push(options.fields);return [
+    {_id:'a',name:'火球术',type:'spell',system:{identifier:'fireball',private:'not returned'}},
+    {_id:'b',name:'魔法飞弹',type:'spell',system:{identifier:'magic-missile'}},
+    {_id:'c',name:'火焰剑',type:'weapon',system:{identifier:'fireball-sword'}},
+    {_id:'d',name:'无标识符',type:'spell'}];}};
+  const run=vm.runInNewContext(`(${runtimeFunction})`,{game:{ready:true,user:{isGM:true},packs:new Map([[pack.collection,pack]])}});
+  const query={scope:'compendium',documentType:'Item',query:'Fireball',itemType:'spell'};
+  const first=JSON.parse(JSON.stringify(await run('contentSearch',query,{})));
+  assert.equal(first.total,1);assert.equal(first.entries[0].name,'火球术');assert.equal(first.entries[0].uuid,'Compendium.example.spells.Item.a');
+  assert.equal(JSON.stringify(first).includes('private'),false);assert.equal(requested[0].includes('system.identifier'),true);
+  const spaced=await run('contentSearch',{...query,query:'Magic Missile'},{});assert.equal(spaced.total,1);
+  const chinese=await run('contentSearch',{...query,query:'火球'},{});assert.equal(chinese.total,1);
+  const punctuation=await run('contentSearch',{...query,query:'-'},{});assert.equal(punctuation.total,0);
+});
