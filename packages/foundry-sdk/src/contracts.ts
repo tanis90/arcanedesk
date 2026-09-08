@@ -414,6 +414,7 @@ export interface ActorDataImage {
 export interface ActorCreateInput extends PrepWriteIdentity {
   source: { kind: "blank"; actorType: "character" | "npc" } | { kind: "compendium"; packId: string; entryId: string };
   name: string; folderId?: string; initialItems?: CompendiumGrant[]; image?: ActorDataImage;
+  prototypeToken?: { name: string };
 }
 export interface ActorChanges {
   name?: string; folderId?: string | null;

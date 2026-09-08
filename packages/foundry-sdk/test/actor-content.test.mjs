@@ -41,6 +41,43 @@ function fixture(globals = {}) {
     edit: (readState, changes) => call("actorEdit", { ...identity, actorUuid: actor.uuid, readState, changes }) };
 }
 
+test("creation sets an explicit prototype name in one write and preserves source fields", async () => {
+  const f = fixture(), source = f.sources.get("npc"), toObject = source.toObject;
+  source.toObject = () => ({ ...toObject(), prototypeToken: { name: "Source", width: 2, height: 3, actorLink: false, texture: { src: "source.webp" } } });
+  const result = await f.call("actorCreate", { ...f.identity, source: { kind: "compendium", packId: "test.pack", entryId: "npc" }, name: "New Actor", prototypeToken: { name: "New Token" } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const created = f.actors.get(result.steps[0].targets[0].split(".")[1]);
+  assert.deepEqual(JSON.parse(JSON.stringify(created.prototypeToken)), { name: "New Token", width: 2, height: 3, actorLink: false, texture: { src: "source.webp" } });
+  assert.equal(f.writes(), 1);
+});
+
+test("blank creation accepts prototype name and omission keeps native behavior", async () => {
+  for (const prototypeToken of [undefined, { name: "Custom Token" }]) {
+    const f = fixture();
+    const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "npc" }, name: "New Actor", ...(prototypeToken ? { prototypeToken } : {}) });
+    assert.equal(result.status, "completed", JSON.stringify(result));
+    assert.equal(f.actors.get(result.steps[0].targets[0].split(".")[1]).prototypeToken.name, prototypeToken?.name ?? "Guard");
+    assert.equal(f.writes(), 1);
+  }
+});
+
+test("invalid creation prototype names or extra fields reject before any write", async () => {
+  for (const prototypeToken of [{}, { name: " " }, { name: 1 }, { name: "a".repeat(257) }, { name: "Token", width: 2 }]) {
+    const f = fixture();
+    const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "npc" }, name: "New Actor", prototypeToken });
+    assert.equal(result.status, "rejected", JSON.stringify(result));
+    assert.equal(f.writes(), 0);
+  }
+});
+
+test("native creation ignoring the prototype name reports partial without replay", async () => {
+  let creates = 0;
+  const f = fixture({ CONFIG: { Actor: { documentClass: { create: async data => { creates++; return { uuid: "Actor.created", name: data.name, prototypeToken: { name: "Wrong" } }; } } } } });
+  const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "npc" }, name: "New Actor", prototypeToken: { name: "Expected" } });
+  assert.equal(result.status, "partial"); assert.equal(result.retry, false); assert.equal(creates, 1);
+  assert.equal(result.steps[0].state, "completed"); assert.equal(result.steps[1].state, "unknown");
+});
+
 test("Actor update checks only touched fields; unrelated HP changes do not block renaming", async () => {
   const f = fixture(), read = await f.read();
   f.actor.system.attributes.hp.value = 7;
