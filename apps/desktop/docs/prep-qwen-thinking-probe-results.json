@@ -62,5 +62,81 @@
       "error": null
     }
   ],
-  "note": "Tiny configuration probe, not a task latency benchmark. low hit the deliberately small 128-output-token ceiling; no claim of completed low-mode answer."
+  "note": "Tiny configuration probe, not a task latency benchmark. low hit the deliberately small 128-output-token ceiling; no claim of completed low-mode answer.",
+  "followupSystemPromptProbe": {
+    "model": "qwen3.7-plus",
+    "provider": "qa-aliyun-token-plan",
+    "compat": {
+      "thinkingFormat": "qwen",
+      "supportsReasoningEffort": false,
+      "supportsDeveloperRole": false
+    },
+    "reasoningCapability": true,
+    "trials": [
+      {
+        "thinking": "off",
+        "sent": {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted",
+          "firstRole": "system"
+        },
+        "ms": 841.1485,
+        "stopReason": "stop",
+        "usage": {
+          "input": 28,
+          "output": 1,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 29,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "text": "OK",
+        "hasThinkingBlock": false,
+        "error": null
+      },
+      {
+        "thinking": "low",
+        "sent": {
+          "enable_thinking": true,
+          "reasoning_effort": "omitted",
+          "firstRole": "system"
+        },
+        "ms": 2707.6348,
+        "stopReason": "length",
+        "usage": {
+          "input": 26,
+          "output": 128,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 128,
+          "totalTokens": 154,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "text": "",
+        "hasThinkingBlock": true,
+        "error": null
+      }
+    ]
+  },
+  "failedTaskProbe": {
+    "report": "benchmark-1788870237146.json",
+    "arm": "baseline",
+    "ms": 732.6005,
+    "calls": 0,
+    "error": "HTTP 400: developer role unsupported",
+    "classification": "configuration failure, retained; no tool-performance evidence"
+  }
 }

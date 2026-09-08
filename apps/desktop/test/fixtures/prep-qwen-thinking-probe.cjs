@@ -26,9 +26,9 @@ app.whenReady().then(async () => {
   for (const thinking of ["off", "low"]) {
     const trial = { thinking }; report.trials.push(trial);
     const start = performance.now();
-    const stream = streamSimple(model, { messages: [{ role: "user", content: "Reply with exactly OK.", timestamp: Date.now() }] }, {
+    const stream = streamSimple(model, { systemPrompt: "You are a concise assistant.", messages: [{ role: "user", content: "Reply with exactly OK.", timestamp: Date.now() }] }, {
       apiKey: credential.apiKey, reasoning: thinking, maxTokens: 128, signal: AbortSignal.timeout(30000),
-      onPayload(payload) { trial.sent = { enable_thinking: payload.enable_thinking ?? "omitted", reasoning_effort: payload.reasoning_effort ?? "omitted" }; },
+      onPayload(payload) { trial.sent = { enable_thinking: payload.enable_thinking ?? "omitted", reasoning_effort: payload.reasoning_effort ?? "omitted", firstRole: payload.messages[0].role }; },
     });
     const result = await stream.result();
     trial.ms = performance.now() - start;

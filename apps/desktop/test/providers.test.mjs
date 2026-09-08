@@ -275,7 +275,7 @@ test("registers Qwen thinking compatibility only for verified official hybrid en
   store.applyToRuntime({ registerProvider: (id, config) => registered.set(id, config) });
   for (const [index, variant] of variants.entries()) {
     assert.deepEqual(registered.get(`test-${index}`)?.models[0].compat,
-      variant[4] ? { thinkingFormat: "qwen", supportsReasoningEffort: false } : undefined);
+      variant[4] ? { thinkingFormat: "qwen", supportsReasoningEffort: false, supportsDeveloperRole: false } : undefined);
     if (variant[4]) assert.equal(registered.get(`test-${index}`).models[0].reasoning, true);
   }
 });
@@ -291,13 +291,14 @@ test("real Pi payload sends Qwen off and on flags before the network boundary", 
   const model = { ...config.models[0], provider: "qwen-test", api: config.api, baseUrl: config.baseUrl };
   for (const reasoning of ["off", "low"]) {
     let payload;
-    const result = await streamSimple(model, { messages: [{ role: "user", content: "OK", timestamp: 0 }] }, {
+    const result = await streamSimple(model, { systemPrompt: "You are a concise assistant.", messages: [{ role: "user", content: "OK", timestamp: 0 }] }, {
       apiKey: "dummy-no-network", reasoning,
       onPayload(value) { payload = value; throw Error("DRY_RUN_STOP_BEFORE_NETWORK"); },
     }).result();
     assert.match(result.errorMessage, /DRY_RUN_STOP_BEFORE_NETWORK/);
     assert.equal(payload.enable_thinking, reasoning !== "off");
     assert.equal(payload.reasoning_effort, undefined);
+    assert.equal(payload.messages[0].role, "system");
   }
 });
 

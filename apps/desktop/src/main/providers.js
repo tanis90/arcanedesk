@@ -43,7 +43,7 @@ function modelCompatibility(provider, model) {
     const officialHosts = ["token-plan.cn-beijing.maas.aliyuncs.com", "dashscope.aliyuncs.com",
       "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"];
     if (url.protocol !== "https:" || !officialHosts.includes(url.hostname) || url.port) return {};
-    return { reasoning: true, compat: { thinkingFormat: "qwen", supportsReasoningEffort: false } };
+    return { reasoning: true, compat: { thinkingFormat: "qwen", supportsReasoningEffort: false, supportsDeveloperRole: false } };
   } catch { return {}; }
 }
 
