@@ -5,7 +5,8 @@
 本套件用于持续评估真实 AgentHost / Pi / 模型操作 Foundry 的效率与正确性。它不是 SDK 微基准，
 也不包含聊天 UI 渲染耗时。入口、用例和图片随仓库保存，账号配置与原始会话留在本机。
 
-当前版本为 **prep-v1-draft2**：六题运行代码已落地，新增图片题尚未完成真实模型验收，不能视为已冻结的正式基线。
+基础六题为 **prep-v1-draft2**，已包含本地图片上传并完成真实模型实验；NPC 法师与狼人采用独立版本。
+整体仍是 draft，剩余验收边界见本文后段，不能称为已冻结正式基线。
 早期五题、100 次中性 prompt 实验见 [历史报告](prep-prompt-benchmark.md)，不能与新版本直接混算。
 
 ## 快速使用
@@ -22,7 +23,7 @@ npm run benchmark:prep -- --target=local-cos --qa-root=C:\qa\arcanedesk-benchmar
 
 setup 只创建两个带 runId 标记的空白 NPC 和一个非激活场景，供本会话 view；不创建或修改 Combat。
 报告保存原 viewed/active Scene 与精确 UUID。结果不确定不重放；结束后恢复原视图并按 UUID／runId
-精确清理 setup 对象。完整 fixture 流程尚待本地真实验收，不能对既有角色做通配清理。
+精确清理 setup 对象。该流程已用于本地实验；不能对既有角色做通配清理。
 
 从仓库根目录执行，先安装仓库依赖并构建 SDK：
 
@@ -38,8 +39,9 @@ Farm 生命周期脚本属于 Foundry 环境仓库，须从其匹配镜像的干
 不要使用 primary 或 QA-B。完成后按 skill 再验证隔离并停止 QA-A。
 
 准备独立 QA profile，通过 App 的 ProviderStore 配置加密 provider `qa-kimi-coding`，选择
-`kimi-for-coding-highspeed`。当前 runner 明确校验这一组合；不读取主 App profile，不在命令行传密钥。
-需要其他模型时先扩展配置与报告身份，另建模型基线，不能只改报告中的模型名。
+`kimi-for-coding-highspeed`（默认组合）。也可用 `--provider=<已配置ID> --model=<模型ID>` 选择独立 QA profile 中的模型，
+例如已测的 qa-aliyun-token-plan / qwen3.7-plus；不读取主 App profile，不在命令行传密钥。
+换供应商或模型时另建环境分组，不能把历史绝对耗时直接混作同一基线。
 
 ```powershell
 # 生成当前 QA-A fixture；输出报告的绝对路径
@@ -58,7 +60,8 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 定向诊断可加 --cases=conditions（多个用例用英文逗号分隔）。工具迭代的单变量实验使用
 --comparison=revision --baseline=<旧版本工作树> --prompt-mode=production；两组均开放工具，
 分别加载旧／新 AgentHost 与 runtime，要求生产 prompt 文本相同。报告记录 baselineCommit 与候选提交。
-统计文件的 controlArm 标识对照组；兼容字段 js 在此模式存放 baseline 数据，不代表裸 JS。
+汇总格式 summaryVersion=2 以 controlArm / candidateArm 标识两臂，统计放在 control / candidate 字段。
+历史格式的 js / tools 字段不再用于新汇总；原始报告不变。
 默认使用本地安装的 Electron；若需其他路径，设置 ARCANE_QA_ELECTRON。启动器自动提供 ARCANE_QA_NODE，
 以隐藏窗口启动 Electron main。不能只用 node 执行 Electron fixture。无需旧 baseline worktree。
 运行期间不要重建 SDK、改变模型配置、修改当前 Scene、操作测试对象或同时跑其他模型测试。
@@ -67,7 +70,7 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 
 创建题的代表性与新增角色组合题设计见
 [创建角色 benchmark 代表性审查](prep-character-benchmark-review.md)。新题已通过 `--cases=npc_wizard`
-显式接入，版本 prep-npc-intent-draft1，单任务 300 秒、结果保留供人工复核；
+显式接入，当前版本 prep-npc-intent-draft2，单任务默认 120 秒、结果保留供人工复核；
 不算进现有 draft2 覆盖或成绩，默认六题与旧复制题继续保留。
 首次结果见 [NPC 预检](prep-npc-wizard-pilot-results.json)，两组均有就绪验收缺口，不标记稳定基线。
 
@@ -76,7 +79,8 @@ NPC 原生 skill 工作流实验使用 `--comparison=native-skill --cases=npc_wi
 每题 skill 复制到该任务自己的工作目录，由资源加载器发现、由模型读取；读取计入任务耗时，记录正文 hash。
 两个样本交换先后顺序；它改变了工具暴露和指引，不是单因素实验。实验指南位于
 [fvtt-native-npc](../test/fixtures/prep-native-npc-skill/SKILL.md)，尚未安装到产品默认模式。
-此比较使用独立审计摘要，不交给只支持 js/revision 两臂的旧汇总器。
+当前汇总器支持 js、revision、native-skill、skill-revision 四种对照。它只接受完整完成的报告；
+中断与独立补齐的块需要保留逐次审计清单，不能直接拼接成伪完整配对。
 
 只比较 skill 正文时使用 `--comparison=skill-revision --cases=npc_wizard --samples=2 --baseline-skill=<旧版SKILL.md>`。
 两臂均使用相同 16 工具及原生路由，分别复制旧／当前正文，通过真实 skill 机制读取；报告记录各自 hash。
@@ -212,3 +216,5 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 ## 狼人迁移题
 
 `--cases=npc_werewolf --comparison=skill-revision --baseline-skill=<冻结旧稿> --samples=1` 使用同一 16 工具对比两份冻结指南。默认仍为 120 秒；独立指定 `--task-timeout-ms=180000` 只能用于预注册诊断块。题目、来源预检与验收边界见[狼人迁移协议](prep-werewolf-transfer.md)。Evaluator 读取来源快照但不把位置或答案传给模型。NPC 与 fixture 保留，超时停止、不重放。
+
+`--reverse-first` 交换首次两臂顺序，后续 sample 仍交替；实际次序记录在 experiment.arms。可用于中断后另开完整反向对照块，不能用它重放已完成或不确定写入。

@@ -17,6 +17,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
   const arms=comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  if(process.argv.includes("--reverse-first"))arms.reverse();
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
   report.experiment={arms,comparison,kind:"same-code tool ablation",cases,samplesPerCase:samples,model:report.model,

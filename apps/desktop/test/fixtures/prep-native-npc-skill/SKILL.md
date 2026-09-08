@@ -1,105 +1,73 @@
 ---
 name: fvtt-native-npc
-description: Create or edit D&D 5e NPCs from a DM's description using current Foundry Document APIs. Read this for NPC ability scores, caster levels, spell imports and equipment, especially when combining compendium resources into a new NPC.
+description: Create or edit D&D 5e NPCs from a DM's description using Foundry Document APIs, compendium templates, spells, features and equipment.
 ---
 
-# Native NPC workflow
+# NPC preparation recipe
 
-Validated on Foundry 13 / dnd5e 5.3.3. Check the actual system version; inspect affected fields if it differs.
-Operate through browser_evaluate on the connected GM page. Use public Document APIs, await writes,
-and keep temporary variables inside an async function so declarations do not collide between calls.
+Validated on Foundry 13 / dnd5e 5.3.3. Use browser_evaluate on the connected GM page.
+Keep variables inside an awaited async function; use public Document APIs. If the system differs,
+inspect only the affected fields. Do not modify compendiums, module files or auto-pack behavior.
 
-## Organize the work before making calls
+## 1. Choose the base and discover the missing content
 
-Before discovery, turn each explicit DM requirement into a compact internal requirement-to-data checklist.
-Include identity/ancestry separately from the Actor's display name, required capabilities and resources,
-and the requested equipment state. Pick reasonable unspecified values without inventing new obligations.
-For each requirement identify both the native write field and the value to read back. If you do not know
-the field, inspect the current model or a relevant source once before writing; do not rely on unknown keys
-silently surviving create/update. Carry this checklist into the final script as actual boolean checks.
-The script's return should contain those checks and the effective values, not just a narrative summary.
-Report completion only if every explicit requirement passes. If one fails, report the existing Actor UUID
-and specific mismatch; do not simply repeat the user's requirement as if it was satisfied.
+For a named creature, find a suitable Actor template with foundry_content_search. For a custom NPC,
+choose reasonable unspecified values; this is not player class advancement. Identify explicit requirements
+and their data checks, including identity separately from display name. Keep optional additions coherent
+and proportionate to the request; do not turn a simple NPC request into a complete player build.
 
-Decide the requested NPC configuration and a reasonable resource list first. Treat related lookups as one
-discovery phase, not a new planning turn for each spell. Use search to discover unknown sources; once the
-relevant packs are known, read each needed pack index once in a single browser script and match all required
-names against it. Independent index reads may run with Promise.all. Include known language alternatives in
-the same matching pass. Return compact selected references plus missing or ambiguous entries, not full indices.
-Only unresolved entries need another lookup. Do not alternate search and equivalent index scans for resolved items.
+Search documentType is case-sensitive Actor, Item or Scene. Use returned references and the requested
+rules edition. Do not invent pack IDs. For several items, discover the relevant packs first, then read
+those pack indices once in a single script and match the whole list, including language alternatives:
+`await Promise.all(packs.map(p => p.getIndex()))`. Return compact matches and unresolved names.
+Only missing or ambiguous entries need another lookup. Avoid one search per optional spell after its
+pack is known, and do not repeat search for an already resolved reference. Available pack metadata is
+`game.packs`: collection, title, documentName. Never load an entire large pack with getDocuments().
 
-Once resources are resolved, write one awaited async script for the dependent execution sequence:
-check the target, load chosen source documents, create/update the NPC, import items with intended preparation
-and equipment fields already set, fill derived resources if needed, and return a compact verification snapshot.
-These are separate native operations inside one script, not an atomic transaction. A tool call boundary is not
-required between every operation. Preserve source data and use the current fields below on the first write.
-Do not postpone a known preparation setting solely to a later correction call.
+## 2. Load sources, configure, write and verify in one script
 
-Verify within that script after the writes. If all requested fields match, report the result without another
-model round trip to read the same data. If a step throws or a check fails, stop dependent writes and return
-the created Actor UUID, completed steps and unresolved issue. Never catch an error and replay the whole sequence.
-Do not combine operations whose target or safety depends on unresolved discovery or a DM answer. Shorter flow
-must not remove validation or conceal partial completion. These instructions are a batching strategy, not a
-target call count; use additional calls when evidence requires them.
+Once references are known, use one awaited script for the dependent steps below. No model response is
+needed between each native operation. This is not an atomic transaction: keep the created Actor UUID
+and completed steps available if an operation fails. Stop dependent writes on failure; never replay creation.
 
-## Discover resources, then import them
+- Load only selected sources with `await fromUuid(uuid)` or `await pack.getDocument(entryId)`.
+- Check the exact target before creating. To copy an Actor, take `source.toObject()`, remove its top-level
+  `_id` and stale folder, change the requested fields, and create it. **Keep its items, effects and other
+  mechanics.** Do not empty the items array to make room for additions. For an existing Actor, preserve
+  unrelated fields. Compare requested additions with existing source UUIDs/identifiers before adding.
+- To import an Item, take `source.toObject()`, remove its `_id`, retain activities/effects/description,
+  set `_stats.compendiumSource=source.uuid`, and configure intended preparation/equipment/resources.
+  Import the resulting array with `actor.createEmbeddedDocuments('Item', dataArray)`.
+- Before import, inspect formulas such as `system.uses.max` and activity consumption targets for references
+  to class scales or other items absent from this NPC. Importing a feature's name does not resolve those
+  dependencies. If source rules specify a standalone allowance, configure that allowance on this NPC's
+  embedded Item and preserve recovery/consumption. Do not invent a class to satisfy an absent scale.
+  If the allowance cannot be determined, report the unresolved dependency instead of claiming readiness.
+- After creation/import, read effective values. Fill intended remaining resources from their derived
+  maxima with an awaited update in the same script. Check `item.system.uses.max`, `.value`, `.spent`
+  and recovery; a raw formula surviving storage does not prove usable charges.
 
-Use foundry_content_search to locate world actors and compendium Actor/Item entries. Follow its schema:
-documentType values are case-sensitive Actor, Item, Scene. Use returned references; do not invent IDs or paths.
-Match the requested rules edition and inspect source metadata when uncertain. Labels may be translated;
-after an empty search try a meaningful alternate language name, not many arbitrary query variations.
+## Native field reference
 
-To understand available packs, read game.packs metadata: collection, title, documentName.
-An index is cheaper than loading every document: await pack.getIndex(). Search several needed names in one
-index read when they share a pack. Fetch only chosen documents with pack.getDocument(entryId), or
-await fromUuid(exactUuid) using a reference returned by discovery. Batch independent reads in one script.
-This connects search results to native writes; no particular world pack or resource is assumed here.
+Use Actor.create({name,type:'npc',system,...}) or actor.update(patch). Unknown keys can be silently ignored.
 
-Import real Item data, including its activities, rather than recreating spell mechanics from memory:
-take source.toObject(), remove the source _id, retain other data, set _stats.compendiumSource=source.uuid,
-then await actor.createEmbeddedDocuments('Item', itemDataArray). For existing actors compare source UUIDs
-before adding items. Do not change compendium documents. Do not call getDocuments() for an entire large
-spell pack merely to find a few names.
+| Requirement | Native data and read-back |
+| --- | --- |
+| Abilities | `system.abilities.str/dex/con/int/wis/cha.value` |
+| Humanoid identity | `system.details.type.value='humanoid'`, ancestry in `system.details.type.subtype` |
+| HP and AC | `system.attributes.hp.value/max`; choose `ac.calc`, then read derived `ac.value` |
+| Caster | `system.attributes.spellcasting`; level in `system.attributes.spell.level` |
+| Proficiency | Read `system.attributes.prof`; derived from `system.details.cr`. Caster level is independent of CR; don't try to write proficiency or raise CR to imitate a PC. |
+| Slots | Read `system.spells.spellN.max`; set `.value` to intended remaining amount. Inherited `.override` or class Items may alter derivation; inspect and adjust inherited resources to the requested level. |
+| Spells | Preserve actual spell activities; `system.method='spell'`, numeric `system.prepared` (0 unprepared, 1 prepared, 2 always). Old `system.preparation` is not the current path. Cantrips need no slots/preparation. |
+| Equipment | `system.quantity`, `system.equipped` when requested. Preserve native weapon activities. NPC `proficient=null` can mean native default; inspect effective data if relevant. |
+| Item charges | Configure `system.uses.max` formula and `.spent`, preserve `.recovery`; verify effective `.max` and `.value` on the embedded Item. |
 
-## NPC data, not player advancement
+## 3. Return evidence, then stop
 
-Use Actor.create({name, type:'npc', system, ...}) or actor.update(patch). Check the exact target name
-before creating. Existing actor edits should read relevant current data first and preserve unrelated content.
-No player class, species or background Items are required merely to express an NPC's identity or caster level.
-Copying a suitable source Actor is also valid; verify and adjust inherited capabilities to the requested scope.
-
-Current fields:
-
-- Ability scores: system.abilities.str/dex/con/int/wis/cha.value.
-- Humanoid identity: system.details.type.value='humanoid'; subtype holds the intended ancestry text.
-- HP: system.attributes.hp.value and max. AC: choose the intended calc and read derived ac.value;
-  setting flat alone does not select the flat calculation mode.
-- Caster ability: system.attributes.spellcasting. Caster level: system.attributes.spell.level.
-- CR: system.details.cr. CR and caster level are independent. Do not raise CR just to mimic player
-  proficiency. Read system.attributes.prof, not a guessed writable proficiency field.
-- Standard NPC spellcasting derives slot maxima from caster level. Read system.spells.spellN.max;
-  set the desired remaining value only after knowing that maximum. Source-template overrides may override
-  this derivation; inspect override fields when inherited resources do not match. Class Items, if present,
-  can also alter derived caster level. Do not add one just to repair a field-path mistake.
-
-## Ready spells and equipment
-
-For normal slot-based spells, the current fields are system.method='spell' and system.prepared (numeric:
-0 unprepared, 1 prepared, 2 always prepared). Use the intended state and verify it persisted. The old
-system.preparation={mode,prepared} object is not a reliable update path on this version.
-Cantrips do not need preparation or slots. Do not replace the imported spell's activities to configure readiness.
-Prepared data does not prove automation execution; do not claim a cast was tested unless it actually was.
-
-Equipment imports use system.equipped and quantity. Inspect the source's weapon identifier/type and native
-activities; do not infer success from its display name alone. NPC weapon proficient=null can use native default
-proficiency, so inspect effective attack data rather than assuming null means untrained.
-
-## Verify, then stop
-
-Read actual derived NPC values and imported Item states after the writes: identity, ability scores, HP/AC,
-caster level, CR/proficiency, slot maxima/remaining, spell levels and readiness, equipment and quantities.
-Check that copied higher-level abilities or resource overrides were not accidentally retained.
-Use a compact snapshot; a successful update response alone does not prove an unknown field took effect.
-If a write is partial, timed out or uncertain, inspect its actual results before continuing; do not recreate
-the actor or blindly replay a batch. No auto-pack changes or script patches to its behavior.
-Report the values actually read, and any unresolved issue. Avoid lengthy build explanations not requested by DM.
+Return compact actual checks for the DM's requirements, source-mechanic preservation and resource readiness,
+plus the Actor UUID and mismatches. Use assertions against effective fields, not names alone. Avoid another
+read call if this script already checked the result. If the task is partial or uncertain, report exactly what
+exists; inspect before any retry. Do not claim automation execution was tested from data checks alone.
+Keep the final answer concise. No automatic concentration, initiative, rest or profession-action mechanisms
+are required merely to configure an NPC.

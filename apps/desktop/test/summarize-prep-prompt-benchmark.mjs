@@ -19,17 +19,18 @@ const groups=r.experiment.cases.map(caseId=>{
       trialsWithErrors:all.filter(t=>t.tools.some(tool=>tool.isError||tool.status==="rejected")).length,
       providerFailures:all.filter(t=>t.modelError).length,quotaFailures:all.filter(t=>t.providerFailure==="quota_exhausted").length,
       toolSequences:all.map(t=>({sample:t.sample,success:t.success,names:t.tools.map(t=>t.name)}))};};
-  const control=r.experiment.comparison==="revision"?"baseline":"js";
-  const js=arm(control),tools=arm("tools");
+  const [control,candidate]=({js:["js","tools"],revision:["baseline","tools"],"native-skill":["tools","native_skill"],"skill-revision":["native_skill_baseline","native_skill"]})[r.experiment.comparison]??[];
+  assert.ok(control&&candidate,"Unknown comparison mode");
+  const js=arm(control),tools=arm(candidate);
   const pairs=[];for(let sample=0;sample<r.experiment.samplesPerCase;sample++){
-    const a=r.prepTrials.find(t=>t.caseId===caseId&&t.arm===control&&t.sample===sample),b=r.prepTrials.find(t=>t.caseId===caseId&&t.arm==="tools"&&t.sample===sample);
+    const a=r.prepTrials.find(t=>t.caseId===caseId&&t.arm===control&&t.sample===sample),b=r.prepTrials.find(t=>t.caseId===caseId&&t.arm===candidate&&t.sample===sample);
     if(a.success&&b.success)pairs.push({sample,changePercent:(b.ms/a.ms-1)*100});
   }
-  return {caseId,controlArm:control,js,tools,p50ChangePercent:js.latencyMs.p50&&tools.latencyMs.p50?(tools.latencyMs.p50/js.latencyMs.p50-1)*100:null,
+  return {caseId,controlArm:control,candidateArm:candidate,control:js,candidate:tools,p50ChangePercent:js.latencyMs.p50&&tools.latencyMs.p50?(tools.latencyMs.p50/js.latencyMs.p50-1)*100:null,
     p95ChangePercent:js.latencyMs.p95&&tools.latencyMs.p95?(tools.latencyMs.p95/js.latencyMs.p95-1)*100:null,
     pairedChangePercent:stats(pairs.map(p=>p.changePercent)),pairedWins:pairs.filter(p=>p.changePercent<0).length,pairs};
 });
-const result={model:r.model,experiment:r.experiment,thinkingLevels:[...new Set(r.prepTrials.map(t=>t.thinking))],groups,
-  caveats:["Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.","Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.","First event includes reasoning/tool events, not necessarily first visible user-facing text.","Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.","Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."]};
+const result={summaryVersion:2,model:r.model,experiment:r.experiment,thinkingLevels:[...new Set(r.prepTrials.map(t=>t.thinking))],groups,
+  caveats:["Use experiment.comparison and promptPolicy to distinguish tool, code and skill comparisons; arm labels are explicit.","Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.","First event includes reasoning/tool events, not necessarily first visible user-facing text.","Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.","Consult experiment.cases for upload coverage; repeated assets may be reused. NPC intent and transfer cases require manual review beyond automated checks."]};
 const output=file.replace(/\.json$/,".prep-summary.json");await writeFile(output,JSON.stringify(result,null,2));
-console.log(JSON.stringify({output,results:groups.map(g=>({case:g.caseId,jsSuccess:g.js.success,toolsSuccess:g.tools.success,jsP50:g.js.latencyMs.p50,toolsP50:g.tools.latencyMs.p50,p50ChangePercent:g.p50ChangePercent,p95ChangePercent:g.p95ChangePercent,jsCalls:g.js.calls.mean,toolsCalls:g.tools.calls.mean,fallbacks:g.tools.jsFallbacks}))},null,2));
+console.log(JSON.stringify({output,results:groups.map(g=>({case:g.caseId,controlArm:g.controlArm,candidateArm:g.candidateArm,controlSuccess:g.control.success,candidateSuccess:g.candidate.success,controlP50:g.control.latencyMs.p50,candidateP50:g.candidate.latencyMs.p50,p50ChangePercent:g.p50ChangePercent,p95ChangePercent:g.p95ChangePercent,controlCalls:g.control.calls.mean,candidateCalls:g.candidate.calls.mean,fallbacks:g.candidate.jsFallbacks}))},null,2));
