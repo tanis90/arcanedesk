@@ -1,0 +1,500 @@
+{
+  "status": "completed",
+  "rawReport": "benchmark-1788871657166.json",
+  "frozenCommit": "580b387",
+  "experiment": {
+    "arms": [
+      "js",
+      "tools"
+    ],
+    "comparison": "js",
+    "kind": "same-code production tools versus native JS",
+    "cases": [
+      "create_npc",
+      "grant_items",
+      "edit_image",
+      "scene_layout",
+      "conditions",
+      "upload_image"
+    ],
+    "samplesPerCase": 1,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "580b3876ea844de09c5fb5968676c112b4f5d1d2",
+    "promptMode": "production",
+    "suiteVersion": "prep-v1-draft2",
+    "taskTimeoutMs": 180000,
+    "experienceTargetMs": 120000,
+    "thinkingOverride": "off",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "trials": [
+    {
+      "caseId": "create_npc",
+      "arm": "js",
+      "ms": 19424.120000000003,
+      "calls": 2,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "count": 1,
+          "prototype": "PB1788871657166-0-create_npc 霜牙",
+          "source": null,
+          "hp": 11,
+          "hasBite": true
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "create_npc",
+      "arm": "tools",
+      "ms": 29692.8649,
+      "calls": 8,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "count": 1,
+          "prototype": "PB1788871657166-0-create_npc 霜牙",
+          "source": null,
+          "hp": 11,
+          "hasBite": true
+        }
+      },
+      "toolErrors": 4,
+      "toolSequence": [
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_open",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "grant_items",
+      "arm": "js",
+      "ms": 38503.61770000001,
+      "calls": 7,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "rapiers": 1,
+          "bows": 1,
+          "rapierEquipped": false,
+          "bowEquipped": true,
+          "bowQuantity": 1
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "grant_items",
+      "arm": "tools",
+      "ms": 20687.072199999995,
+      "calls": 6,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "rapiers": 1,
+          "bows": 1,
+          "rapierEquipped": false,
+          "bowEquipped": true,
+          "bowQuantity": 1
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_grant_items"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "edit_image",
+      "arm": "js",
+      "ms": 10486.664000000004,
+      "calls": 2,
+      "success": false,
+      "withinExperienceTarget": false,
+      "verification": {
+        "ok": false,
+        "details": {
+          "name": "PB1788871657166-0-edit_image 队长",
+          "hp": {
+            "max": 18,
+            "temp": 0,
+            "tempmax": 0,
+            "value": 8,
+            "formula": "",
+            "effectiveMax": 18,
+            "damage": 10,
+            "pct": 44.44444444444444
+          },
+          "ac": 12,
+          "img": "systems/dnd5e/tokens/beast/Wolf.webp",
+          "prototype": "systems/dnd5e/tokens/beast/Wolf.webp",
+          "token": {
+            "name": "PB1788871657166-0-edit_image Token1",
+            "x": 200,
+            "y": 200,
+            "width": 1,
+            "height": 1,
+            "img": "systems/dnd5e/icons/svg/actors/npc.svg"
+          }
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "edit_image",
+      "arm": "tools",
+      "ms": 15753.0674,
+      "calls": 3,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "name": "PB1788871657166-0-edit_image 队长",
+          "hp": {
+            "max": 18,
+            "temp": 0,
+            "tempmax": 0,
+            "value": 8,
+            "formula": "",
+            "effectiveMax": 18,
+            "damage": 10,
+            "pct": 44.44444444444444
+          },
+          "ac": 14,
+          "img": "systems/dnd5e/tokens/beast/Wolf.webp",
+          "prototype": "systems/dnd5e/tokens/beast/Wolf.webp",
+          "token": {
+            "name": "PB1788871657166-0-edit_image Token1",
+            "x": 200,
+            "y": 200,
+            "width": 1,
+            "height": 1,
+            "img": "systems/dnd5e/tokens/beast/Wolf.webp"
+          }
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_update"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "scene_layout",
+      "arm": "js",
+      "ms": 25759.46730000002,
+      "calls": 2,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "tokens": [
+            {
+              "name": "PB1788871657166-0-scene_layout Token2",
+              "x": 500,
+              "y": 400,
+              "actorId": "34ZJ7I9XoKBh7lgF"
+            },
+            {
+              "name": "PB1788871657166-0-scene_layout Token1",
+              "x": 300,
+              "y": 400,
+              "actorId": "yedlbbtOyAA7aIlH"
+            },
+            {
+              "name": "新守卫A",
+              "x": 700,
+              "y": 400,
+              "actorId": "yedlbbtOyAA7aIlH"
+            },
+            {
+              "name": "新守卫B",
+              "x": 900,
+              "y": 400,
+              "actorId": "yedlbbtOyAA7aIlH"
+            }
+          ],
+          "active": false,
+          "current": "A6V8lDKFVtg36CDP"
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "scene_layout",
+      "arm": "tools",
+      "ms": 19616.920699999988,
+      "calls": 4,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "tokens": [
+            {
+              "name": "PB1788871657166-0-scene_layout Token1",
+              "x": 300,
+              "y": 400,
+              "actorId": "JaVlIFlqCNM1MfpX"
+            },
+            {
+              "name": "PB1788871657166-0-scene_layout Token2",
+              "x": 500,
+              "y": 400,
+              "actorId": "2R3rucX3P3dpjQeX"
+            },
+            {
+              "name": "新守卫A",
+              "x": 700,
+              "y": 400,
+              "actorId": "JaVlIFlqCNM1MfpX"
+            },
+            {
+              "name": "新守卫B",
+              "x": 900,
+              "y": 400,
+              "actorId": "JaVlIFlqCNM1MfpX"
+            }
+          ],
+          "active": false,
+          "current": "A6V8lDKFVtg36CDP"
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_content_search",
+        "foundry_scene_get",
+        "foundry_content_search",
+        "foundry_scene_apply"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "conditions",
+      "arm": "js",
+      "ms": 14641.584700000007,
+      "calls": 2,
+      "success": false,
+      "withinExperienceTarget": false,
+      "verification": {
+        "ok": false,
+        "details": {
+          "actors": [
+            {
+              "id": "y6T6XxPeitOqNObO",
+              "statuses": []
+            },
+            {
+              "id": "ZM1flIgNs2zapEf0",
+              "statuses": []
+            },
+            {
+              "id": "UYLoRJPjkOmTXtCM",
+              "statuses": []
+            }
+          ],
+          "protectedIntact": true,
+          "uniqueStatuses": false
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "conditions",
+      "arm": "tools",
+      "ms": 11060.982099999994,
+      "calls": 3,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "actors": [
+            {
+              "id": "8u3T98J7eF2IfoKY",
+              "statuses": [
+                "prone",
+                "poisoned"
+              ]
+            },
+            {
+              "id": "sx6sg1V9rhXm3bxL",
+              "statuses": [
+                "prone",
+                "poisoned"
+              ]
+            },
+            {
+              "id": "2DxgOKUxnPrPiH5q",
+              "statuses": []
+            }
+          ],
+          "protectedIntact": true,
+          "uniqueStatuses": true
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_conditions_set"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "upload_image",
+      "arm": "js",
+      "ms": 17839.022499999992,
+      "calls": 3,
+      "success": false,
+      "withinExperienceTarget": false,
+      "verification": {
+        "ok": false,
+        "details": {
+          "imagePath": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-aliyun-qa\\benchmark-1788871657166\\0-upload_image-js\\benchmark20260508180804.jpg",
+          "hash": null,
+          "loadable": false,
+          "untouched": true,
+          "imageError": null
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_open",
+        "read",
+        "browser_evaluate"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    },
+    {
+      "caseId": "upload_image",
+      "arm": "tools",
+      "ms": 12023.212599999999,
+      "calls": 3,
+      "success": true,
+      "withinExperienceTarget": true,
+      "verification": {
+        "ok": true,
+        "details": {
+          "imagePath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+          "hash": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785",
+          "loadable": true,
+          "untouched": true,
+          "imageError": null
+        }
+      },
+      "toolErrors": 0,
+      "toolSequence": [
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_update"
+      ],
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "cleaned": true
+    }
+  ],
+  "caveats": [
+    "One pair per case is a functional/trajectory regression, not a stable latency estimate.",
+    "Tool arm uses production routing; JS arm uses native routing and eight tools.",
+    "Uploaded asset is reused and connections are warm.",
+    "Old server-default-thinking reports are a separate environment."
+  ]
+}

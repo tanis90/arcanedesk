@@ -226,3 +226,5 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 ### 修正后的迭代协议
 
 以[唯一技术方案 §14.26](foundry-prep-play-technical-plan.md#1426-修正后的-goal-与-loop)为准。每轮单因素，两臂各 3 次交错；迁移与既有题回归必须在冻结候选后执行。新增 `--thinking=off` 显式固定客户端档位；逐次 `modelConfiguration` 与 `requestModes` 保存模型能力和实际出站思考参数（不保存凭据或请求正文）。Qwen 基线校正后单独分组，不能与旧服务端默认思考报告混算提速。汇总 v3 新增 withinExperienceTarget / withinExperienceTargetRate。
+
+本轮结算与停止依据见[技术方案 §14.29](foundry-prep-play-technical-plan.md#1429-修正后-loop-的回归与最终结算)。批量接口已撤回；实验 NPC skill 尚未推广。牧师现为已见题，后续用例版本 draft2 忽略导入元数据比较机制并显式检查 2014 法术来源。历史 draft1 原始评分不改写，[独立复核](prep-priest-transfer-results.json)单独记录，不能当作重新预注册的成功率。
