@@ -5,16 +5,17 @@ const unavailable = () => Object.assign(new Error("Session is being deleted or h
 
 /** A mode's resident sessions. Navigation never disposes a running host. */
 export class SessionRegistry {
-  /** @param {{createHost: (cwd?: string) => any, deletions?: any, navigation?: any}} options */
-  constructor({ createHost, deletions, navigation }) {
+  /** @param {{createHost: (cwd?: string) => any, cleanup?: (id: string) => any, navigation?: any, listStored?: () => Promise<any[]>}} options */
+  constructor({ createHost, cleanup = () => {}, navigation, listStored }) {
     this.createHost = createHost;
-    this.deletions = deletions; this.navigation = navigation;
+    this.listStored = listStored;
+    this.cleanup = cleanup; this.navigation = navigation;
     this.closing = false;
     this.hosts = new Map();
     this.activeHost = null;
     this.pending = new Map();
     this.selection = 0;
-    this.deleting = new Map(); this.deleted = new Set();
+    this.deleting = new Map();
     this.evicted = new Map();
   }
 
@@ -53,47 +54,50 @@ export class SessionRegistry {
     return removed;
   }
 
+  admit(host) {
+    if (this.closing) return { ok: false, code: "APP_STOPPING" };
+    if (host.retired || this.deleting.has(pathKey(host.describeCurrent().path))) return { ok: false, code: "SESSION_DELETING" };
+    return null;
+  }
+
   async deleteSession(sessionPath) {
     const key = pathKey(sessionPath);
     if (this.deleting.has(key)) return this.deleting.get(key);
-    if (this.deleted.has(key)) return { ok: true };
     const target = this.allHosts().find(h => pathKey(h.describeCurrent().path) === key);
-    // Validate ownership even for an unloaded history file.
-    const manager = (target ?? this.activeHost).openSessionManager(sessionPath);
-    const sessionId = target?.describeCurrent().id ?? manager?.getSessionId();
-    this.navigation?.assertDeletable(sessionId, target);
+    const manager = target?.sessionManager ?? this.activeHost.openSessionManager(sessionPath);
+    const sessionId = target?.describeCurrent().id ?? manager.getSessionId();
+    const selectionAtDelete = this.selection;
+    const wasSelected = target && this.activeHost === target;
     if (target) target.deleting = true;
     const operation = Promise.resolve().then(async () => {
+      let removed = false;
       try {
-        const opening = this.pending.get(key);
-        if (opening) await opening.catch(error => { if (error.code !== "SESSION_DELETING") throw error; });
+        await this.pending.get(key)?.catch(error => { if (error.code !== "SESSION_DELETING") throw error; });
         if (target) {
           const stopped = await target.abort(target.task?.id);
-          if (stopped?.ok === false || target.busy) throw new Error("Session task has not stopped");
-        }
-        this.deletions?.begin(sessionId, path.resolve(sessionPath));
-        try { await unlink(sessionPath); }
-        catch (error) {
-          if (error.code !== "ENOENT") { this.deletions?.cancel(sessionId); throw error; }
-        }
-        this.deleted.add(key);
-        for (const [id, file] of this.evicted) if (pathKey(file) === key) this.evicted.delete(id);
-        let warning;
-        try { this.deletions?.commit(sessionId); } catch (error) { warning = error.message; }
-        if (target) {
-          target.dispose();
-          this.hosts.delete(target.describeCurrent().id);
-          if (this.activeHost === target) {
-            this.activeHost = null;
-            const selection = ++this.selection;
-            const next = await this.select(null, true, selection);
-            if (next && selection === this.selection) next.emit({ type: "session_switched", ...next.currentPayload() });
+          if (stopped?.ok === false) throw new Error(stopped.error ?? "Unable to stop session");
+          target.session?.abortCompaction?.();
+          await target.waitForOperations?.();
+          try { target.dispose(); }
+          finally {
+            this.hosts.delete(sessionId);
+            if (this.activeHost === target) this.activeHost = null;
           }
+        }
+        try { await unlink(sessionPath); } catch (error) { if (error.code !== "ENOENT") throw error; }
+        removed = true;
+        this.evicted.delete(sessionId);
+        let warning;
+        try { await this.cleanup(sessionId); } catch (error) { warning = error.message; }
+        if (wasSelected && !this.activeHost && this.selection === selectionAtDelete) {
+          const selection = ++this.selection;
+          const next = await this.select(null, true, selection);
+          if (next && selection === this.selection) next.emit({ type: "session_switched", ...next.currentPayload() });
         }
         return { ok: true, ...(warning ? { warning } : {}) };
       } catch (error) {
-        if (this.deleted.has(key)) return { ok: true, warning: error.message };
-        if (target && !this.deleted.has(key)) target.deleting = false;
+        if (removed) return { ok: true, warning: error.message };
+        if (target && !target.retired) target.deleting = false;
         return { ok: false, error: error.message };
       } finally { this.deleting.delete(key); }
     });
@@ -104,7 +108,7 @@ export class SessionRegistry {
   async select(sessionPath, fresh = false, selection = ++this.selection, cwd = undefined) {
     if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
     const requestedKey = sessionPath ? pathKey(sessionPath) : null;
-    if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey) || this.deletions?.isDeleted(requestedKey))) throw unavailable();
+    if (requestedKey && (this.deleting.has(requestedKey))) throw unavailable();
     let host = requestedKey ? this.allHosts().find(h => pathKey(h.describeCurrent().path) === requestedKey) : null;
     if (!host) {
       const key = requestedKey ?? (fresh ? Symbol("new") : "initial");
@@ -113,12 +117,12 @@ export class SessionRegistry {
         pending = (async () => {
           const created = this.createHost(cwd);
           created.navigation = this.navigation;
+          created.registry = this;
           try {
             await created.start({ sessionPath, fresh });
             if (this.closing) throw Object.assign(new Error("Application is stopping"), { code: "APP_STOPPING" });
-            if (requestedKey && (this.deleting.has(requestedKey) || this.deleted.has(requestedKey))) throw unavailable();
+            if (requestedKey && (this.deleting.has(requestedKey))) throw unavailable();
             const id = created.describeCurrent()?.id;
-            if (!id) throw new Error("Session has no stable identity");
             this.hosts.set(id, created);
             this.evicted.delete(id);
             return created;
@@ -132,7 +136,8 @@ export class SessionRegistry {
       try { host = await pending; }
       finally { if (this.pending.get(key) === pending) this.pending.delete(key); }
     }
-    if (host?.deleting || (requestedKey && this.deleted.has(requestedKey))) throw unavailable();
+    // A shared load can settle just before another caller starts deleting its host.
+    if (host.deleting || host.retired) throw unavailable();
     if (selection !== this.selection) return this.activeHost;
     this.activeHost = host;
     host.lastUsedAt = Date.now();
@@ -140,11 +145,11 @@ export class SessionRegistry {
   }
 
   async listSessions() {
-    const active = await this.start();
-    const stored = await active.listSessions();
+    const stored = this.listStored ? await this.listStored() : await this.activeHost?.listSessions() ?? [];
     const rows = new Map(stored.map(row => [row.id, { ...row, active: false }]));
     for (const host of this.allHosts()) {
       const session = host.describeCurrent();
+      if (this.listStored && !rows.has(session.id)) continue;
       const row = rows.get(session.id) ?? { ...session, firstMessage: "", messageCount: host.session?.messages?.length ?? 0 };
       // The SDK may buffer the first turn before flushing the session file.
       // Resident metadata comes from its native journal, including all branches.

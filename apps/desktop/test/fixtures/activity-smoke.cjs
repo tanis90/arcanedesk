@@ -22,7 +22,6 @@ app.whenReady().then(async () => {
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
   let panelNavigations = 0;
-  const deletedIds = [];
   const { ShutdownCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/shutdown-coordinator.js")));
   let finishExitStop, didQuit = false, exitAdmission = false;
   const exitHost = { busy: true, task: { id: "exit-test" }, async abort() {
@@ -60,7 +59,7 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
-    if (channel === "sessions:deleted") return { ok: true, sessionIds: deletedIds };
+    if (channel === "sessions:identities") return { ok: true, sessionIds: [...sessions.keys()] };
     if (channel === "lifecycle:get") return shutdown.snapshot();
     if (channel === "lifecycle:cancel-exit") { shutdown.cancel(); return shutdown.snapshot(); }
     if (channel === "panel:open") { panelNavigations++; return { ok: true }; }
@@ -251,11 +250,10 @@ app.whenReady().then(async () => {
     await evaluate(`installSnapshot(${JSON.stringify(deletedSnapshot)})`);
     assert.equal(await evaluate('selectedSessionId'), beforeDeletedInstall);
     assert.deepEqual(await evaluate('workspaceStore.load("A")'), {});
-    assert.deepEqual(await evaluate('(async () => { const fresh = new ArcaneConversationState.WorkspaceStore(); await fresh.save("A", { draft: "late resurrection" }); return fresh.load("A"); })()'), {});
+    assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("A")'), {});
     await evaluate('Promise.all([workspaceStore.save("delete-race", { images: [{ data: "secret" }] }), workspaceStore.remove("delete-race")])');
     assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("delete-race")'), {});
     await evaluate('workspaceStore.save("offline-session", { draft: "missed deletion", images: [{ data: "secret" }] })');
-    deletedIds.push("A", "offline-session");
     const deletionReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await deletionReload;
     await until('deletedSessions.has("offline-session") && selectedSessionId === "B"');

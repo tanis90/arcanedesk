@@ -5,7 +5,7 @@
 //   数据层:world_status + combat_*(固定页面 runtime,Turn Protocol v2,四态)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
-import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
+import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -265,6 +265,8 @@ export class AgentHost {
     this._lastError = null;
     /** @type {import("./conversations/session-navigation.js").SessionNavigation | undefined} */
     this.navigation = undefined;
+    this.registry = undefined;
+    this.operationWaiters = [];
   }
 
   /** 本 host 的工作目录:session 分桶、内置工具、skills 扫描全部以它为锚。 */
@@ -296,6 +298,7 @@ export class AgentHost {
     if (!isPathInside(this.sessionDir(), sessionPath)) {
       throw new SessionModeError("SESSION_PATH_OUTSIDE_MODE_DIR", "会话文件不在当前模式目录内");
     }
+    if (!statSync(sessionPath).isFile()) throw new Error("Session path is not a file");
     const manager = SessionManager.open(sessionPath, this.sessionDir());
     claimSessionMode(manager, this.profile.mode);
     return manager;
@@ -661,6 +664,8 @@ export class AgentHost {
    * 自然恢复。只作用于本 host 当前会话,不广播、不改全局默认。
    */
   async setCurrentModel(providerId, modelId, applyNow = false) {
+    const unavailable = this.registry?.admit(this);
+    if (unavailable) return unavailable;
     this.operations++;
     try {
       const ref = { providerId, modelId };
@@ -694,7 +699,7 @@ export class AgentHost {
       this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
       if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
       return { ok: true, ...(sameModel ? { noop: true } : null) };
-    } finally { this.operations--; }
+    } finally { this.endOperation(); }
   }
 
   /** 会话是否已开始对话(有消息条目);空会话才允许被全局默认接管。 */
@@ -730,14 +735,12 @@ export class AgentHost {
 
   /** 手动压缩上下文(pi 原生 compact;自动压缩默认开启,这里只是手动入口)。 */
   async compact(instructions) {
-    this.navigation?.assertWritable(this.describeCurrent()?.id);
     this.operations++;
     try {
-      if (!this.session) throw new Error("agent session not started");
       if (this.session.isCompacting) return { ok: false, error: "compaction already in progress" };
       const result = await this.session.compact(instructions || undefined);
       return { ok: true, tokensBefore: result?.tokensBefore };
-    } finally { this.operations--; }
+    } finally { this.endOperation(); }
   }
 
   get task() { return this.tasks?.task ?? null; }
@@ -772,37 +775,13 @@ export class AgentHost {
   }
 
   submitInput(text, images, commandId, prepare = null, replacesInputId = null) {
-    try { this.navigation?.assertWritable(this.describeCurrent()?.id); }
-    catch (error) { return { ok: false, code: error.code, error: error.message }; }
-    if (this.closing) return { ok: false, code: "APP_STOPPING" };
-    if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
-    if (!this.session) throw new Error("agent session not started");
+    const unavailable = this.registry?.admit(this);
+    if (unavailable) return unavailable;
     const result = this.taskCoordinator().submit({ commandId, text, images, prepare, replacesInputId });
     if (result.ok && !result.duplicate && !this.sessionManager?.getSessionName()) {
       try { this.sessionManager?.appendSessionInfo(text.trim().replace(/\s+/g, " ").slice(0, 24)); } catch { /* naming is best effort */ }
     }
     return result;
-  }
-
-  async prompt(text, images) {
-    if (!this.session) throw new Error("agent session not started");
-    if (this.busy) throw new Error("Task already running");
-    this.submitInput(text, images, randomUUID());
-    await this.tasks.run;
-    // 首轮结束后用首条用户消息做会话标题(best-effort;侧栏展示用)
-    try {
-      if (this.sessionManager && !this.sessionManager.getSessionName()) {
-        const title = text.trim().replace(/\s+/g, " ").slice(0, 24);
-        if (title) this.sessionManager.appendSessionInfo(title);
-      }
-    } catch {
-      /* naming is best-effort */
-    }
-  }
-
-  async steer(text, images) {
-    if (!this.session) throw new Error("agent session not started");
-    return this.submitInput(text, images, randomUUID());
   }
 
   async abort(taskId = null) {
@@ -818,6 +797,13 @@ export class AgentHost {
     this.session = null;
     try { unsubscribe?.(); }
     finally { try { session?.dispose(); } finally { this.telemetry?.releaseSession?.(); } }
+  }
+
+  endOperation() {
+    if (--this.operations === 0) for (const resolve of this.operationWaiters.splice(0)) resolve();
+  }
+  waitForOperations() {
+    return this.operations ? new Promise(resolve => this.operationWaiters.push(resolve)) : Promise.resolve();
   }
 
   canEvict() {
@@ -842,7 +828,6 @@ export class AgentHost {
         this.approvals.delete(approvalId);
         this.approvalSnapshots.delete(approvalId);
         this.emit({ type: "approval_resolved", approvalId, approved });
-        if (!this.tasks?.admission && this.tasks?.task?.state === "waiting_user" && !this.approvals.size && !this.tasks.snapshotAttentions().some(a => a.state === "pending")) this.tasks.setTaskState("running");
         this.telemetry?.approvalResolved(this.profile.mode, payload?.tool, outcome, Date.now() - requestedAt);
         resolve(approved);
       };
@@ -852,10 +837,9 @@ export class AgentHost {
       }, APPROVAL_TIMEOUT_MS);
       this.approvals.set(approvalId, finish);
       this.approvalSnapshots.set(approvalId, { approvalId, requestedAt, ...payload });
-      if (this.tasks?.busy && this.tasks.task.state !== "stopping") this.tasks.setTaskState("waiting_user");
       this.emit({ type: "approval_request", approvalId, ...payload });
     });
-    return this.tasks?.admission ? this.tasks.admission.waitForUser(pending).catch(() => false) : pending;
+    return this.tasks ? this.tasks.waitForUser(pending).catch(() => false) : pending;
   }
 
   respondApproval(approvalId, approved) {

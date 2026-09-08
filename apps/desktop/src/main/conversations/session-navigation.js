@@ -23,12 +23,7 @@ export class SessionNavigation {
     } catch (error) { if (error.code !== "ENOENT") this.error = error.message; }
   }
   get(id) { return { ...(this.rows[id] ?? {}) }; }
-  assertWritable(id) {
-    if (this.error) throw fail("NAVIGATION_UNAVAILABLE", this.error);
-    if (this.rows[id]?.archivedAt != null) throw fail("SESSION_ARCHIVED", "Restore this session before starting a task");
-  }
   patch(id, change) {
-    if (this.error) throw fail("NAVIGATION_UNAVAILABLE", this.error);
     if (!/^[\w-]{1,128}$/.test(id)) throw fail("INVALID_SESSION_ID", "Invalid session identity");
     const next = { ...this.rows };
     if (change === null) delete next[id]; else next[id] = { ...this.get(id), ...change };
@@ -38,7 +33,7 @@ export class SessionNavigation {
     try { writeFileSync(fd, JSON.stringify({ schemaVersion: 1, sessions: next })); fsyncSync(fd); }
     finally { closeSync(fd); }
     renameSync(temporary, this.file);
-    this.rows = next;
+    this.rows = next; this.error = null;
     this.emit({ type: "navigation_changed", sessionId: id, metadata: this.get(id) });
     return this.get(id);
   }
@@ -52,7 +47,7 @@ export class SessionNavigation {
     }
     if (action === "restore") return this.patch(id, { archivedAt: undefined, pinnedOrder: undefined });
     if (action === "pin") {
-      this.assertWritable(id);
+      if (row.archivedAt != null) throw fail("SESSION_ARCHIVED", "Restore the session before pinning it");
       if (typeof value !== "boolean") throw fail("INVALID_PIN", "Pinned must be a boolean");
       return this.patch(id, { pinnedOrder: value ? row.pinnedOrder ?? Math.max(0, ...Object.values(this.rows).map(item => item.pinnedOrder ?? 0)) + 1 : undefined });
     }
@@ -62,10 +57,5 @@ export class SessionNavigation {
       return this.patch(id, { customTitle: title });
     }
     throw fail("INVALID_NAVIGATION_ACTION", "Unknown navigation action");
-  }
-  assertDeletable(id, host) {
-    if (this.error) throw fail("NAVIGATION_UNAVAILABLE", this.error);
-    if (this.get(id).archivedAt == null) throw fail("SESSION_NOT_ARCHIVED", "Archive the session before deleting it");
-    if (host?.busy || host?.operations) throw fail("SESSION_BUSY", "Session has unfinished work");
   }
 }

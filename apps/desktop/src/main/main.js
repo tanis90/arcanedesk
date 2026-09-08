@@ -12,13 +12,15 @@ import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
 import { SessionNavigation, projectKey } from "./conversations/session-navigation.js";
 import { SessionRegistry } from "./conversations/session-registry.js";
+import { listStoredSessions } from "./conversations/session-catalog.js";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
-import { SessionDeletions } from "./conversations/session-deletions.js";
+import { StartupReconciler } from "./conversations/startup-reconciler.js";
 import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
 import "../shared/i18n/messages.js";
-import { configPath, migrateLegacyConfig } from "./config-dir.js";
+import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
@@ -726,13 +728,12 @@ app.whenReady().then(async () => {
   // Each mode owns a registry; command contexts capture an actual session host.
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
-  const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks") });
   const navigation = new SessionNavigation({ file: configPath("session-navigation.json"), emit: sendToRenderer });
-  for (const id of deletions.snapshot().sessionIds) {
-    if (Object.keys(navigation.get(id)).length) { try { navigation.patch(id, null); } catch (error) { navigation.error = error.message; } }
-  }
+  const listDiskSessions = async () => (await Promise.all(["prep", "combat"].map(mode => listStoredSessions(getAgentDir(), mode)))).flat();
+  const reconciler = new StartupReconciler({ directory: configDir(), listSessions: listDiskSessions,
+    navigation, activity: () => activityCenter });
   const hosts = {
-    combat: new SessionRegistry({ deletions, navigation, createHost: (directory) => new AgentHost({
+    combat: new SessionRegistry({ cleanup: id => reconciler.cleanup(id), navigation, listStored: () => listStoredSessions(getAgentDir(), "combat"), createHost: (directory) => new AgentHost({
       foundryRuntime,
       getFoundryView: () => foundryView,
       openFoundry: openFoundryView,
@@ -746,7 +747,7 @@ app.whenReady().then(async () => {
         getCwd: () => directory ?? combatWorkspace,
       },
     }) }),
-    prep: new SessionRegistry({ deletions, navigation, createHost: (directory) => {
+    prep: new SessionRegistry({ cleanup: id => reconciler.cleanup(id), navigation, listStored: () => listStoredSessions(getAgentDir(), "prep"), createHost: (directory) => {
       const cwd = directory ?? prepStore.data.lastCwd ?? prepFallbackWorkspace;
       return new AgentHost({
       foundryRuntime,
@@ -788,13 +789,12 @@ app.whenReady().then(async () => {
     },
     log: console.error,
   });
-  for (const id of deletions.snapshot().sessionIds) activityCenter.remove(id);
+  try { await reconciler.run(); } catch (error) { console.error("[startup] conversation reconciliation failed", error.message); }
   desktopNotifications = new DesktopNotifications({ file: configPath("notifications.json"),
     supported: () => Notification.isSupported(),
     foreground: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && mainWindow.isVisible() && !mainWindow.isMinimized()),
     create: options => new Notification({ ...options, icon: ARCANE_APP_ICON }),
     lookup: id => activityCenter.get(id),
-    isDeleted: id => deletions.snapshot().sessionIds.includes(id),
     text: kind => {
       const key = { completed: "chat.task.completed", failed: "chat.task.failed", waiting_user: "chat.task.waitingUser" }[kind];
       return globalThis.ARCANE_MESSAGES[resolveLocale()][key];
@@ -895,7 +895,6 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok || validated.context.mode !== "prep") return staleModeResponse();
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     if (!modeController.matches(context)) return staleModeResponse();
     const picked = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
     if (picked.canceled || picked.filePaths.length === 0) return { ok: false, canceled: true };
@@ -914,7 +913,6 @@ app.whenReady().then(async () => {
   // Navigation spans modes; commands resolve an owned session rather than the selected view.
   async function navigationRows() {
     const result = await Promise.all(["prep", "combat"].map(async mode => {
-      await modeController.ensureStarted(mode);
       return (await hosts[mode].listSessions()).map(row => ({ ...row, mode, projectKey: projectKey(row.cwd), activity: activityCenter.get(row.id) }));
     }));
     return result.flat();
@@ -925,12 +923,12 @@ app.whenReady().then(async () => {
     const registry = hosts[row.mode];
     if (!registry.get(id)) await registry.select(row.path, false, -1);
     const host = registry.get(id);
-    if (!host || deletions.isDeleted(row.path)) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
+    if (!host) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
     return { row, registry, host };
   }
   ipcMain.handle("sessions:navigation", async event => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
-    try { return { ok: !navigation.error, sessions: await navigationRows(), error: navigation.error }; }
+    try { return { ok: true, sessions: await navigationRows(), warning: navigation.error }; }
     catch (error) { return { ok: false, code: error.code, error: error.message }; }
   });
   for (const [channel, action] of [["setPinned", "pin"], ["rename", "rename"], ["archive", "archive"], ["restore", "restore"]]) {
@@ -946,13 +944,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("sessions:deleteArchived", async (event, request) => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     try {
-      const { row, registry, host } = await navigationTarget(request?.sessionId);
-      navigation.assertDeletable(row.id, host);
+      const { row, registry } = await navigationTarget(request?.sessionId);
       const result = await registry.deleteSession(row.path);
-      if (result.ok) {
-        activityCenter.remove(row.id);
-        try { navigation.patch(row.id, null); } catch (error) { result.warning = error.message; }
-      }
       return result;
     } catch (error) { return { ok: false, code: error.code ?? "SESSION_DELETE_FAILED", error: error.message }; }
   });
@@ -962,7 +955,6 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     const list = await hosts[context.mode].listSessions();
     return {
       ok: true,
@@ -984,13 +976,16 @@ app.whenReady().then(async () => {
     try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.cwd() }; }
     catch (error) { return { ok: false, code: error.code ?? "HISTORY_LOAD_FAILED", error: error.message }; }
   });
-  ipcMain.handle("sessions:deleted", event => isTrustedChatIpc(event) ? deletions.snapshot() : { ok: false, sessionIds: [] });
+  ipcMain.handle("sessions:identities", async event => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    try { return { ok: true, sessionIds: (await listDiskSessions()).map(row => row.id) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
   ipcMain.handle("sessions:new", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     const selection = ++hosts[context.mode].selection;
-    await modeController.ensureStarted(context.mode);
     let directory;
     if (request?.cwd != null) {
       directory = String(request.cwd);
@@ -1006,11 +1001,7 @@ app.whenReady().then(async () => {
     const context = validated.context;
     const selection = ++hosts[context.mode].selection;
     const sessionPath = String(request?.path ?? "");
-    await modeController.ensureStarted(context.mode);
-    const list = await hosts[context.mode].listSessions();
-    if (!list.some((s) => s.path === sessionPath)) {
-      return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
-    }
+
     try {
       const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
       return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
@@ -1021,21 +1012,10 @@ app.whenReady().then(async () => {
     if (!validated.ok) return validated;
     const context = validated.context;
     const sessionPath = String(request?.path ?? "");
-    await modeController.ensureStarted(context.mode);
-    const list = await hosts[context.mode].listSessions();
-    if (!list.some((s) => s.path === sessionPath)) {
-      return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
-    }
+
     let result;
     try { result = await hosts[context.mode].deleteSession(sessionPath); }
     catch (error) { return { ok: false, code: error.code, error: error.message }; }
-    if (result.ok) {
-      const deleted = list.find(row => row.path === sessionPath);
-      if (deleted) {
-        activityCenter.remove(deleted.id);
-        try { navigation.patch(deleted.id, null); } catch (error) { result.warning = error.message; }
-      }
-    }
     return result;
   });
 
@@ -1043,8 +1023,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:get", async (event) => {
     if (!isTrustedChatIpc(event)) return { providers: [], defaultModel: null, models: [] };
     const settings = providerStore.toPublic();
-    await modeController.ensureStarted("combat");
-    const models = await hosts.combat.activeHost.listModels();
+    const { host } = await modeController.readySnapshot();
+    const models = await host.listModels();
     const known = new Set(models.map((model) => model.label));
     // Pi only reports models with usable auth. Settings must still show an unconfigured
     // Arcane Spark so a first-run user can select it and reach its Key field.
@@ -1062,7 +1042,6 @@ app.whenReady().then(async () => {
     if (!isTrustedChatIpc(event)) return { missingKey: null };
     const validated = await validateModeRequest(request);
     if (!validated.ok) return { ...validated, missingKey: null };
-    await modeController.ensureStarted(validated.context.mode);
     const model = validated.context.host.currentModelRef();
     return { model, missingKey: validated.context.host.missingApiKeyForCurrentModel() };
   });
@@ -1139,7 +1118,6 @@ app.whenReady().then(async () => {
     const providerId = String(request?.providerId ?? "");
     const modelId = String(request?.modelId ?? "");
     if (!providerId || !modelId) return { ok: false, error: "invalid model selection" };
-    await modeController.ensureStarted(validated.context.mode);
     const result = await validated.context.host.setCurrentModel(providerId, modelId);
     if (!result?.ok) return { ...result, ...modeController.publicSnapshot(validated.context) };
     return { ...result, model: { providerId, modelId }, ...modeController.publicSnapshot(validated.context) };
@@ -1303,7 +1281,6 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     const { skills, templates } = context.host.listSlashCommands();
     return {
       ok: true,
@@ -1355,8 +1332,6 @@ app.whenReady().then(async () => {
     const context = validated.context;
     const { mode, host } = context;
     try {
-      await modeController.ensureStarted(mode);
-      navigation.assertWritable(host.describeCurrent()?.id);
       try { if (!statSync(host.cwd()).isDirectory()) throw new Error("Missing directory"); }
       catch { return { ok: false, code: "PROJECT_UNAVAILABLE", error: err("navigation.missingProject") }; }
       const missingKey = host.missingApiKeyForCurrentModel();

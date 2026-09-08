@@ -218,9 +218,13 @@ function forgetSession(id) {
   }
   return cleanup;
 }
-async function syncDeletedSessions() {
-  const result = await window.arcane.deletedSessions?.();
-  await Promise.all((result?.sessionIds ?? []).map(forgetSession));
+async function reconcileWorkspaces() {
+  const result = await window.arcane.sessionIdentities?.();
+  if (!result?.ok) return;
+  const existing = new Set(result.sessionIds);
+  const known = new Set([...(await workspaceStore.keys()), ...outboxBySession.keys()]);
+  if (selectedSessionId) known.add(selectedSessionId);
+  await Promise.all([...known].filter(id => !existing.has(id)).map(forgetSession));
 }
 const lastSessionByMode = new Map();
 let workspaceSaveTimer;
@@ -3180,9 +3184,9 @@ new ResizeObserver(() => {
 }).observe(messages);
 messages.addEventListener("scroll", () => activityView.scheduleRead());
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.scheduleRead(); } });
-window.addEventListener("focus", () => { void syncDeletedSessions().catch(() => {}); void activityView.load(); activityView.scheduleRead(); });
+window.addEventListener("focus", () => { void reconcileWorkspaces().catch(() => {}); void activityView.load(); activityView.scheduleRead(); });
 void activityView.load();
-syncDeletedSessions().catch(() => {}).finally(() => {
+reconcileWorkspaces().catch(() => {}).finally(() => {
   refreshSessions();
   pullCurrentSession().then(() => openNotificationTarget());
 });

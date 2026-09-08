@@ -161,7 +161,7 @@ app.on("will-quit", () => {
     if (deletionScenario) {
       assert.deepEqual(requests, ["A", "B"]);
       assert.equal(hostB.tasks.task.state, "completed");
-      console.log("PASS production deletion: active archive/delete rejected; explicit stop, archive and confirmed delete preserve B");
+      console.log("PASS production deletion: active archive remains disabled; explicit stop, archive and confirmed delete preserve B");
       return;
     }
     if (nativeSystem) {
@@ -254,7 +254,6 @@ app.on("will-quit", () => {
     await evaluate(`openActivity(navigationView.rows.get(${JSON.stringify(checkpoint.c)}))`);
     await ui(`selectedSessionId === ${JSON.stringify(checkpoint.c)} && selectedArchived && workspaceReady.has(selectedSessionId)`);
     assert.equal(await evaluate('input.value'), "Restart retained draft");
-    assert.equal((await evaluate(`window.arcane.prompt('production-C', [], {...modeContext(), commandId:crypto.randomUUID()})`)).code, "SESSION_ARCHIVED");
     finalExit = true; app.quit(); return;
   }
   if (sidebarScenario) {

@@ -2,6 +2,18 @@
 
 > 2026-09-08 起冻结为历史材料。当前迭代唯一技术方案与进度为 [激进删减执行方案](simplification-plan.md)。下文“当前有效”“唯一方案”、实施规则及验收要求均描述删减前基线，不再作为本轮执行约束；本轮信任边界图见新方案第 3 节。
 
+本轮边界概览（规则与进度只维护在上述唯一方案）：
+
+```mermaid
+flowchart LR
+  Renderer -->|IPC 身份与输入| Main
+  Main --> Registry[SessionRegistry：生命周期]
+  Main --> Tasks[TaskCoordinator：任务与输入]
+  Registry -->|文件存在性与归属| Disk[对话文件与关联数据]
+  Tasks --> Host[AgentHost：SDK 适配]
+  Host -->|实际调用结果| SDK[SDK／子进程／页面]
+```
+
 日期：2026-09-07。状态：当前有效方案；新导航、归档与既有执行底座已实现，静态及 CDP 验收通过。系统原生交互按用户要求交付人工表单，未冒充实测通过。
 
 本文是本轮多会话改造唯一技术方案。体验要求见 [spec](spec.md)，实现状态和验收缺口统一见 [acceptance-audit](acceptance-audit.md)。[原架构](architecture-history.md)、[原审计](acceptance-audit-history.md)、[milestones](milestones.md) 和 [最初调查](model-and-session-isolation-spec.md) 仅保存历史证据；其中活动双列表、计数横栏、关闭三选一及直接删除运行会话的旧产品流程不再实施。Kimi 资料只作参考，不构成第二套方案。

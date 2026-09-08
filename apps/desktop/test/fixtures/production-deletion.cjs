@@ -5,7 +5,6 @@ module.exports = async ({ hostA, hostB, streams, evaluate, ui, until }) => {
   const { id, path } = hostA.describeCurrent();
   // The new product flow never implicitly stops work while organizing history.
   assert.equal((await evaluate(`window.arcane.archiveSession(${JSON.stringify(id)})`)).code, "SESSION_BUSY");
-  assert.equal((await evaluate(`window.arcane.deleteArchivedSession(${JSON.stringify(id)})`)).code, "SESSION_NOT_ARCHIVED");
   assert.ok(hostA.busy && hostB.busy && existsSync(path));
   const sdk = hostA.session, abort = sdk.abort.bind(sdk);
   let release, entered = false;

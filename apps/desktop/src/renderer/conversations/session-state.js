@@ -148,12 +148,7 @@
       await new Promise((resolve, reject) => {
         const tx = db.transaction("sessions", "readwrite");
         const store = tx.objectStore("sessions");
-        const existing = store.get(sessionId);
-        existing.onsuccess = () => {
-          if (existing.result?._deleted || this.deleted.has(sessionId)) {
-            this.deleted.add(sessionId); this.cache.delete(sessionId); this.dirty.delete(sessionId);
-          } else store.put(copy, sessionId);
-        };
+        store.put(copy, sessionId);
         tx.oncomplete = () => resolve(undefined);
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(tx.error);
@@ -173,19 +168,29 @@
         request.onerror = () => reject(request.error);
       });
       // An input edit while disk read was pending always wins.
-      if (value?._deleted || this.deleted.has(sessionId)) { this.deleted.add(sessionId); this.cache.delete(sessionId); return {}; }
+      if (this.deleted.has(sessionId)) return {};
+      if (value?._deleted) return {}; // Discard legacy tombstones.
       if (this.cache.has(sessionId)) return structuredClone(this.cache.get(sessionId));
       if (revision !== this.revisions.get(sessionId)) return this.load(sessionId);
       const result = value ?? {};
       this.cache.set(sessionId, result);
       return structuredClone(result);
     }
+    async keys() {
+      const db = await this.open();
+      const stored = await new Promise((resolve, reject) => {
+        const request = db.transaction("sessions").objectStore("sessions").getAllKeys();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return [...new Set([...stored, ...this.dirty.keys()])];
+    }
     async remove(sessionId) {
       this.deleted.add(sessionId); this.dirty.delete(sessionId); this.cache.delete(sessionId);
       const db = await this.open();
       await new Promise((resolve, reject) => {
         const tx = db.transaction("sessions", "readwrite");
-        tx.objectStore("sessions").put({ _deleted: true }, sessionId);
+        tx.objectStore("sessions").delete(sessionId);
         tx.oncomplete = () => resolve(undefined);
         tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
       });

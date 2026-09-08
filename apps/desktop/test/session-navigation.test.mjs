@@ -22,23 +22,18 @@ test("pin, custom title, archive and restore survive process-independent reload 
   assert.equal(store.get("a").pinnedOrder, undefined);
   const restoredProcess = new SessionNavigation({ file });
   assert.equal(restoredProcess.get("a").customTitle, "My title");
-  assert.throws(() => restoredProcess.assertWritable("a"), { code: "SESSION_ARCHIVED" });
-  restoredProcess.mutate("a", "restore"); restoredProcess.assertWritable("a");
+  restoredProcess.mutate("a", "restore");
   assert.equal(restoredProcess.get("a").pinnedOrder, undefined);
   assert.equal(readFileSync(history, "utf8"), "history and external results");
 });
-test("admission ordering: work accepted first prevents archive; archive first prevents execution", t => {
+test("navigation still disables archiving active work in its own UI action", t => {
   const { store } = fixture(t);
   for (const state of ["queued", "running", "waiting_user", "stopping"]) {
     assert.throws(() => store.mutate("a", "archive", null, { busy: true, task: { state } }), { code: "SESSION_BUSY" });
     assert.equal(store.get("a").archivedAt, undefined);
   }
   assert.throws(() => store.mutate("a", "archive", null, { operations: 1 }), { code: "SESSION_BUSY" });
-  assert.throws(() => store.assertDeletable("a"), { code: "SESSION_NOT_ARCHIVED" });
   store.mutate("a", "archive", null, { busy: false });
-  assert.throws(() => store.assertWritable("a"), { code: "SESSION_ARCHIVED" });
-  assert.throws(() => store.mutate("a", "pin", true), { code: "SESSION_ARCHIVED" });
-  store.assertDeletable("a");
   assert.throws(() => store.mutate("a", "restore", null, { deleting: true }), { code: "SESSION_DELETING" });
 });
 test("failed atomic replace never changes visible metadata or publishes success", t => {
@@ -49,12 +44,11 @@ test("failed atomic replace never changes visible metadata or publishes success"
   assert.equal(store.get("a").archivedAt, undefined); assert.equal(notifications, 0);
   assert.equal(new SessionNavigation({ file }).get("a").customTitle, "Before");
 });
-test("corrupt navigation fails closed instead of reviving archived sessions or overwriting data", t => {
+test("corrupt navigation can be replaced by a new metadata edit", t => {
   const { file } = fixture(t); writeFileSync(file, "corrupt");
   const store = new SessionNavigation({ file });
-  assert.throws(() => store.assertWritable("a"), { code: "NAVIGATION_UNAVAILABLE" });
-  assert.throws(() => store.mutate("a", "restore"), { code: "NAVIGATION_UNAVAILABLE" });
-  assert.equal(readFileSync(file, "utf8"), "corrupt");
+  store.mutate("a", "rename", "New title");
+  assert.equal(new SessionNavigation({ file }).get("a").customTitle, "New title");
 });
 test("project keys normalize absolute paths without merging equal folder names", () => {
   assert.notEqual(projectKey(path.resolve("first/game")), projectKey(path.resolve("second/game")));

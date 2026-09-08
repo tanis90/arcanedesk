@@ -29,6 +29,7 @@ export class TaskCoordinator {
     this.queueWrites = new Set();
     this.attentions = new Map();
     this.attentionResolvers = new Map();
+    this.userWaits = 0;
     this.pendingModel = pendingModel;
     for (const input of pending.inputs) this.inputs.set(input.id, { ...input, state: "interrupted" });
   }
@@ -51,7 +52,6 @@ export class TaskCoordinator {
     if (!Array.isArray(options) || options.length > 8 || options.some(option => typeof option !== "string" || option.length > 1000)) throw new Error("Invalid answer options");
     const attention = { id: randomUUID(), taskId: this.task.id, question, options: [...options], state: "pending", createdAt: Date.now() };
     this.updateAttention(attention);
-    this.setTaskState("waiting_user");
     const pending = new Promise(resolve => {
       const cancel = () => this.cancelAttention(attention.id);
       this.attentionResolvers.set(attention.id, response => {
@@ -61,7 +61,17 @@ export class TaskCoordinator {
       signal?.addEventListener("abort", cancel, { once: true });
       if (signal?.aborted) cancel();
     });
-    return this.admission ? this.admission.waitForUser(pending).catch(() => ({ cancelled: true })) : pending;
+    return this.waitForUser(pending).catch(() => ({ cancelled: true }));
+  }
+
+  async waitForUser(pending) {
+    this.userWaits++;
+    if (!this.admission && this.busy && this.task.state !== "stopping") this.setTaskState("waiting_user");
+    try { return await (this.admission ? this.admission.waitForUser(pending) : pending); }
+    finally {
+      this.userWaits--;
+      if (!this.admission && !this.userWaits && this.task?.state === "waiting_user") this.setTaskState("running");
+    }
   }
 
   cancelAttention(id) {
@@ -89,7 +99,6 @@ export class TaskCoordinator {
     this.commands.set(commandId, record);
     this.attentions.set(attentionId, answered);
     this.emit({ type: "attention", attention: structuredClone(answered) });
-    if (!this.admission && ![...this.attentions.values()].some(a => a.taskId === taskId && a.state === "pending")) this.setTaskState("running");
     this.attentionResolvers.get(attentionId)({ response });
     this.attentionResolvers.delete(attentionId);
     return ack;

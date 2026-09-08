@@ -52,13 +52,12 @@ test("read, answered, removed and disabled notifications cannot redirect to stal
   h.broker.setEnabled(false); h.created[2].emit("click"); assert.equal(h.activated(), 0);
 });
 
-test("a late click on a confirmed deleted session reports deletion without selecting another session", () => {
+test("a late click on a removed session is ignored", () => {
   const h = harness(); h.broker.setEnabled(true); h.broker.deliver(h.notice);
-  h.rows.delete("A"); h.broker.isDeleted = id => id === "A";
+  h.rows.delete("A");
   h.broker.reconcile("A");
   h.created[0].emit("click");
-  assert.equal(h.activated(), 1);
-  assert.deepEqual(h.broker.takeTarget(), { sessionId: "A", deleted: true });
+  assert.equal(h.activated(), 0);
   assert.equal(h.broker.takeTarget(), null);
 });
 

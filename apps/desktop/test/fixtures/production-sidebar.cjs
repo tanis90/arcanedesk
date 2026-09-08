@@ -105,8 +105,6 @@ module.exports = async ({ window, scratch, streams, requests, until, ui, evaluat
   await menu(bid, "archive");
   await ui(`!document.querySelector('#session-list ${row(bid)}') && selectedSessionId !== ${JSON.stringify(bid)}`);
   assert.ok(existsSync(b.describeCurrent().path)); assert.equal(readFileSync(artifact, "utf8"), "preserve project files");
-  const archivedPrompt = await run(`window.arcane.prompt('production-B', [], { ...modeContext(), sessionId:${JSON.stringify(bid)}, mode:'prep', commandId:crypto.randomUUID() })`);
-  assert.equal(archivedPrompt.code, "SESSION_ARCHIVED");
   assert.equal(requests.length, 2);
   await click("#session-archives");
   await ui('!document.getElementById("archive-page").hidden');

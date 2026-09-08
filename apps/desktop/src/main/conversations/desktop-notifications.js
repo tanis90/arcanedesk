@@ -3,9 +3,9 @@ import path from "node:path";
 
 /** Receives only newly consumed ActivityCenter notices. No history replay or task control. */
 export class DesktopNotifications {
-  constructor({ file, supported, foreground, create, lookup, activate, text, isDeleted = (_id) => false, log = (..._args) => {} }) {
+  constructor({ file, supported, foreground, create, lookup, activate, text, log = (..._args) => {} }) {
     this.file = file; this.supported = supported; this.foreground = foreground;
-    this.create = create; this.lookup = lookup; this.isDeleted = isDeleted; this.activate = activate; this.text = text; this.log = log;
+    this.create = create; this.lookup = lookup; this.activate = activate; this.text = text; this.log = log;
     this.enabled = false; this.storageError = false; this.deliveryFailed = false;
     this.active = new Map(); this.pendingTarget = null;
     try { this.enabled = JSON.parse(readFileSync(file, "utf8")).enabled === true; }
@@ -51,7 +51,7 @@ export class DesktopNotifications {
       native.once("click", () => {
         if (!this.enabled) return;
         const row = this.lookup(notice.sessionId);
-        if (!this.relevant(notice, row) && !this.isDeleted(notice.sessionId)) return;
+        if (!this.relevant(notice, row)) return;
         this.pendingTarget = { notice, row };
         try { this.activate(); } // Only an explicit click may focus/show a window.
         catch (error) { this.log("[notifications] activation failed", error.message); }
@@ -72,14 +72,13 @@ export class DesktopNotifications {
     for (const [key, entry] of this.active) {
       if (entry.notice.sessionId === sessionId && !this.relevant(entry.notice, this.lookup(sessionId))) this.close(key);
     }
-    if (this.pendingTarget?.notice.sessionId === sessionId && !this.lookup(sessionId) && !this.isDeleted(sessionId)) this.pendingTarget = null;
+    if (this.pendingTarget?.notice.sessionId === sessionId && !this.lookup(sessionId)) this.pendingTarget = null;
   }
 
   takeTarget() {
     const target = this.pendingTarget;
     this.pendingTarget = null;
     if (!target) return null;
-    if (this.isDeleted(target.notice.sessionId)) return { sessionId: target.notice.sessionId, deleted: true };
     const row = this.lookup(target.notice.sessionId);
     return this.relevant(target.notice, row) ? { ...target, row } : null;
   }

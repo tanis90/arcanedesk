@@ -139,8 +139,8 @@ D07 将此前缓存调查 TODO 落成删减方向：删除可重取数据的缓�
 | P0 文档收口 | 唯一方案、旧文档历史标记 | 无 | 完成 | Markdown 链接检查通过（72 个文件），git diff --check 通过；提交 7c96cb1 |
 | P1 无消费者删除 | D08 及可独立清理的旧字段/文案 | P0 | 完成 | 14 项快照/消息身份/分页测试、Desktop typecheck 与源码边界通过；提交 8a06490 |
 | P2 执行去锁 | D04、D05、D16 | P1 | 完成 | 27 项相关测试、Desktop typecheck/源码边界及真实 Electron 页面超时后并行调用/导航通过；资源锁、PanelCommands、立即重试与对应旧预期移除；提交 fd0300d |
-| P3 持久化收缩 | D02、D15，含旧数据迁移、outbox | P1 | 完成 | 全量 404/404；最后内存字段清理后 17 项任务/输入测试、6 项真实 SDK 测试复验通过；typecheck/源码边界、真实 Electron renderer/preload 恢复重发通过。模型缺凭据/待应用选择经原生会话驱逐重挂验证。提交见 P3 milestone；InputJournal 当前仅供 P4 将删除的 SessionDeletions 使用 |
-| P4 删除与边界 | D01、D03、D14，审批 owner 收拢 | P2、P3 | 未开始 | 文件存在性、停止写入、孤儿清理完整接通 |
+| P3 持久化收缩 | D02、D15，含旧数据迁移、outbox | P1 | 完成 | 全量 404/404；最后内存字段清理后 17 项任务/输入测试、6 项真实 SDK 测试复验通过；typecheck/源码边界、真实 Electron renderer/preload 恢复重发通过。模型缺凭据/待应用选择经原生会话驱逐重挂验证。提交 6166758；InputJournal 当前仅供 P4 将删除的 SessionDeletions 使用 |
+| P4 删除与边界 | D01、D03、D14，审批 owner 收拢 | P2、P3 | 完成 | 全量 402/402；最后入口清理后 registry/对账 18 项复验通过；typecheck/源码边界通过。真实 Electron 活动/重载清理、正式 main 多会话和删除隔离（真实 SDK、模拟端点）通过。删除日志及任务 InputJournal 文件已删；对账、纯磁盘枚举、审批 owner、architecture 边界图接通。提交见 P4 milestone |
 | P5 视图减负 | D06、D07、D09、D13 | P3 | 未开始 | 草稿与实时事件衔接保留 |
 | P6 活动减负 | D10、D11 | P3、P5 | 未开始 | 最小中断摘要保留 |
 | P7 退出减负 | D12 | P2、P4 | 未开始 | 退出预算真实生效，正常托盘仍可恢复 |

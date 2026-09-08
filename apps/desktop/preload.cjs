@@ -22,7 +22,7 @@ contextBridge.exposeInMainWorld("arcane", {
   closePanel: () => ipcRenderer.invoke("panel:close"),
   /** F5: reload the Foundry panel page (no-op when the panel is closed). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
-  deletedSessions: () => ipcRenderer.invoke("sessions:deleted"),
+  sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),
   lifecycleState: () => ipcRenderer.invoke("lifecycle:get"),
   cancelExit: () => ipcRenderer.invoke("lifecycle:cancel-exit"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */

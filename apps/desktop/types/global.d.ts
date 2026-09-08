@@ -13,7 +13,7 @@ interface ArcaneBridge {
   closePanel(): Promise<any>;
   /** F5: reload the Foundry panel page (no-op when the panel is closed). */
   reloadPanel(): Promise<any>;
-  deletedSessions(): Promise<any>;
+  sessionIdentities(): Promise<any>;
   lifecycleState(): Promise<any>;
   cancelExit(): Promise<any>;
   /** Sync the chat column width during splitter drags (throttled by renderer). */
