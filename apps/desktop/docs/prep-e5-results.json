@@ -1,0 +1,1089 @@
+{
+  "experiments": [
+    {
+      "model": "kimi-for-coding-highspeed",
+      "experiment": {
+        "arms": [
+          "baseline",
+          "tools"
+        ],
+        "comparison": "revision",
+        "kind": "paired tool revisions, fixed production prompt",
+        "cases": [
+          "scene_layout"
+        ],
+        "samplesPerCase": 10,
+        "model": "kimi-for-coding-highspeed",
+        "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+        "newTools": [
+          "world_status",
+          "foundry_play_context",
+          "foundry_conditions_set",
+          "foundry_content_search",
+          "foundry_actor_get",
+          "foundry_actor_create",
+          "foundry_actor_update",
+          "foundry_actor_grant_items",
+          "foundry_scene_get",
+          "foundry_scene_apply"
+        ],
+        "connection": "warm authenticated target world",
+        "humanWait": "recorded; no automatic answers",
+        "candidateCommit": "e4863bc4aaba65a5cb0728590021edbafaf96a56",
+        "promptMode": "production",
+        "baselineCommit": "e77b2be3748b1114b3dcf1abfd9720dc2107886c",
+        "suiteVersion": "prep-v1-draft2",
+        "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+      },
+      "thinkingLevels": [
+        "off"
+      ],
+      "groups": [
+        {
+          "caseId": "scene_layout",
+          "controlArm": "baseline",
+          "js": {
+            "n": 10,
+            "success": 10,
+            "successRate": 1,
+            "failed": [],
+            "latencyMs": {
+              "n": 10,
+              "p50": 13617.515599999984,
+              "p95": 23734.0492,
+              "mean": 13969.353689999998
+            },
+            "allAttemptsMs": {
+              "n": 10,
+              "p50": 13617.515599999984,
+              "p95": 23734.0492,
+              "mean": 13969.353689999998
+            },
+            "firstEventMs": {
+              "n": 10,
+              "p50": 1898.5179999999964,
+              "p95": 5859.6173,
+              "mean": 2403.523830000001
+            },
+            "calls": {
+              "n": 10,
+              "p50": 5,
+              "p95": 7,
+              "mean": 5.2
+            },
+            "inputTokens": {
+              "n": 10,
+              "p50": 39636,
+              "p95": 42434,
+              "mean": 37414.3
+            },
+            "modelResponses": {
+              "n": 10,
+              "p50": 5,
+              "p95": 5,
+              "mean": 4.6
+            },
+            "outputTokens": {
+              "n": 10,
+              "p50": 975,
+              "p95": 1365,
+              "mean": 978.4
+            },
+            "javascriptChars": {
+              "n": 10,
+              "p50": 0,
+              "p95": 0,
+              "mean": 0
+            },
+            "reasoningTokens": {
+              "n": 10,
+              "p50": 353,
+              "p95": 620,
+              "mean": 414.7
+            },
+            "queueWaitMs": {
+              "n": 10,
+              "p50": 41.283800000001065,
+              "p95": 125.01480000000447,
+              "mean": 54.33334999999461
+            },
+            "jsFallbacks": 0,
+            "humanWaits": 0,
+            "uncertainReceipts": 0,
+            "reviewedAfterPause": 0,
+            "trialsWithErrors": 2,
+            "toolSequences": [
+              {
+                "sample": 0,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 1,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 2,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 3,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 4,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 5,
+                "success": true,
+                "names": [
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 6,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 7,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_open",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 8,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 9,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              }
+            ]
+          },
+          "tools": {
+            "n": 10,
+            "success": 10,
+            "successRate": 1,
+            "failed": [],
+            "latencyMs": {
+              "n": 10,
+              "p50": 12490.459099999978,
+              "p95": 21971.15890000001,
+              "mean": 14511.681589999998
+            },
+            "allAttemptsMs": {
+              "n": 10,
+              "p50": 12490.459099999978,
+              "p95": 21971.15890000001,
+              "mean": 14511.681589999998
+            },
+            "firstEventMs": {
+              "n": 10,
+              "p50": 1962.0184999999983,
+              "p95": 3502.3836999999767,
+              "mean": 2171.7655399999967
+            },
+            "calls": {
+              "n": 10,
+              "p50": 5,
+              "p95": 6,
+              "mean": 4.9
+            },
+            "inputTokens": {
+              "n": 10,
+              "p50": 33032,
+              "p95": 41419,
+              "mean": 35804.7
+            },
+            "modelResponses": {
+              "n": 10,
+              "p50": 4,
+              "p95": 5,
+              "mean": 4.4
+            },
+            "outputTokens": {
+              "n": 10,
+              "p50": 861,
+              "p95": 1093,
+              "mean": 901.4
+            },
+            "javascriptChars": {
+              "n": 10,
+              "p50": 0,
+              "p95": 0,
+              "mean": 0
+            },
+            "reasoningTokens": {
+              "n": 10,
+              "p50": 326,
+              "p95": 604,
+              "mean": 376.1
+            },
+            "queueWaitMs": {
+              "n": 10,
+              "p50": 45.79969999997411,
+              "p95": 67.9829000000027,
+              "mean": 44.04013999999806
+            },
+            "jsFallbacks": 0,
+            "humanWaits": 0,
+            "uncertainReceipts": 0,
+            "reviewedAfterPause": 0,
+            "trialsWithErrors": 0,
+            "toolSequences": [
+              {
+                "sample": 0,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 1,
+                "success": true,
+                "names": [
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 2,
+                "success": true,
+                "names": [
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_content_search",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 3,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 4,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 5,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 6,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 7,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 8,
+                "success": true,
+                "names": [
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              },
+              {
+                "sample": 9,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_scene_get",
+                  "foundry_scene_apply"
+                ]
+              }
+            ]
+          },
+          "p50ChangePercent": -8.27652071865449,
+          "p95ChangePercent": -7.42768452675151,
+          "pairedChangePercent": {
+            "n": 10,
+            "p50": -10.220300570486662,
+            "p95": 62.72523182434679,
+            "mean": 7.598397407994739
+          },
+          "pairedWins": 5,
+          "pairs": [
+            {
+              "sample": 0,
+              "changePercent": -15.294678415008933
+            },
+            {
+              "sample": 1,
+              "changePercent": 62.72523182434679
+            },
+            {
+              "sample": 2,
+              "changePercent": -35.694764007161595
+            },
+            {
+              "sample": 3,
+              "changePercent": -10.220300570486662
+            },
+            {
+              "sample": 4,
+              "changePercent": 38.042944167184764
+            },
+            {
+              "sample": 5,
+              "changePercent": -29.325034928465787
+            },
+            {
+              "sample": 6,
+              "changePercent": 4.955656562141453
+            },
+            {
+              "sample": 7,
+              "changePercent": 30.590759211080233
+            },
+            {
+              "sample": 8,
+              "changePercent": 47.65406497518141
+            },
+            {
+              "sample": 9,
+              "changePercent": -17.449904738864298
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.",
+        "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+        "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+        "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+        "Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."
+      ],
+      "sourceReport": "benchmark-1788850205205.json",
+      "argumentAudit": {
+        "baseline": [
+          {
+            "session": "2026-09-08T06-50-08-841Z_01a07fc8-0049-736d-8db0-ed073142efce.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-51-13-401Z_01a07fc8-fc79-76d9-a674-5a7fbe9854b8.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-51-25-895Z_01a07fc9-2d47-72e6-a813-7fa0293c1768.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-52-01-667Z_01a07fc9-b903-7ecc-9d82-93e9311a8849.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-52-11-840Z_01a07fc9-e0bf-7387-bfa0-1346280512d5.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-52-45-334Z_01a07fca-6396-7ba1-a124-3c705de863bb.jsonl",
+            "badDocumentType": true
+          },
+          {
+            "session": "2026-09-08T06-53-00-240Z_01a07fca-9dd0-7787-83af-9f7e91effae9.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-53-53-283Z_01a07fcb-6d03-784e-85b2-5e1a0d687ef4.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-54-05-365Z_01a07fcb-9c35-7dac-856c-2bdfe3db866f.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-54-55-643Z_01a07fcc-609b-7e23-87ce-6def4c4ca40b.jsonl",
+            "badDocumentType": false
+          }
+        ],
+        "tools": [
+          {
+            "session": "2026-09-08T06-50-33-078Z_01a07fc8-5ef6-7750-b4ea-f988afbf4d0c.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-50-54-225Z_01a07fc8-b191-75f9-b1df-2306e21b135a.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-51-41-867Z_01a07fc9-6bab-7f28-9dd3-d33f7c6e8f90.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-51-52-317Z_01a07fc9-947d-74fe-a284-b0d419a073a8.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-52-21-665Z_01a07fca-0721-70db-a1d3-f94ae44ef6a0.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-52-34-741Z_01a07fca-3a35-748d-b72a-10afe884eae4.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-53-18-650Z_01a07fca-e5ba-794e-a31d-bca18a81a86b.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-53-37-924Z_01a07fcb-3104-75c0-a04a-904c02ef1982.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-54-20-930Z_01a07fcb-d902-7849-b5c5-e4f1ce371407.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-54-43-589Z_01a07fcc-3185-7b83-b0bc-ffb9b188cbcc.jsonl",
+            "badDocumentType": false
+          }
+        ]
+      }
+    },
+    {
+      "model": "kimi-for-coding-highspeed",
+      "experiment": {
+        "arms": [
+          "baseline",
+          "tools"
+        ],
+        "comparison": "revision",
+        "kind": "paired tool revisions, fixed production prompt",
+        "cases": [
+          "conditions"
+        ],
+        "samplesPerCase": 10,
+        "model": "kimi-for-coding-highspeed",
+        "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+        "newTools": [
+          "world_status",
+          "foundry_play_context",
+          "foundry_conditions_set",
+          "foundry_content_search",
+          "foundry_actor_get",
+          "foundry_actor_create",
+          "foundry_actor_update",
+          "foundry_actor_grant_items",
+          "foundry_scene_get",
+          "foundry_scene_apply"
+        ],
+        "connection": "warm authenticated target world",
+        "humanWait": "recorded; no automatic answers",
+        "candidateCommit": "e4863bc4aaba65a5cb0728590021edbafaf96a56",
+        "promptMode": "production",
+        "baselineCommit": "e77b2be3748b1114b3dcf1abfd9720dc2107886c",
+        "suiteVersion": "prep-v1-draft2",
+        "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+      },
+      "thinkingLevels": [
+        "off"
+      ],
+      "groups": [
+        {
+          "caseId": "conditions",
+          "controlArm": "baseline",
+          "js": {
+            "n": 10,
+            "success": 10,
+            "successRate": 1,
+            "failed": [],
+            "latencyMs": {
+              "n": 10,
+              "p50": 7499.626199999999,
+              "p95": 23710.412800000006,
+              "mean": 10555.53424
+            },
+            "allAttemptsMs": {
+              "n": 10,
+              "p50": 7499.626199999999,
+              "p95": 23710.412800000006,
+              "mean": 10555.53424
+            },
+            "firstEventMs": {
+              "n": 10,
+              "p50": 1639.2790000000095,
+              "p95": 5300.23079999999,
+              "mean": 2503.707980000001
+            },
+            "calls": {
+              "n": 10,
+              "p50": 4,
+              "p95": 7,
+              "mean": 3.9
+            },
+            "inputTokens": {
+              "n": 10,
+              "p50": 30582,
+              "p95": 31978,
+              "mean": 27876
+            },
+            "modelResponses": {
+              "n": 10,
+              "p50": 4,
+              "p95": 4,
+              "mean": 3.6
+            },
+            "outputTokens": {
+              "n": 10,
+              "p50": 468,
+              "p95": 650,
+              "mean": 498.1
+            },
+            "javascriptChars": {
+              "n": 10,
+              "p50": 0,
+              "p95": 0,
+              "mean": 0
+            },
+            "reasoningTokens": {
+              "n": 10,
+              "p50": 153,
+              "p95": 325,
+              "mean": 187.9
+            },
+            "queueWaitMs": {
+              "n": 10,
+              "p50": 0,
+              "p95": 107.9936999999918,
+              "mean": 42.98202999999994
+            },
+            "jsFallbacks": 0,
+            "humanWaits": 0,
+            "uncertainReceipts": 0,
+            "reviewedAfterPause": 0,
+            "trialsWithErrors": 4,
+            "toolSequences": [
+              {
+                "sample": 0,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 1,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 2,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 3,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 4,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 5,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 6,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 7,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 8,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 9,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              }
+            ]
+          },
+          "tools": {
+            "n": 10,
+            "success": 10,
+            "successRate": 1,
+            "failed": [],
+            "latencyMs": {
+              "n": 10,
+              "p50": 6618.536999999982,
+              "p95": 20407.12640000001,
+              "mean": 10172.71257
+            },
+            "allAttemptsMs": {
+              "n": 10,
+              "p50": 6618.536999999982,
+              "p95": 20407.12640000001,
+              "mean": 10172.71257
+            },
+            "firstEventMs": {
+              "n": 10,
+              "p50": 1903.7134999999835,
+              "p95": 6181.885900000001,
+              "mean": 2699.045179999997
+            },
+            "calls": {
+              "n": 10,
+              "p50": 3,
+              "p95": 6,
+              "mean": 3.3
+            },
+            "inputTokens": {
+              "n": 10,
+              "p50": 23099,
+              "p95": 56129,
+              "mean": 27925.6
+            },
+            "modelResponses": {
+              "n": 10,
+              "p50": 3,
+              "p95": 7,
+              "mean": 3.6
+            },
+            "outputTokens": {
+              "n": 10,
+              "p50": 406,
+              "p95": 705,
+              "mean": 434.2
+            },
+            "javascriptChars": {
+              "n": 10,
+              "p50": 0,
+              "p95": 0,
+              "mean": 0
+            },
+            "reasoningTokens": {
+              "n": 10,
+              "p50": 152,
+              "p95": 354,
+              "mean": 177.3
+            },
+            "queueWaitMs": {
+              "n": 10,
+              "p50": 0,
+              "p95": 120.00930000000153,
+              "mean": 25.86627999999873
+            },
+            "jsFallbacks": 0,
+            "humanWaits": 0,
+            "uncertainReceipts": 0,
+            "reviewedAfterPause": 0,
+            "trialsWithErrors": 0,
+            "toolSequences": [
+              {
+                "sample": 0,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 1,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 2,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 3,
+                "success": true,
+                "names": [
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 4,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "world_status",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 5,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 6,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 7,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 8,
+                "success": true,
+                "names": [
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              },
+              {
+                "sample": 9,
+                "success": true,
+                "names": [
+                  "foundry_open",
+                  "foundry_content_search",
+                  "foundry_conditions_set"
+                ]
+              }
+            ]
+          },
+          "p50ChangePercent": -11.748441542326693,
+          "p95ChangePercent": -13.93179624439097,
+          "pairedChangePercent": {
+            "n": 10,
+            "p50": -15.399101451111763,
+            "p95": 172.10858055832182,
+            "mean": 8.669634219318036
+          },
+          "pairedWins": 6,
+          "pairs": [
+            {
+              "sample": 0,
+              "changePercent": 51.49250427082996
+            },
+            {
+              "sample": 1,
+              "changePercent": -9.976878804971157
+            },
+            {
+              "sample": 2,
+              "changePercent": -52.503964418536
+            },
+            {
+              "sample": 3,
+              "changePercent": -28.83400232763307
+            },
+            {
+              "sample": 4,
+              "changePercent": 172.10858055832182
+            },
+            {
+              "sample": 5,
+              "changePercent": 15.899266107920052
+            },
+            {
+              "sample": 6,
+              "changePercent": 9.646289959768662
+            },
+            {
+              "sample": 7,
+              "changePercent": -32.51350198172885
+            },
+            {
+              "sample": 8,
+              "changePercent": -23.222849719679296
+            },
+            {
+              "sample": 9,
+              "changePercent": -15.399101451111763
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.",
+        "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+        "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+        "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+        "Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."
+      ],
+      "sourceReport": "benchmark-1788850511426.json",
+      "argumentAudit": {
+        "baseline": [
+          {
+            "session": "2026-09-08T06-55-15-596Z_01a07fcc-ae8c-7092-bef3-78cafd39f0cc.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-56-00-298Z_01a07fcd-5d2a-743a-ac80-f837de593a04.jsonl",
+            "badDocumentType": true
+          },
+          {
+            "session": "2026-09-08T06-56-20-798Z_01a07fcd-ad3e-78b1-a048-1a04064f5c95.jsonl",
+            "badDocumentType": true
+          },
+          {
+            "session": "2026-09-08T06-57-06-574Z_01a07fce-600e-7d57-ae43-4fc2363c1967.jsonl",
+            "badDocumentType": true
+          },
+          {
+            "session": "2026-09-08T06-57-19-968Z_01a07fce-9460-7ad1-9fd5-77da661e8129.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-57-57-778Z_01a07fcf-2812-7db7-b91a-2fda7cc6ba27.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-04-428Z_01a07fcf-420c-7caa-890b-671dd3fe74a2.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-23-360Z_01a07fcf-8bff-7ab9-92ab-d449d2d3d473.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-31-802Z_01a07fcf-acfa-7050-b54f-f0858c2d4148.jsonl",
+            "badDocumentType": true
+          },
+          {
+            "session": "2026-09-08T06-58-52-361Z_01a07fcf-fd49-7422-aefb-aff1f20d3ba3.jsonl",
+            "badDocumentType": false
+          }
+        ],
+        "tools": [
+          {
+            "session": "2026-09-08T06-55-26-018Z_01a07fcc-d742-7a82-b06a-bb0f8d7a58c6.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-55-41-697Z_01a07fcd-1481-7622-b267-315a4b1100b6.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-56-45-187Z_01a07fce-0c83-75cc-a0d8-7b632fdcc0ec.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-56-57-154Z_01a07fce-3b42-7a36-9ea2-ba23610442f9.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-57-28-627Z_01a07fce-b632-7e99-ab1f-18f47c1d43cd.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-57-50-181Z_01a07fcf-0a65-7e81-90da-8e5ba7c9d3f3.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-10-683Z_01a07fcf-5a7b-7efd-9bb6-f9de4d5f78e7.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-17-180Z_01a07fcf-73dc-7000-9878-5c9267649454.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-39-195Z_01a07fcf-c9db-7405-90e3-93d52404d834.jsonl",
+            "badDocumentType": false
+          },
+          {
+            "session": "2026-09-08T06-58-45-328Z_01a07fcf-e1d0-7550-8b32-c2f8b03f2f24.jsonl",
+            "badDocumentType": false
+          }
+        ]
+      }
+    }
+  ]
+}
