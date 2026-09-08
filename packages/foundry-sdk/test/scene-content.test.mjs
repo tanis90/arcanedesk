@@ -19,7 +19,7 @@ function patchObject(target, patch) {
     cursor[parts.at(-1)] = value;
   }
 }
-function fixture() {
+function fixture({ reverseCreates = false, receipt = created => created } = {}) {
   const scenes = new Map(), events = []; let failure = null, serial = 0, validations = 0;
   class Token {
     constructor(data, { parent } = {}) {
@@ -44,7 +44,8 @@ function fixture() {
     async update(patch) { events.push("update-scene"); if (failure === "update-scene") throw Error("connection lost"); patchObject(this,patch); }
     async createEmbeddedDocuments(type, entries) {
       assert.equal(type,"Token"); events.push("create-tokens"); if (failure === "create-tokens") throw Error("connection lost");
-      return entries.map(entry => { const token = new Token(entry,{ parent: this }); this.tokens.set(token.id,token); return token; });
+      const created = entries.map(entry => { const token = new Token(entry,{ parent: this }); this.tokens.set(token.id,token); return token; });
+      return receipt(reverseCreates ? created.reverse() : created);
     }
     async updateEmbeddedDocuments(type, entries) {
       assert.equal(type,"Token"); events.push("update-tokens"); if (failure === "update-tokens") throw Error("connection lost");
@@ -67,6 +68,42 @@ function fixture() {
     fail: group => { failure = group; }, read: (include = ["tokens"]) => call("sceneRead",{ sceneUuid: other.uuid, include }),
     apply: args => call("sceneApply",{ world, requestId: "request", ...args }) };
 }
+
+test("batch creation receipt accepts reversed native return order without replay", async () => {
+  const f = fixture({ reverseCreates: true });
+  const result = await f.apply({ operation: "create", scene: { name: "Reversed batch" },
+    tokens: { create: [{ actorUuid: f.actor.uuid, name: "A", x: 10, y: 20 }, { actorUuid: f.actor.uuid, name: "B", x: 30, y: 40 }] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(f.events.filter(event => event === "create-tokens").length, 1);
+  const scene = [...f.scenes.values()].find(value => value.name === "Reversed batch");
+  assert.equal(scene.tokens.size, 2);
+});
+
+test("identical placements each require a distinct created document", async () => {
+  const f = fixture({ reverseCreates: true });
+  const placement = { actorUuid: f.actor.uuid, name: "Same", x: 10, y: 20 };
+  const result = await f.apply({ operation: "create", scene: { name: "Identical batch" }, tokens: { create: [placement, placement] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.steps.find(step => step.step === "create-tokens").targets.length, 2);
+  assert.equal(f.events.filter(event => event === "create-tokens").length, 1);
+});
+
+for (const [name, receipt] of [
+  ["missing document", created => created.slice(1)],
+  ["duplicate returned identity", created => [created[0], created[0]]],
+  ["changed placement", created => { created[0].x += 1; return created; }],
+  ["wrong ownership", created => { created[0].flags.arcanedesk.requestId = "other"; return created; }],
+  ["missing persisted document", created => { created[0].parent.tokens.delete(created[0].id); return created; }],
+]) test(`creation receipt rejects ${name} without replay or activation`, async () => {
+  const f = fixture({ receipt });
+  const result = await f.apply({ operation: "create", scene: { name: "Uncertain batch", active: true },
+    tokens: { create: [{ actorUuid: f.actor.uuid, name: "A", x: 10, y: 20 }, { actorUuid: f.actor.uuid, name: "B", x: 30, y: 40 }] } });
+  assert.equal(result.status, "partial", JSON.stringify(result));
+  assert.equal(result.retry, false);
+  assert.equal(result.steps.find(step => step.step === "create-tokens").state, "unknown");
+  assert.equal(f.events.filter(event => event === "create-tokens").length, 1);
+  assert.equal(f.events.includes("activate-scene"), false);
+});
 
 test("explicit Scene read ignores the canvas, projects bounded collections, and binds cursors", async () => {
   const f = fixture();
