@@ -1,0 +1,1012 @@
+{
+  "status": "complete-not-promoted",
+  "rawReport": "benchmark-1788871018914.json",
+  "posthocAudit": "priest-transfer-posthoc-audit.json",
+  "frozenCommit": "469b4b9",
+  "experiment": {
+    "arms": [
+      "tools",
+      "native_skill"
+    ],
+    "comparison": "native-skill",
+    "kind": "current tools versus native NPC skill without actor create/update",
+    "cases": [
+      "npc_priest"
+    ],
+    "samplesPerCase": 3,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Production prompt control; native skill workflow routing for candidate",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "469b4b9338b619294c56cdd56979ceb2f01f5908",
+    "promptMode": "production",
+    "suiteVersion": "prep-npc-priest-transfer-draft1",
+    "taskTimeoutMs": 180000,
+    "experienceTargetMs": 120000,
+    "thinkingOverride": "off",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "trials": [
+    {
+      "arm": "tools",
+      "sample": 0,
+      "ms": 92713.857,
+      "calls": 23,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": false,
+      "posthocChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellRules": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "skillHash": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_create",
+        "foundry_actor_update",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 5,
+      "toolSequence": [
+        "foundry_open",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 10,
+          "dex": 14,
+          "con": 12,
+          "int": 10,
+          "wis": 16,
+          "cha": 13
+        },
+        "hp": {
+          "max": 22,
+          "temp": 0,
+          "tempmax": 0,
+          "value": 22,
+          "formula": ""
+        },
+        "identity": {
+          "value": "humanoid",
+          "subtype": "Elf Cleric"
+        },
+        "cr": 2,
+        "sourceRef": null,
+        "spellcasting": "",
+        "blesses": [
+          {
+            "name": "祝福术",
+            "prepared": 0,
+            "rules": "2014",
+            "effects": [
+              {
+                "name": "Bless",
+                "changes": [
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "native_skill",
+      "sample": 0,
+      "ms": 75584.3536,
+      "calls": 11,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": false,
+      "posthocChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellRules": false,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 0,
+      "toolSequence": [
+        "read",
+        "foundry_open",
+        "world_status",
+        "browser_evaluate",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 12,
+          "dex": 14,
+          "con": 13,
+          "int": 12,
+          "wis": 16,
+          "cha": 13
+        },
+        "hp": {
+          "value": 45,
+          "max": 45,
+          "temp": null,
+          "tempmax": null,
+          "formula": "7d8 + 7"
+        },
+        "identity": {
+          "value": "humanoid",
+          "subtype": "Elf",
+          "swarm": "",
+          "custom": ""
+        },
+        "cr": 2,
+        "sourceRef": "Compendium.dnd5e.spells24.Item.phbsplBless00000",
+        "spellcasting": "wis",
+        "blesses": [
+          {
+            "name": "Bless",
+            "prepared": 1,
+            "rules": "2024",
+            "effects": [
+              {
+                "name": "Blessed",
+                "changes": [
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  }
+                ]
+              },
+              {
+                "name": "Spell Changes",
+                "changes": [
+                  {
+                    "key": "system.activation",
+                    "mode": 5,
+                    "value": "{\"type\":\"bonus\",\"value\":null,\"condition\":\"\"}",
+                    "priority": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "native_skill",
+      "sample": 1,
+      "ms": 47379.07190000001,
+      "calls": 8,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": true,
+      "posthocChecks": {
+        "singleNpc": true,
+        "elf": true,
+        "wisdom": true,
+        "spellRules": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "bless": true,
+        "hammer": true
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 0,
+      "toolSequence": [
+        "read",
+        "foundry_open",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "world_status",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 12,
+          "dex": 12,
+          "con": 14,
+          "int": 10,
+          "wis": 16,
+          "cha": 10
+        },
+        "hp": {
+          "max": 18,
+          "temp": 0,
+          "tempmax": 0,
+          "value": 18,
+          "formula": ""
+        },
+        "identity": {
+          "value": "humanoid",
+          "subtype": "elf"
+        },
+        "cr": 1,
+        "sourceRef": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+        "spellcasting": "wis",
+        "blesses": [
+          {
+            "name": "祝福术 Bless",
+            "prepared": 1,
+            "rules": "2014",
+            "effects": [
+              {
+                "name": "bless:bless",
+                "changes": [
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "tools",
+      "sample": 1,
+      "ms": 103856.55090000003,
+      "calls": 26,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "elf": false,
+        "wisdom": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": false,
+      "posthocChecks": {
+        "singleNpc": true,
+        "elf": false,
+        "wisdom": true,
+        "spellRules": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "skillHash": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_create",
+        "foundry_actor_update",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 5,
+      "toolSequence": [
+        "foundry_open",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "world_status",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_grant_items",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "foundry_actor_update",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_actor_get",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 10,
+          "dex": 12,
+          "con": 12,
+          "int": 10,
+          "wis": 16,
+          "cha": 13
+        },
+        "hp": {
+          "max": 21,
+          "temp": 0,
+          "tempmax": 0,
+          "value": 21,
+          "formula": ""
+        },
+        "identity": {},
+        "cr": 1,
+        "sourceRef": null,
+        "spellcasting": "",
+        "blesses": [
+          {
+            "name": "祝福术 Bless",
+            "prepared": 0,
+            "rules": "2014",
+            "effects": [
+              {
+                "name": "bless:bless",
+                "changes": [
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "tools",
+      "sample": 2,
+      "ms": 68526.3627,
+      "calls": 15,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "elf": false,
+        "wisdom": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": false,
+      "posthocChecks": {
+        "singleNpc": true,
+        "elf": false,
+        "wisdom": true,
+        "spellRules": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "skillHash": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_create",
+        "foundry_actor_update",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 3,
+      "toolSequence": [
+        "foundry_open",
+        "world_status",
+        "foundry_content_search",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "foundry_actor_create",
+        "browser_evaluate",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 10,
+          "dex": 14,
+          "con": 12,
+          "int": 10,
+          "wis": 16,
+          "cha": 12
+        },
+        "hp": {
+          "value": 24,
+          "max": 24,
+          "temp": 0,
+          "tempmax": 0,
+          "formula": ""
+        },
+        "identity": {},
+        "cr": 1,
+        "sourceRef": null,
+        "spellcasting": "",
+        "blesses": [
+          {
+            "name": "祝福术 Bless",
+            "prepared": 0,
+            "rules": "2014",
+            "effects": [
+              {
+                "name": "bless:bless",
+                "changes": [
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  },
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": 20
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "arm": "native_skill",
+      "sample": 2,
+      "ms": 88700.2378,
+      "calls": 15,
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": false,
+        "elf": true,
+        "wisdom": true,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "posthocSuccess": false,
+      "posthocChecks": {
+        "singleNpc": false,
+        "elf": true,
+        "wisdom": true,
+        "spellRules": false,
+        "spellcasting": false,
+        "slots": false,
+        "hp": true,
+        "bless": false,
+        "hammer": true
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "allRequestsThinkingOff": true,
+      "reasoningTokens": 0,
+      "toolErrors": 2,
+      "toolSequence": [
+        "read",
+        "foundry_open",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "manualReview": {
+        "abilities": {
+          "str": 12,
+          "dex": 10,
+          "con": 14,
+          "int": 10,
+          "wis": 16,
+          "cha": 12
+        },
+        "hp": {
+          "value": 38,
+          "max": 38,
+          "temp": null,
+          "tempmax": null,
+          "formula": "7d8 + 7"
+        },
+        "identity": {
+          "value": "humanoid",
+          "subtype": "Elf",
+          "swarm": "",
+          "custom": ""
+        },
+        "cr": 2,
+        "sourceRef": "Compendium.dnd5e.spells24.Item.phbsplBless00000",
+        "spellcasting": "wis",
+        "blesses": [
+          {
+            "name": "Bless",
+            "prepared": 0,
+            "rules": "2024",
+            "effects": [
+              {
+                "name": "Blessed",
+                "changes": [
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  }
+                ]
+              },
+              {
+                "name": "Spell Changes",
+                "changes": [
+                  {
+                    "key": "system.activation",
+                    "mode": 5,
+                    "value": "{\"type\":\"bonus\",\"value\":null,\"condition\":\"\"}",
+                    "priority": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "祝福术",
+            "prepared": 1,
+            "rules": "2014",
+            "effects": [
+              {
+                "name": "Bless",
+                "changes": [
+                  {
+                    "key": "system.bonuses.abilities.save",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.mwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.msak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rsak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  },
+                  {
+                    "key": "system.bonuses.rwak.attack",
+                    "mode": 2,
+                    "value": "1d4",
+                    "priority": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "original": {
+      "tools": 0,
+      "native_skill": 0
+    },
+    "posthoc": {
+      "tools": 0,
+      "native_skill": 1
+    },
+    "nPerArm": 3
+  },
+  "verifierCorrection": {
+    "old": "Ignored _id but compared _stats import metadata as mechanics.",
+    "new": "Ignore _id and _stats for mechanics comparison; explicitly check requested 2014 spell rules.",
+    "preserved": "Raw original scores and failed trajectories retained. No model replay.",
+    "tests": 5
+  },
+  "decision": "Guide helps specific caster fields, but full-task transfer is only 1/3 versus 0/3. Do not promote ordinary Actor tool removal or experimental skill. Stop adding task-specific examples; finish simple-task regression and report limits.",
+  "caveats": [
+    "Posthoc assessment is separately labeled, not a new preregistered success rate.",
+    "Comparison changes tool visibility, routing and skill together; cannot assign gain to one factor.",
+    "CR balance and actual spell casting are outside this NPC data preparation gate."
+  ]
+}

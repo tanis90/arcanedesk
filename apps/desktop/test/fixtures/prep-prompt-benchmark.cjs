@@ -33,7 +33,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
   if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and 16 tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
-  report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft1":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
+  report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??180000);
   report.experiment.experienceTargetMs=120000;
   const thinkingOverride=process.argv.find(a=>a.startsWith("--thinking="))?.slice(11);

@@ -6,12 +6,13 @@ module.exports=(evaluate,fixture)=>evaluate(`(async()=>{
   const hammers=a.items.filter(i=>i.type==='weapon'&&i.system.identifier==='light-hammer');
   const b=blesses[0],ref=b?.toObject()._stats?.compendiumSource;
   const source=ref?await fromUuid(ref):null;
-  const norm=x=>Array.isArray(x)?x.map(norm):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).filter(k=>k!=='_id').sort().map(k=>[k,norm(x[k])])):x;
+  const norm=x=>Array.isArray(x)?x.map(norm):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).filter(k=>k!=='_id'&&k!=='_stats').sort().map(k=>[k,norm(x[k])])):x;
   const eq=(x,y)=>JSON.stringify(norm(x))===JSON.stringify(norm(y));
   const raw=b?.toObject(),original=source?.toObject();
   const checks={singleNpc:matches.length===1&&a.type==='npc',
     elf:s.details.type?.value==='humanoid'&&(/elf|精灵/i.test(String(s.details.type.subtype??''))||a.items.some(i=>i.type==='race'&&/elf|精灵/i.test(i.name))),
     wisdom:s.abilities.wis.value===16,
+    spellRules:b?.system.source?.rules==='2014',
     spellcasting:s.attributes.spellcasting==='wis'&&s.attributes.spell.level===3,
     slots:[1,2].every((n,i)=>s.spells['spell'+n].max===[4,2][i]&&s.spells['spell'+n].value===s.spells['spell'+n].max)&&[3,4,5,6,7,8,9].every(n=>!s.spells['spell'+n].max&&!s.spells['spell'+n].value),
     hp:Number.isFinite(s.attributes.hp.max)&&s.attributes.hp.max>0&&s.attributes.hp.value===s.attributes.hp.max,
