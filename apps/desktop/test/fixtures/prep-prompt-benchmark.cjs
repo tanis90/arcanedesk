@@ -3,7 +3,7 @@
 module.exports = async function benchmark({ evaluate, report, save, root, runId, store, page, origin, revision, samples, setHost, resumePath, promptMode = "production", baselineRevision, baselinePath, comparison = "js", caseFilter }) {
   const assert=require("node:assert/strict"), path=require("node:path"), fs=require("node:fs"), crypto=require("node:crypto");
   const productionPrep=fs.readFileSync(path.resolve(__dirname,"../../system-prompts/prep.md"),"utf8").trim();
-  const common="你是 ArcaneDesk 备团助手。遵循 DM 的明确要求。QA-A 世界已经连接且 GM 就绪。使用精确世界对象和合集来源，避免重复创建。只用公开 Foundry Document API，等待每次写入完成，返回紧凑结果并确认实际变化。不确定写入不能重放。只操作用户指定的测试对象，不修改模块文件或包。缺少必要信息才提问。成功回复简洁，用中文。";
+  const common="你是 ArcaneDesk 备团助手。遵循 DM 的明确要求。测试世界已经连接且 GM 就绪。使用精确世界对象和合集来源，避免重复创建。只用公开 Foundry Document API，等待每次写入完成，返回紧凑结果并确认实际变化。不确定写入不能重放。只操作用户指定的测试对象，不修改模块文件或包。缺少必要信息才提问。成功回复简洁，用中文。";
   const newTools=new Set(["world_status","foundry_play_context","foundry_conditions_set","foundry_content_search","foundry_actor_get","foundry_actor_create","foundry_actor_update","foundry_actor_grant_items","foundry_scene_get","foundry_scene_apply"]);
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
@@ -14,7 +14,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   assert.ok(["js","revision"].includes(comparison));
   const arms=comparison==="revision"?["baseline","tools"]:["js","tools"];
   report.experiment={arms,comparison,kind:"same-code tool ablation",cases,samplesPerCase:samples,model:report.model,
-    promptPolicy:"same neutral Prep instructions; arm-specific route; Pi generates the matching active-tool preamble",newTools:[...newTools],connection:"warm authenticated QA-A",humanWait:"recorded; no automatic answers"};
+    promptPolicy:"same neutral Prep instructions; arm-specific route; Pi generates the matching active-tool preamble",newTools:[...newTools],connection:"warm authenticated target world",humanWait:"recorded; no automatic answers"};
   report.experiment.candidateCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:path.resolve(__dirname,"../../../.."),encoding:"utf8"}).trim();
   assert.ok(["production","neutral"].includes(promptMode));
   report.experiment.promptMode=promptMode;
@@ -26,7 +26,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   report.prepTrials=[];
   if(resumePath){
     const previous=JSON.parse(fs.readFileSync(resumePath,"utf8"));
-    assert.equal(previous.status,"failed");assert.equal(previous.error,"Ambiguous run retained for inspection; no automatic retry/cleanup");
+    assert.equal(previous.status,"failed");assert.ok(["Ambiguous run retained for inspection; no automatic retry/cleanup","InvalidStateError: The source image could not be decoded."].includes(previous.error));
     assert.equal(previous.experiment.candidateCommit,report.experiment.candidateCommit);
     assert.equal(previous.experiment.comparison,comparison);assert.equal(previous.experiment.baselineCommit,report.experiment.baselineCommit);assert.deepEqual(previous.experiment.cases,cases);
     assert.equal(previous.experiment.promptMode,promptMode);assert.equal(previous.experiment.suiteVersion,report.experiment.suiteVersion);assert.equal(previous.experiment.imageSha256,imageHash);
@@ -56,7 +56,9 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
     trial.verification=await verify(trial.caseId,trial.fixture);trial.success=trial.verification.ok;
-    trial.uncertainReceiptReviewed=true;trial.jsFallback=trial.arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
+    if(trial.tools.some(t=>t.status==="indeterminate"))trial.uncertainReceiptReviewed=true;
+    else trial.verifierFailureReviewed=true;
+    trial.jsFallback=trial.arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
     await cleanup(trial.fixture);trial.cleaned=true;save();
   }
   for(let sample=0;sample<samples;sample++)for(const caseId of cases)for(const arm of sample%2?[...arms].reverse():arms){
@@ -72,7 +74,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
-    const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only QA-A");return{ok:true,url:`${origin}/game`,summary:"QA-A connected, GM ready"};},
+    const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
       providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     setHost(host);await host.start({fresh:true});
@@ -92,7 +94,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       if(e.type==="tool_execution_end"){const t=trial.tools.find(t=>t.id===e.toolCallId);if(t)Object.assign(t,{ms:performance.now()-t.start,isError:e.isError,status:e.result?.details?.status,bytes:Buffer.byteLength(JSON.stringify(e.result??null))});}
       if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage)trial.modelError="provider error";}
     });
-    const timer=setTimeout(()=>{trial.timedOut=true;host.stop();},120000);
+    const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},120000);
     trial.state="submitted";save();
     try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.state="returned";save();}
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");

@@ -10,6 +10,20 @@
 
 ## 快速使用
 
+2026-09-08 用户已指定改用本地 COS。使用 --target=local-cos 绑定 30000／9230／COS；
+默认 --target=qa-a 仍绑定 30101／9231／cos-a。不能把两种环境的样本混作同一基线。
+本地 COS 不运行 review-prep-play-qa 的战斗／故障场景；GM 登录后使用专用 Prep setup：
+
+```powershell
+node apps/desktop/test/setup-prep-benchmark.mjs --target=local-cos
+# 把输出报告路径传给 --qa-report，其余 provider 配置同下文
+npm run benchmark:prep -- --target=local-cos --qa-root=C:\qa\arcanedesk-benchmark --qa-report=C:\qa\fixture.json --samples=10
+```
+
+setup 只创建两个带 runId 标记的空白 NPC 和一个非激活场景，供本会话 view；不创建或修改 Combat。
+报告保存原 viewed/active Scene 与精确 UUID。结果不确定不重放；结束后恢复原视图并按 UUID／runId
+精确清理 setup 对象。完整 fixture 流程尚待本地真实验收，不能对既有角色做通配清理。
+
 从仓库根目录执行，先安装仓库依赖并构建 SDK：
 
 ```powershell
@@ -101,12 +115,32 @@ JPEG，231×223，5542 字节，SHA-256：
 
 ## 冻结 v1 前剩余验收
 
-- 在 QA-A 实跑新增图片题的两组，确认本地读取、上传、哈希验证和清理；再跑 120 次生产模式正式基线。
+- 2026-09-08 已按用户授权在本地 COS 完成图片预检及六类共 120 次生产模式对照。
+  [统计与工具覆盖](prep-cos-benchmark-results.json)，[迭代结论](foundry-prep-play-technical-plan.md#146-本地-cos-全工具基线2026-09-08已完成)。
+  这是完整 draft 基线；下面的协议缺口补齐前仍不标记稳定 v1。
 - draft2 已增加状态题的无关预置效果与重复效果验收，4 项离线测试通过（正确结果、误删、重复、误伤第三人）；
-  仍需 QA-A 确认真实系统效果形态。只验收最终状态，不等于已追踪所有中途副作用。
+  COS 已确认真实系统效果形态；解码异常回归加入后离线验收器共 5 项通过。
+  只验收最终状态，不等于已追踪所有中途副作用。
 - 授物补来源保留与二次幂等，场景补原型继承检查。增强验收须升级 suiteVersion。
 - 确认共享页面 JS 全局声明的隔离策略：当前每题新模型会话，但页面 JS 上下文沿用，顶层 const 可残留。
   不能把相关语法碰撞全部归因于 FVTT 知识不足。
 - 若要测每次冷上传，应另设资产隔离/清理协议，不能混用当前内容复用场景的耗时。
 
 这些限制明确解决并完成实跑后，才能把 draft 标记为稳定 v1；历史报告始终保留。
+
+## 完整覆盖与补验
+
+不传 `--cases` 默认运行全部六类；图片题只能作为预检，不能代替全套。
+也可分别传 `--cases=create_npc`、`grant_items`、`edit_image`、`scene_layout`、`conditions`、`upload_image`，
+每类 `--samples=10`，按六份报告汇总；一类遇到不确定写入暂停，不影响后续独立类别。
+必须保留未决任务，不能删掉失败或以补跑成功替换。
+
+模型不一定主动调用全部工具。报告要附实际工具调用覆盖，未覆盖的运行时分支可独立补验：
+
+```powershell
+node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report=<fixture-report>
+```
+
+该脚本使用专用 fixture 场景，验证世界信息、Token 关注集、轻重上下文和状态添加／移除／重复移除；
+只创建并清理自身标记的 Actor、Token，失败则保留现场。功能补验不计入模型响应速度样本。
+运行器在 120 秒保存超时并请求 abort，150 秒硬截止保留不确定结果；不自动重放或清理。

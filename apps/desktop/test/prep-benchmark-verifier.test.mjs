@@ -3,6 +3,23 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import createVerifier from "./fixtures/prep-benchmark-verifier.cjs";
 
+test("undecodable upload is a failed trial instead of aborting the suite", async () => {
+  const actor = { id: "a", img: "bad.jpg", prototypeToken: { texture: { src: "bad.jpg" } } };
+  const token = { actorId: "a", texture: { src: "bad.jpg" }, name: "test Token1", x: 200, y: 200, width: 1, height: 1 };
+  const context = vm.createContext({
+    game: { actors: new Map([["a", actor]]), scenes: new Map([["s", { tokens: [token] }]]) },
+    location: { origin: "http://127.0.0.1:30000" }, URL,
+    fetch: async () => ({ ok: true, blob: async () => ({ arrayBuffer: async () => new ArrayBuffer(0) }) }),
+    crypto: { subtle: { digest: async () => new Uint8Array([1]).buffer } },
+    createImageBitmap: async () => { throw new DOMException("The source image could not be decoded.", "InvalidStateError"); }
+  });
+  const verify = createVerifier(code => vm.runInContext(code, context), "01");
+  const result = await verify("upload_image", { actorIds: ["a"], sceneId: "s", label: "test" });
+  assert.equal(result.ok, false);
+  assert.equal(result.details.loadable, false);
+  assert.match(result.details.imageError, /InvalidStateError/);
+});
+
 function fixture() {
   const actors = new Map();
   const ids = ["a", "b", "c"];

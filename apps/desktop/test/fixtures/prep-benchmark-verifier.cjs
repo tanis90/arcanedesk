@@ -8,14 +8,17 @@ module.exports = function createVerifier(evaluate, imageHash) {
     if(kind==="scene_layout"){details={tokens:s.tokens.map(t=>({name:t.name,x:t.x,y:t.y,actorId:t.actorId})),active:s.active,current:canvas.scene.id};const expected=[[f.label+" Token1",300,400,f.actorIds[0]],[f.label+" Token2",500,400,f.actorIds[1]],["新守卫A",700,400,f.actorIds[0]],["新守卫B",900,400,f.actorIds[0]]];ok=s.tokens.size===4&&expected.every(([n,x,y,a])=>s.tokens.some(t=>t.name===n&&t.x===x&&t.y===y&&t.actorId===a))&&!s.active&&canvas.scene.id===f.originalSceneId;}
     if(kind==="conditions"){details=f.actorIds.map(id=>({id,statuses:[...game.actors.get(id).statuses]}));ok=details.slice(0,2).every(a=>a.statuses.includes("prone")&&a.statuses.includes("poisoned"))&&!details[2].statuses.includes("prone")&&!details[2].statuses.includes("poisoned");}
     if(kind==="upload_image"){
-      const img=a.img, token=s.tokens.find(t=>t.actorId===a.id);let hash=null,loadable=false;
+      const img=a.img, token=s.tokens.find(t=>t.actorId===a.id);let hash=null,loadable=false,imageError=null;
       if(img&&!/^(?:data:|file:|https?:|[A-Za-z]:)/i.test(img)&&!img.includes("..")){
-        const response=await fetch(new URL(img,location.origin+"/"),{cache:"no-store"});
+        try {
+        const url=new URL(img,location.origin+"/");if(url.origin!==location.origin)throw Error("Image origin mismatch");
+        const response=await fetch(url,{cache:"no-store"});
         if(response.ok){const blob=await response.blob();hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(b=>b.toString(16).padStart(2,"0")).join("");const bitmap=await createImageBitmap(blob);loadable=bitmap.width===231&&bitmap.height===223;bitmap.close();}
+        } catch(error) { imageError=error.name+": "+error.message; }
       }
       const untouched=f.actorIds.slice(1).every(id=>{const other=game.actors.get(id);return other.img===other.prototypeToken.texture.src&&other.img==="systems/dnd5e/icons/svg/actors/npc.svg";})&&s.tokens.filter(t=>t.actorId!==a.id).every(t=>t.texture.src==="systems/dnd5e/icons/svg/actors/npc.svg");
       ok=hash===${JSON.stringify(imageHash)}&&loadable&&a.prototypeToken.texture.src===img&&token.texture.src===img&&token.name===f.label+" Token1"&&token.x===200&&token.y===200&&token.width===1&&token.height===1&&untouched;
-      details={imagePath:img,hash,loadable,untouched};
+      details={imagePath:img,hash,loadable,untouched,imageError};
     }
     if(kind==="conditions"){
       const protectedIntact=f.protectedEffects.every(e=>{const actual=game.actors.get(e.actorId)?.effects.get(e.effectId);return actual?.name===e.name&&actual.disabled===false;});

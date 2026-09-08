@@ -7,6 +7,8 @@ const { pathToFileURL } = require("node:url");
 const { EventEmitter } = require("node:events");
 const assert = require("node:assert/strict");
 const option = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
+const target = require("./prep-benchmark-target.cjs")(option("target", "qa-a"));
+if(target.name === "local-cos") assert.equal(option("prep-benchmark"), "true", "Local COS is authorized for Prep experiments only");
 const root = option("qa-root");
 const qaReportPath = option("qa-report");
 if (!root || !qaReportPath) throw Error("--qa-root and --qa-report are required");
@@ -30,13 +32,13 @@ app.whenReady().then(async () => {
   const store = new ProviderStore(path.join(root, "config/providers.json"), () => {}, {}, new SecretStorage(safeStorage));
   assert.deepEqual(store.effectiveModel(), { providerId: "qa-kimi-coding", modelId: report.model });
   const fixture = JSON.parse(readFileSync(qaReportPath, "utf8"));
-  assert.equal(fixture.worldId, "cos-a"); assert.ok(fixture.fixtures.combatUuid);
-  const origin = "http://127.0.0.1:30101";
+  assert.equal(fixture.worldId, target.worldId); if(option("prep-benchmark") !== "true") assert.ok(fixture.fixtures.combatUuid);
+  const origin = target.origin;
   const targetId = fixture.fixtures.noTokenActorUuid.split(".")[1];
   const sourceId = fixture.fixtures.actorUuid.split(".")[1];
   const sceneId = fixture.fixtures.sceneUuid.split(".")[1];
-  const combatId = fixture.fixtures.combatUuid.split(".")[1];
-  const pages = (await (await fetch("http://127.0.0.1:9231/json/list")).json()).filter(t => t.type === "page" && t.url === `${origin}/game`);
+  const combatId = fixture.fixtures.combatUuid?.split(".")[1];
+  const pages = (await (await fetch(`http://127.0.0.1:${target.port}/json/list`)).json()).filter(t => t.type === "page" && t.url === `${origin}/game`);
   assert.equal(pages.length, 1);
   socket = new WebSocket(pages[0].webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.addEventListener("open", resolve, { once: true }); socket.addEventListener("error", reject, { once: true }); });
@@ -46,7 +48,7 @@ app.whenReady().then(async () => {
     pending.delete(m.id); clearTimeout(p.timer);
     if (m.error || m.result?.exceptionDetails) p.reject(Error(String(m.error?.message ?? m.result.exceptionDetails.exception?.description ?? m.result.exceptionDetails.text).replace(/sk-[A-Za-z0-9_-]+/g,"[redacted]"))); else p.resolve(m.result?.result?.value);
   });
-  const guard = `if(location.origin!==${JSON.stringify(origin)}||game.world.id!=="cos-a"||!game.ready||!game.user.isGM||canvas.scene?.id!==${JSON.stringify(sceneId)})throw Error("QA-A fixture guard failed");`;
+  const guard = `if(location.origin!==${JSON.stringify(origin)}||game.world.id!==${JSON.stringify(target.worldId)}||!game.ready||!game.user.isGM||canvas.scene?.id!==${JSON.stringify(sceneId)})throw Error("QA-A fixture guard failed");`;
   const evaluate = expression => new Promise((resolve, reject) => {
     const id = ++seq;
     const timer = setTimeout(() => { pending.delete(id); reject(Error("QA CDP timeout; do not retry write")); }, 60000);
@@ -61,6 +63,7 @@ app.whenReady().then(async () => {
     executeJavaScript: expression => evaluate(expression) });
   const fixtureNames = await evaluate(`(()=>{const a=game.actors.get(${JSON.stringify(sourceId)}),t=game.actors.get(${JSON.stringify(targetId)});if(!a?.flags.arcanedesk?.requestId?.startsWith(${JSON.stringify(fixture.runId)})||!t?.flags.arcanedesk?.requestId?.startsWith(${JSON.stringify(fixture.runId)}))throw Error("Fixture ownership mismatch");return {source:a.name,target:t.name};})()`);
   report.environment = fixture.environment;
+  report.target = target;
   report.fixtureRun = fixture.runId;
   const revisions = {};
   for (const [label, repo] of [["baseline", baseline], ["candidate", candidate]]) {
