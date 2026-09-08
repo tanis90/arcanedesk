@@ -11,6 +11,16 @@ and keep temporary variables inside an async function so declarations do not col
 
 ## Organize the work before making calls
 
+Before discovery, turn each explicit DM requirement into a compact internal requirement-to-data checklist.
+Include identity/ancestry separately from the Actor's display name, required capabilities and resources,
+and the requested equipment state. Pick reasonable unspecified values without inventing new obligations.
+For each requirement identify both the native write field and the value to read back. If you do not know
+the field, inspect the current model or a relevant source once before writing; do not rely on unknown keys
+silently surviving create/update. Carry this checklist into the final script as actual boolean checks.
+The script's return should contain those checks and the effective values, not just a narrative summary.
+Report completion only if every explicit requirement passes. If one fails, report the existing Actor UUID
+and specific mismatch; do not simply repeat the user's requirement as if it was satisfied.
+
 Decide the requested NPC configuration and a reasonable resource list first. Treat related lookups as one
 discovery phase, not a new planning turn for each spell. Use search to discover unknown sources; once the
 relevant packs are known, read each needed pack index once in a single browser script and match all required

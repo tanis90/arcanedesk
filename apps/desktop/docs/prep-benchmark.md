@@ -83,6 +83,10 @@ NPC 原生 skill 工作流实验使用 `--comparison=native-skill --cases=npc_wi
 旧稿可从 51bb226 提取，当前合并指引仍为实验稿。[首次合并实验](prep-skill-batching-results.json)
 两版各 1/2 通过，不能将减少调用等同于稳定可靠。
 
+用户要求后续默认 120 秒硬超时，NPC 新运行记为 prep-npc-intent-draft2；历史 draft1 的 300 秒报告不改写。
+`--task-timeout-ms` 可在 120000–300000 范围显式设置，仅在有数据说明默认上限失去区分度时用于后续配对块，
+不得为单条失败临时延长。超时保留现场，timeout_abort 与 provider_error 分开记账。
+
 | 用例 | 用户意图 | 当前独立验收 |
 | --- | --- | --- |
 | create_npc | 从 Wolf 创建 NPC，并设置角色和原型名；同名不重复 | 单个目标、两个名字、Wolf HP 与 Bite |
@@ -204,3 +208,7 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 该脚本使用专用 fixture 场景，验证世界信息、Token 关注集、轻重上下文和状态添加／移除／重复移除；
 只创建并清理自身标记的 Actor、Token，失败则保留现场。功能补验不计入模型响应速度样本。
 运行器在 120 秒保存超时并请求 abort，150 秒硬截止保留不确定结果；不自动重放或清理。
+
+## 狼人迁移题
+
+`--cases=npc_werewolf --comparison=skill-revision --baseline-skill=<冻结旧稿> --samples=1` 使用同一 16 工具对比两份冻结指南。默认仍为 120 秒；独立指定 `--task-timeout-ms=180000` 只能用于预注册诊断块。题目、来源预检与验收边界见[狼人迁移协议](prep-werewolf-transfer.md)。Evaluator 读取来源快照但不把位置或答案传给模型。NPC 与 fixture 保留，超时停止、不重放。

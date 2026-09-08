@@ -8,11 +8,12 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
-  const allCases=["npc_wizard","create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
-  const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>c!=="npc_wizard");
+  const npcCases=["npc_wizard","npc_werewolf"];
+  const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
+  const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
   assert.ok(["js","revision","native-skill","skill-revision"].includes(comparison));
-  if(["native-skill","skill-revision"].includes(comparison))assert.deepEqual(cases,["npc_wizard"]);
+  if(["native-skill","skill-revision"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
   const arms=comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
@@ -28,8 +29,9 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
   if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
-  report.experiment.suiteVersion=cases.includes("npc_wizard")?"prep-npc-intent-draft1":"prep-v1-draft2";
-  report.experiment.taskTimeoutMs=cases.includes("npc_wizard")?300000:120000;
+  report.experiment.suiteVersion=cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
+  report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??120000);
+  assert.ok(Number.isInteger(report.experiment.taskTimeoutMs)&&report.experiment.taskTimeoutMs>=120000&&report.experiment.taskTimeoutMs<=300000);
   report.experiment.imageSha256=imageHash;
   report.prepTrials=[];
   if(resumePath){
@@ -44,6 +46,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     runId=previous.fixtureLabelRun??previous.runId;report.fixtureLabelRun=runId;
   }
   const source=await evaluate('(async()=>{const p=game.packs.get("dnd5e.monsters");const wolf=(await p.getIndex()).find(e=>e.name==="Wolf");const w=game.packs.get("arcane-dnd5e-2014-automation.basicweapons");const index=await w.getIndex();return {wolf:wolf._id,rapier:index.find(e=>/Rapier/.test(e.name))._id,bow:index.find(e=>/Longbow/.test(e.name))._id};})()');
+  // Evaluator-only reference snapshot; never included in the model prompt or skill.
+  const werewolfSources=cases.includes("npc_werewolf")?await evaluate('(async()=>{const refs={werewolf:"Compendium.dnd5e.monsters.Actor.7tRhrxuknTpHpYcA",werewolf24:"Compendium.dnd5e.actors24.Actor.mmWerewolf000000",surge:"Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",longbow:"Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.3EE9A77945B5824F"};return Object.fromEntries(await Promise.all(Object.entries(refs).map(async([key,ref])=>{const d=await fromUuid(ref);if(!d)throw Error("Missing transfer source "+ref);return [key,d.toObject()];})));})()'):null;
   const setup=async label=>evaluate(`(async()=>{
     const actors=[];for(let i=0;i<3;i++)actors.push(await Actor.create({name:${JSON.stringify(label)}+" 角色"+(i+1),type:"npc",flags:{arcanedesk:{prepBenchmark:${JSON.stringify(runId)}}},prototypeToken:{name:${JSON.stringify(label)}+" Token"+(i+1),actorLink:true},system:{attributes:{hp:{value:10,max:10},ac:{calc:"flat",flat:12}}}}));
     const protectedEffects=[];
@@ -53,6 +57,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const tokens=[];for(let i=0;i<3;i++)tokens.push((await actors[i].getTokenDocument({x:200+i*200,y:200,actorLink:true})).toObject());await s.createEmbeddedDocuments("Token",tokens);
     return {protectedEffects,actorIds:actors.map(a=>a.id),sceneId:s.id,label:${JSON.stringify(label)},newName:${JSON.stringify(label)}+" 霜牙",originalSceneId:canvas.scene.id};})()`);
   const prompts=(id,label)=>({
+    npc_werewolf:`创建一个狼人，给它动作如潮，把它的武器里加上长弓。命名为“${label} 霜牙”。只创建这个 NPC，不修改已有角色。`,
     npc_wizard:`按2014版规则，创建一个五级的人类法师 NPC，18智力，其他分配要合理，法术保证有火球术。给他装备上一根长棍。命名为“${label} 霜牙”。其他未指定选项自行合理决定；只创建这个 NPC，不修改已有角色。`,
     create_npc:`在 dnd5e.monsters 合集中找到名字精确为 Wolf 的怪物，创建一个名为“${label} 霜牙”的 NPC，并把它的原型 Token 名称也设成“${label} 霜牙”。已有同名则不要重复创建。`,
     grant_items:`给“${label} 角色1”授予 arcane-dnd5e-2014-automation.basicweapons 合集的 Rapier 和 Longbow，各一件。已有同来源的物品原样跳过，不叠加数量；新授予的物品装备上。`,
@@ -61,7 +66,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     conditions:`给世界角色“${label} 角色1”和“${label} 角色2”都加上倒地和中毒状态，不影响“${label} 角色3”。`
   })[id];
   const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
-  const verify=(id,f)=>id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
+  const verify=(id,f)=>id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
   for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
@@ -75,7 +80,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const nativeSkillArm=arm.startsWith("native_skill");
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
-    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${caseId==="npc_wizard"?"-"+arm:""}`;const f=await setup(label);
+    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
     const trial={sample,caseId,arm,fixture:f,prompt:prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
     if(caseId==="upload_image"){
@@ -110,7 +115,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       if(!firstEvent&&["message_update","tool_execution_start"].includes(e.type)){trial.firstEventMs=performance.now()-start;firstEvent=true;}
       if(e.type==="tool_execution_start")trial.tools.push({name:e.toolName,id:e.toolCallId,start:performance.now(),argumentBytes:Buffer.byteLength(JSON.stringify(e.args??null)),javascriptChars:e.toolName==="browser_evaluate"?(e.args?.code?.length??0):0});
       if(e.type==="tool_execution_end"){const t=trial.tools.find(t=>t.id===e.toolCallId);if(t)Object.assign(t,{ms:performance.now()-t.start,isError:e.isError,status:e.result?.details?.status,bytes:Buffer.byteLength(JSON.stringify(e.result??null))});}
-      if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage){trial.modelError="provider error";trial.providerFailure=/5-hour usage limit/i.test(e.message.errorMessage)?"quota_exhausted":"provider_error";}}
+      if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage&&trial.timedOut&&/abort/i.test(e.message.errorMessage)){trial.cancellation="timeout_abort";}else if(e.message.errorMessage){trial.modelError="provider error";trial.providerFailure=/5-hour usage limit/i.test(e.message.errorMessage)?"quota_exhausted":"provider_error";}}
     });
     const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},report.experiment.taskTimeoutMs);
     trial.state="submitted";save();
@@ -119,7 +124,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
     trial.jsFallback=arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
-    host.dispose();setHost(null);if(caseId==="npc_wizard"){trial.retainedForReview=true;}else{await cleanup(f);trial.cleaned=true;}save();
+    host.dispose();setHost(null);if(npcCases.includes(caseId)){trial.retainedForReview=true;}else{await cleanup(f);trial.cleaned=true;}save();
     if(trial.modelError)throw Error("Provider failure; batch paused after settled trial");
   }
   report.status="prep-benchmark-completed";save();
