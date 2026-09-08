@@ -92,7 +92,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       if(!firstEvent&&["message_update","tool_execution_start"].includes(e.type)){trial.firstEventMs=performance.now()-start;firstEvent=true;}
       if(e.type==="tool_execution_start")trial.tools.push({name:e.toolName,id:e.toolCallId,start:performance.now(),argumentBytes:Buffer.byteLength(JSON.stringify(e.args??null)),javascriptChars:e.toolName==="browser_evaluate"?(e.args?.code?.length??0):0});
       if(e.type==="tool_execution_end"){const t=trial.tools.find(t=>t.id===e.toolCallId);if(t)Object.assign(t,{ms:performance.now()-t.start,isError:e.isError,status:e.result?.details?.status,bytes:Buffer.byteLength(JSON.stringify(e.result??null))});}
-      if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage)trial.modelError="provider error";}
+      if(e.type==="message_end"&&e.message?.role==="assistant"){if(e.message.usage)trial.usage.push(e.message.usage);if(e.message.errorMessage){trial.modelError="provider error";trial.providerFailure=/5-hour usage limit/i.test(e.message.errorMessage)?"quota_exhausted":"provider_error";}}
     });
     const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},120000);
     trial.state="submitted";save();
@@ -102,6 +102,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
     trial.jsFallback=arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
     host.dispose();setHost(null);await cleanup(f);trial.cleaned=true;save();
+    if(trial.modelError)throw Error("Provider failure; batch paused after settled trial");
   }
   report.status="prep-benchmark-completed";save();
 };

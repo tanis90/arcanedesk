@@ -17,6 +17,7 @@ const groups=r.experiment.cases.map(caseId=>{
       queueWaitMs:stats(all.map(t=>t.waits.reduce((a,b)=>a+b,0))),jsFallbacks:all.filter(t=>t.jsFallback).length,humanWaits:all.filter(t=>t.waitingUser).length,
       uncertainReceipts:all.filter(t=>t.tools.some(tool=>tool.status==="indeterminate")).length,reviewedAfterPause:all.filter(t=>t.uncertainReceiptReviewed).length,
       trialsWithErrors:all.filter(t=>t.tools.some(tool=>tool.isError||tool.status==="rejected")).length,
+      providerFailures:all.filter(t=>t.modelError).length,quotaFailures:all.filter(t=>t.providerFailure==="quota_exhausted").length,
       toolSequences:all.map(t=>({sample:t.sample,success:t.success,names:t.tools.map(t=>t.name)}))};};
   const control=r.experiment.comparison==="revision"?"baseline":"js";
   const js=arm(control),tools=arm("tools");
