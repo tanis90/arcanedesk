@@ -21,14 +21,10 @@ function showRetry(retry) {
   indicator.textContent = indicator.hidden ? "" : t("chat.retrying", retry);
 }
 const stopRequests = new Map();
-const confirmedAt = new Map();
-const syncAttemptAt = new Map();
+let lastContactAt = Date.now();
 function showSyncStatus(key, id = selectedSessionId) {
   if (id !== selectedSessionId) return;
-  const at = confirmedAt.get(id);
-  const time = at ? new Date(at).toLocaleTimeString() : t("chat.syncNeverConfirmed");
   syncIndicator.textContent = t(key);
-  syncIndicator.title = t("chat.syncLastConfirmed", { time });
   syncIndicator.dataset.status = key;
   syncIndicator.hidden = false;
 }
@@ -183,8 +179,13 @@ let currentMode = "prep";
 let currentModeGeneration = 0;
 let selectedSessionId = null;
 let selectedTaskId = null;
-const { EventInbox, WorkspaceStore, BoundedCache } = /** @type {any} */ (globalThis).ArcaneConversationState;
-const eventInbox = new EventInbox();
+const { SnapshotEvents, WorkspaceStore } = /** @type {any} */ (globalThis).ArcaneConversationState;
+const eventInbox = new SnapshotEvents();
+async function withSnapshotEvents(operation) {
+  const captured = eventInbox.begin();
+  try { return await operation(captured); }
+  finally { eventInbox.end(captured); }
+}
 const workspaceStore = new WorkspaceStore();
 let viewSeq = 0;
 let viewEpoch = null;
@@ -195,23 +196,16 @@ let draftRevision = 0;
 let navigationRequest = 0;
 const workspaceReady = new Set();
 const syncingSessions = new Map();
-const snapshotCache = new BoundedCache();
 const deletedSessions = new Set();
 function forgetSession(id) {
   if (!id) return;
   stopRequests.delete(id);
-  confirmedAt.delete(id); syncAttemptAt.delete(id);
-  for (const attention of snapshotCache.get(id)?.attentions ?? []) {
-    attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id);
-  }
-  deletedSessions.add(id); eventInbox.remove(id); snapshotCache.delete(id);
+  deletedSessions.add(id);
   workspaceReady.delete(id); syncingSessions.delete(id); outboxBySession.delete(id);
-  for (const [mode, selected] of lastSessionByMode) if (selected === id) lastSessionByMode.delete(mode);
   const cleanup = workspaceStore.remove(id).catch(() => {});
   if (selectedSessionId === id) {
     snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
-    historyPage = null; pendingHistoryAnchor = null; historyRetry = null; historyPageRequest++;
-    workspaceStore.setActive(null);
+    historyPage = null; historyRetry = null; historyPageRequest++;
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
     document.getElementById("conversation-title").textContent = "";
@@ -226,44 +220,33 @@ async function reconcileWorkspaces() {
   if (selectedSessionId) known.add(selectedSessionId);
   await Promise.all([...known].filter(id => !existing.has(id)).map(forgetSession));
 }
-const lastSessionByMode = new Map();
 let workspaceSaveTimer;
 let activityView = null;
 let activityReady = false;
 let historyPage = null;
 let historyPageRequest = 0;
-let pendingHistoryAnchor = null;
 let historyRetry = null;
 
-function snapshotContainsAnchor(payload, key) {
-  const plain = key.replace(/^(?:think:|work:)/, "");
-  return (payload.history ?? []).some(row => [row.key, row.legacyKey, row.role + ":" + row.ts].includes(plain)
-    || row.toolCalls?.some(call => "tool:" + call.id === plain))
-    || (!payload.historyPage?.hasNewer && payload.inFlight?.streaming?.some(row => row.key === plain))
-    || (!payload.historyPage?.hasNewer && payload.inFlight?.tools?.some(row => "tool:" + row.toolCallId === plain && (!payload.historyPage || row.state === "running")))
-    || payload.attentions?.some(row => "attention:" + row.id === key);
-}
-
 async function showHistoryPage(query = {}, intent = "latest") {
-  const id = selectedSessionId, request = ++historyPageRequest, navigation = navigationRequest;
-  if (!id) return;
-  saveWorkspace();
-  document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
-  try {
-    const observedEpoch = eventInbox.epoch(id);
-    const payload = await fetchSessionSnapshot(id, query);
-    if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
-    if (!payload.ok) throw new Error(payload.code);
-    if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("Stale history snapshot");
-    await installSnapshot(payload, intent);
-  } catch {
-    if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
-      historyRetry = { id, query, intent };
-      showSyncStatus("chat.historyFailed", id);
+  return withSnapshotEvents(async captured => {
+    const id = selectedSessionId, request = ++historyPageRequest, navigation = navigationRequest;
+    if (!id) return;
+    saveWorkspace();
+    document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
+    try {
+      const payload = await fetchSessionSnapshot(id, query);
+      if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
+      if (!payload.ok) throw new Error(payload.code);
+      await installSnapshot(payload, intent, captured);
+    } catch {
+      if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
+        historyRetry = { id, query, intent };
+        showSyncStatus("chat.historyFailed", id);
+      }
+    } finally {
+      if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
     }
-  } finally {
-    if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
-  }
+  });
 }
 
 function renderHistoryNavigation() {
@@ -285,194 +268,148 @@ function scheduleWorkspaceSave() {
 
 function saveWorkspace() {
   if (restoringView || !selectedSessionId || !workspaceReady.has(selectedSessionId)) return;
-  const top = messages.getBoundingClientRect().top;
-  const anchor = [...messages.querySelectorAll("[data-item-key]")].find(node => node.getBoundingClientRect().bottom > top);
-  const expansionStates = new Map((workspaceStore.cache.get(selectedSessionId)?.expansions ?? [])
-    .filter(state => /^(?:tool:|think:|work:)/.test(state.key)).map(state => [state.key, state]));
-  for (const node of messages.querySelectorAll("details[data-item-key], .card[data-item-key], .think[data-item-key]")) {
-    const state = {
-    key: /** @type {HTMLElement} */ (node).dataset.itemKey,
-    open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
-    };
-    expansionStates.set(state.key, state);
-  }
-  const expansions = [...expansionStates.values()];
-  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest: pendingHistoryAnchor ? false : followLatest,
+  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages,
     attentionDrafts: Object.fromEntries([...attentionCards.keys()].map(id => [id, attentionDrafts.get(id) ?? ""])),
     attentionAttempts: Object.fromEntries([...attentionCards.keys()].filter(id => attentionAttempts.has(id)).map(id => [id, attentionAttempts.get(id)])),
-    outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })),
-    anchor: pendingHistoryAnchor ?? (anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null),
-    expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
+    outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })) }).catch(() => { input.title = t("chat.draftSaveFailed"); });
 }
 
-async function installSnapshot(payload, pageIntent = null, fromCache = false) {
-  const id = payload.session?.id;
-  if (!id || deletedSessions.has(id)) return;
-  const token = ++snapshotRequest;
-  const changed = selectedSessionId !== id;
-  historyRetry = null;
-  activityReady = false;
-  saveWorkspace();
-  if (payload.mode) lastSessionByMode.set(payload.mode, id);
-  restoringView = true;
-  syncIndicator.hidden = true;
-  selectedSessionId = id;
-  selectedArchived = (navigationView?.rows.get(id)?.archivedAt ?? payload.session?.archivedAt) != null;
-  updateArchivedView();
-  if (!fromCache) confirmedAt.set(id, Date.now());
+async function installSnapshot(payload, pageIntent = "latest", requestEvents = []) {
+  return withSnapshotEvents(async captured => {
+    const id = payload.session?.id;
+    if (!id || deletedSessions.has(id)) return;
+    const token = ++snapshotRequest;
+    const changed = selectedSessionId !== id;
+    const keepReading = !changed && pageIntent === "refresh" && !followLatest;
+    const previousSeq = viewSeq, previousEpoch = viewEpoch;
+    historyRetry = null;
+    activityReady = false;
+    saveWorkspace();
+    restoringView = true;
+    syncIndicator.hidden = true;
+    selectedSessionId = id;
+    selectedArchived = (navigationView?.rows.get(id)?.archivedAt ?? payload.session?.archivedAt) != null;
+    updateArchivedView();
+    lastContactAt = Date.now();
 
-  workspaceStore.setActive(id);
-  selectedTaskId = payload.task?.id ?? null;
-  document.getElementById("conversation-title").textContent = payload.session.name || "";
-  showTaskState(payload.task);
-  showRetry(payload.inFlight?.retry);
-  showPendingModel(payload.pendingModel);
-  viewSeq = payload.inFlight?.seq ?? 0;
-  viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
-  if (payload.mode) applyModeUi(payload.mode, payload.cwd);
-  if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
-  const revision = draftRevision;
-  setTimeout(() => {
-    if (token === snapshotRequest && restoringView) showSyncStatus("chat.syncing", id);
-  }, 1000);
-  let saved;
-  try { saved = await workspaceStore.load(id); } catch { saved = {}; }
-  if (token !== snapshotRequest || selectedSessionId !== id) return;
-  pendingHistoryAnchor = null;
-  let restoreError = false;
-  let anchorUnavailable = false;
-  if (!pageIntent && payload.historyPage && saved.followLatest === false && saved.anchor
-    && !snapshotContainsAnchor(payload, saved.anchor.key)) {
-    const observedEpoch = eventInbox.epoch(id);
-    try {
-      const around = await fetchSessionSnapshot(id, { around: saved.anchor.key });
-      if (token !== snapshotRequest || selectedSessionId !== id) return;
-      if (around.code === "HISTORY_CURSOR_NOT_FOUND") { saved = { ...saved, anchor: null, followLatest: true }; anchorUnavailable = true; }
-      else if (!around.ok || !eventInbox.acceptSnapshot(id, around.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("History restore failed");
-      else { payload = around; fromCache = false; confirmedAt.set(id, Date.now()); }
-    } catch {
-      if (token !== snapshotRequest || selectedSessionId !== id) return;
-      pendingHistoryAnchor = saved.anchor; restoreError = true;
+    selectedTaskId = payload.task?.id ?? null;
+    document.getElementById("conversation-title").textContent = payload.session.name || "";
+    showTaskState(payload.task);
+    showRetry(payload.inFlight?.retry);
+    showPendingModel(payload.pendingModel);
+    viewSeq = payload.inFlight?.seq ?? 0;
+    viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+    if (payload.mode) applyModeUi(payload.mode, payload.cwd);
+    if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
+    const revision = draftRevision;
+    setTimeout(() => {
+      if (token === snapshotRequest && restoringView) showSyncStatus("chat.syncing", id);
+    }, 1000);
+    let saved;
+    try { saved = await workspaceStore.load(id); } catch { saved = {}; }
+    if (token !== snapshotRequest || selectedSessionId !== id) return;
+    if (!keepReading) historyPage = payload.historyPage ?? null;
+    else if (historyPage) historyPage = { ...historyPage, hasNewer: true };
+    selectedTaskId = payload.task?.id ?? null;
+    showTaskState(payload.task); showPendingModel(payload.pendingModel);
+    viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+    if (keepReading && viewEpoch === previousEpoch) viewSeq = Math.max(viewSeq, previousSeq);
+    if (!keepReading) renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy), historyPage);
+    else { setBusy(Boolean(payload.busy)); messages.querySelectorAll(".history-page-button").forEach(node => node.remove()); }
+    renderHistoryNavigation();
+    if (payload.modelLabel) updateModelLabels(payload.modelLabel);
+    if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
+    for (const attention of payload.attentions ?? []) renderAttention(attention);
+    for (const approval of payload.approvals ?? []) addApprovalCard(approval);
+    if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
+    for (const item of payload.inputs ?? []) {
+      if (item.state === "interrupted") {
+        renderRecoveredInput(item);
+        continue;
+      }
+      const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
+      if (historyNode instanceof HTMLElement) {
+        historyNode.dataset.commandId = item.commandId;
+        updateInputReceipt(item.commandId, item.state);
+        continue;
+      }
+      if (["accepted", "queued", "dispatching", "context"].includes(item.state)) {
+        const node = addMessage("user", item.text, undefined, "input:" + item.commandId);
+        node.dataset.commandId = item.commandId;
+        updateInputReceipt(item.commandId, item.state);
+      }
     }
-  }
-  snapshotCache.set(id, payload);
-  historyPage = payload.historyPage ?? null;
-  selectedTaskId = payload.task?.id ?? null;
-  showTaskState(payload.task); showPendingModel(payload.pendingModel);
-  viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
-  renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy), historyPage);
-  renderHistoryNavigation();
-  if (payload.modelLabel) updateModelLabels(payload.modelLabel);
-  if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
-  for (const attention of payload.attentions ?? []) renderAttention(attention);
-  for (const approval of payload.approvals ?? []) addApprovalCard(approval);
-  if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
-  for (const item of payload.inputs ?? []) {
-    if (item.state === "interrupted") {
-      renderRecoveredInput(item);
-      continue;
+    const replay = eventInbox.after([...requestEvents, ...captured], id, viewEpoch, viewSeq);
+    restoringView = false;
+    if (replay === null) { setTimeout(() => { void resyncSelected(); }, 0); return; }
+    for (const event of replay) receiveEvent(event, true);
+    if (token !== snapshotRequest || selectedSessionId !== id) return;
+    for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
+    for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
+    for (const [attentionId, card] of attentionCards) {
+      const answer = card.querySelector("textarea");
+      if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
     }
-    const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
-    if (historyNode instanceof HTMLElement) {
-      historyNode.dataset.commandId = item.commandId;
-      updateInputReceipt(item.commandId, item.state);
-      continue;
+    workspaceReady.add(id);
+    if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, { ...item, recovered: true, sending: false }])));
+    const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
+    for (const [commandId, submission] of outboxFor(id)) {
+      if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
+      if (submission.recovered) { renderRecoveredInput({ ...submission, commandId }, submission); continue; }
+      const node = submissionNode(submission);
+      updateInputReceipt(commandId, "uncertain");
+      const retry = el("button", "retry-input", t("chat.input.retry"));
+      retry.addEventListener("click", () => { void sendSubmission(submission); });
+      node.appendChild(retry);
     }
-    if (["accepted", "queued", "dispatching", "context"].includes(item.state)) {
-      const node = addMessage("user", item.text, undefined, "input:" + item.commandId);
-      node.dataset.commandId = item.commandId;
-      updateInputReceipt(item.commandId, item.state);
+    if (revision === draftRevision) {
+      input.value = saved.draft ?? "";
+      pendingImages = saved.images ?? [];
+      renderAttachStrip(); autosize();
     }
-  }
-  const replay = eventInbox.acceptSnapshot(id, viewEpoch) ? eventInbox.after(id, viewEpoch, viewSeq) : null;
-  restoringView = false;
-  if (replay === null) { void resyncSelected(); return; }
-  for (const event of replay) receiveEvent(event, true);
-  if (token !== snapshotRequest || selectedSessionId !== id) return;
-  for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
-  for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
-  for (const [attentionId, card] of attentionCards) {
-    const answer = card.querySelector("textarea");
-    if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
-  }
-  workspaceReady.add(id);
-  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, { ...item, recovered: true, sending: false }])));
-  const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
-  for (const [commandId, submission] of outboxFor(id)) {
-    if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
-    if (submission.recovered) { renderRecoveredInput({ ...submission, commandId }, submission); continue; }
-    const node = submissionNode(submission);
-    updateInputReceipt(commandId, "uncertain");
-    const retry = el("button", "retry-input", t("chat.input.retry"));
-    retry.addEventListener("click", () => { void sendSubmission(submission); });
-    node.appendChild(retry);
-  }
-  if (revision === draftRevision) {
-    input.value = saved.draft ?? "";
-    pendingImages = saved.images ?? [];
-    renderAttachStrip(); autosize();
-  }
-  followLatest = pageIntent ? pageIntent === "latest" : saved.followLatest !== false;
-  if (historyPage?.hasNewer) followLatest = false;
-  for (const state of saved.expansions ?? []) {
-    const node = messageNode(state.key);
-    if (node instanceof HTMLDetailsElement) node.open = state.open;
-    else node?.classList.toggle("open", state.open);
-  }
-  if (followLatest) scrollToEnd(true);
-  else if (pageIntent) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
-  else if (saved.anchor) {
-    const anchor = messageNode(saved.anchor.key);
-    if (anchor) messages.scrollTo({ top: messages.scrollTop + anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset, behavior: "instant" });
-  }
-  updateScrollButton();
-  activityReady = true;
-  syncIndicator.hidden = !restoreError && !anchorUnavailable;
-  if (restoreError) showSyncStatus("chat.historyFailed", id);
-  else if (anchorUnavailable) showSyncStatus("chat.historyMoved", id);
+    followLatest = !keepReading && !["older", "newer"].includes(pageIntent) && !historyPage?.hasNewer;
+    if (followLatest) scrollToEnd(true);
+    else if (!keepReading) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
+    updateScrollButton();
+    activityReady = true;
+    syncIndicator.hidden = true;
 
-  activityView?.render();
-  pruneOutboxes();
-  if (changed) refreshSessions();
+    if (revision !== draftRevision) saveWorkspace();
+    activityView?.render();
+    pruneOutboxes();
+    if (changed) refreshSessions();
+  });
 }
 
 async function resyncSelected() {
-  const id = selectedSessionId;
-  const token = snapshotRequest;
-  const navigation = navigationRequest;
-  if (!id) return;
-  const previous = syncingSessions.get(id);
-  if (previous?.navigation === navigation) return;
-  const request = { token, navigation };
-  syncingSessions.set(id, request);
-  syncAttemptAt.set(id, Date.now());
-  const stillCurrent = () => selectedSessionId === id && snapshotRequest === token && navigationRequest === navigation;
-  const indicatorTimer = setTimeout(() => {
-    if (stillCurrent()) showSyncStatus("chat.syncing", id);
-  }, 1000);
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const observedEpoch = eventInbox.epoch(id);
+  return withSnapshotEvents(async captured => {
+    const id = selectedSessionId;
+    const token = snapshotRequest;
+    const navigation = navigationRequest;
+    if (!id) return;
+    const previous = syncingSessions.get(id);
+    if (previous?.navigation === navigation) return;
+    const request = { token, navigation };
+    syncingSessions.set(id, request);
+    lastContactAt = Date.now();
+    const stillCurrent = () => selectedSessionId === id && snapshotRequest === token && navigationRequest === navigation;
+    const indicatorTimer = setTimeout(() => {
+      if (stillCurrent()) showSyncStatus("chat.syncing", id);
+    }, 1000);
+    try {
       saveWorkspace();
-      const saved = workspaceStore.cache.get(id);
-      const query = saved?.followLatest === false && saved.anchor ? { around: saved.anchor.key } : {};
-      let payload = await fetchSessionSnapshot(id, query);
-      if (!stillCurrent()) return;
-      if (payload.code === "HISTORY_CURSOR_NOT_FOUND") payload = await fetchSessionSnapshot(id, {});
+      const payload = await fetchSessionSnapshot(id);
       if (!stillCurrent()) return;
       if (!payload.ok) throw new Error(payload.code);
-      if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) continue;
-      await installSnapshot(payload);
-      return;
+      await installSnapshot(payload, "refresh", captured);
+    } catch {
+      if (stillCurrent()) showSyncStatus("chat.syncFailed", id);
+    } finally {
+      clearTimeout(indicatorTimer);
+      if (syncingSessions.get(id) === request) syncingSessions.delete(id);
+      activityView?.scheduleRead();
     }
-    throw new Error("Session runtime changed during synchronization");
-  } catch {
-    if (stillCurrent()) showSyncStatus("chat.syncFailed", id);
-  } finally {
-    clearTimeout(indicatorTimer);
-    if (syncingSessions.get(id) === request) syncingSessions.delete(id);
-    activityView?.scheduleRead();
-  }
+  });
 }
 
 function receiveEvent(event, replay = false) {
@@ -491,7 +428,7 @@ function receiveEvent(event, replay = false) {
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
-  if (!replay && eventInbox.record(event) === false) return;
+  if (!replay) eventInbox.record(event);
   if (!replay && (["message", "agent_end"].includes(event.type) || (event.type === "input_state" && event.state === "consumed"))) scheduleSessionMetadata();
   if (event.type === "task_state" && event.sessionId &&
     (stopRequests.get(event.sessionId)?.taskId === event.task.id || ["running", "queued"].includes(event.task.state))) {
@@ -502,7 +439,7 @@ function receiveEvent(event, replay = false) {
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
     if (event.seq <= viewSeq) return;
     viewSeq = event.seq;
-    if (!replay) confirmedAt.set(event.sessionId, Date.now());
+    if (!replay) lastContactAt = Date.now();
     if (historyPage?.hasNewer && ["message", "message_delta", "tool_start", "tool_end", "agent_settled", "compaction_start", "compaction_end"].includes(event.type)
       && !toolCards.has(event.toolCallId) && !streamBubbles.has(event.key) && !thinkBlocks.has(event.key)) {
       updateScrollButton(); activityView?.scheduleRead(); return;
@@ -563,39 +500,39 @@ function applyModeUi(mode, cwd) {
 }
 
 async function switchMode(next) {
-  next = next === "prep" ? "prep" : "combat";
-  if (next === requestedMode) return; // 已选中或已有同目标请求在途
-  requestedMode = next;
-  const navigation = ++navigationRequest;
-  const cached = snapshotCache.get(lastSessionByMode.get(next));
-  if (cached) void installSnapshot(cached, null, true);
-  const requestId = ++modeSwitchRequest;
-  let result;
-  try {
-    result = await window.arcane.setMode(next);
-  } catch (error) {
-    if (requestId !== modeSwitchRequest) return;
+  return withSnapshotEvents(async captured => {
+    next = next === "prep" ? "prep" : "combat";
+    if (next === requestedMode) return; // 已选中或已有同目标请求在途
+    requestedMode = next;
+    const navigation = ++navigationRequest;
+    const requestId = ++modeSwitchRequest;
+    let result;
+    try {
+      result = await window.arcane.setMode(next);
+    } catch (error) {
+      if (requestId !== modeSwitchRequest) return;
+      requestedMode = currentMode;
+      // invoke reject(handler 抛错)也要有反馈,不能静默卡在两态分裂里
+      addStatus(t("chat.status.modeSwitchFailed", { error: error?.message ?? "unknown" }));
+      return;
+    }
+    if (requestId !== modeSwitchRequest || navigation !== navigationRequest) return;
+    if (!result?.ok) {
+      requestedMode = currentMode;
+      addStatus(t("chat.status.modeSwitchFailed", {
+        error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
+      }));
+      return;
+    }
+    if (!acceptModeSnapshot(result)) return;
+    applyModeUi(result.mode, result.cwd);
     requestedMode = currentMode;
-    // invoke reject(handler 抛错)也要有反馈,不能静默卡在两态分裂里
-    addStatus(t("chat.status.modeSwitchFailed", { error: error?.message ?? "unknown" }));
-    return;
-  }
-  if (requestId !== modeSwitchRequest || navigation !== navigationRequest) return;
-  if (!result?.ok) {
-    requestedMode = currentMode;
-    addStatus(t("chat.status.modeSwitchFailed", {
-      error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-    }));
-    return;
-  }
-  if (!acceptModeSnapshot(result)) return;
-  applyModeUi(result.mode, result.cwd);
-  requestedMode = currentMode;
-  invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
-  void installSnapshot(result);
-  if (result.modelLabel) updateModelLabels(result.modelLabel);
-  if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
-  refreshSessions();
+    invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
+    await installSnapshot(result, "latest", captured);
+    if (result.modelLabel) updateModelLabels(result.modelLabel);
+    if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
+    refreshSessions();
+  });
 }
 
 modeSegs.prep.addEventListener("click", () => switchMode("prep"));
@@ -631,7 +568,7 @@ function scrollToEnd(force = false) {
   if (force || followLatest) {
     if (force) followLatest = true;
     // Smooth programmatic scrolling emits intermediate positions which look
-    // like a user leaving the live tail and can persist an old-history anchor.
+    // like a user leaving the live tail and turn off following new output.
     messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
   }
   updateScrollButton();
@@ -644,7 +581,6 @@ function updateScrollButton() {
 
 messages.addEventListener("scroll", () => {
   if (!restoringView) followLatest = !historyPage?.hasNewer && nearBottom();
-  if (!restoringView) scheduleWorkspaceSave();
   updateScrollButton();
 });
 scrollBottomBtn.addEventListener("click", () => scrollToEnd(true));
@@ -2110,14 +2046,16 @@ function renderHistory(entries, inFlight = {}, running = false, page = null) {
 let currentSessionRequest = 0;
 
 async function pullCurrentSession() {
-  const requestId = ++currentSessionRequest;
-  const navigation = navigationRequest;
-  const payload = await window.arcane.currentSession();
-  if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
-  if (payload.mode) requestedMode = payload.mode;
-  const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
-  if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
-  await installSnapshot(payload);
+  return withSnapshotEvents(async captured => {
+    const requestId = ++currentSessionRequest;
+    const navigation = navigationRequest;
+    const payload = await window.arcane.currentSession();
+    if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
+    if (payload.mode) requestedMode = payload.mode;
+    const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
+    if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
+    await installSnapshot(payload, "latest", captured);
+  });
 }
 
 const drawer = document.getElementById("session-drawer");
@@ -2142,20 +2080,22 @@ function updateArchivedView() {
 function showEmptyConversation() {
   saveWorkspace(); snapshotRequest++; navigationRequest++;
   selectedSessionId = null; selectedTaskId = null; selectedArchived = false;
-  workspaceStore.setActive(null); historyPage = null; pendingHistoryAnchor = null;
+  historyPage = null;
   resetConversation(); input.value = ""; pendingImages = []; renderAttachStrip();
   showTaskState(null); showPendingModel(null); updateArchivedView();
   document.getElementById("conversation-title").textContent = "";
   messages.append(el("p", "nav-empty-selection", t("navigation.emptySelection")));
 }
 async function createProjectSession(cwd = undefined) {
-  setDrawer(false); navigationView?.showArchives(false);
-  const context = modeContext(), navigation = ++navigationRequest;
-  const result = await window.arcane.newSession({ ...context, cwd });
-  if (navigation !== navigationRequest) return;
-  if (result?.ok) { await installSnapshot(result); await refreshSessions(); navigationView?.reveal(result.session.id); }
-  else addStatus(result?.code === "PROJECT_UNAVAILABLE" ? t("navigation.missingProject") : t("sessions.newFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
-  input.focus();
+  return withSnapshotEvents(async captured => {
+    setDrawer(false); navigationView?.showArchives(false);
+    const context = modeContext(), navigation = ++navigationRequest;
+    const result = await window.arcane.newSession({ ...context, cwd });
+    if (navigation !== navigationRequest) return;
+    if (result?.ok) { await installSnapshot(result, "latest", captured); await refreshSessions(); navigationView?.reveal(result.session.id); }
+    else addStatus(result?.code === "PROJECT_UNAVAILABLE" ? t("navigation.missingProject") : t("sessions.newFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+    input.focus();
+  });
 }
 
 function setDrawer(open) {
@@ -2170,49 +2110,49 @@ async function refreshSessions() { await navigationView?.load(); }
 function updateSessionActivity() { navigationView?.updateActivities(activityView?.rows ?? new Map()); }
 
 async function openActivity(row, notice = null) {
-  if (!row) return;
-  const id = row.sessionId ?? row.id;
-  if (deletedSessions.has(id)) { navigationView?.notify(t("navigation.deleted")); return; }
-  navigationView?.showArchives(false); navigationView?.reveal(id);
-  if (row.mode === currentMode) {
-    setDrawer(false);
-    const navigation = ++navigationRequest;
-    const context = modeContext();
-    const cached = snapshotCache.get(id);
-    if (cached && id !== selectedSessionId) void installSnapshot(cached, null, true);
-    const result = await window.arcane.openSession(row.path, context);
-    if (navigation !== navigationRequest) return;
-    if (result?.ok) { await installSnapshot(result); focusActivityTarget(row, notice); void refreshSessions(); }
-    else navigationView?.notify(t("sessions.openFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
-    return;
-  }
-  row = { ...row, sessionId: id };
-  const navigation = ++navigationRequest;
-  ++modeSwitchRequest;
-  setDrawer(false);
-  requestedMode = row.mode;
-  try {
-    let result = await window.arcane.setMode(row.mode);
-    if (navigation !== navigationRequest) return;
-    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
-    if (result.stale || !acceptModeSnapshot(result)) { requestedMode = currentMode; return; }
-    if (result.session?.id !== row.sessionId) {
-      result = await window.arcane.openSession(row.path, { mode: result.mode, generation: result.generation, sessionId: result.session?.id });
+  return withSnapshotEvents(async captured => {
+    if (!row) return;
+    const id = row.sessionId ?? row.id;
+    if (deletedSessions.has(id)) { navigationView?.notify(t("navigation.deleted")); return; }
+    navigationView?.showArchives(false); navigationView?.reveal(id);
+    if (row.mode === currentMode) {
+      setDrawer(false);
+      const navigation = ++navigationRequest;
+      const context = modeContext();
+      const result = await window.arcane.openSession(row.path, context);
       if (navigation !== navigationRequest) return;
+      if (result?.ok) { await installSnapshot(result, "latest", captured); focusActivityTarget(row, notice); void refreshSessions(); }
+      else navigationView?.notify(t("sessions.openFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+      return;
     }
-    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
-    await installSnapshot(result);
-    if (navigation !== navigationRequest) return;
-    requestedMode = currentMode;
-    invalidateSlashItems();
-    refreshSessions();
-    focusActivityTarget(row, notice);
-  } catch (error) {
-    if (navigation === navigationRequest) {
+    row = { ...row, sessionId: id };
+    const navigation = ++navigationRequest;
+    ++modeSwitchRequest;
+    setDrawer(false);
+    requestedMode = row.mode;
+    try {
+      let result = await window.arcane.setMode(row.mode);
+      if (navigation !== navigationRequest) return;
+      if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+      if (result.stale || !acceptModeSnapshot(result)) { requestedMode = currentMode; return; }
+      if (result.session?.id !== row.sessionId) {
+        result = await window.arcane.openSession(row.path, { mode: result.mode, generation: result.generation, sessionId: result.session?.id });
+        if (navigation !== navigationRequest) return;
+      }
+      if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+      await installSnapshot(result, "latest", captured);
+      if (navigation !== navigationRequest) return;
       requestedMode = currentMode;
-      addStatus(t("sessions.openFailed", { error: error.message }));
+      invalidateSlashItems();
+      refreshSessions();
+      focusActivityTarget(row, notice);
+    } catch (error) {
+      if (navigation === navigationRequest) {
+        requestedMode = currentMode;
+        addStatus(t("sessions.openFailed", { error: error.message }));
+      }
     }
-  }
+  });
 }
 
 function focusActivityTarget(row, notice) {
@@ -3148,15 +3088,12 @@ window.addEventListener("focus", () => { void resyncSelected(); });
 setInterval(() => {
   const id = selectedSessionId;
   if (!id || restoringView || !activeTaskStates.has(displayedTask?.state)) return;
-  const lastContact = Math.max(confirmedAt.get(id) ?? 0, syncAttemptAt.get(id) ?? 0);
-  if (Date.now() - lastContact >= 15000) void resyncSelected();
+  if (Date.now() - lastContactAt >= 15000) void resyncSelected();
 }, 5000);
 syncIndicator.addEventListener("click", () => {
   if (historyRetry?.id === selectedSessionId) void showHistoryPage(historyRetry.query, historyRetry.intent);
   else void resyncSelected();
 });
-messages.addEventListener("click", scheduleWorkspaceSave);
-messages.addEventListener("toggle", scheduleWorkspaceSave, true);
 setInterval(() => {
   for (const entry of toolCards.values()) {
     if (entry.card.classList.contains("running")) {
@@ -3172,7 +3109,7 @@ activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: w
     ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
     visible: !document.body.classList.contains("show-archives") && document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
       && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
-    atBottom: !historyPage?.hasNewer && !pendingHistoryAnchor && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
+    atBottom: !historyPage?.hasNewer && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
     readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
     toLatest: () => scrollToEnd(true) }), changed: updateSessionActivity });
 applyPanelLayout();

@@ -76,7 +76,7 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
 app.whenReady().then(async () => {
   const window = new BrowserWindow({ show: false, width: 1000, height: 800,
     webPreferences: { preload: path.join(desktop, "preload.cjs"), contextIsolation: true } });
-  const evaluate = code => window.webContents.executeJavaScript(code);
+  const evaluate = code => window.webContents.executeJavaScript(code).catch(error => { throw new Error(code + "\n" + error.message); });
   sendTestEvent = event => window.webContents.send("arcane:event", { ...event, sessionId: "A", mode: "prep", runtimeEpoch: "test", taskId: question.taskId });
   async function until(code) {
     const limit = Date.now() + 7000;
@@ -104,7 +104,6 @@ app.whenReady().then(async () => {
     await evaluate('input.value = "draft A"; input.dispatchEvent(new Event("input")); pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; saveWorkspace();');
     await evaluate('messages.scrollTo({top:200, behavior:"instant"}); messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
     assert.equal(await evaluate('followLatest'), false, "fixture actually moves away from the live tail before switching");
-    const anchor = await evaluate('workspaceStore.cache.get("A").anchor');
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B" && workspaceReady.has("B")');
     assert.equal(await evaluate('input.value'), "");
@@ -115,12 +114,8 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("running")'), true);
     assert.equal(await evaluate('toolCards.get("tool-A").startAt'), startedAt);
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(await evaluate('followLatest'), false);
-    assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("open")'), false);
-    const restoredOffset = await evaluate(`messageNode(${JSON.stringify(anchor.key)}).getBoundingClientRect().top - messages.getBoundingClientRect().top`);
-    assert.ok(Math.abs(restoredOffset - anchor.offset) < 3, "reading anchor preserved");
-    assert.ok((await evaluate(`messageNode(${JSON.stringify(anchor.key)}).dataset.itemKey`)).includes("entry:"), "legacy anchor resolves to durable message identity");
-    await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
+    assert.equal(await evaluate('followLatest'), true);
+    await evaluate('saveWorkspace()');
     const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload();
     await reloaded;
@@ -182,7 +177,7 @@ app.whenReady().then(async () => {
     epochA = "reloaded";
     await evaluate('resyncSelected()');
     await until('viewEpoch === "reloaded" && viewSeq === 0 && !syncingSessions.has("A")');
-    assert.equal(await evaluate('eventInbox.epoch("A")'), "reloaded");
+    assert.equal(await evaluate('eventInbox.pending.size'), 0);
     window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "test", seq: 100,
       type: "message", key: "stale", role: "assistant", text: "STALE OLD INSTANCE" });
     window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "reloaded", seq: 1,
@@ -284,7 +279,7 @@ app.whenReady().then(async () => {
     const failureDraft = await evaluate('input.value');
     assert.equal(failureDraft, "retain this");
     assert.equal(await evaluate('document.querySelector(".recover-task, .task-terminal-next")'), null);
-    await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
+    await evaluate('saveWorkspace()');
     const terminalReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await terminalReloaded;
     await until('selectedSessionId === "A" && !!document.querySelector(".error-message") && workspaceReady.has("A")');
@@ -305,16 +300,13 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('document.querySelector(".error-message")'), null);
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     assert.equal(submitAttempts, 2, "terminal states leave drafts unchanged without executing work");
-    const lastConfirmation = await evaluate('confirmedAt.get("A")');
-    await evaluate('installSnapshot(snapshotCache.get("A"), null, true)');
-    assert.equal(await evaluate('confirmedAt.get("A")'), lastConfirmation, "rendering a cache is not new execution confirmation");
     assert.equal(await evaluate('syncIndicator.hidden'), true);
     await evaluate('resyncSelected()');
     deferSnapshots = true;
     await evaluate('void resyncSelected()');
     await until('!syncIndicator.hidden && syncIndicator.dataset.status === "chat.syncing"');
     assert.equal(await evaluate('busy'), true, "sync delay does not change execution state");
-    assert.ok(await evaluate('syncIndicator.title.includes(t("chat.syncLastConfirmed", {time: new Date(confirmedAt.get("A")).toLocaleTimeString()}))'));
+    assert.equal(await evaluate('syncIndicator.title'), "");
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B"');
     await evaluate('switchMode("prep")');
@@ -336,7 +328,7 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('input.value'), keptDraft);
     // Force only the diagnostic clock stale, then let the real interval probe.
     deferSnapshots = true;
-    await evaluate('confirmedAt.set("A", Date.now() - 30000); syncAttemptAt.delete("A")');
+    await evaluate('lastContactAt = Date.now() - 30000');
     await until('syncingSessions.has("A")');
     assert.equal(snapshotRequests.length, 3, "silence triggers a read-only execution probe");
     // A hung invoke must not permanently keep the single-flight gate locked.

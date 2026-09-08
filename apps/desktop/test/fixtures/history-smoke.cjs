@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     if (channel === "sessions:snapshot") {
       queries.push(query);
       const host = Object.values(hosts).find(host => host.describeCurrent().id === input);
-      if (delayed) { const gate = delayed; delayed = null; await gate.promise; }
+      if (delayed) { const gate = delayed; delayed = null; const captured = payload(host, query); gate.started?.(); await gate.promise; return captured; }
       if (failPage) return { ok: false, code: "HISTORY_LOAD_FAILED" };
       try { return payload(host, query); } catch (error) { return { ok: false, code: error.code }; }
     }
@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   async function until(code) {
     const limit = Date.now() + 7000;
     while (Date.now() < limit) { if (await evaluate(code)) return; await new Promise(resolve => setTimeout(resolve, 25)); }
-    const state = await evaluate('({activityReady, restoringView, historyPage, draft: input.value, saved: workspaceStore.cache.get(selectedSessionId), sync: syncIndicator.textContent})');
+    const state = await evaluate('({activityReady, restoringView, historyPage, draft: input.value, sync: syncIndicator.textContent})');
     throw new Error("Timed out: " + code + "\n" + JSON.stringify(state));
   }
   try {
@@ -68,15 +68,14 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('pendingImages.length'), 1);
     await evaluate('toolCards.get("old-tool").card.classList.remove("open"); saveWorkspace();');
     await evaluate('messages.scrollTo({top:300,behavior:"instant"}); messages.dispatchEvent(new Event("scroll")); saveWorkspace();');
-    const anchor = await evaluate('workspaceStore.cache.get(selectedSessionId).anchor');
     await evaluate('switchMode("combat")'); await until(`selectedSessionId === ${JSON.stringify(bId)} && activityReady`);
     await evaluate('switchMode("prep")'); await until(`selectedSessionId === ${JSON.stringify(aId)} && activityReady && !restoringView`);
-    assert.equal(await evaluate(`!!messageNode(${JSON.stringify(anchor.key)})`), true);
-    const actualOffset = await evaluate(`messageNode(${JSON.stringify(anchor.key)}).getBoundingClientRect().top - messages.getBoundingClientRect().top`);
-    assert.ok(Math.abs(actualOffset - anchor.offset) < 3, JSON.stringify({ anchor, actualOffset, stored: await evaluate('workspaceStore.cache.get(selectedSessionId).anchor') }));
-    assert.ok(queries.some(query => query?.around === anchor.key));
-    assert.equal(await evaluate('toolCards.get("old-tool").card.classList.contains("open")'), false);
-    assert.equal(await evaluate('messages.querySelectorAll(".msg").length'), 100);
+    assert.equal(await evaluate('historyPage.firstKey'), "message:prep-1100");
+    assert.equal(await evaluate('followLatest'), true);
+    assert.equal(queries.some(query => query?.around), false);
+    assert.equal(await evaluate('toolCards.has("old-tool")'), false);
+    await evaluate('document.querySelector(".history-page-button").click()');
+    await until('historyPage.firstKey === "message:prep-1000" && activityReady');
     assert.equal(await evaluate('activityView.getView().atBottom'), false);
     const before = await evaluate('messages.scrollTop');
     hosts.prep.sessionManager.appendMessage({ role: "assistant", timestamp: 1201, arcaneMessageKey: "message:new-result", content: "NEW BACKGROUND RESULT" });
@@ -84,6 +83,9 @@ app.whenReady().then(async () => {
     await until('viewSeq === 1');
     assert.equal(await evaluate('messages.textContent.includes("NEW BACKGROUND RESULT")'), false);
     assert.equal(await evaluate('messages.scrollTop'), before);
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('messages.scrollTop'), before, "refresh keeps the current reading position");
+    assert.equal(await evaluate('messages.textContent.includes("NEW BACKGROUND RESULT")'), false);
     await evaluate('document.getElementById("scroll-bottom").click()');
     await until('!historyPage.hasNewer && messages.textContent.includes("NEW BACKGROUND RESULT")');
     assert.equal(await evaluate('messages.querySelectorAll(".msg").length'), 100);
@@ -96,11 +98,10 @@ app.whenReady().then(async () => {
     failPage = false;
     await evaluate('syncIndicator.click()');
     await until('historyPage.hasNewer && syncIndicator.hidden');
-    assert.equal(await evaluate('toolCards.get("old-tool").card.classList.contains("open")'), false);
     await evaluate('saveWorkspace()');
     const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await reloaded;
-    await until('activityReady && historyPage.hasNewer && input.value === "long history draft"');
+    await until('activityReady && !historyPage.hasNewer && input.value === "long history draft"');
     let release;
     delayed = { promise: new Promise(resolve => { release = resolve; }) };
     await evaluate('document.querySelector(".history-page-button").click()');
@@ -108,19 +109,14 @@ app.whenReady().then(async () => {
     release(); await evaluate('new Promise(resolve => setTimeout(resolve, 80))');
     assert.equal(await evaluate('selectedSessionId'), bId);
     assert.equal(await evaluate('messages.textContent.includes("Message prep")'), false);
-    await evaluate(`(async () => {
-      for (let i = 0; i < 40; i++) {
-        snapshotCache.set("pressure-" + i, { history: [{ text: "cached" }] });
-        eventInbox.record({ sessionId: "pressure-" + i, runtimeEpoch: "pressure", seq: 1, text: "progress" });
-        await workspaceStore.save("pressure-" + i, { draft: "draft-" + i, images: [{data:"image-" + i}], anchor:{key:"anchor-" + i,offset:5} });
-      }
-    })()`);
-    assert.equal(await evaluate(`snapshotCache.has(${JSON.stringify(aId)}) || eventInbox.sessions.has(${JSON.stringify(aId)}) || workspaceStore.cache.has(${JSON.stringify(aId)})`), false);
-    assert.ok(await evaluate('snapshotCache.size <= 8 && eventInbox.sessions.size <= 32 && workspaceStore.cache.size <= 16'));
-    const restored = await evaluate('workspaceStore.load("pressure-0")');
-    assert.equal(restored.draft, "draft-0"); assert.equal(restored.images[0].data, "image-0"); assert.equal(restored.anchor.key, "anchor-0");
+    await evaluate('workspaceStore.save("saved-draft", {draft:"saved draft", images:[{data:"saved image"}]})');
+    const restored = await evaluate('workspaceStore.load("saved-draft")');
+    assert.equal(restored.draft, "saved draft");
+    assert.equal(restored.images[0].data, "saved image");
+    assert.equal(await evaluate('eventInbox.pending.size'), 0);
+    assert.equal(await evaluate('"cache" in workspaceStore'), false);
     await evaluate('switchMode("prep")');
-    await until(`selectedSessionId === ${JSON.stringify(aId)} && activityReady && historyPage.hasNewer && input.value === "long history draft"`);
+    await until(`selectedSessionId === ${JSON.stringify(aId)} && activityReady && !historyPage.hasNewer && input.value === "long history draft"`);
     assert.equal(await evaluate('pendingImages.length'), 1);
     await evaluate('showHistoryPage({}, "latest")');
     await until('activityReady && !historyPage.hasNewer');
@@ -132,7 +128,18 @@ app.whenReady().then(async () => {
     const installs = await evaluate('snapshotRequest');
     hosts.prep.emit({ type: "session_switched", ...hosts.prep.currentPayload() });
     await until(`activityReady && snapshotRequest === ${installs + 1} && viewSeq === ${hosts.prep.projection.seq}`);
-    console.log("PASS Electron history: bounded pages and caches, durable eviction/reload, anchors, drafts/images, background output, retry and stale page rejection");
+    let snapshotStarted;
+    const requested = new Promise(resolve => { snapshotStarted = resolve; });
+    delayed = { promise: new Promise(resolve => { release = resolve; }), started: snapshotStarted };
+    await evaluate('void resyncSelected()');
+    await requested;
+    hosts.prep.sessionManager.appendMessage({ role: "assistant", timestamp: 1202, arcaneMessageKey: "message:during-snapshot", content: "OUTPUT DURING SNAPSHOT" });
+    hosts.prep.emit({ type: "message", role: "assistant", key: "message:during-snapshot", text: "OUTPUT DURING SNAPSHOT" });
+    await until('messages.textContent.includes("OUTPUT DURING SNAPSHOT")');
+    release();
+    await until('activityReady && !syncingSessions.has(selectedSessionId) && eventInbox.pending.size === 0');
+    assert.equal(await evaluate('[...messages.querySelectorAll(".msg")].filter(node => node.textContent.includes("OUTPUT DURING SNAPSHOT")).length'), 1, "events received during a stale snapshot request survive installation exactly once");
+    console.log("PASS Electron history: bounded pages, latest on reopen, durable drafts/images, background output, retry and stale page rejection");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }
 });

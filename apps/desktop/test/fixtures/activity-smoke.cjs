@@ -152,16 +152,10 @@ app.whenReady().then(async () => {
     // Explicitly simulate trusted foreground presence; the test window stays hidden.
     focused = true;
     await evaluate('Object.defineProperty(document, "hasFocus", { value: () => true, configurable: true }); void 0;');
-    await evaluate('workspaceStore.save("A", {followLatest:false, anchor:{key:"user:15", offset:0}})');
     await evaluate('document.querySelector(".session-item[data-session-id=A] .s-body").click()');
-    await until('selectedSessionId === "A" && activityReady && !followLatest');
-    assert.equal(center.get("A").unread, true);
-    assert.equal(await evaluate('!document.getElementById("scroll-bottom").classList.contains("has-unread")'), false);
-    assert.equal(await evaluate('document.querySelectorAll(".unread-divider").length'), 1);
-    assert.equal(await evaluate('document.getElementById("scroll-bottom").getBoundingClientRect().bottom <= composerWrap.getBoundingClientRect().top'), true, "new progress does not cover the composer");
-    await capture("activity-wide-history");
-    await evaluate('document.getElementById("scroll-bottom").click()');
+    await until('selectedSessionId === "A" && activityReady && followLatest');
     await until('activityView.rows.get("A").unread === false');
+    await capture("activity-wide-latest");
     assert.equal(center.get("A").state, "completed");
     assert.equal(await evaluate('!document.getElementById("activity-notice")'), true);
     await evaluate('switchMode("combat")');
@@ -245,7 +239,7 @@ app.whenReady().then(async () => {
     const deletedSnapshot = snapshot("A");
     await evaluate('workspaceStore.save("A", { draft: "private draft", images: [{ data: "private image" }], outbox: [{ text: "pending" }] })');
     center.remove("A"); sessions.delete("A");
-    await until('deletedSessions.has("A") && !snapshotCache.has("A") && !eventInbox.sessions.has("A")');
+    await until('deletedSessions.has("A") && selectedSessionId !== "A"');
     const beforeDeletedInstall = await evaluate('selectedSessionId');
     await evaluate(`installSnapshot(${JSON.stringify(deletedSnapshot)})`);
     assert.equal(await evaluate('selectedSessionId'), beforeDeletedInstall);

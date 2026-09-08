@@ -33,10 +33,8 @@ export class HistoryIndex {
       const position = this.records.length;
       this.records.push(record);
       this.positions.set(identity(record), position);
-      const legacy = `${message.role}:${message.timestamp}`;
-      if (!this.positions.has(legacy)) this.positions.set(legacy, position);
       for (const part of parts) if (part?.type === "toolCall") {
-        toolOwners.set(part.id, record); this.positions.set(`tool:${part.id}`, position);
+        toolOwners.set(part.id, record);
       }
     }
   }
@@ -59,22 +57,19 @@ export class HistoryIndex {
   /** @param {any} query */
   page(query = {}) {
     if (!query || typeof query !== "object" || Array.isArray(query)) throw invalid("History query must be an object");
-    if (Object.keys(query).some(key => !["before", "after", "around", "limit"].includes(key))) throw invalid("Unknown history query field");
+    if (Object.keys(query).some(key => !["before", "after", "limit"].includes(key))) throw invalid("Unknown history query field");
     const limit = query.limit ?? 100;
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw invalid("History page limit must be 1–200");
-    const boundaries = ["before", "after", "around"].filter(key => query[key] !== undefined);
+    const boundaries = ["before", "after"].filter(key => query[key] !== undefined);
     if (boundaries.length > 1) throw invalid("Use one history boundary");
     let start = Math.max(0, this.records.length - limit), end = this.records.length;
     if (boundaries.length) {
       const kind = boundaries[0], key = query[kind];
       if (typeof key !== "string" || !key.length || key.length > 256) throw invalid("Invalid history cursor");
-      // Work/thinking containers inherit their message's identity.
-      const plain = key.replace(/^(?:think:|work:)/, "");
-      const position = this.positions.get(key) ?? this.positions.get(plain);
+      const position = this.positions.get(key);
       if (position === undefined) throw Object.assign(new Error("History cursor is no longer on this branch"), { code: "HISTORY_CURSOR_NOT_FOUND" });
       if (kind === "before") { end = position; start = Math.max(0, end - limit); }
       else if (kind === "after") { start = position + 1; end = Math.min(this.records.length, start + limit); }
-      else { start = Math.max(0, position - Math.floor(limit / 2)); end = Math.min(this.records.length, start + limit); }
     }
     const records = this.records.slice(start, end);
     return { history: structuredClone(records.map(record => this.render(record))), historyPage: {
