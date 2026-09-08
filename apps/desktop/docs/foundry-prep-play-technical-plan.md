@@ -265,6 +265,7 @@ sceneTokens 读取该世界各 Scene 中真正指向目标 Actor 的 Token，区
 `name`；可选 `folderId`、`image: ActorImageInput`、`initialItems: CompendiumGrant[]`、`prototypeToken: { name: string }`。
 prototypeToken 只开放显式名称（非空白，最多 256 字符），随原生创建一次写入，保留来源其他原型字段；
 省略时保持原生行为。创建后名称回读不符返回 partial 并保留角色，不重建。
+显式指定名称且创建成功时，verification 返回已核验的 prototypeToken.name，供模型直接确认。
 initialItems 最多 50。folder 必须是已有 Actor folder；不按名称自动创建目录。
 
 流程：解析合集与资源 → 检查同名/同 request → 建 Actor → 设置图片 → 授初始物品
@@ -976,3 +977,23 @@ E3 结果：候选 ea8454c，benchmark-1788849402218；SDK 95 项、工具契约
 不改变 schema、工具说明、写入方式、系统提示或其他回执。预注册 create_npc 10 组，
 主要看多余 actor_get 是否下降，保持 10/10 正确；成本 0.25–0.5 人天，未来适配 0–0.25 人天。
 如果回读不减少或耗时无支持，不扩展为大对象回执。之后再独立处理 E5 的搜索枚举大小写说明。
+
+### 14.10 E3b：创建确认回执（已完成）
+
+baseline 8befae8，独立 SDK 构建；candidate 6fa697e。仅成功 verification 增加显式指定的原型名称，
+工具 schema、说明、生产提示和写入不变。22 项相关测试通过；真实报告 benchmark-1788849872566。
+两组各 10/10 成功并清理，额外 actor_get 从 6/10 降为 0/10，双方均无需后续 update。
+平均工具调用 4.5 → 3.6，p50 10.26 → 8.42 秒（-18%），候选逐对胜 6/10。
+[统计与调用链核验](prep-e3b-results.json)。按预注册主要指标保留，维护估算 0.25–0.5 人天，
+后续适配 0–0.25 人天；不扩大成功回执为完整 Actor 数据。创建方向暂时收束。
+
+### 14.11 E5：搜索枚举大小写（预注册）
+
+背景：E2 与 E3 的原始会话反复使用 documentType=actor/scene，而 schema 要求 Actor/Scene。
+假设：仅在 foundry_content_search.description 明确列出精确的 Actor、Item、Scene 值，
+可以减少校验错误；不改枚举、不增加大小写兼容逻辑、不扩大搜索能力、不改系统提示。
+scene_layout 与 conditions 各 10 组旧／新交错，检查错误 documentType 任务数、成功率、调用次数和配对耗时。
+这些题需要世界 Actor／Scene 查询，能覆盖已知错误，不用模型的总错误数代替目标指标。
+保留门槛：目标误用减少、正确率不降，无新增机制；10 样本的微小延迟波动不作为唯一依据。
+成本 0.25–0.5 人天，后续适配 0–0.25 人天。若无收益则撤回，不演进成宽松输入解析器。
+E5 后对保留组合运行六类全量回归并复核剩余方向投入产出，再进行目标完成审计。

@@ -1,0 +1,463 @@
+{
+  "model": "kimi-for-coding-highspeed",
+  "experiment": {
+    "arms": [
+      "baseline",
+      "tools"
+    ],
+    "comparison": "revision",
+    "kind": "paired tool revisions, fixed production prompt",
+    "cases": [
+      "create_npc"
+    ],
+    "samplesPerCase": 10,
+    "model": "kimi-for-coding-highspeed",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "6fa697e6012996a4140cd881cff0697eaf66e733",
+    "promptMode": "production",
+    "baselineCommit": "8befae8661aaa9f566641c35550e2b8ca98450d3",
+    "suiteVersion": "prep-v1-draft2",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "thinkingLevels": [
+    "off"
+  ],
+  "groups": [
+    {
+      "caseId": "create_npc",
+      "controlArm": "baseline",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 10261.5859,
+          "p95": 17031.29460000001,
+          "mean": 11394.464749999996
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 10261.5859,
+          "p95": 17031.29460000001,
+          "mean": 11394.464749999996
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1640.9370000000054,
+          "p95": 2881.281600000002,
+          "mean": 2024.7727800000011
+        },
+        "calls": {
+          "n": 10,
+          "p50": 4,
+          "p95": 7,
+          "mean": 4.5
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 39331,
+          "p95": 64252,
+          "mean": 40503.3
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 7,
+          "mean": 4.8
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 707,
+          "p95": 1065,
+          "mean": 755.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 374,
+          "p95": 625,
+          "mean": 383.3
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 50.18299999998999,
+          "mean": 12.077779999997256
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 3,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 8418.456999999995,
+          "p95": 15175.0847,
+          "mean": 8922.92311
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8418.456999999995,
+          "p95": 15175.0847,
+          "mean": 8922.92311
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1678.3288999999932,
+          "p95": 2747.804199999984,
+          "mean": 1791.3205499999992
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 6,
+          "mean": 3.6
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 34154,
+          "p95": 49408,
+          "mean": 34223
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 6,
+          "mean": 4.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 582,
+          "p95": 802,
+          "mean": 605.6
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 256,
+          "p95": 412,
+          "mean": 275.9
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 54.84819999997853,
+          "mean": 12.752479999997377
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 2,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": -17.961442977347243,
+      "p95ChangePercent": -10.898818578359915,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -34.60578642137566,
+        "p95": 45.12359236712427,
+        "mean": -14.829018273248204
+      },
+      "pairedWins": 6,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": -34.60578642137566
+        },
+        {
+          "sample": 1,
+          "changePercent": 17.836707329512524
+        },
+        {
+          "sample": 2,
+          "changePercent": 45.12359236712427
+        },
+        {
+          "sample": 3,
+          "changePercent": -48.64142095222751
+        },
+        {
+          "sample": 4,
+          "changePercent": -51.86335248978629
+        },
+        {
+          "sample": 5,
+          "changePercent": -12.898225036414434
+        },
+        {
+          "sample": 6,
+          "changePercent": 19.249635559721877
+        },
+        {
+          "sample": 7,
+          "changePercent": 2.8708008215599268
+        },
+        {
+          "sample": 8,
+          "changePercent": -49.840519232456295
+        },
+        {
+          "sample": 9,
+          "changePercent": -35.521614678140445
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.",
+    "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+    "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+    "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+    "Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."
+  ],
+  "sourceReport": "benchmark-1788849872566.json",
+  "chainAudit": [
+    {
+      "arm": "baseline",
+      "readTasks": 6,
+      "updateTasks": 0
+    },
+    {
+      "arm": "tools",
+      "readTasks": 0,
+      "updateTasks": 0
+    }
+  ]
+}
