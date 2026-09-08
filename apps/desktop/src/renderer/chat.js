@@ -362,7 +362,12 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
   if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
   for (const attention of payload.attentions ?? []) renderAttention(attention);
   for (const approval of payload.approvals ?? []) addApprovalCard(approval);
+  if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
   for (const item of payload.inputs ?? []) {
+    if (item.state === "interrupted") {
+      renderRecoveredInput(item);
+      continue;
+    }
     const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
     if (historyNode instanceof HTMLElement) {
       historyNode.dataset.commandId = item.commandId;
@@ -387,10 +392,11 @@ async function installSnapshot(payload, pageIntent = null, fromCache = false) {
     if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
   }
   workspaceReady.add(id);
-  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, item])));
+  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, { ...item, recovered: true, sending: false }])));
   const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
   for (const [commandId, submission] of outboxFor(id)) {
     if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
+    if (submission.recovered) { renderRecoveredInput({ ...submission, commandId }, submission); continue; }
     const node = submissionNode(submission);
     updateInputReceipt(commandId, "uncertain");
     const retry = el("button", "retry-input", t("chat.input.retry"));
@@ -1750,6 +1756,25 @@ function submissionNode(submission) {
   }
   return node;
 }
+function renderRecoveredInput(item, oldSubmission = null) {
+  const node = item.messageKey ? messageNode(item.messageKey) : null;
+  const card = node ?? addMessage("user", item.text, item.images, "input:" + item.commandId);
+  card.dataset.commandId = item.commandId;
+  updateInputReceipt(item.commandId, "interrupted");
+  card.querySelector(".retry-input")?.remove();
+  const retry = el("button", "retry-input", t("chat.input.retry"));
+  retry.addEventListener("click", () => {
+    if (composerStopping() || selectedArchived) return;
+    const submission = { context: { ...modeContext(), commandId: crypto.randomUUID(), replacesInputId: item.id },
+      text: item.text, images: item.images ?? [], sending: false };
+    if (oldSubmission) outboxFor(selectedSessionId).delete(oldSubmission.context.commandId);
+    outboxFor(selectedSessionId).set(submission.context.commandId, submission);
+    retry.remove(); saveWorkspace();
+    void sendSubmission(submission);
+  });
+  card.appendChild(retry);
+}
+
 async function sendSubmission(submission) {
   const id = submission.context.sessionId;
   if ((selectedSessionId === id && composerStopping()) || stopRequests.get(id)?.state === "pending") return;

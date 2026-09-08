@@ -1391,7 +1391,7 @@ app.whenReady().then(async () => {
         }
         return text;
       };
-      const result = host.submitInput(message, images, payload?.commandId, prepare);
+      const result = host.submitInput(message, images, payload?.commandId, prepare, payload?.replacesInputId);
       if (result.ok && !result.duplicate) {
         if (result.disposition !== "new_task") host.telemetry?.turnSteered(mode);
         host.telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);

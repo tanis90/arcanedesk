@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Send a user message to the agent session. images: [{ data: base64, mimeType }]. */
   prompt: (text, images, context) => ipcRenderer.invoke("chat:prompt", {
     text,
+    replacesInputId: context?.replacesInputId,
     images,
     mode: context?.mode,
     generation: context?.generation,

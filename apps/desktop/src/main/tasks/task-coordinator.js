@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InputJournal } from "./input-journal.js";
+import { PendingInputs } from "./pending-inputs.js";
 import { TaskAdmission } from "../scheduling/execution-scheduler.js";
 
 const activeStates = new Set(["running", "stopping", "waiting_user", "queued"]);
@@ -9,13 +9,14 @@ const messageText = message => typeof message?.content === "string" ? message.co
 
 /** One owner for a session's commands and task lifecycle. No view selection state. */
 export class TaskCoordinator {
-  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal, scheduler?: any}} options */
-  constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal(), scheduler = null }) {
+  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, pending?: PendingInputs, pendingModel?: any, saveModel?: (model: any) => void, scheduler?: any}} options */
+  constructor({ sessionId, adapter, emit = () => {}, pending = new PendingInputs(), pendingModel = null, saveModel = () => {}, scheduler = null }) {
     this.scheduler = scheduler; this.admission = null;
     this.sessionId = sessionId;
     this.adapter = adapter;
     this.emit = emit;
-    this.journal = journal;
+    this.pending = pending;
+    this.saveModel = saveModel;
     this.commands = new Map();
     this.inputs = new Map();
     this.task = null;
@@ -28,64 +29,18 @@ export class TaskCoordinator {
     this.queueWrites = new Set();
     this.attentions = new Map();
     this.attentionResolvers = new Map();
-    this.pendingModel = null;
-    for (const record of journal.records) {
-      if (record.type === "checkpoint") {
-        if (record.version !== 1) throw new Error("Unsupported task checkpoint");
-        this.commands = new Map(record.commands);
-        this.inputs = new Map(record.inputs.map(input => [input.id, input]));
-        this.attentions = new Map(record.attentions.map(attention => [attention.id, attention]));
-        this.task = record.task; this.pendingModel = record.pendingModel;
-      } else if (record.type === "accepted") {
-        this.commands.set(record.commandId, record);
-        this.inputs.set(record.input.id, record.input);
-        this.task = record.task;
-      } else if (record.type === "input_state") {
-        const input = this.inputs.get(record.inputId);
-        if (input) input.state = record.state;
-      } else if (record.type === "task_state") this.task = record.task;
-      else if (record.type === "attention") this.attentions.set(record.attention.id, record.attention);
-      else if (record.type === "response") {
-        this.commands.set(record.commandId, record);
-        this.attentions.set(record.attention.id, record.attention);
-      } else if (record.type === "pending_model") this.pendingModel = record.model;
-    }
-    if (this.busy) {
-      this.setTaskState("interrupted");
-      for (const input of this.inputs.values()) if (pendingStates.has(input.state)) this.setInputState(input, "interrupted");
-    }
-    for (const attention of this.attentions.values()) {
-      if (attention.state === "pending") this.updateAttention({ ...attention, state: "interrupted" });
-    }
-    this.compact();
+    this.pendingModel = pendingModel;
+    for (const input of pending.inputs) this.inputs.set(input.id, { ...input, state: "interrupted" });
   }
 
   get busy() { return activeStates.has(this.task?.state); }
-  compact(force = false) {
-    if (this.busy || typeof this.journal.compact !== "function") return false;
-    const consumed = input => ["consumed", "handled"].includes(input.state);
-    if (!force && this.journal.records.length < 128 && ![...this.inputs.values()].some(input => consumed(input) && input.images?.length)) return false;
-    const commands = /** @type {Array<[any, any]>} */ ([...this.commands].map(([id, record]) => [id, { fingerprint: record.fingerprint, ack: record.ack }]));
-    const inputs = [...this.inputs.values()].map(input => {
-      if (!consumed(input)) return { ...input };
-      const { images: _images, executionText: _execution, expandedText: _expanded, ...state } = input;
-      return state;
-    });
-    try {
-      this.journal.compact([{ type: "checkpoint", version: 1, commands, inputs, task: this.task,
-        attentions: [...this.attentions.values()], pendingModel: this.pendingModel }]);
-      this.commands = new Map(commands); this.inputs = new Map(inputs.map(input => [input.id, input]));
-      this.compactionError = null; return true;
-    } catch (error) { this.compactionError = error.message; return false; }
-  }
   snapshotAttentions() { return structuredClone([...this.attentions.values()]); }
   setPendingModel(model) {
-    this.journal.append({ type: "pending_model", model });
+    this.saveModel(model);
     this.pendingModel = model ? { ...model } : null;
     this.emit({ type: "model_pending", model: this.pendingModel });
   }
   updateAttention(attention) {
-    this.journal.append({ type: "attention", attention });
     this.attentions.set(attention.id, attention);
     this.emit({ type: "attention", attention: structuredClone(attention) });
   }
@@ -131,7 +86,6 @@ export class TaskCoordinator {
     const answered = { ...attention, state: "answered", response, answeredAt: Date.now() };
     const ack = { ok: true, commandId, sessionId: this.sessionId, taskId, attentionId };
     const record = { type: "response", commandId, fingerprint, attention: answered, ack };
-    this.journal.append(record);
     this.commands.set(commandId, record);
     this.attentions.set(attentionId, answered);
     this.emit({ type: "attention", attention: structuredClone(answered) });
@@ -144,21 +98,24 @@ export class TaskCoordinator {
   snapshotInputs(messageKeys = null) {
     return [...this.inputs.values()].filter(input => !messageKeys || messageKeys.has(input.messageKey)
       || !["consumed", "handled"].includes(input.state))
-      .map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
+      .map(({ id, commandId, taskId, state, text, images, messageKey }) =>
+        ({ id, commandId, taskId, state, text, images: state === "interrupted" ? images : undefined, messageKey }));
   }
   setTaskState(state, error = null) {
     this.task = { ...this.task, state, error, endedAt: activeStates.has(state) ? null : Date.now() };
-    this.journal.append({ type: "task_state", task: this.task });
     this.emit({ type: "task_state", task: { ...this.task } });
   }
   setInputState(input, state) {
-    this.journal.append({ type: "input_state", inputId: input.id, state });
+    if (["consumed", "handled"].includes(state)) {
+      this.pending.save([...this.inputs.values()].filter(item => item.id !== input.id));
+      delete input.images; delete input.executionText; delete input.expandedText;
+    }
     input.state = state;
     this.emit({ type: "input_state", inputId: input.id, commandId: input.commandId, taskId: input.taskId, state });
   }
 
   /** Accept synchronously after durable registration; execution is asynchronous. */
-  submit({ commandId = randomUUID(), text, images = [], prepare = null }) {
+  submit({ commandId = randomUUID(), text, images = [], prepare = null, replacesInputId = null }) {
     const fingerprint = createHash("sha256").update(JSON.stringify({ text, images })).digest("hex");
     const previous = this.commands.get(commandId);
     if (previous) {
@@ -173,7 +130,10 @@ export class TaskCoordinator {
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
       taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
     const record = { type: "accepted", commandId, fingerprint, input, task, ack };
-    this.journal.append(record);
+    const replaced = this.inputs.get(replacesInputId);
+    const replaceId = replaced?.state === "interrupted" ? replaced.id : null;
+    this.pending.save([...this.inputs.values()].filter(item => item.id !== replaceId).concat(input));
+    if (replaceId) this.inputs.delete(replaceId);
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
     this.task = task;
@@ -199,7 +159,6 @@ export class TaskCoordinator {
     }).finally(() => {
       this.run = null;
       if (this.busy && [...this.inputs.values()].some(i => i.taskId === this.task.id && pendingStates.has(i.state))) this.schedule();
-      else this.compact();
     });
     this.run.catch(() => {});
   }

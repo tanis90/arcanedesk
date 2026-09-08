@@ -23,7 +23,7 @@ function fixture() {
   return { registry, root, events };
 }
 
-test("empty and user-only SDK sessions survive eviction with identity, task receipts and appendable history", async () => {
+test("empty and user-only SDK sessions survive eviction with identity and appendable history", async () => {
   const { registry, events } = fixture();
   const empty = await registry.start(), emptyId = empty.describeCurrent().id;
   const worked = await registry.select(null, true), workedId = worked.describeCurrent().id;
@@ -37,25 +37,27 @@ test("empty and user-only SDK sessions survive eviction with identity, task rece
   assert.notEqual(restored, worked); assert.equal(registry.activeHost, selected);
   assert.equal(restored.describeCurrent().id, workedId);
   assert.equal(restored.sessionManager.getEntries().some(entry => entry.type === "message" && entry.message.content === "hello"), true);
-  assert.deepEqual(restored.submitInput("hello", [], "command"), { ...accepted, duplicate: true });
+  const resent = restored.submitInput("hello", [], "command");
+  assert.notEqual(resent.inputId, accepted.inputId);
+  assert.equal(resent.duplicate, undefined);
+  await restored.tasks.run;
   restored.sessionManager.appendMessage({ role: "assistant", content: [{ type: "text", text: "done" }], timestamp: Date.now() });
   const lines = readFileSync(restored.describeCurrent().path, "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(lines.filter(entry => entry.type === "session").length, 1);
   assert.equal((await registry.getOrLoad(emptyId)).sessionManager.getHeader().id, emptyId);
 });
 
-test("active work, operations, unsaved model choices, recent use and failed persistence prevent eviction", async () => {
+test("active work, operations, recent use and failed persistence prevent eviction", async () => {
   const { registry } = fixture();
   const busy = await registry.start(); busy.tasks.task = { id: "busy", state: "waiting_user" };
   const operation = await registry.select(null, true); operation.operations = 1;
-  const model = await registry.select(null, true); model._currentModelRef = { providerId: "missing", modelId: "new" };
   const recent = await registry.select(null, true);
   const failed = await registry.select(null, true); failed.persistForEviction = () => { throw new Error("disk full"); };
   await registry.select(null, true);
-  for (const host of [busy, operation, model, failed]) host.lastUsedAt = 0;
+  for (const host of [busy, operation, failed]) host.lastUsedAt = 0;
   assert.deepEqual(registry.prune({ idleMs: 300_000, keepIdle: 0 }), []);
   assert.equal(registry.get(recent.describeCurrent().id), recent);
-  assert.equal(registry.allHosts().length, 6);
+  assert.equal(registry.allHosts().length, 5);
 });
 
 test("default idle retention keeps four recent eligible hosts plus the selected session", async () => {

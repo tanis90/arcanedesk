@@ -20,7 +20,8 @@ import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
-import { InputJournal } from "./tasks/input-journal.js";
+import { PendingInputs } from "./tasks/pending-inputs.js";
+import { replaceFile } from "./atomic-file.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -475,6 +476,8 @@ export class AgentHost {
       ? `${this._currentModelRef.providerId}/${this._currentModelRef.modelId}`
       : null;
     this.supportsImages = selectedModel?.input?.includes("image") ?? true;
+    const savedModel = this.navigation?.get(sessionManager.getSessionId()).selectedModel;
+    if (savedModel) await this.setCurrentModel(savedModel.providerId, savedModel.modelId, true);
     this.log(`[agent:${this.profile.mode}] session ready (${customTools.length} custom tools, builtin ${this.profile.builtinTools ? "ON" : "off"}, approvals ${APPROVALS_ENABLED ? "ON" : "off"}, id=${sessionManager.getSessionId?.()?.slice(0, 8) ?? "?"})`);
     this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
     // 遥测只拿 provider/model 的 family 映射,原始 id 不落盘(§7.2)
@@ -565,6 +568,7 @@ export class AgentHost {
       approvals: structuredClone([...this.approvalSnapshots.values()]),
       pendingModel: this.tasks?.pendingModel ?? null,
       inputs: this.tasks?.snapshotInputs(messageKeys) ?? [],
+      recoveryWarning: this.tasks?.pending.warning ?? null,
       acceptedCommandIds: this.tasks?.snapshotInputCommandIds?.() ?? [],
       busy: this.busy,
       task: this.task ? { ...this.task } : null,
@@ -664,6 +668,7 @@ export class AgentHost {
       if (this.modelRuntime && !model) {
         return { ok: false, error: `model not found: ${providerId}/${modelId}` };
       }
+      this.navigation?.patch(this.describeCurrent()?.id, { selectedModel: ref });
       if (this.busy && !applyNow) {
         this.taskCoordinator().setPendingModel(ref);
         return { ok: true, deferred: true, model: ref };
@@ -742,7 +747,11 @@ export class AgentHost {
     if (this.tasks) return this.tasks;
     const sessionId = this.describeCurrent()?.id ?? "unattached";
     const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
-    this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, journal: new InputJournal(file), emit: event => this.emit(event),
+    const pending = new PendingInputs(this.taskStorageDir ? path.join(path.dirname(this.taskStorageDir), "pending-inputs", sessionId + ".json") : null);
+    if (file) pending.migrate(file, model => this.navigation.patch(sessionId, { selectedModel: model, pendingModel: model }));
+    this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, pending,
+      pendingModel: this.navigation?.get(sessionId).pendingModel ?? null,
+      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }), emit: event => this.emit(event),
       adapter: {
         beginTask: async (pending) => {
           if (!pending) return;
@@ -762,13 +771,13 @@ export class AgentHost {
     return this.tasks;
   }
 
-  submitInput(text, images, commandId, prepare = null) {
+  submitInput(text, images, commandId, prepare = null, replacesInputId = null) {
     try { this.navigation?.assertWritable(this.describeCurrent()?.id); }
     catch (error) { return { ok: false, code: error.code, error: error.message }; }
     if (this.closing) return { ok: false, code: "APP_STOPPING" };
     if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
     if (!this.session) throw new Error("agent session not started");
-    const result = this.taskCoordinator().submit({ commandId, text, images, prepare });
+    const result = this.taskCoordinator().submit({ commandId, text, images, prepare, replacesInputId });
     if (result.ok && !result.duplicate && !this.sessionManager?.getSessionName()) {
       try { this.sessionManager?.appendSessionInfo(text.trim().replace(/\s+/g, " ").slice(0, 24)); } catch { /* naming is best effort */ }
     }
@@ -813,16 +822,12 @@ export class AgentHost {
 
   canEvict() {
     if (this.busy || this.tasks?.run || this.operations || this.deleting || this.closing || this.session?.isStreaming || this.session?.isCompacting || this.approvals.size) return false;
-    const ref = this._currentModelRef, model = this.session?.model;
-    // An unconfigured model choice can still be memory-only; keep its owner resident.
-    if (ref && (model?.provider !== ref.providerId || (model?.id ?? model?.name) !== ref.modelId)) return false;
     return Boolean(this.sessionManager?.getSessionFile?.() && this.sessionManager?.getHeader?.());
   }
   persistForEviction() {
     if (!this.canEvict()) throw new Error("Session still owns active or unsaved state");
     const file = this.sessionManager.getSessionFile();
-    new InputJournal(file).compact([this.sessionManager.getHeader(), ...this.sessionManager.getEntries()]);
-    this.tasks?.compact(true);
+    replaceFile(file, [this.sessionManager.getHeader(), ...this.sessionManager.getEntries()].map(entry => JSON.stringify(entry) + "\n").join(""));
   }
 
   // ---- approval gate(opt-in,默认关闭) ----

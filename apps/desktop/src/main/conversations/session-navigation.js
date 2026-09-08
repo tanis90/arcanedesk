@@ -15,7 +15,9 @@ export class SessionNavigation {
         if (!/^[\w-]{1,128}$/.test(id) || !row || typeof row !== "object"
           || (row.archivedAt != null && (!Number.isFinite(row.archivedAt) || row.pinnedOrder != null))
           || (row.pinnedOrder != null && !Number.isFinite(row.pinnedOrder))
-          || (row.customTitle != null && typeof row.customTitle !== "string")) throw new Error("Invalid navigation entry");
+          || (row.customTitle != null && typeof row.customTitle !== "string")
+          || [row.selectedModel, row.pendingModel].some(model => model != null &&
+            (typeof model.providerId !== "string" || typeof model.modelId !== "string"))) throw new Error("Invalid navigation entry");
       }
       this.rows = data.sessions;
     } catch (error) { if (error.code !== "ENOENT") this.error = error.message; }

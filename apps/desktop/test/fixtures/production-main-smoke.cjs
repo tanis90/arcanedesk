@@ -446,10 +446,9 @@ app.on("will-quit", () => {
   if (crashPhase === "recover") {
     const saved = JSON.parse(readFileSync(path.join(scratch, "crash-checkpoint.json"), "utf8"));
     await openHost({ describeCurrent: () => saved.b });
-    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && displayedTask?.state === "interrupted"`);
+    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && displayedTask == null`);
     const restoredB = globalThis.__arcaneHosts.prep.get(saved.b.id);
-    assert.equal(restoredB.tasks.task.state, "interrupted");
-    assert.equal(restoredB.tasks.task.id, saved.taskId);
+    assert.equal(restoredB.tasks.task, null);
     assert.ok(await evaluate('messages.textContent.includes("production-B")'), "accepted input remains visible");
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     await sleep(300);
@@ -462,7 +461,7 @@ app.on("will-quit", () => {
     assert.equal(restoredB.tasks.task.state, "completed");
     await openHost({ describeCurrent: () => saved.a });
     await ui(`selectedSessionId === ${JSON.stringify(saved.a.id)} && !busy && messages.textContent.includes("A final result")`);
-    assert.equal(globalThis.__arcaneHosts.prep.get(saved.a.id).tasks.task.state, "completed");
+    assert.equal(globalThis.__arcaneHosts.prep.get(saved.a.id).tasks.task, null);
     await sleep(300);
     assert.deepEqual(requests, ["C"], "only the explicitly submitted continuation executes");
     console.log("PASS crash recovery: durable result, interrupted first-turn task, no automatic replay and explicit continuation");

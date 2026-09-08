@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, appendFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { TaskCoordinator } from "../src/main/tasks/task-coordinator.js";
-import { InputJournal } from "../src/main/tasks/input-journal.js";
+import { PendingInputs } from "../src/main/tasks/pending-inputs.js";
 
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -73,17 +73,12 @@ test("queued input is consumed when the model starts; a missed end-of-turn steer
   assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
 });
 
-test("a journal failure after acceptance stops scheduling without executing unrecorded work", async () => {
-  let writes = 0; let calls = 0;
-  const journal = { records: [], append() { if (++writes > 1) throw new Error("disk full"); } };
-  const coordinator = new TaskCoordinator({ sessionId: "A", journal,
-    adapter: { prompt: async () => { calls++; } } });
-  assert.equal(coordinator.submit({ text: "work" }).ok, true);
-  await coordinator.run;
-  assert.equal(coordinator.task.state, "failed");
-  assert.equal(calls, 0);
-  await tick();
-  assert.equal(coordinator.run, null);
+test("failed persistence never acknowledges or dispatches an input", async () => {
+  let calls = 0;
+  const pending = new PendingInputs(); pending.save = () => { throw new Error("disk full"); };
+  const coordinator = new TaskCoordinator({ sessionId: "A", pending, adapter: { prompt: async () => { calls++; } } });
+  assert.throws(() => coordinator.submit({ text: "work" }), /disk full/);
+  await tick(); assert.equal(calls, 0); assert.equal(coordinator.task, null);
 });
 
 test("already consumed steering is not prompted a second time", async () => {
@@ -135,22 +130,21 @@ test("input submitted on the terminal event starts a subsequent task despite the
   assert.deepEqual(calls, ["first", "second"]);
 });
 
-test("journal recovery keeps acceptance identity, marks interrupted, and never replays work", async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-input-test-"));
-  const file = path.join(dir, "journal.jsonl");
+test("restart keeps all unconsumed input bodies without restoring command dedup or running work", async () => {
+  const file = path.join(mkdtempSync(path.join(os.tmpdir(), "arcane-input-test-")), "pending.json");
   const gate = deferred();
-  const original = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: { prompt: () => gate.promise } });
-  const ack = original.submit({ commandId: "stable", text: "write once" });
-  await tick();
-  appendFileSync(file, '{"type":"partial');
-  const recovered = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: { prompt: () => assert.fail("must not replay") } });
-  assert.equal(recovered.task.state, "interrupted");
-  assert.equal(recovered.submit({ commandId: "stable", text: "write once" }).inputId, ack.inputId);
-  assert.equal(recovered.run, null);
+  const original = new TaskCoordinator({ sessionId: "A", pending: new PendingInputs(file), adapter: { prompt: () => gate.promise } });
+  const first = original.submit({ commandId: "old", text: "first", images: [{ data: "data", mimeType: "image/png" }] });
+  original.submit({ commandId: "old2", text: "second" }); await tick();
+  const recovered = new TaskCoordinator({ sessionId: "A", pending: new PendingInputs(file), adapter: {} });
+  assert.equal(recovered.task, null); assert.equal(recovered.commands.size, 0); assert.equal(recovered.run, null);
+  assert.deepEqual(recovered.snapshotInputs().map(i => i.text), ["first", "second"]);
+  assert.equal(recovered.inputs.get(first.inputId).state, "interrupted");
+  assert.equal(recovered.inputs.get(first.inputId).images[0].data, "data");
   gate.resolve(); await original.run;
 });
 
-test("structured answer is scoped, durable and idempotent, then resumes the same task", async () => {
+test("structured answer is scoped and idempotent within a running host, then resumes the same task", async () => {
   let coordinator; let question;
   coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
     prompt: async () => { question = coordinator.ask({ question: "Which scene?", options: ["Forest", "City"] }); await question; },
@@ -184,17 +178,17 @@ test("stop resolves a waiting question and rejects later answers", async () => {
   assert.equal(coordinator.respond({ commandId: "late", taskId: task.taskId, attentionId, response: "yes" }).code, "STALE_ATTENTION");
 });
 
-test("recovery marks an unresolved question interrupted instead of pretending a resolver survived", async () => {
+test("recovery does not restore an unresolved question or answer consumer", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "arcane-attention-test-"));
   const file = path.join(dir, "journal.jsonl");
   let original;
-  original = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: {
+  original = new TaskCoordinator({ sessionId: "A", pending: new PendingInputs(file), adapter: {
     prompt: async () => { await original.ask({ question: "Choose?" }); }, abort: async () => {},
   } });
   const task = original.submit({ text: "work" }); await tick();
-  const restored = new TaskCoordinator({ sessionId: "A", journal: new InputJournal(file), adapter: {} });
-  const attention = restored.snapshotAttentions()[0];
-  assert.equal(attention.state, "interrupted");
+  const restored = new TaskCoordinator({ sessionId: "A", pending: new PendingInputs(file), adapter: {} });
+  const attention = original.snapshotAttentions()[0];
+  assert.deepEqual(restored.snapshotAttentions(), []);
   assert.equal(restored.respond({ commandId: "after-restart", taskId: task.taskId, attentionId: attention.id, response: "yes" }).code, "STALE_ATTENTION");
   await original.stop(task.taskId);
 });

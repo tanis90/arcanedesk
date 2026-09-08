@@ -31,6 +31,7 @@ app.whenReady().then(async () => {
   const shutdown = new ShutdownCoordinator({ registries: [{ allHosts: () => [exitHost], pending: new Map() }],
     gate: value => { exitAdmission = value; }, quiesce: async () => {}, finish: () => { didQuit = true; },
     emit: state => emit({ type: "shutdown_state", ...state }) });
+  const submissions = [];
   let notificationBroker;
   const nativeNotifications = [];
   const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
@@ -47,7 +48,7 @@ app.whenReady().then(async () => {
     const row = sessions.get(id);
     return { ok: true, session: { id, name: row.name, path: row.path }, mode: row.mode, generation,
       history: row.history, task: row.task, busy: row.task?.state === "running" || row.task?.state === "waiting_user",
-      attentions: row.attentions, inFlight: row.projection.snapshot() };
+      attentions: row.attentions, inputs: row.inputs ?? [], inFlight: row.projection.snapshot() };
   }
   function send(id, payload) {
     const row = sessions.get(id);
@@ -68,6 +69,12 @@ app.whenReady().then(async () => {
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
     if (channel === "activity:snapshot") return { ok: true, ...center.snapshot() };
     if (channel === "activity:read") return center.markRead(input, focused);
+    if (channel === "chat:prompt") {
+      submissions.push(input);
+      const row = sessions.get(input.sessionId);
+      row.inputs = (row.inputs ?? []).filter(item => item.id !== input.replacesInputId);
+      return { ok: true };
+    }
     if (channel === "sessions:current") return snapshot(selected);
     if (channel === "sessions:snapshot") return snapshot(input);
     if (channel === "sessions:navigation") return { ok: true, sessions: [...sessions.values()].map(s => ({ id: s.id, name: s.name, path: s.path, mode: s.mode, projectKey: s.mode, cwd: "C:/test/" + s.mode, activity: center.get(s.id) })) };
@@ -112,6 +119,27 @@ app.whenReady().then(async () => {
     center.markRead({ sessionId: "A", runtimeEpoch: "activity-test", seq: 2, visible: true, atBottom: true, readKey: "assistant:100" }, true);
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "B" && activityReady && activityView.rows.has("A")');
+    if (process.env.ARCANE_SMOKE_INPUT_RECOVERY === "1") {
+      await until('workspaceReady.has("B")');
+      const recovered = { id: "pending-1", commandId: "old-1", text: "interrupted first", state: "interrupted", images: [] };
+      sessions.get("B").inputs = [recovered, { ...recovered, id: "pending-2", commandId: "old-2", text: "interrupted second" }];
+      await evaluate('workspaceStore.save("B", { draft: "independent draft", outbox: [{ context: { sessionId: "B", commandId: "old-1" }, text: "interrupted first", images: [] }, { context: { sessionId: "B", commandId: "old-outbox" }, text: "uncertain outbox", images: [] }] }); outboxBySession.delete("B"); workspaceReady.delete("B");');
+      await evaluate('pullCurrentSession()');
+      await until('messages.textContent.includes("uncertain outbox") && messages.querySelectorAll(".retry-input").length === 3');
+      assert.equal(await evaluate('input.value'), "independent draft");
+      assert.equal(await evaluate(`messages.querySelectorAll('[data-command-id="old-1"]').length`), 1);
+      await evaluate(`messages.querySelector('[data-command-id="old-1"] .retry-input').click()`);
+      await until('messages.querySelectorAll(".retry-input").length === 2');
+      assert.equal(submissions.length, 1);
+      assert.notEqual(submissions[0].commandId, "old-1"); assert.equal(submissions[0].replacesInputId, "pending-1");
+      assert.equal(submissions[0].sessionId, "B");
+      await evaluate(`messages.querySelector('[data-command-id="old-outbox"] .retry-input').click()`);
+      await until('messages.querySelectorAll(".retry-input").length === 1');
+      assert.equal(submissions.length, 2); assert.notEqual(submissions[1].commandId, "old-outbox");
+      assert.equal(await evaluate('input.value'), "independent draft");
+      console.log("PASS renderer/preload recovery: pending and outbox merged; explicit resend uses new identity; draft preserved");
+      window.destroy(); app.exit(0); return;
+    }
     assert.equal(await evaluate('document.body.classList.contains("sidebar-pinned")'), true);
     assert.equal(await evaluate('drawer.inert'), false);
     await evaluate('input.value = "B 的草稿"; input.dispatchEvent(new Event("input")); input.focus();');
