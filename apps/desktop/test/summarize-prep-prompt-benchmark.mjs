@@ -18,12 +18,13 @@ const groups=r.experiment.cases.map(caseId=>{
       uncertainReceipts:all.filter(t=>t.tools.some(tool=>tool.status==="indeterminate")).length,reviewedAfterPause:all.filter(t=>t.uncertainReceiptReviewed).length,
       trialsWithErrors:all.filter(t=>t.tools.some(tool=>tool.isError||tool.status==="rejected")).length,
       toolSequences:all.map(t=>({sample:t.sample,success:t.success,names:t.tools.map(t=>t.name)}))};};
-  const js=arm("js"),tools=arm("tools");
+  const control=r.experiment.comparison==="revision"?"baseline":"js";
+  const js=arm(control),tools=arm("tools");
   const pairs=[];for(let sample=0;sample<r.experiment.samplesPerCase;sample++){
-    const a=r.prepTrials.find(t=>t.caseId===caseId&&t.arm==="js"&&t.sample===sample),b=r.prepTrials.find(t=>t.caseId===caseId&&t.arm==="tools"&&t.sample===sample);
+    const a=r.prepTrials.find(t=>t.caseId===caseId&&t.arm===control&&t.sample===sample),b=r.prepTrials.find(t=>t.caseId===caseId&&t.arm==="tools"&&t.sample===sample);
     if(a.success&&b.success)pairs.push({sample,changePercent:(b.ms/a.ms-1)*100});
   }
-  return {caseId,js,tools,p50ChangePercent:js.latencyMs.p50&&tools.latencyMs.p50?(tools.latencyMs.p50/js.latencyMs.p50-1)*100:null,
+  return {caseId,controlArm:control,js,tools,p50ChangePercent:js.latencyMs.p50&&tools.latencyMs.p50?(tools.latencyMs.p50/js.latencyMs.p50-1)*100:null,
     p95ChangePercent:js.latencyMs.p95&&tools.latencyMs.p95?(tools.latencyMs.p95/js.latencyMs.p95-1)*100:null,
     pairedChangePercent:stats(pairs.map(p=>p.changePercent)),pairedWins:pairs.filter(p=>p.changePercent<0).length,pairs};
 });

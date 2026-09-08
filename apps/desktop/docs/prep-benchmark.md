@@ -5,7 +5,7 @@
 本套件用于持续评估真实 AgentHost / Pi / 模型操作 Foundry 的效率与正确性。它不是 SDK 微基准，
 也不包含聊天 UI 渲染耗时。入口、用例和图片随仓库保存，账号配置与原始会话留在本机。
 
-当前版本为 **prep-v1-draft**：六题运行代码已落地，新增图片题尚未完成真实模型验收，不能视为已冻结的正式基线。
+当前版本为 **prep-v1-draft2**：六题运行代码已落地，新增图片题尚未完成真实模型验收，不能视为已冻结的正式基线。
 早期五题、100 次中性 prompt 实验见 [历史报告](prep-prompt-benchmark.md)，不能与新版本直接混算。
 
 ## 快速使用
@@ -41,6 +41,10 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 ```
 
 每题 10 组配对，共 120 次模型任务。快速诊断可用 --samples=1；这不是正式性能结论。
+定向诊断可加 --cases=conditions（多个用例用英文逗号分隔）。工具迭代的单变量实验使用
+--comparison=revision --baseline=<旧版本工作树> --prompt-mode=production；两组均开放工具，
+分别加载旧／新 AgentHost 与 runtime，要求生产 prompt 文本相同。报告记录 baselineCommit 与候选提交。
+统计文件的 controlArm 标识对照组；兼容字段 js 在此模式存放 baseline 数据，不代表裸 JS。
 默认使用本地安装的 Electron；若需其他路径，设置 ARCANE_QA_ELECTRON。启动器自动提供 ARCANE_QA_NODE，
 以隐藏窗口启动 Electron main。不能只用 node 执行 Electron fixture。无需旧 baseline worktree。
 运行期间不要重建 SDK、改变模型配置、修改当前 Scene、操作测试对象或同时跑其他模型测试。
@@ -53,11 +57,12 @@ node apps/desktop/test/summarize-prep-prompt-benchmark.mjs C:\qa\arcanedesk-benc
 | grant_items | 同来源已有武器原样跳过，新武器授予并装备 | 数量、已有装备状态不变、新物品装备 |
 | edit_image | 改名字、HP、固定 AC，同步已有 Data 图片 | Actor／原型／非当前 Scene Token 图片、布局与名字 |
 | scene_layout | 非当前 Scene 移动、删除、创建 Token | 精确数量、角色、名字、坐标，未切换或激活 Scene |
-| conditions | 两位角色上倒地／中毒，第三人不变 | 两人状态成立，第三人没有新增目标状态 |
+| conditions | 两位角色上倒地／中毒，第三人不变 | 两人状态成立且无重复效果，第三人无新增状态；三人预置无关效果保留 |
 | upload_image | 本地图片维护到 Actor／原型／存量 Token | HTTP 读取、SHA-256、图片解码、引用一致、Token 布局和其他角色图片不变 |
 
-完整自然语言 prompt 和 setup/verify/cleanup 代码在
-[prep-prompt-benchmark.cjs](../test/fixtures/prep-prompt-benchmark.cjs)。两组需求相同，仅替换对象名及各自本地路径。
+完整自然语言 prompt 与 setup/cleanup 在
+[prep-prompt-benchmark.cjs](../test/fixtures/prep-prompt-benchmark.cjs)，独立验收在
+[prep-benchmark-verifier.cjs](../test/fixtures/prep-benchmark-verifier.cjs)。两组需求相同，仅替换对象名及各自本地路径。
 不提供 UUID、预写脚本或调用顺序。每次新模型会话、重新创建三位 NPC 与非当前 Scene；奇偶轮交换两组先后。
 
 图片为 [benchmark20260508180804.jpg](../test/fixtures/prep-benchmark-assets/benchmark20260508180804.jpg)，
@@ -97,7 +102,8 @@ JPEG，231×223，5542 字节，SHA-256：
 ## 冻结 v1 前剩余验收
 
 - 在 QA-A 实跑新增图片题的两组，确认本地读取、上传、哈希验证和清理；再跑 120 次生产模式正式基线。
-- 状态题增加无关预置效果与重复效果验收；当前只检查最终状态集合，不能保证中途未误删后恢复。
+- draft2 已增加状态题的无关预置效果与重复效果验收，4 项离线测试通过（正确结果、误删、重复、误伤第三人）；
+  仍需 QA-A 确认真实系统效果形态。只验收最终状态，不等于已追踪所有中途副作用。
 - 授物补来源保留与二次幂等，场景补原型继承检查。增强验收须升级 suiteVersion。
 - 确认共享页面 JS 全局声明的隔离策略：当前每题新模型会话，但页面 JS 上下文沿用，顶层 const 可残留。
   不能把相关语法碰撞全部归因于 FVTT 知识不足。

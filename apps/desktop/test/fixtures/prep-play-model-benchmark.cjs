@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
     const source = readFileSync(path.join(repo, "packages/foundry-sdk/src/runtime-source.ts"), "utf8");
     const runtimeSource = JSON.parse(source.match(/export const runtimeFunction: string = (.*);/)[1]);
     let allowedActions;
-    if (label === "candidate") ({ DESKTOP_FOUNDRY_ACTIONS: allowedActions } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js"));
+    if (label === "candidate" || option("comparison") === "revision") ({ DESKTOP_FOUNDRY_ACTIONS: allowedActions } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js"));
     revisions[label] = { AgentHost, DirectFoundryRuntime, ResourceCoordinator, ExecutionScheduler, runtimeSource, allowedActions };
   }
   if (option("scenarios", "false") === "true") {
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("prep-benchmark", "false") === "true") {
-    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; }, resumePath: option("prep-resume"), promptMode: option("prompt-mode", "production") });
+    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; }, resumePath: option("prep-resume"), promptMode: option("prompt-mode", "production"), baselineRevision: revisions.baseline, baselinePath: baseline, comparison: option("comparison", "js"), caseFilter: option("cases") });
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("edge-cases", "false") === "true") {
