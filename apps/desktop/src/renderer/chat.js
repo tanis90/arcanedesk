@@ -3163,7 +3163,7 @@ activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: w
       && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
     atBottom: !historyPage?.hasNewer && !pendingHistoryAnchor && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
     readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
-    toLatest: () => scrollToEnd(true) }), open: openActivity, drawer: () => setDrawer(true), changed: updateSessionActivity });
+    toLatest: () => scrollToEnd(true) }), changed: updateSessionActivity });
 applyPanelLayout();
 setDrawer(false);
 new ResizeObserver(() => {

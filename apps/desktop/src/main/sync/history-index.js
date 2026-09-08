@@ -56,8 +56,6 @@ export class HistoryIndex {
       }) };
   }
 
-  all() { return structuredClone(this.records.map(record => this.render(record))); }
-
   /** @param {any} query */
   page(query = {}) {
     if (!query || typeof query !== "object" || Array.isArray(query)) throw invalid("History query must be an object");

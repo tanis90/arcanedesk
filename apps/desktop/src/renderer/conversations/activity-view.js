@@ -1,29 +1,20 @@
 "use strict";
 
 (() => {
-  const activeStates = new Set(["running", "queued", "waiting_resource", "waiting_user", "stopping"]);
-  const keys = { idle: "activity.idle", running: "chat.task.running", queued: "activity.queued",
-    waiting_resource: "activity.waitingResource", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
-    completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped",
-    interrupted: "chat.task.interrupted", cancelled: "activity.cancelled" };
   const node = (tag, className, text = "") => {
     const element = document.createElement(tag); element.className = className; element.textContent = text; return element;
   };
 
   class ActivityView {
-    constructor({ api, t, getView, open, drawer, changed }) {
-      this.api = api; this.t = t; this.getView = getView; this.open = open; this.changed = changed;
-      this.rows = new Map(); this.items = new Map(); this.notices = new Map();
+    constructor({ api, t, getView, changed }) {
+      this.api = api; this.t = t; this.getView = getView; this.changed = changed;
+      this.rows = new Map();
       this.epoch = null; this.seq = 0; this.pending = []; this.loading = false;
       this.frame = null; this.readPending = false; this.selected = null; this.boundary = null;
-      this.list = document.getElementById("activity-list");
-      this.toggle = document.getElementById("activity-toggle");
       this.error = document.getElementById("activity-error");
       this.jump = document.getElementById("scroll-bottom");
       this.error.addEventListener("click", () => { void this.load(); });
     }
-
-    stateLabel(state) { return this.t(keys[state] ?? "activity.idle"); }
 
     async load() {
       if (this.loading) return;

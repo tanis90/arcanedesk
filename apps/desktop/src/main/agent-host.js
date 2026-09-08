@@ -561,8 +561,6 @@ export class AgentHost {
     return index;
   }
 
-  buildHistory() { return this.historyIndex().all(); }
-
   currentPayload(historyQuery = {}) {
     const page = this.historyIndex().page(historyQuery);
     const messageKeys = new Set(page.history.flatMap(row => [row.key, row.legacyKey]));
