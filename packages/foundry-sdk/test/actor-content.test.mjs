@@ -46,6 +46,7 @@ test("creation sets an explicit prototype name in one write and preserves source
   source.toObject = () => ({ ...toObject(), prototypeToken: { name: "Source", width: 2, height: 3, actorLink: false, texture: { src: "source.webp" } } });
   const result = await f.call("actorCreate", { ...f.identity, source: { kind: "compendium", packId: "test.pack", entryId: "npc" }, name: "New Actor", prototypeToken: { name: "New Token" } });
   assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.verification[0].prototypeToken.name, "New Token");
   const created = f.actors.get(result.steps[0].targets[0].split(".")[1]);
   assert.deepEqual(JSON.parse(JSON.stringify(created.prototypeToken)), { name: "New Token", width: 2, height: 3, actorLink: false, texture: { src: "source.webp" } });
   assert.equal(f.writes(), 1);
@@ -57,6 +58,7 @@ test("blank creation accepts prototype name and omission keeps native behavior",
     const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "npc" }, name: "New Actor", ...(prototypeToken ? { prototypeToken } : {}) });
     assert.equal(result.status, "completed", JSON.stringify(result));
     assert.equal(f.actors.get(result.steps[0].targets[0].split(".")[1]).prototypeToken.name, prototypeToken?.name ?? "Guard");
+    assert.equal(result.verification[0].prototypeToken?.name, prototypeToken?.name);
     assert.equal(f.writes(), 1);
   }
 });
