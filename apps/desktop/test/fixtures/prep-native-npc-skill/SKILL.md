@@ -63,6 +63,38 @@ Use Actor.create({name,type:'npc',system,...}) or actor.update(patch). Unknown k
 | Equipment | `system.quantity`, `system.equipped` when requested. Preserve native weapon activities. NPC `proficient=null` can mean native default; inspect effective data if relevant. |
 | Item charges | Configure `system.uses.max` formula and `.spent`, preserve `.recovery`; verify effective `.max` and `.value` on the embedded Item. |
 
+## Native API examples: use actual field types
+
+These fragments belong inside the execution script above. Variables come from the DM's request and
+resolved sources; they are not another input schema. Only apply the parts relevant to the NPC.
+
+```js
+// actor is the exact new/target NPC. Values were chosen from the request.
+await actor.update({
+  'system.attributes.spellcasting': castingAbility, // scalar 'int', 'wis' or 'cha', NOT an object
+  'system.attributes.spell.level': casterLevel,
+});
+const casterCheck = actor.system.attributes.spellcasting === castingAbility
+  && actor.system.attributes.spell.level === casterLevel;
+// Neither details.spellLevel nor attributes.spellcasting.level is this API.
+
+// Source data is native Item data, preserving actual activities and effects.
+const data = spellSource.toObject();
+delete data._id;
+data._stats = { ...data._stats, compendiumSource: spellSource.uuid };
+if (data.system.level > 0) {
+  data.system.method = 'spell';
+  data.system.prepared = 1; // numeric field, not system.preparation.prepared
+}
+const [spell] = await actor.createEmbeddedDocuments('Item', [data]);
+const spellCheck = spell.system.level === 0
+  || (spell.system.method === 'spell' && spell.system.prepared === 1);
+// In the full task, build one data array and import all selected items together.
+```
+
+A false check is an unresolved requirement. Inspect the actual scalar/number before another patch;
+do not repeatedly update invented nested fields or verify them instead of the current fields.
+
 ## 3. Return evidence, then stop
 
 Return compact actual checks for the DM's requirements, source-mechanic preservation and resource readiness,
