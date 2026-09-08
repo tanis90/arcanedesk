@@ -262,7 +262,9 @@ sceneTokens 读取该世界各 Scene 中真正指向目标 Actor 的 Token，区
 本节为当前合同；R1 计划补齐创建时的原型设置，尚未实现，见第 14.3 节。
 
 输入 `source: {kind:blank,actorType:character|npc} | {kind:compendium,packId,entryId}`、
-`name`；可选 `folderId`、`image: ActorImageInput`、`initialItems: CompendiumGrant[]`。
+`name`；可选 `folderId`、`image: ActorImageInput`、`initialItems: CompendiumGrant[]`、`prototypeToken: { name: string }`。
+prototypeToken 只开放显式名称（非空白，最多 256 字符），随原生创建一次写入，保留来源其他原型字段；
+省略时保持原生行为。创建后名称回读不符返回 partial 并保留角色，不重建。
 initialItems 最多 50。folder 必须是已有 Actor folder；不按名称自动创建目录。
 
 流程：解析合集与资源 → 检查同名/同 request → 建 Actor → 设置图片 → 授初始物品
@@ -961,3 +963,16 @@ baseline 59539de，独立 arcanedesk-prep-e3-baseline checkout 与 SDK 构建。
 若正确率不降、读改链路明确减少且速度支持，则保留；否则撤回能力避免无收益的长期维护。
 预计实现 0.5–1 人天，未来适配 0.25–0.5 人天。用正确创建、来源字段保留、非法字段零写入、
 原生未应用名称时 partial 四类测试验收，再跑真实模型。
+
+E3 结果：候选 ea8454c，benchmark-1788849402218；SDK 95 项、工具契约 6 项通过。
+新旧各 10/10 成功且清理完毕；旧版 10/10 需要 actor_get 和 actor_update，候选 0/10 需要后续 update，
+但仍有 5/10 查询 prototypeToken 作确认。平均工具调用 5.8 → 5.1，p50 13.15 → 12.01 秒（-8.7%），
+候选逐对胜 7/10，逐对变化中位数 -23.5%。[完整统计与调用链](prep-e3-results.json)。
+候选 5 个任务有错误，主要仍是未改动的搜索参数，影响实际总耗时；不删除这些样本。
+决策：保留该字段，创建后修改链路完全消除，正确率不降，速度有支持信号；维护估算仍 0.5–1 人天。
+
+新假设 E3b：创建已核验原型名称，但 verification 只返回角色 name/type，模型 5/10 又读取原型确认。
+下一轮只在显式指定原型名称时把已回读的 prototypeToken.name 放入成功 verification，
+不改变 schema、工具说明、写入方式、系统提示或其他回执。预注册 create_npc 10 组，
+主要看多余 actor_get 是否下降，保持 10/10 正确；成本 0.25–0.5 人天，未来适配 0–0.25 人天。
+如果回读不减少或耗时无支持，不扩展为大对象回执。之后再独立处理 E5 的搜索枚举大小写说明。
