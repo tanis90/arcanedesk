@@ -3,6 +3,22 @@ import test from "node:test";
 import { Value } from "typebox/value";
 import { createFoundryTools } from "../src/main/foundry-tools.js";
 
+test("search exposes a typed batch and rejects ambiguous inputs before dispatch", async () => {
+  const calls = [];
+  const tool = createFoundryTools({ foundryServices: () => ({ contentSearch: async p => { calls.push(p); return { entries: [] }; } }) })
+    .find(t => t.name === "foundry_content_search");
+  assert.equal(tool.parameters.properties.query.type, "string");
+  assert.equal(tool.parameters.properties.queries.type, "array");
+  const shared = { scope: "compendium", documentType: "Item", limit: 10 };
+  for (const input of [{}, { query: "x", queries: ["y"] }, { queries: '["x"]' }, { queries: [] }, { queries: ["x", "x"] }]) {
+    assert.equal((await tool.execute("invalid", { ...shared, ...input })).details.code, "INPUT_INVALID");
+  }
+  assert.equal(calls.length, 0);
+  await tool.execute("batch", { ...shared, queries: ["Fireball", "Quarterstaff"] });
+  await tool.execute("single", { ...shared, query: "Fireball" });
+  assert.deepEqual(calls, [{ ...shared, query: ["Fireball", "Quarterstaff"] }, { ...shared, query: "Fireball" }]);
+});
+
 test("new schemas reject unknown keys and unbounded selectors", () => {
   const tools = new Map(createFoundryTools({}).map(tool => [tool.name, tool]));
   const valid = (name, params) => Value.Check(tools.get(name).parameters, params);

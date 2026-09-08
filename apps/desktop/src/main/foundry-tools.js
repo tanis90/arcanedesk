@@ -41,6 +41,13 @@ const activityInput = exact({
   targetSpec: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 });
 const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Array(ref(), { maxItems: 100 })), input: Type.Optional(activityInput) };
+const searchFields = {
+  scope: Type.Union([Type.Literal("world"), Type.Literal("compendium")]),
+  documentType: Type.Union([Type.Literal("Actor"), Type.Literal("Item"), Type.Literal("Scene")]),
+  packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
+  actorType: Type.Optional(ref()), itemType: Type.Optional(ref()),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()),
+};
 const grant = exact({ packId: ref(), entryId: ref(), expectedName: Type.Optional(ref()), expectedType: Type.Optional(ref()),
   quantity: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })), equipped: Type.Optional(Type.Boolean()) });
 const actorImage = Type.Union([
@@ -124,13 +131,15 @@ export function createFoundryTools(host) {
       "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     defineTool({
       name: "foundry_content_search", label: "Search Foundry Content",
-      description: "Search world Actors/Scenes or compendium Actors/Items by name; Items also match their system identifier across translated names. For multiple names, pass query as an array (up to 16) in one call; entries report matchedQueries and missingQueries lists names absent from all pages. Follow nextCursor for remaining matches. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
-      parameters: exact({ scope: Type.Union([Type.Literal("world"), Type.Literal("compendium")]),
-        documentType: Type.Union([Type.Literal("Actor"), Type.Literal("Item"), Type.Literal("Scene")]),
-        query: Type.Union([Type.String({ maxLength: 256 }), Type.Array(Type.String({ minLength: 1, maxLength: 256 }), { minItems: 1, maxItems: 16, uniqueItems: true })]), packIds: Type.Optional(Type.Array(ref(), { maxItems: 20 })),
-        actorType: Type.Optional(ref()), itemType: Type.Optional(ref()),
-        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
-      execute: async (_id, params, signal) => textResult(await host.foundryServices().contentSearch(params, signal)),
+      description: "Search world Actors/Scenes or compendium Actors/Items by name; Items also match their system identifier across translated names. Supply exactly one: query (one string), or queries (an array of up to 16 names). Combine multiple names in queries, not a JSON-encoded string. Batch entries report matchedQueries and missingQueries lists names absent from all pages. Follow nextCursor for remaining matches. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
+      parameters: Type.Union([
+        exact({ ...searchFields, query: Type.String({ maxLength: 256 }) }),
+        exact({ ...searchFields, queries: Type.Array(Type.String({ minLength: 1, maxLength: 256 }), { minItems: 1, maxItems: 16, uniqueItems: true }) }),
+      ]),
+      execute: async (_id, params, signal) => {
+        const { queries, ...rest } = params;
+        return textResult(await host.foundryServices().contentSearch(queries ? { ...rest, query: queries } : rest, signal));
+      },
     }),
     defineTool({
       name: "foundry_execute_action", label: "Execute Action",
