@@ -1,5 +1,7 @@
 # 备团结构化工具与原生 JS 对比
 
+本文保留早期五题实验协议与结果。当前六题套件的运行方式、设计原则与版本边界见 [benchmark 使用说明](prep-benchmark.md)。
+
 本轮实现已提交为 `38b430b`。此实验不改产品行为，只评估同一版本开启／移除新增备团工具后的任务表现。
 环境使用 QA-A，Kimi `kimi-for-coding-highspeed`，沿用独立加密 provider；auto pack 不修改。
 

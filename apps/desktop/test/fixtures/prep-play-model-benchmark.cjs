@@ -11,7 +11,7 @@ const root = option("qa-root");
 const qaReportPath = option("qa-report");
 if (!root || !qaReportPath) throw Error("--qa-root and --qa-report are required");
 const candidate = path.resolve(__dirname, "../../../..");
-const baseline = path.resolve(option("baseline"));
+const baseline = path.resolve(option("baseline", candidate));
 const samples = Number(option("samples", "10"));
 assert.ok(Number.isInteger(samples) && samples > 0 && samples <= 30);
 app.setPath("userData", root);
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("prep-benchmark", "false") === "true") {
-    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; }, resumePath: option("prep-resume") });
+    await require("./prep-prompt-benchmark.cjs")({ evaluate, report, save, root, runId, store, page, origin, revision: revisions.candidate, samples, setHost: value => { host = value; }, resumePath: option("prep-resume"), promptMode: option("prompt-mode", "production") });
     socket.close(); console.log(JSON.stringify({ status: report.status, output })); app.exit(0); return;
   }
   if (option("edge-cases", "false") === "true") {

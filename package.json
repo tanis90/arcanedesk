@@ -23,6 +23,7 @@
     "pack:check": "node scripts/smoke-packed-packages.mjs",
     "docs:check": "node scripts/check-markdown-links.mjs",
     "verify:repo": "node scripts/verify-repository.mjs",
-    "verify": "npm run verify:repo && npm run docs:check && npm run typecheck && npm test && npm run build && npm run pack:check"
+    "verify": "npm run verify:repo && npm run docs:check && npm run typecheck && npm test && npm run build && npm run pack:check",
+    "benchmark:prep": "node apps/desktop/test/run-prep-benchmark.mjs"
   }
 }
