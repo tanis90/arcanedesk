@@ -1,0 +1,1276 @@
+[
+  {
+    "input": {
+      "className": "artificer",
+      "subclassName": "alchemist",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.0LbXiM6HXvwlI6EI",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.TsvhgdDRQPNMmC01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "魔法工艺 Magical Tinkering",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.tInzXFrwzNnbXE8h",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "施法（奇械师） Spellcasting",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.enRJaReImW7ZVMDY",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "物品注法 Infuse Item",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.V5YioLyAmcWLtZqm",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "奇械师注法",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IrZuNJvar506SCUa",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "奇械师专业 Artificer Specialist",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.7pO8fIZR2rXCHdjF",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "称手工具 The Right Tool For The Job",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.oGTDEbOPlsTke4PS",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "治愈真言 Healing Word",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.o8Dh7fblk1d16tnO",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "致病射线 Ray of Sickness",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.PZQqlG5R6G24aWtm",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "炽焰法球 Flaming Sphere",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.FjYE214HTERCRZNm",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "马友夫强酸箭 Acid Arrow",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.4H6YgYdKgnX6ZQ8M",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "实验性灵药 Experimental Elixir",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.sGggioh8w6WTNUbD",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "炼金术掌握 Alchemical Savant",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i7WUteJZQLyoN9Jn",
+        "optional": false,
+        "level": 5
+      }
+    ],
+    "choices": [
+      {
+        "name": "物品注法",
+        "choices": {
+          "2": {
+            "count": 4,
+            "replacement": false
+          }
+        },
+        "pool": 0
+      },
+      {
+        "name": "选择戏法",
+        "choices": {
+          "1": {
+            "count": 2,
+            "replacement": true
+          },
+          "4": {
+            "count": null,
+            "replacement": true
+          }
+        },
+        "pool": 22
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "warlock",
+      "subclassName": "the-fiend",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.K8769YOGYqLIB902",
+    "spellAccess": {
+      "slots": 2,
+      "level": 3,
+      "source": "CONFIG.DND5E.pactCastingProgression",
+      "scope": "requested class only"
+    },
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "异界宗主 Otherworldly Patron",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rCUSoZKPAorzwiXR",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "契约魔法 Pact Magic",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.D8bK0Szru97X9Qvc",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外魔契师法术 Additional Warlock Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NlynjOtBcxblMOkS",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "魔能祈唤 Eldritch Invocations",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NuxbPM5TkEXEJkKQ",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "额外魔能祈唤选项 Eldritch Invocation Options",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.t26Nd728fW5zskrC",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "魔契恩泽  Pact Boon",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SMJGVQvMPi5cL0iB",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "魔能选项 Eldritch Versatility",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.vLBJr3FWtdYzJfcI",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "黑暗赐福 Dark One's Blessing",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0M65FLBoPzoNWHZH",
+        "optional": false,
+        "level": 1
+      }
+    ],
+    "choices": [
+      {
+        "name": "魔能祈唤",
+        "choices": {
+          "2": {
+            "count": 2,
+            "replacement": false
+          },
+          "5": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 35
+      },
+      {
+        "name": "魔契恩泽",
+        "choices": {
+          "3": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 4
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "bard",
+      "subclassName": "college-of-lore",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.3jSkSIPAb6TSydTL",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.hF3GFBbyWG7GYn01",
+    "spellAccess": {
+      "level": 3,
+      "slotsByLevel": [
+        4,
+        3,
+        2
+      ],
+      "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+      "scope": "requested class only"
+    },
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "诗人激励 Bardic Inspiration",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FSr7TfaoWRPpUtkD",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "施法（吟游诗人）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.HQqte84bGPKQfzv8",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外吟游诗人法术  Additional Bard Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.k1rERcaymVW92mjN",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "万事通 Jack of All Trades",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Sy2nLteEcWYfuoCg",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "休憩曲 Song of Rest",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.slIogwldvla8LbZZ",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "魔法激励  Magical Inspiration",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.pgFefXyCH8wgE0xN",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "吟游诗人学院",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.A26hQgXSyk7O86gN",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "专精 (吟游诗人) Expertise",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.6VAQtlkbL6GIIX8K",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "替换诗人法术  Bardic Versitility",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.6vwfgAaM0sZsXi5H",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "激励之源 Font of Inspiration",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYJ9LCZiQ7rV0ZXl",
+        "optional": false,
+        "level": 5
+      }
+    ],
+    "choices": []
+  },
+  {
+    "input": {
+      "className": "ranger",
+      "subclassName": "hunter",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.6Ce5hGue5OSI2jKj",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.dP3iX2uL3SU5Mq01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "战斗风格 Fighting Style",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0LbuXQnP6LC0gn3H",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "施法（游侠）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.teW7ffezIYtEGx5h",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "额外游侠法术 Additional Ranger Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.W8IgV3zZSWduIjd0",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "额外战斗风格（TCE）Fighting Style Options",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wfzlpRPC5owayAq5",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "法器 Spellcasting Focus",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IyU8WAr5a0PGGWZM",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "游侠范型",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NPczR8Kl9DEMDnFV",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "替换武术Martial Versatility",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bCzTP0sFVSM7nsNl",
+        "optional": false,
+        "level": 4
+      },
+      {
+        "name": "额外攻击",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WKQXfXbifuoCk1V1",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "Favored Enemy",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.4Vpj9vCOB37GtXk6",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "Natural Explorer",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8fbZt2Qh7ZttwIan",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "猎物 Hunter’s Prey",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v4e9dpVoep1w4VAa",
+        "optional": false,
+        "level": 3
+      }
+    ],
+    "choices": [
+      {
+        "name": "1.宿敌/夙敌",
+        "choices": {
+          "1": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 2
+      },
+      {
+        "name": "2.自然探索者/熟练探险家",
+        "choices": {
+          "1": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 2
+      },
+      {
+        "name": "原初意识/原始意识",
+        "choices": {
+          "3": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 2
+      },
+      {
+        "name": "3.熟练探险家额外特性",
+        "choices": {
+          "1": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 1
+      },
+      {
+        "name": "战斗风格 Fighting Style",
+        "choices": {
+          "2": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 7
+      },
+      {
+        "name": "猎物特性",
+        "choices": {
+          "3": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 3
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "cleric",
+      "subclassName": "life-domain",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+    "spellAccess": {
+      "level": 3,
+      "slotsByLevel": [
+        4,
+        3,
+        2
+      ],
+      "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+      "scope": "requested class only"
+    },
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "施法（牧师）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P92k8OSu7UBA9EUy",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "神圣领域",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fdrypzReS8PCtLFN",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外牧师法术 Additional Cleric Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Cnl1XvqavxBl4WUo",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "引导神力：驱散不死生物 Channel Divinity: Turn Undead",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYuxMvRIO9feIxSe",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "神力掌控 Harness Divine Power",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0DjKOCFyAb5mljbS",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "引导神力 Channel Divinity",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "替换戏法 Cantrip Versatility",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FXRY6408tUuCLPqZ",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "摧毁不死生物 Destroy Undead",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0FpisRRfprr7PL8Y",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "祝福术 Bless",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "疗伤术 Cure Wounds",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "次等复原术 Lesser Restoration",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "灵体武器 Spiritual Weapon",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "希望信标 Beacon of Hope",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ZU9d6woBdUP8pIPt",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "回生术 Revivify",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.LmRHHMtplpxr9fX6",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "生命门徒 Disciple of Life",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "引导神力：维持生命 Channel Divinity: Preserve Life",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.cVCWDgOyiytOouwE",
+        "optional": false,
+        "level": 2
+      }
+    ],
+    "choices": [
+      {
+        "name": "牧师戏法",
+        "choices": {
+          "1": {
+            "count": 3,
+            "replacement": false
+          },
+          "4": {
+            "count": 1,
+            "replacement": true
+          }
+        },
+        "pool": 9
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "barbarian",
+      "subclassName": "path-of-the-berserker",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.G7wdU2tyYDn9b527",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.XjAPBLTyScoKwt01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "狂暴 Rage",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gLNFWGL05O0FUNTD",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "无甲防御 (野蛮人) Unarmored Defense",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.yJmyesVEgGP7ZXr1",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "鲁莽攻击 Reckless Attack",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eHoAjddNTEm1m6Gn",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "险境感知 Danger Sense",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rRAhPEBSeVSJ0TS0",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "原初道途",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NiS8Mn1YwNFzXj1l",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "额外攻击",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WKQXfXbifuoCk1V1",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "快速移动 Fast Movement",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nRxAaPdKbTB0Fk6U",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "狂怒 Frenzy",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kp2osKuwC7iEaH6V",
+        "optional": false,
+        "level": 3
+      }
+    ],
+    "choices": []
+  },
+  {
+    "input": {
+      "className": "monk",
+      "subclassName": "way-of-the-open-hand",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.JNX3agrVFrpJYqca",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.UdiF2PfBvmVstQ01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "无甲防御 (武僧) Unarmored Defense",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Wa5rowRAXPUbeKzG",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "武艺 Martial Arts",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Prusg4IgGeNrNNwy",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "气 Ki",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.2N9lOBZ0UerzDM55",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "无甲移动 Unarmored Movement",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.UykmHdtrGsqkDcFs",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "气：疾风连击 Flurry of Blows",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.vLuoFN1x3tRWTPdm",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "气：坚强防御 Patient Defense",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wsvuM0qXEMnmo6bk",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "气：飞檐走壁 Step of the Wind",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gLPcfpXUf336nV4G",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "专用武器Dedicated Weapon",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zAUzDT6vLeJjvnUT",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "name": "修行宗派",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.s6PwD9DZrVZSB4r5",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "拨挡飞弹 Deflect Missiles",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.1hdifLtf7qAjBGP3",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "拨挡飞弹(反弹)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.KaNP1mdUfGFnnwuB",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "驭气以击 Ki-Fueled Attack",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ECu6x73eCp8IKGq7",
+        "optional": true,
+        "level": 3
+      },
+      {
+        "name": "轻身坠 Slow Fall",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.MFSL5ot6qZFel6C2",
+        "optional": false,
+        "level": 4
+      },
+      {
+        "name": "加速愈合Quickened Healing",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8JJgEqQGD4xj4to4",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "额外攻击",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WKQXfXbifuoCk1V1",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "气：震慑拳 Stunning Strike",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.14O6CITjoeogTaqf",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "凝神聚气Focused Aim",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.1E19Tn2jHof6kqSZ",
+        "optional": true,
+        "level": 5
+      },
+      {
+        "name": "散打技巧 Open Hand Technique",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.TW6ka5woO73clsGX",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "散打技巧(倒地)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.oY9fnLAvpFnPMzlu",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "散打技巧(推离)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.OGIFRy1GqUjy0p5D",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "散打技巧(丧失反应)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fA8C3DfWNfShzZi4",
+        "optional": false,
+        "level": 3
+      }
+    ],
+    "choices": []
+  },
+  {
+    "input": {
+      "className": "fighter",
+      "subclassName": "champion",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "回气 Second Wind",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "动作如潮 Action Surge",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "武术范型",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "额外攻击 (战士)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "精通重击 Improved Critical",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+        "optional": false,
+        "level": 3
+      }
+    ],
+    "choices": [
+      {
+        "name": "战斗风格 Fighting Style",
+        "choices": {
+          "1": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 6
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "rogue",
+      "subclassName": "thief",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.6ecMXduZAts7up01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "专精 (游荡者) Expertise",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zwXiai18a2q90THH",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "偷袭 Sneak Attack",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AlFAC3Lz1ud2ry9T",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "盗贼黑话 Thieves'Cant",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eXqCYX6BlKodEbgy",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "灵巧动作 Cunning Action",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.biPF9xysyu0WBtJe",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "灵巧动作-撤离",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.BAA7KbuY83oybZRb",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "灵巧动作-疾走",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i52KGSYIBJySWhXy",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "灵巧动作-躲藏",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.tQYwoAeBY57QvKSM",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "游荡者范型",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8cxR6XZCphM9Y7qx",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "直觉闪避 Uncanny Dodge",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NjaIajsrmNSZY4jO",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "快手 Fast Hands",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nL8KdY6H1RD3FEqC",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "梁上君子 Second-Story Work",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FUwvN3wZZvuWDJDn",
+        "optional": false,
+        "level": 3
+      }
+    ],
+    "choices": []
+  },
+  {
+    "input": {
+      "className": "sorcerer",
+      "subclassName": "draconic-bloodline",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.dLA1lQ2nRUUWFwZU",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.V4Xk3D90t3HpdL01",
+    "spellAccess": {
+      "level": 3,
+      "slotsByLevel": [
+        4,
+        3,
+        2
+      ],
+      "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+      "scope": "requested class only"
+    },
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "术法起源 Sorcerous Origin",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.DEquevqOojTV62qv",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "施法（术士）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.MU6Ah5xgFLUoO0qQ",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外术士法术Additional Sorcerer Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.O2NC9J3QaNjdqzDe",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "魔力泉涌 Font of Magic",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NOMp4AVrFi5GaTCb",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "术法点 Sorcery Points",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Q3AW3csi2dBTMvPm",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "超魔法",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uy9spzWLUgflbPtk",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "额外超魔法选项Metamagic Options",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.1NDFlKVd6mm6K1Fs",
+        "optional": true,
+        "level": 3
+      },
+      {
+        "name": "法力变换Sorcerous Versatility",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.aZJhapP7lW0esvNh",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "魔法指引Magical Guidance",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nkWhDnMPtZYewwyF",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "巨龙先祖 Dragon Ancestor",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.02apnvdAC94ksZIV",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "龙族体魄 Draconic Resilience",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.R9xt1utJwk61sJmR",
+        "optional": false,
+        "level": 1
+      }
+    ],
+    "choices": [
+      {
+        "name": "超魔法",
+        "choices": {
+          "3": {
+            "count": 2,
+            "replacement": false
+          }
+        },
+        "pool": 10
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "wizard",
+      "subclassName": "school-of-evocation",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+    "spellAccess": {
+      "level": 3,
+      "slotsByLevel": [
+        4,
+        3,
+        2
+      ],
+      "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+      "scope": "requested class only"
+    },
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "奥术回想 Arcane Recovery",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "施法（法师）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外法师法术  Additional Wizard Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kguxSknHhFAgJuYg",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "奥术传承",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "戏法公式  Cantrip Formulas",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jxABfDaC7XGVji2k",
+        "optional": true,
+        "level": 3
+      },
+      {
+        "name": "法术塑形 Sculpt Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+        "optional": false,
+        "level": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "input": {
+      "className": "druid",
+      "subclassName": "circle-of-the-moon",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.vIeHGZ1GdlXINSP8",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.0nEK2U1jS5PETo01",
+    "spellAccess": {
+      "level": 3,
+      "slotsByLevel": [
+        4,
+        3,
+        2
+      ],
+      "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+      "scope": "requested class only"
+    },
+    "unresolved": [
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xzAp6LCqoEml2umc",
+        "reason": "linked document edition mismatch"
+      }
+    ],
+    "grants": [
+      {
+        "name": "施法（德鲁伊）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xUZMbvYPBSmVCAHd",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "德鲁伊语",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.OGIREDqYEX5P0Xdh",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "额外德鲁伊法术 Additional Druid Spells",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Js0Gw3ObrSuyKZPO",
+        "optional": true,
+        "level": 1
+      },
+      {
+        "name": "德鲁伊结社",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.V2vrjxj04CXhNYMz",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "荒野形态 Wild Shape",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.pORTgCToV9NLPWo1",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "荒野伙伴 Wild companion",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.OskQEW6LVtTAJKVm",
+        "optional": true,
+        "level": 2
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xzAp6LCqoEml2umc",
+        "optional": true,
+        "level": 4
+      },
+      {
+        "name": "战斗荒野形态 Combat Wild Shape",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ubKkZCuWMutmjDEC",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "结社形态 Circle Forms",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FV1TIQ5RYeA1xmmd",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "战斗荒野形态治疗 (月德)",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CtR6F5RTXFEEp3dI",
+        "optional": true,
+        "level": 2
+      }
+    ],
+    "choices": [
+      {
+        "name": "选择戏法",
+        "choices": {
+          "1": {
+            "count": 2,
+            "replacement": false
+          },
+          "4": {
+            "count": 1,
+            "replacement": true
+          }
+        },
+        "pool": 18
+      }
+    ]
+  },
+  {
+    "input": {
+      "className": "paladin",
+      "subclassName": "oath-of-devotion",
+      "level": 5
+    },
+    "classUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.z1iG3WYuX10Z4oVE",
+    "subclassUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.td4iqgqU7Neeca01",
+    "spellAccess": null,
+    "unresolved": [],
+    "grants": [
+      {
+        "name": "神圣感知 Divine Sense",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8zAjaNHqw1utneKU",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "圣疗 Lay on Hands",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mvfsL7Pp6aCSn6uh",
+        "optional": false,
+        "level": 1
+      },
+      {
+        "name": "战斗风格 Fighting Style",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0LbuXQnP6LC0gn3H",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "施法（圣武士）",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.RSqZldNaZcEiziGq",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "至圣斩 Divine Smite",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xEqX4KGWWY5W1bRE",
+        "optional": false,
+        "level": 2
+      },
+      {
+        "name": "神佑 Divine Health",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SmQiBIv2W4VpQAFU",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "神圣誓言",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.3J9VuFAJehLvYKHX",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "引导神力 Channel Divinity",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "额外攻击",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WKQXfXbifuoCk1V1",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "Channel Divinity: Turn the Unholy",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ZdwGlsJNtc7pGFCd",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "Channel Divinity: Sacred Weapon",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xNN0JMKqlG4hKVYu",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "防护善恶 Protection from Evil and Good",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.xmDBqZhRVrtLP8h2",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "庇护术 Sanctuary",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.gvdA9nPuWLck4tBl",
+        "optional": false,
+        "level": 3
+      },
+      {
+        "name": "次等复原术 Lesser Restoration",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+        "optional": false,
+        "level": 5
+      },
+      {
+        "name": "诚实之域 Zone of Truth",
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CylBa7jR8DSbo8Z3",
+        "optional": false,
+        "level": 5
+      }
+    ],
+    "choices": [
+      {
+        "name": "战斗风格 Fighting Style",
+        "choices": {
+          "2": {
+            "count": 1,
+            "replacement": false
+          }
+        },
+        "pool": 4
+      }
+    ]
+  }
+]

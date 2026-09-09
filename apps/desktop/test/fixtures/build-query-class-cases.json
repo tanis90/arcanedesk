@@ -1,0 +1,67 @@
+[
+  {
+    "className": "artificer",
+    "subclassName": "alchemist",
+    "level": 5
+  },
+  {
+    "className": "warlock",
+    "subclassName": "the-fiend",
+    "level": 5
+  },
+  {
+    "className": "bard",
+    "subclassName": "college-of-lore",
+    "level": 5
+  },
+  {
+    "className": "ranger",
+    "subclassName": "hunter",
+    "level": 5
+  },
+  {
+    "className": "cleric",
+    "subclassName": "life-domain",
+    "level": 5
+  },
+  {
+    "className": "barbarian",
+    "subclassName": "path-of-the-berserker",
+    "level": 5
+  },
+  {
+    "className": "monk",
+    "subclassName": "way-of-the-open-hand",
+    "level": 5
+  },
+  {
+    "className": "fighter",
+    "subclassName": "champion",
+    "level": 5
+  },
+  {
+    "className": "rogue",
+    "subclassName": "thief",
+    "level": 5
+  },
+  {
+    "className": "sorcerer",
+    "subclassName": "draconic-bloodline",
+    "level": 5
+  },
+  {
+    "className": "wizard",
+    "subclassName": "school-of-evocation",
+    "level": 5
+  },
+  {
+    "className": "druid",
+    "subclassName": "circle-of-the-moon",
+    "level": 5
+  },
+  {
+    "className": "paladin",
+    "subclassName": "oath-of-devotion",
+    "level": 5
+  }
+]
