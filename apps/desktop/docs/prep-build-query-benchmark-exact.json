@@ -1,0 +1,4374 @@
+[
+  {
+    "id": "A1",
+    "args": {
+      "className": "wizard",
+      "subclassName": "school-of-evocation",
+      "level": 5,
+      "raceName": "human"
+    },
+    "result": {
+      "version": 6,
+      "level": 5,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+        "name": "法师 Wizard",
+        "type": "class",
+        "identifier": "wizard",
+        "hitDice": "d6",
+        "spellcasting": {
+          "progression": "full",
+          "ability": "int",
+          "preparation": {
+            "formula": "@abilities.int.mod + @classes.wizard.levels"
+          }
+        },
+        "advancements": [
+          {
+            "id": "n6edggokwbjlfwry",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "jdc8290618j69cs9",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+                  "name": "奥术回想 Arcane Recovery",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP",
+                  "name": "施法（法师）",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kguxSknHhFAgJuYg",
+                  "name": "额外法师法术  Additional Wizard Spells",
+                  "type": "feat",
+                  "identifier": "-additional-wizard-spells",
+                  "optional": true
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "kpdt6v1dmng8nr2z",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+                  "name": "奥术传承",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "safxkf7j5j2fc23l",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jxABfDaC7XGVji2k",
+                  "name": "戏法公式  Cantrip Formulas",
+                  "type": "feat",
+                  "identifier": "-cantrip-formulas",
+                  "optional": true
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "r1DG0GF8L6SkLNvq",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:int",
+                "saves:wis"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "6blzmKC4EON0KM2e",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "skills:arc",
+                    "skills:his",
+                    "skills:ins",
+                    "skills:inv",
+                    "skills:med",
+                    "skills:rel"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "JXcSQmjdfaJeSjZ7",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim:dagger",
+                "weapon:sim:dart",
+                "weapon:sim:lightcrossbow",
+                "weapon:sim:quarterstaff",
+                "weapon:sim:sling"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "r4NBaBhA20gUjJ56",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "Cantrips Known",
+            "configuration": {
+              "identifier": "cantrips-known",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 4
+              }
+            }
+          },
+          {
+            "id": "rvfuW71lYEeJW7HS",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 4,
+            "type": "AbilityScoreImprovement",
+            "title": "属性值提升",
+            "configuration": {
+              "points": 2,
+              "fixed": {
+                "str": 0,
+                "dex": 0,
+                "con": 0,
+                "int": 0,
+                "wis": 0,
+                "cha": 0
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+        "name": "塑能学派 School of Evocation",
+        "type": "subclass",
+        "identifier": "school-of-evocation",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "u6mkf8avr1c7kg3x",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+                  "name": "法术塑形 Sculpt Spells",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          }
+        ]
+      },
+      "race": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+        "name": "人类Human",
+        "type": "race",
+        "identifier": "human",
+        "movement": {
+          "walk": "30",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "advancements": [
+          {
+            "id": "Z9hvZFkWUNvowbQX",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 0,
+            "type": "AbilityScoreImprovement",
+            "title": "",
+            "configuration": {
+              "points": 0,
+              "fixed": {
+                "str": 1,
+                "dex": 1,
+                "con": 1,
+                "int": 1,
+                "wis": 1,
+                "cha": 1
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          },
+          {
+            "id": "dNSrZePZHz2qwVpi",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 1,
+            "type": "Size",
+            "title": "",
+            "hint": "Humans vary widely in height and build, from barely 5 feet to well over 6 feet tall. Regardless of your position in that range, your size is Medium.",
+            "configuration": {
+              "sizes": [
+                "med"
+              ]
+            }
+          },
+          {
+            "id": "HI6r4Y6KjHND0i53",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 0,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "languages:standard:common"
+              ],
+              "choices": [
+                {
+                  "count": 1,
+                  "pool": [
+                    "languages:*"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "spellAccess": {
+        "level": 3,
+        "slotsByLevel": [
+          4,
+          3,
+          2
+        ],
+        "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+        "scope": "requested class only"
+      },
+      "spellTables": [],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+          "name": "法师 Wizard",
+          "type": "class",
+          "identifier": "wizard",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+          "name": "塑能学派 School of Evocation",
+          "type": "subclass",
+          "identifier": "school-of-evocation",
+          "rules": "2014",
+          "description": "你专注于研习以魔力创造威力惊人的元素力量，诸如:苦寒、灼焰、惊雷、汲电、烈酸。一些塑能师会接受军队的雇佣，在军队的后方作为在远距离轰炸敌人的“重炮手”。另一些则以其惊人力量四处保护弱小，或是仅仅为满足自身而成为强盗、冒险家、甚至野心勃勃的暴君。 塑能学者Evocation Savant 从第2级你选择该学派起，你向法术书中抄写塑能系法术的时间和金钱花费减半。",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+          "name": "人类Human",
+          "type": "race",
+          "identifier": "human",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+          "name": "奥术回想 Arcane Recovery",
+          "type": "feat",
+          "rules": "2014",
+          "description": "你学会了通过研读法术书来恢复魔法能量的办法。你可以每日使用一次奥术回想，以在你完成一次短休后恢复若干已消耗的法术位，所恢复的法术位环阶总和不得大于你法师等级的一半（向上取整），且任何一枚法术位的环阶都必须小于6环。 例如，作为一名4级法师时，你可恢复环阶总数最多为2的法术位。你可以选择恢复一枚2环法术位或两枚1环法术位。",
+          "descriptionTruncated": false,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP",
+          "name": "施法（法师）",
+          "type": "feat",
+          "rules": "2014",
+          "description": "作为一名奥术魔法的研习者，你拥有一本自己的法术书。书.中所包含的法术隐约透露着你真正的力量。参考施法规则，以及法师法术列表。 戏法Cantrips 第1级时，你从法师法术列表中选择三个戏法作为已知法术。在获得更高的法师等级后你还可以习得其它的戏法，具体数量参见“法师职业表”中“已知戏法”一栏。 法术书Spellbook 第1级时，你得到一本法术书，其中包含了六个自选的1环法师法术。法术书储存着你除戏法外的所有已知法术，而你的戏法则直接铭记在你的脑海中。 法术的准备和施展Preparing and Casting Spells “法师职业表”里记录了你用以施法的1环及更高环阶法术位的数量。施展某个法师法术时，你必须同时消耗其对应环阶的法术位。已消耗的法术位可在完成长休后恢复。 你可以准备一系列符合当前施法条件的法师法术。准备法术时，你从法术书中选择的准备法术总数等于你的智力调整值+你的法师职业等级(最少为1)。另外，你只能准备已经获得相应环阶法术位的法术。 例如，作为一名3级法师时，你拥有四枚1环法术位和两枚2环法术位。假如你的智力为16,则你的准备法术列表可以囊括总共六个1环或2环法术的组合。如果你准备了1环法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.41JIhpDyM9Anm7cs]{魔法飞弹 Magic Missile}，则你可以使用1环或者2环的法术位来施展它。另外，已施展的法术并不会从你的准备列表中移除。 你可以在完成长休后改变你的准备法术列表。如需准备新的法师法术，则需要你再花时间研读你的法术书，并重新记忆所准备法术的咒语和施展动作。准备法术时，法术的每个环阶平均要花费至少1分钟的准备时间。 施法关键属性Spellcasting Ability 你的法术来自你专注的研习和记忆，因此智力是你施展法师.法术的关键属性。每当你的法术需要施法关键属性时均指向你的智力值。而你法师法术的器免DC和攻击检定，则使用你的智力调整值。 法术豁免DC =8+你的熟练加值+你的智力调整值 法术攻击调整值 =你的熟练加",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kguxSknHhFAgJuYg",
+          "name": "额外法师法术  Additional Wizard Spells",
+          "type": "feat",
+          "identifier": "-additional-wizard-spells",
+          "rules": "2014",
+          "description": "下表中的法术扩充了《玩家手册》中的法师法术列表，排序基于法术环阶而非角色等级。表中标出了法术所属的学派，并在在可仪式施法的法术后方追记了仪式标签。若无*号标记，表中法术均来自《玩家手册》（有*标记的法术来自本书第三章）。《姗娜萨的万事指南》也提供了更多法术。 法术环位 法术 戏法 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.pumDQ5z7GSGX16nY]{轰雷剑*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.0TR7HOOqbttnAGzj]{翠炎剑*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9ez2X9q9mQmDqJ8Q]{闪电牵引*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Il0iA9nttKqh0ACr]{心灵之楔*（附魔）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.FbWd9LrvqTSOdKwk]{剑刃爆发*（咒法）} 1环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.aRiWcyTXoQK7Z3ow]{塔莎酸蚀酿*（塑能）} 2环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.4v2H3hHb3Ph9XLNd]{卜筮术（预言，仪式）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9eOZDBImVKxbeOyZ]{强化属性（变化）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.S2Julj2sEMwh4rdc]{塔莎心灵鞭*（附魔）} 3环 @UUID[Compendium.a",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+          "name": "奥术传承",
+          "type": "feat",
+          "rules": "2014",
+          "description": "法师技艺的研习传统由来已久，甚至可以往前追溯到凡人刚发现魔法存在的时期。魔法是奇幻世界不可或缺的部分，其繁复的研习体系则被细分为各不相同的思学传统。 多元宇宙中最常见的奥术传承基于魔法学派进行分类。数个世代以来，法师们已经整理分类了上千个法术，并将其归分称八大类的不同“学派”。一方面，一门奥术传承即是一所学院：法师学徒门可以在幻术学院研习，也可以到临近的附魔学院塔楼里进行研究。另一方面，学派之间更像是同一院校内的不同派系，其相互间则不断竞争着优秀的学徒与资源。即使是那些在与世隔绝的高塔中孤独地培养学徒的法师，也会使用八学派的概念作为一种教学工具，以让学徒们充分掌握各学派法术所存在的不同技术要求。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp09]{防护学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp02]{咒法学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp03]{预言学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp04]{附魔学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp05]{塑能学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp06]{幻术学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp07]{死灵学派} @UUID[Compendium.arcane-dnd5e-2",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jxABfDaC7XGVji2k",
+          "name": "戏法公式  Cantrip Formulas",
+          "type": "feat",
+          "identifier": "-cantrip-formulas",
+          "rules": "2014",
+          "description": "你在法术书中写下了一套奥法公式，并能借此在心中推演出一个戏法。每当你完成一次长休，你可以查阅法术书中所记的公式，以将你的一个已知法师戏法替换为另一个来自法师法术列表的戏法。",
+          "descriptionTruncated": false,
+          "requirements": "法师等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 1,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+          "name": "法术塑形 Sculpt Spells",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第2级起，你的塑能系法术作用范围里可以保留一小部分相对安全的区域。你施展某个塑能系法术时，如果该法术的效应影响你能看见的其他生物，则你可以从中指定一定数量的生物作特殊处理。被指定生物的数量等于1＋该法术的环阶，而被指定生物进行该法术豁免时将直接判为成功，且豁免成功伤害减半的法术此时也不对该生物造成任何伤害",
+          "descriptionTruncated": false,
+          "requirements": "塑能学派等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "法术塑形",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "flags.midi-qol.sculptSpells",
+                  "mode": 2,
+                  "value": "+1",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  },
+  {
+    "id": "A2",
+    "args": {
+      "className": "fighter",
+      "subclassName": "champion",
+      "level": 5,
+      "raceName": "human"
+    },
+    "result": {
+      "version": 6,
+      "level": 5,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "name": "战士 Fighter",
+        "type": "class",
+        "identifier": "fighter",
+        "hitDice": "d10",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "gilq1vjnpur64iv3",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "httwqnsfvwcjbjyc",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+                  "name": "回气 Second Wind",
+                  "type": "feat",
+                  "identifier": "second-wind",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "quc0rwf3eqgj2dyg",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+                  "name": "动作如潮 Action Surge",
+                  "type": "feat",
+                  "identifier": "action-surge",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "4uym61w20kml93uf",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+                  "name": "武术范型",
+                  "type": "feat",
+                  "identifier": "martial-archetype",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "2sp8e2prwjpuoh32",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 5,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+                  "name": "额外攻击 (战士)",
+                  "type": "feat",
+                  "identifier": "extra-attack-fighter",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "wt78ty9vqkbx2how",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "动作如潮次数",
+            "configuration": {
+              "identifier": "action-surge",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 1
+              }
+            }
+          },
+          {
+            "id": "u5uzss2r9fuygelv",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "额外攻击次数",
+            "configuration": {
+              "identifier": "extra-attack",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 1
+              }
+            }
+          },
+          {
+            "id": "6KJ1wz4CENVjg4Mo",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim",
+                "weapon:mar"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "WZLiDroNw8S2pZvD",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "armor:lgt",
+                "armor:med",
+                "armor:hvy",
+                "armor:shl"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "rvfuW71lYEeJW7HS",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 4,
+            "type": "AbilityScoreImprovement",
+            "title": "属性值提升",
+            "configuration": {
+              "points": 2,
+              "fixed": {
+                "str": 0,
+                "dex": 0,
+                "con": 0,
+                "int": 0,
+                "wis": 0,
+                "cha": 0
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          },
+          {
+            "id": "3o2s8ZVAyJd74CrP",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:str",
+                "saves:con"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "JEZnz3P7ydbNAdwN",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "skills:acr",
+                    "skills:ani",
+                    "skills:ath",
+                    "skills:his",
+                    "skills:ins",
+                    "skills:itm",
+                    "skills:prc",
+                    "skills:sur"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "euUOamWwB1JpE9df",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "ItemChoice",
+            "title": "战斗风格 Fighting Style",
+            "hint": "第1级时，从战士可用的战斗风格中选择一项。",
+            "configuration": {
+              "choices": {
+                "1": {
+                  "count": 1,
+                  "replacement": false
+                }
+              },
+              "allowDrops": false,
+              "type": "feat",
+              "pool": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+                  "name": "战斗风格：防御 Fighting Style: Defense",
+                  "type": "feat",
+                  "identifier": "fighting-style-defense",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2，游侠等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+                  "name": "战斗风格：对决 Fighting Style: Dueling",
+                  "type": "feat",
+                  "identifier": "fighting-style-dueling",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级  10，圣武士等级  2，游侠等级 2，剑舞学院等级 3"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+                  "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+                  "type": "feat",
+                  "identifier": "fighting-style-great-weapon-fighting",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+                  "name": "战斗风格：守护 Fighting Style:Protection",
+                  "type": "feat",
+                  "identifier": "fighting-style-protection",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+                  "name": "战斗风格：箭术 Fighting Style: Archery",
+                  "type": "feat",
+                  "identifier": "fighting-style-archery",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，游侠等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+                  "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+                  "type": "feat",
+                  "identifier": "fighting-style-two-weapon-fighting",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级  10，圣武士等级 2，游侠等级 2，剑舞学院等级 3"
+                }
+              ],
+              "spell": null,
+              "restriction": {
+                "type": "class",
+                "subtype": "fightingStyle",
+                "list": []
+              },
+              "excludedByLevel": 0,
+              "eligibilityNote": "Level checked at target level; conditional requirements must be satisfied before selection. Historical acquisition is not validated."
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+        "name": "勇士 Champion",
+        "type": "subclass",
+        "identifier": "champion",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "9gd70onmans30zvr",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+                  "name": "精通重击 Improved Critical",
+                  "type": "feat",
+                  "identifier": "improved-critical",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          }
+        ]
+      },
+      "race": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+        "name": "人类Human",
+        "type": "race",
+        "identifier": "human",
+        "movement": {
+          "walk": "30",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "advancements": [
+          {
+            "id": "Z9hvZFkWUNvowbQX",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 0,
+            "type": "AbilityScoreImprovement",
+            "title": "",
+            "configuration": {
+              "points": 0,
+              "fixed": {
+                "str": 1,
+                "dex": 1,
+                "con": 1,
+                "int": 1,
+                "wis": 1,
+                "cha": 1
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          },
+          {
+            "id": "dNSrZePZHz2qwVpi",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 1,
+            "type": "Size",
+            "title": "",
+            "hint": "Humans vary widely in height and build, from barely 5 feet to well over 6 feet tall. Regardless of your position in that range, your size is Medium.",
+            "configuration": {
+              "sizes": [
+                "med"
+              ]
+            }
+          },
+          {
+            "id": "HI6r4Y6KjHND0i53",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+            "level": 0,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "languages:standard:common"
+              ],
+              "choices": [
+                {
+                  "count": 1,
+                  "pool": [
+                    "languages:*"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "spellAccess": null,
+      "spellTables": [],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+          "name": "战士 Fighter",
+          "type": "class",
+          "identifier": "fighter",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+          "name": "勇士 Champion",
+          "type": "subclass",
+          "identifier": "champion",
+          "rules": "2014",
+          "description": "勇士范型追求在肉体力量上登峰造极。选择此范型的人将战斗训练与强身健体相结合，令自己的攻击无坚不摧。",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5",
+          "name": "人类Human",
+          "type": "race",
+          "identifier": "human",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+          "name": "回气 Second Wind",
+          "type": "feat",
+          "identifier": "second-wind",
+          "rules": "2014",
+          "description": "你拥有少量的精力储备，可以用来保护自己免受伤害。你可以在自己回合内用一个附赠动作恢复生命值，其总值为[[/r 1d10]]＋你的战士职业等级。你必须完成一次短休或长休才能再次使用该特性。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "heal",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+          "name": "动作如潮 Action Surge",
+          "type": "feat",
+          "identifier": "action-surge",
+          "rules": "2014",
+          "description": "第2级起，你可以在短时间内突破极限，以使你在自己回合内执行一个额外的动作。 该特性在使用后必须完成一次短休或长休才能再次使用。第17级起，你可以在休息前使用两次该特性，但每个回合只能使用一次。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "@scale.fighter.action-surge",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+          "name": "武术范型",
+          "type": "feat",
+          "identifier": "martial-archetype",
+          "rules": "2014",
+          "description": "第3级时，你选择一种范型以体现你的战斗风格和技巧。你可以从以下范型中选择其一。随后，你将在第3、第7、第10、第15、第18级获得所选范型的相应特性。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs01]{勇士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs02]{战斗大师} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs03]{奥法骑士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs04]{紫龙骑士（SCAG）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs05]{武士（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs06]{魔射手（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs07]{骑兵（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs08]{回音骑士（EGtW）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs09]{符文骑士（TCE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJ",
+          "descriptionTruncated": true,
+          "requirements": "战士等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+          "name": "额外攻击 (战士)",
+          "type": "feat",
+          "identifier": "extra-attack-fighter",
+          "rules": "2014",
+          "description": "第5级起，你在自己回合内执行攻击动作时可以发动两次攻击而非一次。 第11级后，你可以攻击三次。第20级后，你可以攻击四次。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 5",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+          "name": "战斗风格：防御 Fighting Style: Defense",
+          "type": "feat",
+          "identifier": "fighting-style-defense",
+          "rules": "2014",
+          "description": "着装护甲时，你的AC获得 +1加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2，游侠等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "战斗风格：防御",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.attributes.ac.bonus",
+                  "mode": 2,
+                  "value": "+1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+          "name": "战斗风格：对决 Fighting Style: Dueling",
+          "type": "feat",
+          "identifier": "fighting-style-dueling",
+          "rules": "2014",
+          "description": "单手持用一把近战武器，且并未同时持用其他武器时，你用该武器攻击的伤害掷骰获得 +2加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级  10，圣武士等级  2，游侠等级 2，剑舞学院等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+          "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+          "type": "feat",
+          "identifier": "fighting-style-great-weapon-fighting",
+          "rules": "2014",
+          "description": "双手持用一把近战武器发动攻击时，如果你的伤害掷骰掷出1或2，则可以选择重掷。不过哪怕其仍是1或2，你都必须接受重掷的数值。此外，该武器必须具有双手或两用属性。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+          "name": "战斗风格：守护 Fighting Style:Protection",
+          "type": "feat",
+          "identifier": "fighting-style-protection",
+          "rules": "2014",
+          "description": "当某个你能看见的生物攻击你身边5尺内除你之外的目标时，你可以用反应迫使该攻击的攻击检定具有劣势。此时你必须持用盾牌。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "activities": [
+            {
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+          "name": "战斗风格：箭术 Fighting Style: Archery",
+          "type": "feat",
+          "identifier": "fighting-style-archery",
+          "rules": "2014",
+          "description": "你使用远程武器进行攻击检定时具有 +2加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，游侠等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "战斗风格：箭术",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.bonuses.rwak.attack",
+                  "mode": 2,
+                  "value": "+2"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+          "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+          "type": "feat",
+          "identifier": "fighting-style-two-weapon-fighting",
+          "rules": "2014",
+          "description": "使用两把武器战斗时，你可以将相应属性调整值加到第二次攻击的伤害上。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级  10，圣武士等级 2，游侠等级 2，剑舞学院等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+          "name": "精通重击 Improved Critical",
+          "type": "feat",
+          "identifier": "improved-critical",
+          "rules": "2014",
+          "description": "从你第3级选择此范型起，你的武器攻击在掷出19或20时即可造成重击。",
+          "descriptionTruncated": false,
+          "requirements": "勇士等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "精通重击",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "flags.dnd5e.weaponCriticalThreshold",
+                  "mode": 0,
+                  "value": "19",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  },
+  {
+    "id": "A3",
+    "args": {
+      "className": "cleric",
+      "subclassName": "life-domain",
+      "level": 3,
+      "raceName": "hill-dwarf"
+    },
+    "result": {
+      "version": 6,
+      "level": 3,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+        "name": "牧师 Cleric",
+        "type": "class",
+        "identifier": "cleric",
+        "hitDice": "d8",
+        "spellcasting": {
+          "progression": "full",
+          "ability": "wis",
+          "preparation": {
+            "formula": "@abilities.wis.mod + @classes.cleric.levels"
+          }
+        },
+        "advancements": [
+          {
+            "id": "cycx5dd96vnrmegw",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "9a3oxql3z85383v8",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P92k8OSu7UBA9EUy",
+                  "name": "施法（牧师）",
+                  "type": "feat",
+                  "identifier": "spellcasting-cleric",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fdrypzReS8PCtLFN",
+                  "name": "神圣领域",
+                  "type": "feat",
+                  "identifier": "divine-domain",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Cnl1XvqavxBl4WUo",
+                  "name": "额外牧师法术 Additional Cleric Spells",
+                  "type": "feat",
+                  "identifier": "-additional-cleric-spells",
+                  "optional": true
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "jdnp5sqty5fbsico",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYuxMvRIO9feIxSe",
+                  "name": "引导神力：驱散不死生物 Channel Divinity: Turn Undead",
+                  "type": "feat",
+                  "identifier": "channel-divinity-turn-undead",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0DjKOCFyAb5mljbS",
+                  "name": "神力掌控 Harness Divine Power",
+                  "type": "feat",
+                  "identifier": "-harness-divine-power",
+                  "optional": true
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk",
+                  "name": "引导神力 Channel Divinity",
+                  "type": "feat",
+                  "identifier": "channel-divinity",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "65dljdetblkz5zkp",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "引导神力次数",
+            "configuration": {
+              "identifier": "channel-divinity",
+              "type": "string",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": "1"
+              }
+            }
+          },
+          {
+            "id": "bcFNu9fM4o5He4J7",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:wis",
+                "saves:cha"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "6YQrE9NkjbvhfN8F",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "skills:his",
+                    "skills:ins",
+                    "skills:med",
+                    "skills:per",
+                    "skills:rel"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "vLDkTMgod0IS4HJn",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "armor:lgt",
+                "armor:med",
+                "armor:shl"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "uyLXlhMnjMSHHdbs",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "b6vbDSfWTwxqyTke",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "Cantrips Known",
+            "configuration": {
+              "identifier": "cantrips-known",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 3
+              }
+            }
+          },
+          {
+            "id": "WWI2mQpJAQB6Qm62",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+            "level": null,
+            "type": "ItemChoice",
+            "title": "牧师戏法",
+            "configuration": {
+              "allowDrops": true,
+              "choices": {
+                "1": {
+                  "count": 3,
+                  "replacement": false
+                }
+              },
+              "pool": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.P7mF2MxSuVJwHRRY",
+                  "name": "神导术 Guidance",
+                  "type": "spell",
+                  "identifier": "guidance",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Bnn9Nzajixvow9xi",
+                  "name": "光亮术 Light",
+                  "type": "spell",
+                  "identifier": "light",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.kjmjY0zlE6IEiQVL",
+                  "name": "修复术 Mending",
+                  "type": "spell",
+                  "identifier": "mending",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.dl8YwvMboBqX2OC4",
+                  "name": "抵抗术 Resistance",
+                  "type": "spell",
+                  "identifier": "resistance",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.n9pJzTDsAwQxJVRl",
+                  "name": "圣火术 Sacred Flame",
+                  "type": "spell",
+                  "identifier": "sacred-flame",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8zT7njvqbpXs4Cel",
+                  "name": "维生术 Spare the Dying",
+                  "type": "spell",
+                  "identifier": "spare-the-dying",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.MUO1uYN7JR1hm4dR",
+                  "name": "奇术 Thaumaturgy",
+                  "type": "spell",
+                  "identifier": "thaumaturgy",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.iTvzofXQ9Ebrq73c",
+                  "name": "亡者丧钟 Toll the Dead",
+                  "type": "spell",
+                  "identifier": "toll-the-dead",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EoHUtMRA7ftylPNt",
+                  "name": "光耀祷词 Word of Radiance",
+                  "type": "spell",
+                  "identifier": "word-of-radiance",
+                  "eligibility": "level-eligible",
+                  "requirements": ""
+                }
+              ],
+              "spell": {
+                "ability": [
+                  "wis"
+                ],
+                "uses": {
+                  "max": "",
+                  "per": "",
+                  "requireSlot": false
+                },
+                "method": "spell",
+                "prepared": 0
+              },
+              "type": "spell",
+              "restriction": {
+                "level": "",
+                "list": []
+              },
+              "excludedByLevel": 0,
+              "eligibilityNote": "Level checked at target level; conditional requirements must be satisfied before selection. Historical acquisition is not validated."
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+        "name": "生命领域 Life Domain",
+        "type": "subclass",
+        "identifier": "life-domain",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "lowv6o578jo7dqnq",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "获得领域法术",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+                  "name": "祝福术 Bless",
+                  "type": "spell",
+                  "identifier": "bless",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+                  "name": "疗伤术 Cure Wounds",
+                  "type": "spell",
+                  "identifier": "cure-wounds",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "hae6czro96iqw4dp",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "获得领域法术",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+                  "name": "次等复原术 Lesser Restoration",
+                  "type": "spell",
+                  "identifier": "lesser-restoration",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+                  "name": "灵体武器 Spiritual Weapon",
+                  "type": "spell",
+                  "identifier": "spiritual-weapon",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "2pbio9g7r1c48uqm",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu",
+                  "name": "生命门徒 Disciple of Life",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "w23y6jcwldhqnfh2",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.cVCWDgOyiytOouwE",
+                  "name": "引导神力：维持生命 Channel Divinity: Preserve Life",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "x82gvlwrOz6XTaID",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "armor:hvy"
+              ],
+              "choices": []
+            }
+          }
+        ]
+      },
+      "race": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+        "name": "丘陵矮人Hill Dwarf",
+        "type": "race",
+        "identifier": "hill-dwarf",
+        "movement": {
+          "walk": "25",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "advancements": [
+          {
+            "id": "tNfLTuoHfvAxg2FC",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "ItemGrant",
+            "title": "",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.mbBENsVQ1abapmm8",
+                  "name": "矮人体魄(矮人)",
+                  "type": "feat",
+                  "identifier": "dwarven-resilience",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.znrZOqF2J2YYw22O",
+                  "name": "矮人战斗熟练项(矮人)",
+                  "type": "feat",
+                  "identifier": "dwarven-combat-training",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.qwYhHBO8PATKs1vL",
+                  "name": "矮人工具熟练(矮人)",
+                  "type": "feat",
+                  "identifier": "dwarven-tool-proficiency",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.g8kRXKDNt5DniOel",
+                  "name": "石中精妙(矮人)",
+                  "type": "feat",
+                  "identifier": "stonecunning",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.wUkIW5Nfcxad3qlY",
+                  "name": "黑暗视觉 (通用)",
+                  "type": "feat",
+                  "identifier": "darkvision",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.p3thQu1DkOgiNA10",
+                  "name": "矮人刚毅(矮人)",
+                  "type": "feat",
+                  "identifier": "dwarven-toughness",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": {
+                "ability": [
+                  ""
+                ],
+                "uses": {
+                  "max": "",
+                  "per": "",
+                  "requireSlot": false
+                },
+                "prepared": 0
+              }
+            }
+          },
+          {
+            "id": "Z9hvZFkWUNvowbQX",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "AbilityScoreImprovement",
+            "title": "",
+            "configuration": {
+              "points": 0,
+              "fixed": {
+                "str": 0,
+                "dex": 0,
+                "con": 2,
+                "int": 0,
+                "wis": 1,
+                "cha": 0
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          },
+          {
+            "id": "kdMPoRp3j1uOHQom",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 1,
+            "type": "Size",
+            "title": "",
+            "hint": "Dwarves stand between 4 and 5 feet tall and average about 150 pounds. Your size is Medium.",
+            "configuration": {
+              "sizes": [
+                "med"
+              ]
+            }
+          },
+          {
+            "id": "rmcKuRQ2Laloq1xp",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "languages:standard:common",
+                "languages:standard:dwarvish"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "5zWGcz9uAerx3Dh5",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "Trait",
+            "title": "矮人体魄",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "dr:poison"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "J0UGmCyMy6thWDeU",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "Trait",
+            "title": "矮人战斗熟练项",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim:handaxe",
+                "weapon:sim:lighthammer",
+                "weapon:mar:battleaxe",
+                "weapon:mar:warhammer"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "9CYW7Bj53L9G8Zsw",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+            "level": 0,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 1,
+                  "pool": [
+                    "tool:art:brewer",
+                    "tool:art:mason",
+                    "tool:art:smith"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "spellAccess": {
+        "level": 2,
+        "slotsByLevel": [
+          4,
+          2
+        ],
+        "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+        "scope": "requested class only"
+      },
+      "spellTables": [
+        {
+          "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+          "interpretation": "linked-spells-not-assumed-granted",
+          "entries": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+              "name": "祝福术 Bless",
+              "type": "spell",
+              "identifier": "bless",
+              "spellLevel": 1,
+              "eligibility": "level-eligible"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+              "name": "疗伤术 Cure Wounds",
+              "type": "spell",
+              "identifier": "cure-wounds",
+              "spellLevel": 1,
+              "eligibility": "level-eligible"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+              "name": "次等复原术 Lesser Restoration",
+              "type": "spell",
+              "identifier": "lesser-restoration",
+              "spellLevel": 2,
+              "eligibility": "level-eligible"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+              "name": "灵体武器 Spiritual Weapon",
+              "type": "spell",
+              "identifier": "spiritual-weapon",
+              "spellLevel": 2,
+              "eligibility": "level-eligible"
+            }
+          ]
+        }
+      ],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+          "name": "牧师 Cleric",
+          "type": "class",
+          "identifier": "cleric",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+          "name": "生命领域 Life Domain",
+          "type": "subclass",
+          "identifier": "life-domain",
+          "rules": "2014",
+          "description": "生命领域专注于活跃的正能量,其既是组成字宙的主能量之一，也是维持所有生命延续的基础。生命之神的神职就是恢复人们的健康和伤痛,照顾需要帮助者，同时对抗死亡和不死的力量。几乎所有的非邪恶神衹都可以宣称在这一领域有影响， 特别是农业神(如裳提亚Chauntea、阿拉瓦依Arawai和德墨忒尔Demeter)、太阳神(洛山达Lathander、培罗Pelor 和拉.赫拉克提Re-Horakhty)、医疗或者坚韧之神(如伊尔马特Ilmater、 米莎凯Mishakal、阿波罗Apollo和迪安斯彻特Diancecht) 以及家庭和社会之神(如赫斯提亚Hestia,哈托尔Hathor和博得雷Boldrei)。 牧师等级 法术 1st @UUID[Compendium.arcane-dnd5e-2014-automation.spells.8dzaICjGy6mTUaUr]{祝福术}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.uUWb1wZgtMou0TVP]{疗伤术} 3rd @UUID[Compendium.arcane-dnd5e-2014-automation.spells.F0GsG0SJzsIOacwV]{次级复原术}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.JbxsYXxSOTZbf9I0]{灵体武器} 5th @UUID[Compendium.arcane-dnd5e-2014-automation.spells.ZU9d6woBdUP8pIPt]{希望信标}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.LmRHHMtplpxr9fX6]{回生术} 7th @UUID[Compendium.arcane-dnd5e-2014-automation.spells.VtCXMdyM6mAdIJZb]{防死结界}@UUID[Compendium.arcane-dnd5e-2014-autom",
+          "descriptionTruncated": true,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4",
+          "name": "丘陵矮人Hill Dwarf",
+          "type": "race",
+          "identifier": "hill-dwarf",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+          "name": "祝福术 Bless",
+          "type": "spell",
+          "identifier": "bless",
+          "rules": "2014",
+          "description": "你用言语祝福施法距离内至多三个生物。在法术终止前，每当受术目标进行攻击检定或豁免检定时，可以额外掷一次 d4 并加在其结果上。 升环施法。 使用二环或更高法术位施展该法术时，你使用的法术位每比一环高一环，就可以多指定一个目标。 English You bless up to three creatures of your choice within range. Whenever a target makes an attack rol",
+          "descriptionTruncated": true,
+          "spellLevel": 1,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "祝福术 Bless",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "bless:bless",
+              "disabled": false,
+              "transfer": false,
+              "changes": [
+                {
+                  "key": "system.bonuses.mwak.attack",
+                  "mode": 2,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "system.bonuses.msak.attack",
+                  "mode": 2,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "system.bonuses.rwak.attack",
+                  "mode": 2,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "system.bonuses.rsak.attack",
+                  "mode": 2,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "system.bonuses.abilities.save",
+                  "mode": 2,
+                  "value": "1d4",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+          "name": "疗伤术 Cure Wounds",
+          "type": "spell",
+          "identifier": "cure-wounds",
+          "rules": "2014",
+          "description": "一个你触碰的生物恢复特定数值的生命值，其恢复量等于 1d8+你的施法属性调整值。该法术对亡灵和构装生物无效。 升环施法。使用二环或更高法术位施展该法术时，你使用的法术位每比一环高一环，恢复量就增加 1d8。 English A creature you touch regains a number of hit points equal to 1d8 + your spellcasting ability modifier. This ",
+          "descriptionTruncated": true,
+          "spellLevel": 1,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "疗伤术 Cure Wounds",
+              "type": "heal"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+          "name": "次等复原术 Lesser Restoration",
+          "type": "spell",
+          "identifier": "lesser-restoration",
+          "rules": "2014",
+          "description": "你触碰一个生物，并终止正影响它的一项疾病或一种状态。该状态可以是目盲，耳聋，麻痹或中毒其一。 English You touch a creature and can end either one disease or one condition afflicting it. The condition can be blinded, deafened, paralyzed, or poisoned.",
+          "descriptionTruncated": false,
+          "spellLevel": 2,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "次等复原术 Lesser Restoration",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+          "name": "灵体武器 Spiritual Weapon",
+          "type": "spell",
+          "identifier": "spiritual-weapon",
+          "rules": "2014",
+          "description": "Arcane BG3 简化流程（不是 2014 RAW） 本法术创建一枚拥有独立 Token、生命值、Combatant 和回合的灵体武器 Actor；它不是施法者回合内的武器标记。 1. 命名 profile。 在角色卡或 turn-context 中选择 Greataxe、Greatsword、Halberd、Maul、Spear 或 Trident 六个命名 Cast profile 之一；缺失或非法选择会在消耗附赠动作和法术位前",
+          "descriptionTruncated": true,
+          "spellLevel": 2,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Greataxe",
+              "type": "summon"
+            },
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Greatsword",
+              "type": "summon"
+            },
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Halberd",
+              "type": "summon"
+            },
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Maul",
+              "type": "summon"
+            },
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Spear",
+              "type": "summon"
+            },
+            {
+              "name": "召唤灵体武器 Summon Spiritual Weapon: Trident",
+              "type": "summon"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P92k8OSu7UBA9EUy",
+          "name": "施法（牧师）",
+          "type": "feat",
+          "identifier": "spellcasting-cleric",
+          "rules": "2014",
+          "description": "你作为神圣力量的导体得以施展牧师法术。参考施法规则，以及牧师法术列表。 戏法Cantrips 第1级时，你选择三个牧师法术列表中的戏法作为已知法术。在获得更高的牧师等级后你还可以习得其它的戏法，具体数据参见“牧师职业表”中“已知戏法”一栏。 法术的准备与施展Preparing and Casting Spells “牧师职业表”里记录了你用以施法的1环及更高环阶法术位的数量。施展某个牧师法术时，你必须同时消耗其对应环阶的法术位。已消耗的法术位可在完成长休后恢复。 你可以准备牧师法术列表中所有符合当前施展条件的法术。准备法术时，你所准备法术的总数等于你的感知调整值+你的牧师职业等级(最少可以准备一个)。另外，你只能准备已经获得相应环阶法术位的法术。 例如，作为一名3级牧师时，你拥有四枚1环法术位和两枚2环法术位。假如你的感知为16，则你的准备法术列表可以囊括总共六个1环或2环法术的组合。如果你准备了1环法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.uUWb1wZgtMou0TVP]{疗伤术 Cure Wounds}，则你可以使用1环或者2环的法术位来施展它。另外，已施展的法术并不会从你的准备列表中移除。 你可以在完成长休后改变你的准备法术列表。如需准备新的牧师法术，则需要你再花时间进行祈祷和冥想。准备法术时，法术的每个环阶平均要花费至少1分钟的准备时间。 施法关键属性Spellcasting Ability 你的法术力量来源于你对神衹的信仰，因此感知是你施展牧师法术的关键属性。每当你的牧师法术需要施法关键属性时均指向你的感知值。而你牧师法术的豁免DC和攻击检定，则使用你的感知调整值。 法术豁免DC =8+你的熟练加值+你的感知调整值 法术攻击调整值 =你的熟练加值+你的感知调整值 仪式施法Ritual Casting 如果你所准备牧师法术中的某法术有带仪式标签，则你可以用这些法术进行仪式施法。 法器Spellcasting Focus 你可以使用圣徽作为施展牧师法术的法器。",
+          "descriptionTruncated": false,
+          "requirements": "牧师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fdrypzReS8PCtLFN",
+          "name": "神圣领域",
+          "type": "feat",
+          "identifier": "divine-domain",
+          "rules": "2014",
+          "description": "在万神殿中，每个神衹都会对凡人生活和文明的特定方面生影响，亦即相应神衹的领域。一名神衹所有掌管的领域被称作为其神职。例如，希腊神衹阿波罗的神职即包含有知识、生俞和光明领域。作为一个牧师，你将选择神衹职能的其中一个方面来着重体现，同时你也将被授予有关该额域的部分权能。 你的选择可能对应于献身神衹的其中-一个特别教派。还是阿波罗为例，他在某个地区被崇敬以福玻斯(“光耀\")阿波罗之名，他们强调了池在光明领城造成的影响:而在另个地区则被称为阿波罗阿刻西俄斯(“医师”),强调池的教团着重于生命领域。作为另一可能，你对领域的选择也可以只是单纯由于个人偏好，然后再去选择可以满足你这方面要求的神衹。 每个领域的描述中都提供了在相应领域具影响力的神衹例子。范例中的神衹可能来自包括费伦。灰鹰、龙枪和艾伯伦等战役设定集的世界中，也可能来自凯尔特、希脑。北欧和埃及的古老神话。 你将选择一个与你所信仰神衹的神职相关的神圣领域。你可以从以下领域中选择其一。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i14]{知识领域} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i02]{生命领域} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i03]{光明领域} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i04]{自然领域} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i05]{风暴领域} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.k0Edsji19UVt4i06]",
+          "descriptionTruncated": true,
+          "requirements": "牧师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Cnl1XvqavxBl4WUo",
+          "name": "额外牧师法术 Additional Cleric Spells",
+          "type": "feat",
+          "identifier": "-additional-cleric-spells",
+          "rules": "2014",
+          "description": "下方列出的法术是对玩家手册中牧师法术列表的补充。若一个法术能够以仪式施法的方式施展，那么仪式标签会记在法术名字后方。除了标有星号(说明这是一个来自第三章的法术)的法术以外，其他法术均来自玩家手册。萨娜珊的万事指南中也提供了更多的法术。 环阶 法术 三环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.XfYgB18GC8OgETjG]{活力灵光}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.TH2wXQ3yssrGZ821]{魂灵环绕*} 四环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.9WDd3gopYOGyYnrT]{生命灵光}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.ujZGFLEqgI0L6oli]{净化灵光} 五环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.XT7nzJmVGgv73uaf]{召唤天界生物*} 六环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.2RC0EyvBLPH88PZF]{阳炎射线} 八环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.hzK7FQya0BDjSmLE]{阳炎爆} 九环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.FfrtzwJUyOdNzB5q]{律令医疗}",
+          "descriptionTruncated": false,
+          "requirements": "牧师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYuxMvRIO9feIxSe",
+          "name": "引导神力：驱散不死生物 Channel Divinity: Turn Undead",
+          "type": "feat",
+          "identifier": "channel-divinity-turn-undead",
+          "rules": "2014",
+          "description": "你以一个动作展示你的圣徽，并说出一段谴责不死生物的祷言。你身边30尺范围内能够看到圣徽或听到你祷言的不死生物必须进行一次感知豁免，豁免失败则受到驱散，其效应持续1分钟或直到其受到任何伤害。 一个被驱散的生物必须花费其回合内的所有速度尽力远离你，而且无法主动靠近你30尺内。被驱散的生物无法使用反应，只能使用既有的疾走Dash动作或从任何妨碍他们移动的效应中挣脱。该生物无路可走时，将会使用“回避Dodge”动作。",
+          "descriptionTruncated": false,
+          "requirements": "牧师等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "type": "save",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1",
+                    "target": "channel-divinity"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              },
+              "damage": {
+                "onSave": "half",
+                "critical": {
+                  "allow": false
+                }
+              },
+              "save": {
+                "ability": [
+                  "wis"
+                ],
+                "dc": {
+                  "calculation": "spellcasting"
+                }
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "Turned Undead",
+              "disabled": false,
+              "transfer": false
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0DjKOCFyAb5mljbS",
+          "name": "神力掌控 Harness Divine Power",
+          "type": "feat",
+          "identifier": "-harness-divine-power",
+          "rules": "2014",
+          "description": "你可以花费一次你的@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.WPevnsjK8Cjd9Fcl]{引导神力}次数来充能你的法术。你可以用一个附赠动作触碰你的圣徽并祈祷，你恢复一个环阶不超过你熟练加值的一半（向上取整）的法术位。",
+          "descriptionTruncated": false,
+          "requirements": "牧师等级 2、6、18",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "@scale.cleric.channel-divinity",
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ],
+            "spent": 0
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "target": "channel-divinity",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk",
+          "name": "引导神力 Channel Divinity",
+          "type": "feat",
+          "identifier": "channel-divinity",
+          "rules": "2014",
+          "description": "你的誓言使你获得引导神祇所授神圣能量的能力，引导的能量将用以实现各种魔法效应。誓言赋予的相应效应，可以参考相关誓言的描述内容。 引导神力时，神力最终产生的效应由你自行选择。引导神力后，你必须完成一次短休或长休才能再次使用该特性。 某些引导神力的效应需要豁免，其豁免DC等于你的圣武士法术豁免DC。 *classpack注：作为总的引导神力项使用",
+          "descriptionTruncated": false,
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "spent": 0
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.P7mF2MxSuVJwHRRY",
+          "name": "神导术 Guidance",
+          "type": "spell",
+          "identifier": "guidance",
+          "rules": "2014",
+          "description": "你触碰一个自愿的生物。在法术终止前，目标可以选择在一次属性检定时额外掷一粒 d4，并将所得数值加入检定结果中。它可以在进行属性检定之前或之后掷骰。法术随后即终止。 English You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one ability chec",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "神导术 Guidance",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "guidance:guidance",
+              "disabled": false,
+              "transfer": false,
+              "changes": [
+                {
+                  "key": "flags.midi-qol.optional.guidance.check.all",
+                  "mode": 5,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.guidance.skill.all",
+                  "mode": 5,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.guidance.label",
+                  "mode": 5,
+                  "value": "Guidance (+1d4)",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.guidance.count",
+                  "mode": 5,
+                  "value": "1",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Bnn9Nzajixvow9xi",
+          "name": "光亮术 Light",
+          "type": "spell",
+          "identifier": "light",
+          "rules": "2014",
+          "description": "你触碰一个尺寸在任意方向上都不超过 10 尺的物件。在法术终止前，物件将在其 20 尺半径范围内发出明亮光照，并在其外 20 尺范围发出微光光照。光的颜色由你决定，该物件被不透明的东西完全遮盖时，其光照被遮挡。如果你再次施展该法术，或者使用一个动作解散该法术，则该法术终止。如果你指定敌对生物所持握或着装的一个物件作为目标，则该生物必须进行一次敏捷豁免以尝试摆脱该法术的效应。 English You touch one object th",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "光亮术 Light",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "Light",
+              "disabled": false,
+              "transfer": false,
+              "changes": [
+                {
+                  "key": "ATL.light.bright",
+                  "mode": 4,
+                  "value": "20",
+                  "priority": 20
+                },
+                {
+                  "key": "ATL.light.dim",
+                  "mode": 4,
+                  "value": "40",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.kjmjY0zlE6IEiQVL",
+          "name": "修复术 Mending",
+          "type": "spell",
+          "identifier": "mending",
+          "rules": "2014",
+          "description": "该法术修复你所触碰一个物件上的一处破损或裂缝，例如修复一条断裂的链条，或者一把碎成两半的钥匙、一件撕裂的斗篷、一个漏了的酒袋等。只要破损或断裂处在任意方向上都不超过 1 尺，你就可以不留痕迹地修复它。 该法术可以从物理上修复一件魔法物品或一个构装生物，但不会恢复这类物件上的魔法。 English This spell repairs a single break or tear in an object you touch, such ",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "Cast",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.dl8YwvMboBqX2OC4",
+          "name": "抵抗术 Resistance",
+          "type": "spell",
+          "identifier": "resistance",
+          "rules": "2014",
+          "description": "你触碰一个自愿的生物。在法术终止前，目标可以选择在一次豁免检定时额外掷一粒 d4，并将所得数值加入检定结果中。他可以在进行豁免检定之前或之后掷骰。法术随后即终止。 English You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one saving throw",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "抵抗术 Resistance",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "Resistance",
+              "disabled": false,
+              "transfer": false,
+              "changes": [
+                {
+                  "key": "flags.midi-qol.optional.resistance.save.all",
+                  "mode": 5,
+                  "value": "1d4",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.resistance.label",
+                  "mode": 5,
+                  "value": "Resistance (+1d4)",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.resistance.count",
+                  "mode": 5,
+                  "value": "1",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.n9pJzTDsAwQxJVRl",
+          "name": "圣火术 Sacred Flame",
+          "type": "spell",
+          "identifier": "sacred-flame",
+          "rules": "2014",
+          "description": "如同火焰般的辉光向施法距离内你能看见的一个生物倾泻而下。目标必须要进行一次敏捷豁免，豁免失败则受到 1d8 点光耀伤害。目标在这次豁免检定中无法获得掩护的增益。 你到达 5 级时，该法术的伤害增加 1d8（变为 2d8）。11 级时再加 1d8（变为 3d8），17 级时再加 1d8（变为 4d8）。 English Flame-like radiance descends on a creature that you can see ",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "圣火术 Sacred Flame",
+              "type": "save"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8zT7njvqbpXs4Cel",
+          "name": "维生术 Spare the Dying",
+          "type": "spell",
+          "identifier": "spare-the-dying",
+          "rules": "2014",
+          "description": "你触碰一个生命值为 0 的活体生物，使该生物的伤势立刻稳定下来。该法术对亡灵和构装生物无效。 English You touch a living creature that has 0 hit points. The creature becomes &amp;reference[stable]. This spell has no effect on undead or constructs.",
+          "descriptionTruncated": false,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "Cast",
+              "type": "heal"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.MUO1uYN7JR1hm4dR",
+          "name": "奇术 Thaumaturgy",
+          "type": "spell",
+          "identifier": "thaumaturgy",
+          "rules": "2014",
+          "description": "你在施法距离内展示出一个低级奇观，以表现你的超自然力。你在施法距离内创造出下列魔法效应之一： 你的声音在 1 分钟内变得比常人响两倍。 你在 1 分钟内使一团火焰闪烁，变亮，变暗或变色。 你使地面震动 1 分钟（完全无害）。 你使某种声音自施法距离内一点瞬间发出，例如雷鸣声，鸦叫声或不祥的低语声。 你使一扇没有锁上的门或窗瞬间打开或关上。 你在 1 分钟内改变自己眼睛的颜色。 多次施展该法术时，你可以同时维持最多三个持续 1 分钟的效应",
+          "descriptionTruncated": true,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "Cast",
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.iTvzofXQ9Ebrq73c",
+          "name": "亡者丧钟 Toll the Dead",
+          "type": "spell",
+          "identifier": "toll-the-dead",
+          "rules": "2014",
+          "description": "你指向一个处于距离内、你能看见的生物，一阵哀痛的铃声在空中鸣响。目标必须通过一次感知豁免检定，否则受到1d8点黯蚀伤害。若目标失去了任何量的生命值，它改为受到1d12点黯蚀伤害。 此法术的伤害在你达到5级（2d8或2d12），11级（3d8或3d12），和17级（4d8或4d12）时提高一个伤害骰。",
+          "descriptionTruncated": false,
+          "spellLevel": 0,
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "亡者丧钟 Toll the Dead",
+              "type": "save"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EoHUtMRA7ftylPNt",
+          "name": "光耀祷词 Word of Radiance",
+          "type": "spell",
+          "identifier": "word-of-radiance",
+          "rules": "2014",
+          "description": "你念出神圣的词语，灼热的光辉随之喷薄而出。每个你选择的、处于你周围5英尺内、你能看见的生物必须通过一次体质豁免检定，否则受到1d6点光耀伤害。 此法术的伤害在你达到5级（2d6），11级（3d6），和17级（4d6）时提高1d6点",
+          "descriptionTruncated": false,
+          "spellLevel": 0,
+          "activities": [
+            {
+              "type": "save"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu",
+          "name": "生命门徒 Disciple of Life",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第1级起，你的治疗法术更加有效。当你施展1环或更高环阶法术恢复生物生命值时，你的目标额外恢复2＋法术环阶数值的生命值。",
+          "descriptionTruncated": false,
+          "requirements": "生命领域等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "生命门徒",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "flags.midi-qol.optional.生命门徒.activation",
+                  "mode": 2,
+                  "value": "item.level > 0 && item.itemType === \"spell\"",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.生命门徒.damage.heal",
+                  "mode": 2,
+                  "value": "ItemMacro.Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu",
+                  "priority": 20
+                },
+                {
+                  "key": "flags.midi-qol.optional.生命门徒.count",
+                  "mode": 2,
+                  "value": "every",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.cVCWDgOyiytOouwE",
+          "name": "引导神力：维持生命 Channel Divinity: Preserve Life",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第2级起，你可以用@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.WPevnsjK8Cjd9Fcl]{引导神力}特性来恢复严重的伤害。 你用一个动作展示圣徽，引导治疗能量来恢复等于你牧师等级五倍的生命值。你指定身边30尺内的任意生物作为该特性的目标，再为其分配从中获得的治疗能量。该特性不能将目标恢复到其生命值上限的一半以上。而且你不能对不死生物或构装生物使用该特性。",
+          "descriptionTruncated": false,
+          "requirements": "生命领域等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "type": "heal",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "target": "channel-divinity",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.mbBENsVQ1abapmm8",
+          "name": "矮人体魄(矮人)",
+          "type": "feat",
+          "identifier": "dwarven-resilience",
+          "rules": "2014",
+          "description": "你进行对抗毒素的豁免时具有优势，并且拥有毒素伤害的抗性。",
+          "descriptionTruncated": false,
+          "requirements": "矮人",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "矮人体魄(矮人)",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.traits.dr.value",
+                  "mode": 2,
+                  "value": "poison",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.znrZOqF2J2YYw22O",
+          "name": "矮人战斗熟练项(矮人)",
+          "type": "feat",
+          "identifier": "dwarven-combat-training",
+          "rules": "2014",
+          "description": "你具有战斧，手斧，轻锤和战锤等武器的熟练项。",
+          "descriptionTruncated": false,
+          "requirements": "矮人",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.qwYhHBO8PATKs1vL",
+          "name": "矮人工具熟练(矮人)",
+          "type": "feat",
+          "identifier": "dwarven-tool-proficiency",
+          "rules": "2014",
+          "description": "你获得一个工匠工具的熟练项，从以下项目中自选其一： 铁匠工具 酿酒工具 石匠工具",
+          "descriptionTruncated": false,
+          "requirements": "矮人",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.g8kRXKDNt5DniOel",
+          "name": "石中精妙(矮人)",
+          "type": "feat",
+          "identifier": "stonecunning",
+          "rules": "2014",
+          "description": "每当你对一件石制品的起源做智力（历史）检定时，你视为具有历史技能的熟练项，并可以在检定中加上双倍的熟练加值，而非你平时的熟练加值。",
+          "descriptionTruncated": false,
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.wUkIW5Nfcxad3qlY",
+          "name": "黑暗视觉 (通用)",
+          "type": "feat",
+          "identifier": "darkvision",
+          "rules": "2014",
+          "description": "在微光光照下，你身边60尺内可以视为等同于明亮光照。而在黑暗中，该范围内可视为等同于微光光照。 你无法在黑暗中分辨颜色，只能看到有灰度的黑白画面。",
+          "descriptionTruncated": false,
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.p3thQu1DkOgiNA10",
+          "name": "矮人刚毅(矮人)",
+          "type": "feat",
+          "identifier": "dwarven-toughness",
+          "rules": "2014",
+          "description": "你的生命值最大值加1，且此后每次升级时再加1。",
+          "descriptionTruncated": false,
+          "requirements": "丘陵矮人",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "矮人刚毅(矮人)",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.attributes.hp.bonuses.level",
+                  "mode": 2,
+                  "value": "+1",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  },
+  {
+    "id": "B1",
+    "args": {
+      "className": "fighter",
+      "subclassName": "champion",
+      "level": 5
+    },
+    "result": {
+      "version": 6,
+      "level": 5,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "name": "战士 Fighter",
+        "type": "class",
+        "identifier": "fighter",
+        "hitDice": "d10",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "gilq1vjnpur64iv3",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "httwqnsfvwcjbjyc",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+                  "name": "回气 Second Wind",
+                  "type": "feat",
+                  "identifier": "second-wind",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "quc0rwf3eqgj2dyg",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+                  "name": "动作如潮 Action Surge",
+                  "type": "feat",
+                  "identifier": "action-surge",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "4uym61w20kml93uf",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+                  "name": "武术范型",
+                  "type": "feat",
+                  "identifier": "martial-archetype",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "2sp8e2prwjpuoh32",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 5,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+                  "name": "额外攻击 (战士)",
+                  "type": "feat",
+                  "identifier": "extra-attack-fighter",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "wt78ty9vqkbx2how",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "动作如潮次数",
+            "configuration": {
+              "identifier": "action-surge",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 1
+              }
+            }
+          },
+          {
+            "id": "u5uzss2r9fuygelv",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "额外攻击次数",
+            "configuration": {
+              "identifier": "extra-attack",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 1
+              }
+            }
+          },
+          {
+            "id": "6KJ1wz4CENVjg4Mo",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim",
+                "weapon:mar"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "WZLiDroNw8S2pZvD",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "armor:lgt",
+                "armor:med",
+                "armor:hvy",
+                "armor:shl"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "rvfuW71lYEeJW7HS",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 4,
+            "type": "AbilityScoreImprovement",
+            "title": "属性值提升",
+            "configuration": {
+              "points": 2,
+              "fixed": {
+                "str": 0,
+                "dex": 0,
+                "con": 0,
+                "int": 0,
+                "wis": 0,
+                "cha": 0
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          },
+          {
+            "id": "3o2s8ZVAyJd74CrP",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:str",
+                "saves:con"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "JEZnz3P7ydbNAdwN",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "skills:acr",
+                    "skills:ani",
+                    "skills:ath",
+                    "skills:his",
+                    "skills:ins",
+                    "skills:itm",
+                    "skills:prc",
+                    "skills:sur"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "euUOamWwB1JpE9df",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+            "level": 1,
+            "type": "ItemChoice",
+            "title": "战斗风格 Fighting Style",
+            "hint": "第1级时，从战士可用的战斗风格中选择一项。",
+            "configuration": {
+              "choices": {
+                "1": {
+                  "count": 1,
+                  "replacement": false
+                }
+              },
+              "allowDrops": false,
+              "type": "feat",
+              "pool": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+                  "name": "战斗风格：防御 Fighting Style: Defense",
+                  "type": "feat",
+                  "identifier": "fighting-style-defense",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2，游侠等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+                  "name": "战斗风格：对决 Fighting Style: Dueling",
+                  "type": "feat",
+                  "identifier": "fighting-style-dueling",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级  10，圣武士等级  2，游侠等级 2，剑舞学院等级 3"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+                  "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+                  "type": "feat",
+                  "identifier": "fighting-style-great-weapon-fighting",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+                  "name": "战斗风格：守护 Fighting Style:Protection",
+                  "type": "feat",
+                  "identifier": "fighting-style-protection",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，圣武士等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+                  "name": "战斗风格：箭术 Fighting Style: Archery",
+                  "type": "feat",
+                  "identifier": "fighting-style-archery",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级 10，游侠等级 2"
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+                  "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+                  "type": "feat",
+                  "identifier": "fighting-style-two-weapon-fighting",
+                  "eligibility": "conditional",
+                  "requirements": "战士等级 1，勇士等级  10，圣武士等级 2，游侠等级 2，剑舞学院等级 3"
+                }
+              ],
+              "spell": null,
+              "restriction": {
+                "type": "class",
+                "subtype": "fightingStyle",
+                "list": []
+              },
+              "excludedByLevel": 0,
+              "eligibilityNote": "Level checked at target level; conditional requirements must be satisfied before selection. Historical acquisition is not validated."
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+        "name": "勇士 Champion",
+        "type": "subclass",
+        "identifier": "champion",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "9gd70onmans30zvr",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+                  "name": "精通重击 Improved Critical",
+                  "type": "feat",
+                  "identifier": "improved-critical",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          }
+        ]
+      },
+      "race": null,
+      "spellAccess": null,
+      "spellTables": [],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+          "name": "战士 Fighter",
+          "type": "class",
+          "identifier": "fighter",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+          "name": "勇士 Champion",
+          "type": "subclass",
+          "identifier": "champion",
+          "rules": "2014",
+          "description": "勇士范型追求在肉体力量上登峰造极。选择此范型的人将战斗训练与强身健体相结合，令自己的攻击无坚不摧。",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+          "name": "回气 Second Wind",
+          "type": "feat",
+          "identifier": "second-wind",
+          "rules": "2014",
+          "description": "你拥有少量的精力储备，可以用来保护自己免受伤害。你可以在自己回合内用一个附赠动作恢复生命值，其总值为[[/r 1d10]]＋你的战士职业等级。你必须完成一次短休或长休才能再次使用该特性。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "heal",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+          "name": "动作如潮 Action Surge",
+          "type": "feat",
+          "identifier": "action-surge",
+          "rules": "2014",
+          "description": "第2级起，你可以在短时间内突破极限，以使你在自己回合内执行一个额外的动作。 该特性在使用后必须完成一次短休或长休才能再次使用。第17级起，你可以在休息前使用两次该特性，但每个回合只能使用一次。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "@scale.fighter.action-surge",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "targets": [
+                  {
+                    "type": "itemUses",
+                    "value": "1"
+                  }
+                ],
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+          "name": "武术范型",
+          "type": "feat",
+          "identifier": "martial-archetype",
+          "rules": "2014",
+          "description": "第3级时，你选择一种范型以体现你的战斗风格和技巧。你可以从以下范型中选择其一。随后，你将在第3、第7、第10、第15、第18级获得所选范型的相应特性。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs01]{勇士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs02]{战斗大师} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs03]{奥法骑士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs04]{紫龙骑士（SCAG）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs05]{武士（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs06]{魔射手（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs07]{骑兵（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs08]{回音骑士（EGtW）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs09]{符文骑士（TCE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJ",
+          "descriptionTruncated": true,
+          "requirements": "战士等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+          "name": "额外攻击 (战士)",
+          "type": "feat",
+          "identifier": "extra-attack-fighter",
+          "rules": "2014",
+          "description": "第5级起，你在自己回合内执行攻击动作时可以发动两次攻击而非一次。 第11级后，你可以攻击三次。第20级后，你可以攻击四次。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 5",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+          "name": "战斗风格：防御 Fighting Style: Defense",
+          "type": "feat",
+          "identifier": "fighting-style-defense",
+          "rules": "2014",
+          "description": "着装护甲时，你的AC获得 +1加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2，游侠等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "战斗风格：防御",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.attributes.ac.bonus",
+                  "mode": 2,
+                  "value": "+1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+          "name": "战斗风格：对决 Fighting Style: Dueling",
+          "type": "feat",
+          "identifier": "fighting-style-dueling",
+          "rules": "2014",
+          "description": "单手持用一把近战武器，且并未同时持用其他武器时，你用该武器攻击的伤害掷骰获得 +2加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级  10，圣武士等级  2，游侠等级 2，剑舞学院等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+          "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+          "type": "feat",
+          "identifier": "fighting-style-great-weapon-fighting",
+          "rules": "2014",
+          "description": "双手持用一把近战武器发动攻击时，如果你的伤害掷骰掷出1或2，则可以选择重掷。不过哪怕其仍是1或2，你都必须接受重掷的数值。此外，该武器必须具有双手或两用属性。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+          "name": "战斗风格：守护 Fighting Style:Protection",
+          "type": "feat",
+          "identifier": "fighting-style-protection",
+          "rules": "2014",
+          "description": "当某个你能看见的生物攻击你身边5尺内除你之外的目标时，你可以用反应迫使该攻击的攻击检定具有劣势。此时你必须持用盾牌。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "activities": [
+            {
+              "type": "utility"
+            }
+          ],
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+          "name": "战斗风格：箭术 Fighting Style: Archery",
+          "type": "feat",
+          "identifier": "fighting-style-archery",
+          "rules": "2014",
+          "description": "你使用远程武器进行攻击检定时具有 +2加值。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级 10，游侠等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics",
+          "effects": [
+            {
+              "name": "战斗风格：箭术",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.bonuses.rwak.attack",
+                  "mode": 2,
+                  "value": "+2"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+          "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+          "type": "feat",
+          "identifier": "fighting-style-two-weapon-fighting",
+          "rules": "2014",
+          "description": "使用两把武器战斗时，你可以将相应属性调整值加到第二次攻击的伤害上。",
+          "descriptionTruncated": false,
+          "requirements": "战士等级 1，勇士等级  10，圣武士等级 2，游侠等级 2，剑舞学院等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "preview; import source preserves full mechanics"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+          "name": "精通重击 Improved Critical",
+          "type": "feat",
+          "identifier": "improved-critical",
+          "rules": "2014",
+          "description": "从你第3级选择此范型起，你的武器攻击在掷出19或20时即可造成重击。",
+          "descriptionTruncated": false,
+          "requirements": "勇士等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "精通重击",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "flags.dnd5e.weaponCriticalThreshold",
+                  "mode": 0,
+                  "value": "19",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  },
+  {
+    "id": "B2",
+    "args": {
+      "className": "rogue",
+      "subclassName": "thief",
+      "level": 3
+    },
+    "result": {
+      "version": 6,
+      "level": 3,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+        "name": "游荡者 Rogue",
+        "type": "class",
+        "identifier": "rogue",
+        "hitDice": "d8",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "qzkhtbdprid3jqv5",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "fdd4ttbdb9peiscl",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zwXiai18a2q90THH",
+                  "name": "专精 (游荡者) Expertise",
+                  "type": "feat",
+                  "identifier": "-",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AlFAC3Lz1ud2ry9T",
+                  "name": "偷袭 Sneak Attack",
+                  "type": "feat",
+                  "identifier": "sneak-attack",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eXqCYX6BlKodEbgy",
+                  "name": "盗贼黑话 Thieves'Cant",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "4k5z76aqdpeckyfi",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.biPF9xysyu0WBtJe",
+                  "name": "灵巧动作 Cunning Action",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.BAA7KbuY83oybZRb",
+                  "name": "灵巧动作-撤离",
+                  "type": "feat",
+                  "identifier": "-",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i52KGSYIBJySWhXy",
+                  "name": "灵巧动作-疾走",
+                  "type": "feat",
+                  "identifier": "-",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.tQYwoAeBY57QvKSM",
+                  "name": "灵巧动作-躲藏",
+                  "type": "feat",
+                  "identifier": "-",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "yy4n56pacadp2q35",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8cxR6XZCphM9Y7qx",
+                  "name": "游荡者范型",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "m8eplgcb2ne7oumi",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "偷袭骰",
+            "configuration": {
+              "identifier": "sneak-attack",
+              "type": "dice",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "number": 2,
+                "faces": 6,
+                "modifiers": []
+              }
+            }
+          },
+          {
+            "id": "ejtwT3eAwBpgvtcw",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:dex",
+                "saves:int"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "rKux16jqNCPEtyDL",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 4,
+                  "pool": [
+                    "skills:acr",
+                    "skills:ath",
+                    "skills:dec",
+                    "skills:ins",
+                    "skills:itm",
+                    "skills:inv",
+                    "skills:prc",
+                    "skills:prf",
+                    "skills:per",
+                    "skills:slt",
+                    "skills:ste"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "3GyyG2fRAwPbKK7n",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "languages:exotic:cant"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "OdvmWcuFdpmQa1R9",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "armor:lgt"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "IAuJ7LQGV2HvMXWB",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim",
+                "weapon:mar:handcrossbow",
+                "weapon:mar:longsword",
+                "weapon:mar:rapier",
+                "weapon:mar:shortsword"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "ZfLkT5c0hxOmdyti",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "tool:thief"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "TDHYngxGqDHllgzw",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+            "level": 1,
+            "type": "Trait",
+            "title": "专精",
+            "hint": "选择两个已有技能熟练项，或者一个技能熟练项和盗贼工具熟练项。此后你进行该项目的检定时，可以使用双倍的熟练加值。",
+            "configuration": {
+              "mode": "expertise",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "tool:thief",
+                    "skills:*"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.6ecMXduZAts7up01",
+        "name": "盗贼 Thief",
+        "type": "subclass",
+        "identifier": "thief",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "s5zxyl9xy1l17o75",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.6ecMXduZAts7up01",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nL8KdY6H1RD3FEqC",
+                  "name": "快手 Fast Hands",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FUwvN3wZZvuWDJDn",
+                  "name": "梁上君子 Second-Story Work",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          }
+        ]
+      },
+      "race": null,
+      "spellAccess": null,
+      "spellTables": [],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+          "name": "游荡者 Rogue",
+          "type": "class",
+          "identifier": "rogue",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.6ecMXduZAts7up01",
+          "name": "盗贼 Thief",
+          "type": "subclass",
+          "identifier": "thief",
+          "rules": "2014",
+          "description": "你专注于训练盗窃的技能。窃贼，强盗，扒手和其他的犯罪类型常常会追随此范型，还有那些自称寻宝者，探险家，探索者和调查员的游荡者也是如此。除了提升灵巧和隐匿的技艺外，你还将学会如何探索古代废墟，解读罕见的语言和使用魔法物品的技巧。",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zwXiai18a2q90THH",
+          "name": "专精 (游荡者) Expertise",
+          "type": "feat",
+          "identifier": "-",
+          "rules": "2014",
+          "description": "第1级起，你选择两个已有技能熟练项，或者一个技能熟练项和盗贼工具熟练项。此后你进行该项目的检定时，可以使用双倍的熟练加值。 第6级时，你可以再选择另外两个已有的技能熟练项（或盗贼工具熟练项）从该特性中获益。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AlFAC3Lz1ud2ry9T",
+          "name": "偷袭 Sneak Attack",
+          "type": "feat",
+          "identifier": "sneak-attack",
+          "rules": "2014",
+          "description": "第1级起，你就知道如何精确地攻击分心的敌人。每当你的攻击命中一个生物时，如果该攻击的攻击检定带有优势，则可以造成额外[[/r 1d6]]的伤害。该伤害每回合可以产生一次，且造成伤害的攻击必须使用带灵巧属性的武器或远程武器。 如果目标生物身边5尺内还有其他与之对敌者，且该对敌者并未处于失能状态，则只要你的攻击检定没有劣势，就可以发动偷袭。 你的偷袭伤害也将会随游荡者职业等级的提升而提高，其具体数值见“游荡者职业表”。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "activities": [
+            {
+              "name": "Sneak Attack Damage",
+              "type": "damage",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": false
+              },
+              "damage": {
+                "critical": {
+                  "allow": true
+                },
+                "parts": [
+                  {
+                    "custom": {
+                      "enabled": true,
+                      "formula": "@scale.rogue.sneak-attack"
+                    },
+                    "denomination": 0,
+                    "scaling": {
+                      "number": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eXqCYX6BlKodEbgy",
+          "name": "盗贼黑话 Thieves'Cant",
+          "type": "feat",
+          "rules": "2014",
+          "description": "作为一名游荡者，你在平时的练习中学会了盗贼间的黑话。盗贼黑话是一门混合了土话、术语和密语的秘密语言，掌握这门语言后，你可以在平时对话中不落痕迹的加入隐藏信息。而只有另一个懂盗贼黑话的生物才能看懂这些隐藏信息。不过这种交流方式需要花费四倍于直接交流所需要的时间。 另外，你还习得一套用以传达简单短小信息的秘密符文和标识。它能发布的内容诸如某地区是否危险，是否受盗贼公会管辖，附近是否有战利品，附近的人是否好主顾或者路上是否有安全的房屋以供庇护。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "习得盗贼黑话",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "system.traits.languages.value",
+                  "mode": 2,
+                  "value": "cant"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.biPF9xysyu0WBtJe",
+          "name": "灵巧动作 Cunning Action",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第2级起，你精妙的反应与身手使你的行动无比迅速。 你每回合有一次机会使用一个特殊的附赠动作，该附赠动作可用以执行撤离Disengage、疾走Dash或躲藏Hide三个动作其中之一。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.BAA7KbuY83oybZRb",
+          "name": "灵巧动作-撤离",
+          "type": "feat",
+          "identifier": "-",
+          "rules": "2014",
+          "description": "第2级起，你精妙的反应与身手使你的行动无比迅速。 你每回合有一次机会使用一个特殊的附赠动作，该附赠动作可用以执行撤离Disengage、疾走Dash或躲藏Hide三个动作其中之一。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i52KGSYIBJySWhXy",
+          "name": "灵巧动作-疾走",
+          "type": "feat",
+          "identifier": "-",
+          "rules": "2014",
+          "description": "第2级起，你精妙的反应与身手使你的行动无比迅速。 你每回合有一次机会使用一个特殊的附赠动作，该附赠动作可用以执行撤离Disengage、疾走Dash或躲藏Hide三个动作其中之一。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.tQYwoAeBY57QvKSM",
+          "name": "灵巧动作-躲藏",
+          "type": "feat",
+          "identifier": "-",
+          "rules": "2014",
+          "description": "第2级起，你精妙的反应与身手使你的行动无比迅速。 你每回合有一次机会使用一个特殊的附赠动作，该附赠动作可用以执行撤离Disengage、疾走Dash或躲藏Hide三个动作其中之一。",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8cxR6XZCphM9Y7qx",
+          "name": "游荡者范型",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第3级时，你选择学习一种特定的战斗范型。你可以从下列范型中选择其一。随后，你将在第3，第9，第13、第17级时获得所选范型的相应特性。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up01]{盗贼} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up02]{刺客} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up03]{诡术师} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up04]{策士（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up05]{游荡剑客（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up06]{审判官（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up07]{斥候（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up08]{鬼魅（TCE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.6ecMXduZAts7up09]{魂刃（TCE）}",
+          "descriptionTruncated": false,
+          "requirements": "游荡者等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nL8KdY6H1RD3FEqC",
+          "name": "快手 Fast Hands",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第3级起，你可以使用从“@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.biPF9xysyu0WBtJe]{灵巧动作}”特性中得到的附赠动作来进行一次敏捷（巧手）检定，或是以该附赠动作使用盗贼工具来解除陷阱、撬锁，或执行“使用物件”动作。",
+          "descriptionTruncated": false,
+          "requirements": "盗贼等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FUwvN3wZZvuWDJDn",
+          "name": "梁上君子 Second-Story Work",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第3级选择此范型起，你获得比通常情况更快的攀爬速度，从而使攀爬不再消耗额外的移动力。 此外，当你做一个有助跑的跳远时，跳远距离增加一定的尺数，其数值等于你的敏捷调整值。",
+          "descriptionTruncated": false,
+          "requirements": "盗贼等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  },
+  {
+    "id": "B3",
+    "args": {
+      "className": "wizard",
+      "subclassName": "school-of-evocation",
+      "level": 5
+    },
+    "result": {
+      "version": 6,
+      "level": 5,
+      "rules": "2014",
+      "classRole": "primary",
+      "class": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+        "name": "法师 Wizard",
+        "type": "class",
+        "identifier": "wizard",
+        "hitDice": "d6",
+        "spellcasting": {
+          "progression": "full",
+          "ability": "int",
+          "preparation": {
+            "formula": "@abilities.int.mod + @classes.wizard.levels"
+          }
+        },
+        "advancements": [
+          {
+            "id": "n6edggokwbjlfwry",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": null,
+            "type": "HitPoints",
+            "configuration": {}
+          },
+          {
+            "id": "jdc8290618j69cs9",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+                  "name": "奥术回想 Arcane Recovery",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP",
+                  "name": "施法（法师）",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                },
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kguxSknHhFAgJuYg",
+                  "name": "额外法师法术  Additional Wizard Spells",
+                  "type": "feat",
+                  "identifier": "-additional-wizard-spells",
+                  "optional": true
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "kpdt6v1dmng8nr2z",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+                  "name": "奥术传承",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "safxkf7j5j2fc23l",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 3,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jxABfDaC7XGVji2k",
+                  "name": "戏法公式  Cantrip Formulas",
+                  "type": "feat",
+                  "identifier": "-cantrip-formulas",
+                  "optional": true
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          },
+          {
+            "id": "r1DG0GF8L6SkLNvq",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "saves:int",
+                "saves:wis"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "6blzmKC4EON0KM2e",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [],
+              "choices": [
+                {
+                  "count": 2,
+                  "pool": [
+                    "skills:arc",
+                    "skills:his",
+                    "skills:ins",
+                    "skills:inv",
+                    "skills:med",
+                    "skills:rel"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "JXcSQmjdfaJeSjZ7",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 1,
+            "type": "Trait",
+            "title": "",
+            "configuration": {
+              "mode": "default",
+              "allowReplacements": false,
+              "grants": [
+                "weapon:sim:dagger",
+                "weapon:sim:dart",
+                "weapon:sim:lightcrossbow",
+                "weapon:sim:quarterstaff",
+                "weapon:sim:sling"
+              ],
+              "choices": []
+            }
+          },
+          {
+            "id": "r4NBaBhA20gUjJ56",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": null,
+            "type": "ScaleValue",
+            "title": "Cantrips Known",
+            "configuration": {
+              "identifier": "cantrips-known",
+              "type": "number",
+              "distance": {
+                "units": ""
+              },
+              "current": {
+                "value": 4
+              }
+            }
+          },
+          {
+            "id": "rvfuW71lYEeJW7HS",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+            "level": 4,
+            "type": "AbilityScoreImprovement",
+            "title": "属性值提升",
+            "configuration": {
+              "points": 2,
+              "fixed": {
+                "str": 0,
+                "dex": 0,
+                "con": 0,
+                "int": 0,
+                "wis": 0,
+                "cha": 0
+              },
+              "cap": 2,
+              "locked": [],
+              "recommendation": null
+            }
+          }
+        ]
+      },
+      "subclass": {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+        "name": "塑能学派 School of Evocation",
+        "type": "subclass",
+        "identifier": "school-of-evocation",
+        "spellcasting": {
+          "progression": "none",
+          "ability": "",
+          "preparation": {
+            "formula": ""
+          }
+        },
+        "advancements": [
+          {
+            "id": "u6mkf8avr1c7kg3x",
+            "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+            "level": 2,
+            "type": "ItemGrant",
+            "title": "职业特性",
+            "configuration": {
+              "items": [
+                {
+                  "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+                  "name": "法术塑形 Sculpt Spells",
+                  "type": "feat",
+                  "identifier": "",
+                  "optional": false
+                }
+              ],
+              "optional": false,
+              "spell": null
+            }
+          }
+        ]
+      },
+      "race": null,
+      "spellAccess": {
+        "level": 3,
+        "slotsByLevel": [
+          4,
+          3,
+          2
+        ],
+        "source": "CONFIG.DND5E.SPELL_SLOT_TABLE",
+        "scope": "requested class only"
+      },
+      "spellTables": [],
+      "linkedLists": [],
+      "documents": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+          "name": "法师 Wizard",
+          "type": "class",
+          "identifier": "wizard",
+          "rules": "2014",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+          "name": "塑能学派 School of Evocation",
+          "type": "subclass",
+          "identifier": "school-of-evocation",
+          "rules": "2014",
+          "description": "你专注于研习以魔力创造威力惊人的元素力量，诸如:苦寒、灼焰、惊雷、汲电、烈酸。一些塑能师会接受军队的雇佣，在军队的后方作为在远距离轰炸敌人的“重炮手”。另一些则以其惊人力量四处保护弱小，或是仅仅为满足自身而成为强盗、冒险家、甚至野心勃勃的暴君。 塑能学者Evocation Savant 从第2级你选择该学派起，你向法术书中抄写塑能系法术的时间和金钱花费减半。",
+          "descriptionTruncated": false,
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+          "name": "奥术回想 Arcane Recovery",
+          "type": "feat",
+          "rules": "2014",
+          "description": "你学会了通过研读法术书来恢复魔法能量的办法。你可以每日使用一次奥术回想，以在你完成一次短休后恢复若干已消耗的法术位，所恢复的法术位环阶总和不得大于你法师等级的一半（向上取整），且任何一枚法术位的环阶都必须小于6环。 例如，作为一名4级法师时，你可恢复环阶总数最多为2的法术位。你可以选择恢复一枚2环法术位或两枚1环法术位。",
+          "descriptionTruncated": false,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 0,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "activities": [
+            {
+              "type": "utility",
+              "consumption": {
+                "scaling": {
+                  "allowed": false
+                },
+                "spellSlot": true
+              }
+            }
+          ],
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP",
+          "name": "施法（法师）",
+          "type": "feat",
+          "rules": "2014",
+          "description": "作为一名奥术魔法的研习者，你拥有一本自己的法术书。书.中所包含的法术隐约透露着你真正的力量。参考施法规则，以及法师法术列表。 戏法Cantrips 第1级时，你从法师法术列表中选择三个戏法作为已知法术。在获得更高的法师等级后你还可以习得其它的戏法，具体数量参见“法师职业表”中“已知戏法”一栏。 法术书Spellbook 第1级时，你得到一本法术书，其中包含了六个自选的1环法师法术。法术书储存着你除戏法外的所有已知法术，而你的戏法则直接铭记在你的脑海中。 法术的准备和施展Preparing and Casting Spells “法师职业表”里记录了你用以施法的1环及更高环阶法术位的数量。施展某个法师法术时，你必须同时消耗其对应环阶的法术位。已消耗的法术位可在完成长休后恢复。 你可以准备一系列符合当前施法条件的法师法术。准备法术时，你从法术书中选择的准备法术总数等于你的智力调整值+你的法师职业等级(最少为1)。另外，你只能准备已经获得相应环阶法术位的法术。 例如，作为一名3级法师时，你拥有四枚1环法术位和两枚2环法术位。假如你的智力为16,则你的准备法术列表可以囊括总共六个1环或2环法术的组合。如果你准备了1环法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.41JIhpDyM9Anm7cs]{魔法飞弹 Magic Missile}，则你可以使用1环或者2环的法术位来施展它。另外，已施展的法术并不会从你的准备列表中移除。 你可以在完成长休后改变你的准备法术列表。如需准备新的法师法术，则需要你再花时间研读你的法术书，并重新记忆所准备法术的咒语和施展动作。准备法术时，法术的每个环阶平均要花费至少1分钟的准备时间。 施法关键属性Spellcasting Ability 你的法术来自你专注的研习和记忆，因此智力是你施展法师.法术的关键属性。每当你的法术需要施法关键属性时均指向你的智力值。而你法师法术的器免DC和攻击检定，则使用你的智力调整值。 法术豁免DC =8+你的熟练加值+你的智力调整值 法术攻击调整值 =你的熟练加",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.kguxSknHhFAgJuYg",
+          "name": "额外法师法术  Additional Wizard Spells",
+          "type": "feat",
+          "identifier": "-additional-wizard-spells",
+          "rules": "2014",
+          "description": "下表中的法术扩充了《玩家手册》中的法师法术列表，排序基于法术环阶而非角色等级。表中标出了法术所属的学派，并在在可仪式施法的法术后方追记了仪式标签。若无*号标记，表中法术均来自《玩家手册》（有*标记的法术来自本书第三章）。《姗娜萨的万事指南》也提供了更多法术。 法术环位 法术 戏法 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.pumDQ5z7GSGX16nY]{轰雷剑*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.0TR7HOOqbttnAGzj]{翠炎剑*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9ez2X9q9mQmDqJ8Q]{闪电牵引*（塑能）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Il0iA9nttKqh0ACr]{心灵之楔*（附魔）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.FbWd9LrvqTSOdKwk]{剑刃爆发*（咒法）} 1环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.aRiWcyTXoQK7Z3ow]{塔莎酸蚀酿*（塑能）} 2环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.4v2H3hHb3Ph9XLNd]{卜筮术（预言，仪式）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9eOZDBImVKxbeOyZ]{强化属性（变化）}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.S2Julj2sEMwh4rdc]{塔莎心灵鞭*（附魔）} 3环 @UUID[Compendium.a",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 1",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+          "name": "奥术传承",
+          "type": "feat",
+          "rules": "2014",
+          "description": "法师技艺的研习传统由来已久，甚至可以往前追溯到凡人刚发现魔法存在的时期。魔法是奇幻世界不可或缺的部分，其繁复的研习体系则被细分为各不相同的思学传统。 多元宇宙中最常见的奥术传承基于魔法学派进行分类。数个世代以来，法师们已经整理分类了上千个法术，并将其归分称八大类的不同“学派”。一方面，一门奥术传承即是一所学院：法师学徒门可以在幻术学院研习，也可以到临近的附魔学院塔楼里进行研究。另一方面，学派之间更像是同一院校内的不同派系，其相互间则不断竞争着优秀的学徒与资源。即使是那些在与世隔绝的高塔中孤独地培养学徒的法师，也会使用八学派的概念作为一种教学工具，以让学徒们充分掌握各学派法术所存在的不同技术要求。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp09]{防护学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp02]{咒法学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp03]{预言学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp04]{附魔学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp05]{塑能学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp06]{幻术学派} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.wQtUjvfS0MXMFp07]{死灵学派} @UUID[Compendium.arcane-dnd5e-2",
+          "descriptionTruncated": true,
+          "requirements": "法师等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jxABfDaC7XGVji2k",
+          "name": "戏法公式  Cantrip Formulas",
+          "type": "feat",
+          "identifier": "-cantrip-formulas",
+          "rules": "2014",
+          "description": "你在法术书中写下了一套奥法公式，并能借此在心中推演出一个戏法。每当你完成一次长休，你可以查阅法术书中所记的公式，以将你的一个已知法师戏法替换为另一个来自法师法术列表的戏法。",
+          "descriptionTruncated": false,
+          "requirements": "法师等级 3",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "max": "1",
+            "spent": 1,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ]
+          },
+          "mechanicsDetail": "activity-summary"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+          "name": "法术塑形 Sculpt Spells",
+          "type": "feat",
+          "rules": "2014",
+          "description": "第2级起，你的塑能系法术作用范围里可以保留一小部分相对安全的区域。你施展某个塑能系法术时，如果该法术的效应影响你能看见的其他生物，则你可以从中指定一定数量的生物作特殊处理。被指定生物的数量等于1＋该法术的环阶，而被指定生物进行该法术豁免时将直接判为成功，且豁免成功伤害减半的法术此时也不对该生物造成任何伤害",
+          "descriptionTruncated": false,
+          "requirements": "塑能学派等级 2",
+          "prerequisites": {
+            "repeatable": false
+          },
+          "uses": {
+            "spent": 0
+          },
+          "mechanicsDetail": "activity-summary",
+          "effects": [
+            {
+              "name": "法术塑形",
+              "disabled": false,
+              "transfer": true,
+              "changes": [
+                {
+                  "key": "flags.midi-qol.sculptSpells",
+                  "mode": 2,
+                  "value": "+1",
+                  "priority": 20
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+      "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+    }
+  }
+]
