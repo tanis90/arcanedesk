@@ -1,7 +1,7 @@
 {
-  "status": "running",
+  "status": "completed",
   "expectedTrials": 24,
-  "auditedTrials": 20,
+  "auditedTrials": 24,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -317,6 +317,64 @@
       "seconds": 157.506,
       "calls": 29,
       "toolSeconds": 12.519,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788959568663",
+      "case": "B3",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 158.604,
+      "calls": 14,
+      "toolSeconds": 0.866,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "spells.book"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788959737268",
+      "case": "B3",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 159.371,
+      "calls": 14,
+      "toolSeconds": 0.656,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788959905169",
+      "case": "B3",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_tool",
+      "seconds": 189.822,
+      "calls": 40,
+      "toolSeconds": 32.229,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788960104314",
+      "case": "B3",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_js",
+      "seconds": 112.033,
+      "calls": 26,
+      "toolSeconds": 1.182,
       "success": true,
       "timeout": false,
       "failures": [],
