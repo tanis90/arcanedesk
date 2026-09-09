@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 4,
+  "auditedTrials": 8,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -70,6 +70,70 @@
         "movement.walk",
         "spells.book"
       ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957011662",
+      "case": "A2",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 175.765,
+      "calls": 17,
+      "toolSeconds": 1.023,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "features.level-ceiling",
+        "abilities.legal",
+        "hp.full",
+        "movement.walk"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957196314",
+      "case": "A2",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 166.353,
+      "calls": 14,
+      "toolSeconds": 0.686,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "abilities.legal",
+        "skills.abilities"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957371879",
+      "case": "A2",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_tool",
+      "seconds": 149.603,
+      "calls": 35,
+      "toolSeconds": 14.342,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957530188",
+      "case": "A2",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_js",
+      "seconds": 157.879,
+      "calls": 35,
+      "toolSeconds": 2.303,
+      "success": true,
+      "timeout": false,
+      "failures": [],
       "verifier": "v4",
       "timeoutMs": 300000
     }
