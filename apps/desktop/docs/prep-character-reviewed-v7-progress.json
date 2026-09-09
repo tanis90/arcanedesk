@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 16,
+  "auditedTrials": 18,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -262,6 +262,36 @@
       "success": true,
       "timeout": false,
       "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958990636",
+      "case": "B2",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 139.764,
+      "calls": 17,
+      "toolSeconds": 0.843,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788959139342",
+      "case": "B2",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 137.912,
+      "calls": 18,
+      "toolSeconds": 0.477,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "hp.full"
+      ],
       "verifier": "v4",
       "timeoutMs": 300000
     }
