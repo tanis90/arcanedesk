@@ -14,7 +14,7 @@ function fixture(){
  doc('auto-class','Wizard','class','arcane-dnd5e-2014-automation.classes',{identifier:'wizard',advancement:{...adv,grant:{type:'ItemGrant',level:1,configuration:{items:[{uuid:'auto-feature'}]}}}});
  doc('native-sub','Evocation','subclass','dnd5e.subclasses',{identifier:'evocation',classIdentifier:'wizard',advancement:{grant:{type:'ItemGrant',level:2,configuration:{items:[{uuid:'sub-feature'}]}}}});
  const packs=[...new Set([...docs.values()].map(d=>d.pack))].map(collection=>({collection,documentName:'Item',getIndex:async()=>[...docs.values()].filter(d=>d.pack===collection).map(d=>({_id:d.uuid,name:d.name,type:d.type,system:d.system})),getDocument:async id=>docs.get(id)}));
- const execute=vm.runInNewContext('('+queryBuild.toString()+')',{game:{packs},CONFIG:{DND5E:{pactCastingProgression:{1:{slots:1,level:1},5:{slots:2,level:3}}}},fromUuid:async id=>docs.get(id)});
+ const execute=vm.runInNewContext('('+queryBuild.toString()+')',{game:{packs},CONFIG:{DND5E:{SPELL_SLOT_TABLE:[[2],[3],[4,2],[4,3],[4,3,2]],spellcasting:{spell:{progression:{half:{divisor:2},artificer:{divisor:2,roundUp:true},third:{divisor:3}}}},pactCastingProgression:{1:{slots:1,level:1},5:{slots:2,level:3}}}},fromUuid:async id=>docs.get(id)});
  return {execute,docs};
 }
 test('actual import sources, selected subclass and source immutability',async()=>{
@@ -80,4 +80,26 @@ test('spell table links after preview limit are read, filtered by system slots, 
  const r=await execute({className:'wizard',subclassName:'evocation',level:5});
  assert.equal(r.spellAccess.slots,2);assert.equal(r.spellTables[0].entries.length,1);assert.equal(r.spellTables[0].entries[0].uuid,'spell3');
  assert.equal(r.spellTables[0].interpretation,'expanded-list-candidates-not-granted');assert.ok(!r.documents.some(x=>x.uuid==='spell4'));
+});
+
+test('single-class half and artificer slots use system table and round up',async()=>{
+ for(const progression of ['half','artificer','third']){
+  const {execute,docs}=fixture();docs.get('auto-class').system.spellcasting={progression};
+  const r=await execute({className:'wizard',subclassName:'evocation',level:5});
+  assert.equal(r.spellAccess.level,progression==='third'?1:2);
+ }
+});
+test('empty typed feat choice expands only the selected package category',async()=>{
+ const {execute,docs}=fixture();docs.get('auto-feature').system.type={value:'class',subtype:'infusion'};
+ docs.get('auto-class').system.advancement={choice:{type:'ItemChoice',configuration:{choices:{2:{count:1}},type:'feat',pool:[],restriction:{type:'class',subtype:'infusion'}}}};
+ const r=await execute({className:'wizard',subclassName:'evocation',level:5});
+ assert.equal(r.class.advancements[0].configuration.pool[0].uuid,'auto-feature');
+ assert.equal(r.class.advancements[0].configuration.pool.length,1);
+});
+
+test('single-class rounding does not grant level-one 2014 half-caster slots',async()=>{
+ const {execute,docs}=fixture();docs.get('auto-class').system.spellcasting={progression:'half'};
+ assert.equal((await execute({className:'wizard',subclassName:'evocation',level:1})).spellAccess,null);
+ docs.get('auto-class').system.spellcasting={progression:'artificer'};
+ assert.equal((await execute({className:'wizard',subclassName:'evocation',level:1})).spellAccess.level,1);
 });

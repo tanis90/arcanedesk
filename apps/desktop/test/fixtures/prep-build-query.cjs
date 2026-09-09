@@ -56,10 +56,14 @@ async function queryBuild({className,level,raceName,subclassName,rules='2014',cl
   };
   // The system validates structured level and item prerequisites; textual requirements
   // may carry additional restrictions that the system data has not encoded.
-  const candidate=async uuid=>{
+  const candidate=async (uuid,restriction={})=>{
     const d=await read(uuid);
     if(!d||!edition(d))return {...await resolve(uuid),eligibility:'unresolved'};
     const s=d.toObject().system,p=s.prerequisites||{};
+    if(d.type==='spell'&&restriction.level!==undefined&&restriction.level!==''){
+      const max=restriction.level==='available'?spellAccess?.level:Number(restriction.level);
+      if(Number.isFinite(max)&&(restriction.level==='available'?s.level>max:s.level!==max))return null;
+    }
     if(Number.isFinite(p.level)&&p.level>level)return null;
     const text=String(s.requirements||'').trim();
     const onlyLevel=/^(?:[\u3400-\u9fff]+等级\s*\d+|[a-z -]+\s+levels?\s*\d+)$/i.test(text);
@@ -75,8 +79,12 @@ async function queryBuild({className,level,raceName,subclassName,rules='2014',cl
     const table=CONFIG.DND5E.pactCastingProgression||{};
     const key=Object.keys(table).map(Number).filter(n=>n<=level).sort((a,b)=>b-a)[0];
     if(key!==undefined)spellAccess={...table[key],source:'CONFIG.DND5E.pactCastingProgression',scope:'requested class only'};
-  }else if(casting?.progression==='full'&&typeof CONFIG!=='undefined'){
-    const row=CONFIG.DND5E.SPELL_SLOT_TABLE?.[level-1];
+  }else if(casting?.progression&&typeof CONFIG!=='undefined'){
+    const prog=CONFIG.DND5E.spellcasting?.spell?.progression?.[casting.progression];
+    const divisor=prog?.divisor||(casting.progression==='full'?1:null);
+    const initial=divisor?(prog?.roundUp?Math.ceil:Math.floor)(level/divisor):0;
+    const effective=initial&&divisor>1?Math.ceil(level/divisor):initial;
+    const row=effective?CONFIG.DND5E.SPELL_SLOT_TABLE?.[effective-1]:null;
     if(row)spellAccess={level:row.length,slotsByLevel:row,source:'CONFIG.DND5E.SPELL_SLOT_TABLE',scope:'requested class only'};
   }
   // Read links before preview truncation. Only spell-labelled table rows are included;
@@ -120,9 +128,23 @@ async function queryBuild({className,level,raceName,subclassName,rules='2014',cl
       if(a.type==='ItemChoice'){
         c.choices=Object.fromEntries(Object.entries(c.choices||{}).filter(([l])=>Number(l)<=level));
         if(!Object.keys(c.choices).length)continue;
-        const originalCount=(c.pool||[]).length;
-        c.pool=(await Promise.all((c.pool||[]).map(r=>candidate(typeof r==='string'?r:r.uuid)))).filter(Boolean);
+        let pool=c.pool||[];
+        if(!pool.length&&c.type==='feat'&&c.restriction?.type&&c.restriction?.subtype){
+          // Mirror the system's typed compendium picker within the selected package.
+          // This expands a declared category, never rematches an explicit link.
+          const namespace=root.selected.pack.slice(0,root.selected.pack.lastIndexOf('.')+1);
+          const entries=[];
+          for(const p of packs.filter(p=>p.collection.startsWith(namespace))){
+            for(const e of await index(p))if(e.type==='feat'&&e.system?.type?.value===c.restriction.type&&e.system?.type?.subtype===c.restriction.subtype){
+              const d=await p.getDocument(e._id);if(edition(d))entries.push(d.uuid);
+            }
+          }
+          pool=[...new Set(entries)];c.poolSource={kind:'selected-package-category',namespace,restriction:c.restriction};
+        }
+        const originalCount=pool.length;
+        c.pool=(await Promise.all(pool.map(r=>candidate(typeof r==='string'?r:r.uuid,c.restriction)))).filter(Boolean);
         c.excludedByLevel=originalCount-c.pool.length;
+        if(!c.pool.length)unresolved.push({uuid:root.selected.uuid,advancementId:a._id,title:a.title,reason:'choice has no explicit eligible candidates; inspect source restriction/list configuration'});
         c.eligibilityNote='Level checked at target level; conditional requirements must be satisfied before selection. Historical acquisition is not validated.';
       }
       if(a.type==='ItemGrant')c.items=await Promise.all((c.items||[]).map(async r=>({...await resolve(typeof r==='string'?r:r.uuid),optional:!!r.optional})));
@@ -135,7 +157,7 @@ async function queryBuild({className,level,raceName,subclassName,rules='2014',cl
       spellcasting:actual.spellcasting,movement:actual.movement,advancements};
   };
   const projected={class:await project(cls),subclass:await project(sub),race:await project(race)};
-  return {version:4,level,rules,classRole,...projected,spellAccess,spellTables,documents:[...documents.values()].map(d=>{
+  return {version:5,level,rules,classRole,...projected,spellAccess,spellTables,documents:[...documents.values()].map(d=>{
       const prune=v=>Array.isArray(v)?v.map(prune):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,prune(x)]).filter(([k,x])=>x!==undefined&&x!==null&&x!==''&&!(typeof x==='object'&&Object.keys(x).length===0))):v;
       return prune(d);
     }),fallbacks,unresolved,
