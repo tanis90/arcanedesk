@@ -34,7 +34,7 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 | 面板区域生命周期 | `panel:open` / `panel:close` 与 `panel_layout` / `panel_status` 事件 |
 | 主题/i18n | `resolveTheme()` / `resolveLocale()` / `ARCANE_MESSAGES`，query 传入 |
 
-新增依赖仅两个（见 §6）：`viz.js`（Graphviz 的 WASM 移植，vendor 进 `generated/renderer-assets/`）与 `plantuml-encoder`（数 KB 纯 JS）。
+新增依赖仅一个（见 §6）：`viz.js`（Graphviz 的 WASM 移植，vendor 进 `generated/renderer-assets/`）。
 
 ## 3. 状态机
 
@@ -168,14 +168,8 @@ Markdown 主包不换：marked 18（已 vendor）+ 手工 DOM 管线。文生图
 |---|---|---|---|
 | `mermaid` | mermaid 11（现有） | 无 | 本地渲 SVG，零成本 |
 | `dot` / `graphviz` | viz.js（新增，WASM 移植） | 无 | 纯 JS 离线 |
-| `plantuml` | PlantUML Server + `plantuml-encoder`（新增） | 需要 | deflate 编码拼图片 URL，`<img>` 加载；CSP `img-src` 已允许 `https:` |
-| 其他（`blockdiag` 等） | 同 PlantUML 通道 | 需要 | 能力取决于服务器 |
 
-PlantUML 没有可用的纯 JS 离线渲染（npm 上的 plantuml 包底层都是 JVM wrapper），因此走服务器通道并配三条护栏：
-
-1. **服务器地址一个设置项**：默认 `https://www.plantuml.com/plantuml`，可指向自托管 [Kroki](https://kroki.io)（单容器同时支持 PlantUML/Graphviz/BlockDiag 等数十种，文生图万能网关）或内网 plantuml-server；
-2. **离线降级（R3）**：服务器不可达时，围栏渲染为源码块 + 一行「图形需要连接图表服务器渲染」，不空白、不上错误墙；
-3. **本地 JVM + plantuml.jar 的离线渲染归 agent 侧工具链**（生成 SVG 落盘再由阅读器显示），不进 renderer，v1 不做。
+**只支持纯离线渲染**：PlantUML 没有可用的纯 JS 实现（npm 上的 plantuml 包底层都是 JVM wrapper），依赖 PlantUML Server / Kroki 的方案已被否决（见 §10）。未命中注册表的围栏一律保持源码块——这本来就是管线的缺省行为，无需额外降级逻辑。本地 JVM + plantuml.jar 渲 SVG 落盘归 agent 侧工具链，不进阅读器，v1 不做。
 
 ## 7. IPC 与安全围栏
 
@@ -221,22 +215,21 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 | `src/main/main.js` | 接线：`md-reader:open/back` IPC、`layoutViews` 走控制器、`panel:open/close` 与 `openFoundryView` 委托控制器 | ~80 行改 |
 | `src/main/preload-reader.cjs` | 新建：readerView 的三方法桥 | ~20 行 |
 | `src/renderer/md-reader.html` / `md-reader.js` | 新建：阅读器页（CSP 同 foundry-unavailable，引 marked/katex/hljs/mermaid 本地资源 + `markdown.js`，顶栏 + 正文栏） | ~180 行 |
-| `src/renderer/markdown.js` | `.md` 链接锚点 + 裸路径 post-process + fence 渲染器注册表（mermaid 迁入、dot/plantuml 新增） | ~150 行 |
+| `src/renderer/markdown.js` | `.md` 链接锚点 + 裸路径 post-process + fence 渲染器注册表（mermaid 迁入、dot 新增） | ~130 行 |
 | `src/renderer/chat.js` | 消息体点击委托 → `openMdReader` | ~20 行 |
 | `preload.cjs` | `openMdReader` | ~5 行 |
-| `src/shared/i18n/messages.js` | §5.5 文案键 + 图表降级文案（zh/en） | ~25 行 |
-| 设置面板 | 图表服务器地址一项 | ~20 行 |
+| `src/shared/i18n/messages.js` | §5.5 文案键（zh/en） | ~20 行 |
 | `generated/renderer-assets/` | vendor viz.js | 构建脚本改动 |
-| `test/` | 路径正则、围栏 resolve、状态机转移、fence 分发与降级、面板切换 smoke | ~250 行 |
+| `test/` | 路径正则、围栏 resolve、状态机转移、fence 分发、面板切换 smoke | ~230 行 |
 
 renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件协议不变）。
 
 ## 9. 测试与验收
 
-- 单测（`node --test`）：路径匹配正则全形态；围栏 resolve（目录内/越界/盘符/行号）；状态机四态 × 四事件全转移表；fence 注册表分发（mermaid/dot/plantuml）与离线降级；
+- 单测（`node --test`）：路径匹配正则全形态；围栏 resolve（目录内/越界/盘符/行号）；状态机四态 × 四事件全转移表；fence 注册表分发（mermaid/dot）与未知语言保持源码块；
 - smoke：仿 `smoke-panel-ui.mjs`，起真实窗口验证 ② 打开、③ 两分支、④ 顶掉与瞬时唤回；
 - 门禁：`npm run verify:source && npm test` 全绿；
-- 手测清单：三种主题/语言组合下的阅读器页；含 mermaid/dot/plantuml 围栏的笔记渲染与断网降级；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
+- 手测清单：三种主题/语言组合下的阅读器页；含 mermaid/dot 围栏的笔记渲染；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
 
 ## 10. 被否决方案存档
 
@@ -248,3 +241,4 @@ renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件
 | ④ 发生时往 chat 推系统消息 | "顶掉就顶掉"，回看走 chat 原有路径即可 |
 | 战斗模式硬门禁 | 买到的是代码量和边界 bug；点击即意图，机制一致零门禁 |
 | tab 条/多笔记并存 | 复杂度上台阶；出现"同时对照两份笔记"的真实需求再演进 |
+| PlantUML Server / Kroki 服务器通道 | 依赖网络与外部服务，与本地阅读器定位不符；本地 JVM 渲染归 agent 侧工具链 |
