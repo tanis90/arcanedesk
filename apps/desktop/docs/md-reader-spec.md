@@ -25,7 +25,7 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 
 因此阅读器**必须也是 main 侧的一个 `WebContentsView`**（下称 readerView），加载本地 `renderer/md-reader.html`。两个 view 同一时刻最多一个可见，切换只做显隐，不销毁对方——Foundry 页面重建昂贵（加载 + 会话），阅读器重建廉价（读文件 + 渲染），但保活成本同样极低，保活换来重复点击时的瞬时恢复（滚动位置保留）。
 
-复用清单（零新依赖）：
+复用清单与新增依赖：
 
 | 能力 | 复用 |
 |---|---|
@@ -33,6 +33,8 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 | 右屏自定义页面样板 | `foundry-unavailable.html`（loadFile + query 传 theme/locale） |
 | 面板区域生命周期 | `panel:open` / `panel:close` 与 `panel_layout` / `panel_status` 事件 |
 | 主题/i18n | `resolveTheme()` / `resolveLocale()` / `ARCANE_MESSAGES`，query 传入 |
+
+新增依赖仅两个（见 §6）：`viz.js`（Graphviz 的 WASM 移植，vendor 进 `generated/renderer-assets/`）与 `plantuml-encoder`（数 KB 纯 JS）。
 
 ## 3. 状态机
 
@@ -158,7 +160,24 @@ stateDiagram-v2
 
 错误不道歉、不含糊、给下一步（R3/R5）；错误也渲染在阅读器页面里（不在 chat 弹任何东西）。
 
-## 6. IPC 与安全围栏
+## 6. 渲染管线与文生图
+
+Markdown 主包不换：marked 18（已 vendor）+ 手工 DOM 管线。文生图统一走 **fence 渲染器注册表**：`markdown.js` 在围栏代码块分发处按 language 查注册表，命中即渲染，未命中保持源码块。注册表挂在渲染管线本体上，chat 气泡与阅读器两处同时生效，扩展新图类型 = 加一条注册项。
+
+| fence 语言 | 渲染器 | 网络 | 说明 |
+|---|---|---|---|
+| `mermaid` | mermaid 11（现有） | 无 | 本地渲 SVG，零成本 |
+| `dot` / `graphviz` | viz.js（新增，WASM 移植） | 无 | 纯 JS 离线 |
+| `plantuml` | PlantUML Server + `plantuml-encoder`（新增） | 需要 | deflate 编码拼图片 URL，`<img>` 加载；CSP `img-src` 已允许 `https:` |
+| 其他（`blockdiag` 等） | 同 PlantUML 通道 | 需要 | 能力取决于服务器 |
+
+PlantUML 没有可用的纯 JS 离线渲染（npm 上的 plantuml 包底层都是 JVM wrapper），因此走服务器通道并配三条护栏：
+
+1. **服务器地址一个设置项**：默认 `https://www.plantuml.com/plantuml`，可指向自托管 [Kroki](https://kroki.io)（单容器同时支持 PlantUML/Graphviz/BlockDiag 等数十种，文生图万能网关）或内网 plantuml-server；
+2. **离线降级（R3）**：服务器不可达时，围栏渲染为源码块 + 一行「图形需要连接图表服务器渲染」，不空白、不上错误墙；
+3. **本地 JVM + plantuml.jar 的离线渲染归 agent 侧工具链**（生成 SVG 落盘再由阅读器显示），不进 renderer，v1 不做。
+
+## 7. IPC 与安全围栏
 
 边界只有一条：renderer → main 的 `md-reader:open`（信任边界 ①，输入校验只在此处，R1 规则）。
 
@@ -184,7 +203,7 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 
 `md-reader:back`（来自 readerView 的 preload）：按 origin 执行 ③。
 
-## 7. 实现结构
+## 8. 实现结构
 
 新增 `src/main/panel-surface-controller.js`（状态机唯一 owner，R2）：
 
@@ -202,22 +221,24 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 | `src/main/main.js` | 接线：`md-reader:open/back` IPC、`layoutViews` 走控制器、`panel:open/close` 与 `openFoundryView` 委托控制器 | ~80 行改 |
 | `src/main/preload-reader.cjs` | 新建：readerView 的三方法桥 | ~20 行 |
 | `src/renderer/md-reader.html` / `md-reader.js` | 新建：阅读器页（CSP 同 foundry-unavailable，引 marked/katex/hljs/mermaid 本地资源 + `markdown.js`，顶栏 + 正文栏） | ~180 行 |
-| `src/renderer/markdown.js` | `.md` 链接锚点 + 裸路径 post-process | ~70 行 |
+| `src/renderer/markdown.js` | `.md` 链接锚点 + 裸路径 post-process + fence 渲染器注册表（mermaid 迁入、dot/plantuml 新增） | ~150 行 |
 | `src/renderer/chat.js` | 消息体点击委托 → `openMdReader` | ~20 行 |
 | `preload.cjs` | `openMdReader` | ~5 行 |
-| `src/shared/i18n/messages.js` | §5.5 文案键（zh/en） | ~20 行 |
-| `test/` | 路径正则、围栏 resolve、状态机转移、面板切换 smoke | ~200 行 |
+| `src/shared/i18n/messages.js` | §5.5 文案键 + 图表降级文案（zh/en） | ~25 行 |
+| 设置面板 | 图表服务器地址一项 | ~20 行 |
+| `generated/renderer-assets/` | vendor viz.js | 构建脚本改动 |
+| `test/` | 路径正则、围栏 resolve、状态机转移、fence 分发与降级、面板切换 smoke | ~250 行 |
 
 renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件协议不变）。
 
-## 8. 测试与验收
+## 9. 测试与验收
 
-- 单测（`node --test`）：路径匹配正则全形态；围栏 resolve（目录内/越界/盘符/行号）；状态机四态 × 四事件全转移表；
+- 单测（`node --test`）：路径匹配正则全形态；围栏 resolve（目录内/越界/盘符/行号）；状态机四态 × 四事件全转移表；fence 注册表分发（mermaid/dot/plantuml）与离线降级；
 - smoke：仿 `smoke-panel-ui.mjs`，起真实窗口验证 ② 打开、③ 两分支、④ 顶掉与瞬时唤回；
 - 门禁：`npm run verify:source && npm test` 全绿；
-- 手测清单：三种主题/语言组合下的阅读器页；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
+- 手测清单：三种主题/语言组合下的阅读器页；含 mermaid/dot/plantuml 围栏的笔记渲染与断网降级；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
 
-## 9. 被否决方案存档
+## 10. 被否决方案存档
 
 | 方案 | 否决原因 |
 |---|---|
