@@ -65,3 +65,33 @@ Item/Activity 身份；不扣资源、不创建规则效果、不要求 Combatan
 
 **验收**：有 Token 且入口支持时仅播放一次；资产缺失／超时／异常后资源仍只扣一次，
 无额外效果、战斗或召唤物；旧包无入口正常完成记账。确认实际包集成后再关闭。
+
+
+## 追加职业后的CR重评未实现
+
+- 决策：本轮不实现、不自动估算CR。来源CR保留，DM明确指定时才修改；交付时说明没有重新评估。
+- 背景：相同职业等级对不同基础怪物的威胁增量不同，例如狼人追加战士与龙追加施法职业，不能用每级固定增加CR的方式处理。
+- 后续若重启：独立设计整体威胁评估与验证案例，再讨论实现；不视为当前必做项。不以修改CR绕过熟练派生问题。
+- 依据与当前边界：[唯一技术方案§26.1](foundry-prep-play-technical-plan.md#261-cr边界已确认)。本条不涉及auto pack变更。
+
+## 车卡试跑发现：奥术回想的职业定位与资源字段（仅记录）
+
+背景：六题benchmark v2的Qwen A1工具组导入了`Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW`。只读检查内嵌宏发现它按`i.type === "class" && i.name === "法师wizard"`定位等级，并使用旧式`system.uses.value`写入。当前未执行此宏，不宣称已经复现运行故障。
+
+需求：能识别合法导入的法师职业条目，兼容本地dnd5e资源消耗字段；不能要求agent仅为宏而使用某个精确本地化名称。
+
+改造思路：由auto pack维护者后续评估使用稳定identifier/关联字段定位职业，并按支持的系统版本适配资源消费API，加入不同显示名与资源耗尽场景验证。本轮不修改auto pack，不把这项自动化可用性算作模型配置失败。背景见[benchmark手册](prep-character-benchmark-manual.md)。
+
+
+### auto pack 职业能力标识规范化（只记录，不修改包）
+
+背景：六题职业成长benchmark中，施法、奥术传承等条目的system.identifier为空，奥术回想/法术塑形带前导连字符。条目来源UUID真实，旧验收器却无法关联能力和资源。当前以审核后的UUID别名表兼容，未修改auto pack。
+
+需求：在auto pack本轮大改稳定后，为职业能力提供稳定、无歧义的机器标识；显示名和翻译变化不应影响能力识别。
+
+改造思路：包维护侧统一生成与校验identifier，处理同名跨职业能力、既有UUID和旧卡迁移；客户端继续兼容旧来源UUID，回归验证资源与活动关联。不在当前benchmark迭代中直接改包。参见[技术方案](foundry-prep-play-technical-plan.md#27-六题benchmark实现试跑与验收修订完成)与[修订证据](prep-character-benchmark-audit.md)。
+
+
+### 成长候选的附加先决条件结构化（auto pack 后续协同）
+
+背景：查询v4发现祈唤已具备prerequisites.level，但苦痛魔爆、饥渴魔刃等的魔能爆/刃之魔契要求仅在requirements文本里，prerequisites.items为空。需求：工具能够可靠区分等级可选与前置选择已满足。改造思路：由auto pack维护方审查可表达的Item标识关联，按dnd5e原生前置条件语义补入，复杂“或”条件不能强行简化；同时保留规则文字。当前不修改auto pack，只在查询中保留条件待确认。关联[唯一技术方案§30](foundry-prep-play-technical-plan.md#30-查询-v4候选资格与子职法术表2026-09-09)。
