@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 9,
+  "auditedTrials": 10,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -153,6 +153,27 @@
         "spells.cantrips",
         "spells.book",
         "spells.prepared"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957979562",
+      "case": "A3",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 170.033,
+      "calls": 12,
+      "toolSeconds": 3.321,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "class.subclass",
+        "feature.bonus-proficiency",
+        "abilities.legal",
+        "hp.full",
+        "skills.abilities",
+        "gear.light-hammer"
       ],
       "verifier": "v4",
       "timeoutMs": 300000
