@@ -14,9 +14,11 @@ test("new schemas reject unknown keys and unbounded selectors", () => {
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected" }], conditions: [{ key: "prone", active: false }] }), true);
   assert.equal(valid("foundry_conditions_set", { targets: Array(21).fill({ kind: "selected" }), conditions: [{ key: "prone", active: false }] }), false);
   assert.equal(valid("foundry_conditions_set", { targets: [{ kind: "selected", code: "x" }], conditions: [{ key: "prone", toggle: true }] }), false);
+  assert.equal(valid("foundry_image", { sourcePath: "images/npc.webp", targetUuid: "Item.a" }), true);
+  assert.equal(valid("foundry_image", { dataPath: "assets/npc.png", targetUuid: "JournalEntry.j.JournalEntryPage.p" }), true);
   const actor = image => ({ actorUuid: "Actor.a", readRef: "read", changes: { image } });
-  assert.equal(valid("foundry_actor_update", actor({ sourcePath: "images/npc.webp", syncPlacedTokens: true })), true);
-  assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png" })), true);
+  assert.equal(valid("foundry_actor_update", actor({ sourcePath: "images/npc.webp", syncPlacedTokens: true })), false);
+  assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png" })), false);
   assert.equal(valid("foundry_actor_update", actor({ sourcePath: "npc.png", dataPath: "assets/npc.png" })), false);
   assert.equal(valid("foundry_actor_update", actor({ dataPath: "assets/npc.png", upload: { base64: "secret" } })), false);
   assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter" }, tokens: { create: [{ actorUuid: "Actor.a", x: 0, y: 0 }] } }), true);

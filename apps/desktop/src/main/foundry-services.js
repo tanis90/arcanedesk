@@ -67,19 +67,19 @@ export class FoundryServices {
 
   async writeContent(action, params, binding, toolCallId, signal) {
     const reject = (code, message) => ({ status: "rejected", code, message });
-    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "sceneApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
+    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
     const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action, input: params });
     if (replay) return replay;
     const { readRef, ...values } = params;
     const readState = readRef ? this.readRefs.get(readRef) : null;
     const sceneAction = action === "sceneApply";
-    const creating = action === "actorCreate" || (sceneAction && params.operation === "create");
+    const creating = action === "imageApply" || action === "actorCreate" || (sceneAction && params.operation === "create");
     const identityKey = sceneAction ? "sceneUuid" : "actorUuid";
     if (!creating && (!readState || !params[identityKey] || readState[identityKey] !== params[identityKey])) return reject("READ_REF_INVALID", "Read this document in the current session first");
     const metadata = await binding.metadata;
     if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
     const args = { ...values, world: metadata.world, ...(readState ? { readState } : {}) };
-    const image = sceneAction ? values.scene?.background : action === "actorCreate" ? values.image : values.changes?.image;
+    const image = sceneAction ? values.scene?.background : ["actorCreate", "imageApply"].includes(action) ? values.image : values.changes?.image;
     const local = image && "sourcePath" in image;
     const cwd = local ? this.getCwd?.() : null;
     if (local && (!cwd || !this.withAssets || !this.decodeImage)) return reject("CAPABILITY_UNAVAILABLE", "Local image upload is unavailable");
@@ -105,7 +105,7 @@ export class FoundryServices {
           const runtimeImage = { dataPath: prepared.dataPath, syncPlacedTokens: image.syncPlacedTokens,
             upload: { base64: prepared.bytes.toString("base64"), hash: prepared.hash, extension: prepared.extension, mimeType: prepared.mimeType } };
           runtimeArgs = sceneAction ? { ...runtimeArgs, scene: { ...values.scene, background: runtimeImage } }
-            : action === "actorCreate" ? { ...runtimeArgs, image: runtimeImage }
+            : ["actorCreate", "imageApply"].includes(action) ? { ...runtimeArgs, image: runtimeImage }
             : { ...runtimeArgs, changes: { ...values.changes, image: runtimeImage } };
         }
         return this.call(action, runtimeArgs, { signal, executionTimeoutMs: 60_000 });

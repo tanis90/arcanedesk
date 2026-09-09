@@ -4,7 +4,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const assert=require("node:assert/strict"), path=require("node:path"), fs=require("node:fs"), crypto=require("node:crypto");
   const productionPrep=fs.readFileSync(path.resolve(__dirname,"../../system-prompts/prep.md"),"utf8").trim();
   const common="你是 ArcaneDesk 备团助手。遵循 DM 的明确要求。测试世界已经连接且 GM 就绪。使用精确世界对象和合集来源，避免重复创建。只用公开 Foundry Document API，等待每次写入完成，返回紧凑结果并确认实际变化。不确定写入不能重放。只操作用户指定的测试对象，不修改模块文件或包。缺少必要信息才提问。成功回复简洁，用中文。";
-  const newTools=new Set(["world_status","foundry_play_context","foundry_conditions_set","foundry_content_search","foundry_actor_get","foundry_actor_create","foundry_actor_update","foundry_actor_grant_items","foundry_scene_get","foundry_scene_apply"]);
+  const newTools=new Set(["world_status","foundry_play_context","foundry_conditions_set","foundry_content_search","foundry_actor_get","foundry_actor_create","foundry_actor_update","foundry_actor_grant_items","foundry_scene_get","foundry_scene_apply","foundry_image"]);
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
@@ -31,8 +31,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   report.experiment.promptPolicy=promptMode==="production"?"Production Prep prompt for tools; neutral native-JS instructions for control":"Same neutral instructions with arm-specific routing";
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
-  if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical 16 tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
-  if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and 16 tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
+  if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical exposed tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
+  if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??180000);
   report.experiment.experienceTargetMs=120000;
@@ -119,7 +119,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    assert.equal(trial.activeTools.length,nativeSkillArm?16:arm==="js"?8:18,"Ablated tool count changed");
+    const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
+    assert.deepEqual([...trial.activeTools].sort(),[...expectedTools].sort(),"Ablated tool set changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
     assert.ok(host.session.systemPrompt.includes(productionPrep),"Prep preamble anchor changed");

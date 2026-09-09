@@ -76,7 +76,8 @@ app.whenReady().then(async () => {
     const runtimeSource = JSON.parse(source.match(/export const runtimeFunction: string = (.*);/)[1]);
     let allowedActions;
     if (label === "candidate" || option("comparison") === "revision") ({ DESKTOP_FOUNDRY_ACTIONS: allowedActions } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js"));
-    revisions[label] = { AgentHost, DirectFoundryRuntime, ResourceCoordinator, ExecutionScheduler, runtimeSource, allowedActions };
+    const { activeToolNames } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js");
+    revisions[label] = { AgentHost, DirectFoundryRuntime, ResourceCoordinator, ExecutionScheduler, runtimeSource, allowedActions, prepToolNames: activeToolNames("prep") };
     const digest = value => require("node:crypto").createHash("sha256").update(value).digest("hex");
     report.revisionInputs ??= {};
     report.revisionInputs[label] = {

@@ -27,6 +27,7 @@ export function toolFamily(toolName) {
     case "foundry_conditions_set":
     case "foundry_actor_create":
     case "foundry_actor_update":
+    case "foundry_image":
     case "foundry_actor_grant_items":
     case "foundry_scene_apply":
       return "combat.execute";
@@ -79,6 +80,7 @@ export function actionFamily(action) {
     case "conditionsSet":
     case "actorCreate":
     case "actorEdit":
+    case "imageApply":
     case "actorGrantItems":
     case "sceneApply":
       return "execute_turn";

@@ -33,6 +33,19 @@ test("one lease, bound selection, alias resolution and operation lookup without 
   assert.equal(f.calls.length, 1);
 });
 
+test("independent image operations need no Actor handle, bind world and replay once", async t => {
+  const f = fixture(t), params = { image: { dataPath: "assets/image.png" }, targetUuid: "JournalEntry.j.JournalEntryPage.p" };
+  assert.equal((await f.service.writeContent("imageApply", params, f.binding, "image")).code, "MODE_FORBIDDEN");
+  f.service.mode = "prep";
+  f.service.call = async (action, args) => { f.calls.push({ action, args }); return { status: "completed", dataPath: params.image.dataPath, steps: [], verification: [], warnings: [] }; };
+  const result = await f.service.writeContent("imageApply", params, f.binding, "image");
+  assert.equal(result.status, "completed"); assert.equal(result.dataPath, params.image.dataPath);
+  assert.equal(f.calls[0].action, "imageApply"); assert.equal(f.calls[0].args.targetUuid, params.targetUuid);
+  assert.deepEqual(f.calls[0].args.world, (await f.binding.metadata).world);
+  assert.deepEqual(await f.service.writeContent("imageApply", params, f.binding, "image"), result);
+  assert.equal(f.calls.length, 1);
+});
+
 test("missing admission world and cancellation never dispatch", async t => {
   const f = fixture(t), params = { targets: [], conditions: [] };
   assert.equal((await f.service.setConditions(params, { taskId: "t", metadata: Promise.resolve(null) }, "call")).status, "rejected");

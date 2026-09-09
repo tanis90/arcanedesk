@@ -23,7 +23,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  */
 export const ALL_DIRECT_ACTIONS = [
   "sceneRead", "sceneApply",
-  "actorRead", "actorCreate", "actorEdit", "actorGrantItems",
+  "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "imageApply",
   "contentSearch",
   "staticContext",
   "playContext",
@@ -70,7 +70,7 @@ export type DirectActionEffect = "read" | "write";
  */
 export const DIRECT_ACTION_EFFECTS = {
   sceneRead: "read", sceneApply: "write",
-  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write",
+  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write", imageApply: "write",
   contentSearch: "read",
   staticContext: "read",
   playContext: "read",
@@ -332,6 +332,7 @@ export interface FoundryActionContract<Input, Output> {
 
 export interface FoundryActionMap {
   sceneRead: FoundryActionContract<SceneReadInput, SceneReadResult>;
+  imageApply: FoundryActionContract<{ image: FoundryDataImage; targetUuid?: string; syncPlacedTokens?: boolean; world: { origin: string; id: string }; requestId?: string }, PlayWriteReceipt & { dataPath?: string }>;
   sceneApply: FoundryActionContract<SceneApplyInput, PlayWriteReceipt>;
   actorRead: FoundryActionContract<ActorReadInput, ActorReadResult>;
   actorCreate: FoundryActionContract<ActorCreateInput, PlayWriteReceipt>;
@@ -407,10 +408,12 @@ export interface CompendiumGrant {
 }
 export interface PrepWriteIdentity { world: { origin: string; id: string }; requestId: string }
 /** Internal upload bytes are prepared by the host, never supplied by the model. */
-export interface ActorDataImage {
-  dataPath: string; syncPlacedTokens?: boolean;
+export interface FoundryDataImage {
+  dataPath: string;
   upload?: { base64: string; hash: string; mimeType: string; extension: "png" | "jpg" | "webp" };
 }
+/** Compatibility name for existing Actor callers. */
+export interface ActorDataImage extends FoundryDataImage { syncPlacedTokens?: boolean }
 export interface ActorCreateInput extends PrepWriteIdentity {
   source: { kind: "blank"; actorType: "character" | "npc" } | { kind: "compendium"; packId: string; entryId: string };
   name: string; folderId?: string; initialItems?: CompendiumGrant[]; image?: ActorDataImage;

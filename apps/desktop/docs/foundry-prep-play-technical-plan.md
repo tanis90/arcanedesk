@@ -73,7 +73,8 @@ App/SDK 可推进不依赖包改动的部分和兼容检查；依赖缺失时在
 | foundry_content_search | read | ✓ | — | 新增世界/合集内容搜索 |
 | foundry_actor_get | read | ✓ | — | 新增角色编辑前读取 |
 | foundry_actor_create | write | ✓ | — | 新增空白/合集角色创建 |
-| foundry_actor_update | write | ✓ | — | 新增有限字段与图片/Token 更新 |
+| foundry_actor_update | write | ✓ | — | 有限字段更新；图片独立交给 foundry_image |
+| foundry_image | write | ✓ | — | 独立上传、可复用 Data 路径及文档图片应用 |
 | foundry_actor_grant_items | write | ✓ | — | 新增从合集授物 |
 | foundry_scene_get | read | ✓ | — | 新增明确场景读取 |
 | foundry_scene_apply | write | ✓ | — | 新增场景元数据、背景、批量 Token |
@@ -82,7 +83,7 @@ App/SDK 可推进不依赖包改动的部分和兼容检查；依赖缺失时在
 
 备团保留原三个 Foundry 工具，增加七项核心能力（search、actor get/create/update/grant、
 scene get/apply）和三个共享入口（world_status、play_context、conditions_set），
-共十三个 Foundry 工具。另保留平台 read/edit/write/powershell 或 bash。
+另加独立 foundry_image，共十四个 Foundry 工具。加上 request_user_input 和平台 read/edit/write/powershell 或 bash，当前备团合计 19 个。
 
 跑团固定六个 Foundry 工具：open、world_status、play_context、static_context、
 execute_action、conditions_set。相对原六工具：移除 browser_evaluate，
@@ -153,13 +154,13 @@ type Source =
   | { kind: "name"; name: string; scope: "focus" | "actors" };
 
 type DataImage =
-  | { kind: "local"; sourcePath: string }
-  | { kind: "foundry"; dataPath: string };
+  | { sourcePath: string }
+  | { dataPath: string };
 
-interface ActorImageInput {
-  image: DataImage;
-  syncPlacedTokens?: boolean; // default false
-}
+type FoundryImageInput = DataImage & {
+  targetUuid?: string; // omit for upload/path only
+  syncPlacedTokens?: boolean; // Actor only, default false
+};
 
 interface CompendiumGrant {
   packId: string;
@@ -262,16 +263,16 @@ sceneTokens 读取该世界各 Scene 中真正指向目标 Actor 的 Token，区
 本节为当前合同；R1 计划补齐创建时的原型设置，尚未实现，见第 14.3 节。
 
 输入 `source: {kind:blank,actorType:character|npc} | {kind:compendium,packId,entryId}`、
-`name`；可选 `folderId`、`image: ActorImageInput`、`initialItems: CompendiumGrant[]`、`prototypeToken: { name: string }`。
+`name`；可选 `folderId`、`initialItems: CompendiumGrant[]`、`prototypeToken: { name: string }`。
 prototypeToken 只开放显式名称（非空白，最多 256 字符），随原生创建一次写入，保留来源其他原型字段；
 省略时保持原生行为。创建后名称回读不符返回 partial 并保留角色，不重建。
 显式指定名称且创建成功时，verification 返回已核验的 prototypeToken.name，供模型直接确认。
 initialItems 最多 50。folder 必须是已有 Actor folder；不按名称自动创建目录。
 
-流程：解析合集与资源 → 检查同名/同 request → 建 Actor → 设置图片 → 授初始物品
+流程：解析合集与资源 → 检查同名/同 request → 建 Actor → 授初始物品
 → 最小回读。全部可预检项在首次写前检查。同名返回已有候选，不随意再建；DM 可改名
 后再次请求。同一来源创建不同名字允许。Actor 已建而后续失败返回 partial 和 UUID，
-不删除已建角色、不重新创建。初始图片同已有角色图片规则。
+不删除已建角色、不重新创建。图片通过独立 foundry_image 使用创建结果中的 UUID 设置。旧 SDK 图片参数保留兼容，不再向模型暴露。
 
 ### 5.4 foundry_actor_update
 
@@ -281,7 +282,6 @@ initialItems 最多 50。folder 必须是已有 Actor folder；不按名称自�
 interface ActorChanges {
   name?: string;
   folderId?: string | null;
-  image?: ActorImageInput;
   prototypeToken?: {
     name?: string;
     width?: number; height?: number; // >0, <=100
@@ -297,9 +297,7 @@ interface ActorChanges {
 不暴露任意 dotted patch。HP 非负且 value 不超过修改后的 max；临时 HP 非负；flat AC
 仅适用于当前配置支持的模式，不能只写 flat 后声称派生 AC 已改变。超出支持范围拒绝，
 具体数值由 Runtime 检查实际 system 字段，不自动裁定“合理属性”。
-image 更新 actor.img、prototypeToken.texture.src；Token Ring 已启用时同步 subject
-texture，不擅自启用 ring。syncPlacedTokens=true 时只更新绑定 Actor 的存量 Token
-图片/ring，不能覆盖其独立名称、尺寸、位置。范围在回执列出，逐文档报告部分完成。
+图片已迁移到 foundry_image；本工具不再向模型暴露 image 参数。SDK 旧 Actor 图片实现保留兼容，由新入口复用。
 
 ### 5.5 foundry_actor_grant_items
 
@@ -354,7 +352,14 @@ actorLink 缺省继承 actor prototypeToken，不强制设 false。坐标/尺寸
 create Scene 与 Token 都记录请求来源，导航不确定时可查已创建对象，不盲目重建。
 不写 walls/lights/tiles/notes/sounds；后续在同一工具加可选段，不增加 CRUD 工具矩阵。
 
-### 5.8 图片与本地资源
+### 5.8 foundry_image：独立图片与本地资源
+
+输入为 `{ sourcePath | dataPath, targetUuid?, syncPlacedTokens? }`，两个路径参数互斥。不提供目标时仅上传并返回可复用 dataPath，可用于任意文档、富文本和未来文档类型，不绑定 Actor。
+
+可选直接应用支持世界 Actor、Item（含嵌入 Item）、image 类型 JournalEntryPage：分别更新 Actor 头像及原型 Token、Item.img、图片页.src。Actor 的 syncPlacedTokens=true 同步 linked/unlinked 存量 Token 及已启用 Ring 的 subject，保留名称、位置和尺寸。Text Journal 页拒绝直接覆盖；使用返回的路径和原生 API 插入正文图片。拒绝合集目标，不改 auto pack。
+
+不要求模型先获取 readRef；同一次页面租约内读目标图片快照，上传后检查同一身份与图片状态，Actor 同步复用既有局部冲突检查。回执含 dataPath 与逐文档步骤，部分完成不重放；上传成功而应用失败时，路径与已完成步骤仍可用于人工复核。
+
 
 本地 sourcePath 最大 4096 字符；Desktop realpath 校验在用户 prep cwd 内，拒绝目录
 穿越、符号链接越界。首版 png/jpeg/webp，单文件至多 10 MiB；校验真实格式与大小。
@@ -1399,3 +1404,19 @@ JS 失败具体为 AC 与存量 Token 图片未修改、实际状态为空、将
 成本与停止审计：三个正式块共 24 次任务、210 次工具调用，任务耗时合计约 19.94 分钟；另有 1 次零工具配置失败及 4 次短参数探针。usage 记录 input=421349、cacheRead=2463232、output=56466、reasoning=0；这是供应商返回的 token 计数，不是工程人时或费用，配置中的零单价不代表免费。工程时间未独立计时。本轮新增工具数为零，实验批量合同/实现/测试分支已撤回；保留小范围 provider 兼容、验收器及可复现记录。继续追加提示或接口不能解决已暴露的完整任务正确性，达到本轮停止条件。
 
 完成证据：三对参数实验、三对未见迁移、六题回归均有原始报告及逐次索引；失败与 posthoc 复核分开；SDK 回退后 96 项测试通过，provider 18 项测试及真实请求验证通过，牧师验收器 5 项测试通过。产品工具集合保持 18，实验指南仅在测试 fixture 中，未写入产品 skill；runtime 与工具定义恢复为 ddf1132 的单查询版本。本轮迭代在此结算，不把“所有任务可靠创建”冒充已完成；后续若重开角色创建优化，应使用新未见题并另行预注册。
+
+## 15. 四组能力交付与独立图片入口（2026-09-09）
+
+按用户确认交付 conditions_set、scene_get/apply、actor_grant_items、独立图片能力。前面三组沿用已验证的服务、回执、去重和局部并发检查；本次不新增角色创建抽象、不改 auto pack、不增加休息能力。图片独立为 foundry_image，当前合同见 §5.8；普通 actor_create/update 不再暴露图片参数，旧 SDK Actor 图片参数仅保留兼容。Scene 的背景设置继续可使用 Data 路径及既有便捷上传，不限制独立图片路径的其他用途。
+
+实现：Desktop 共用有界文件读取、图像解码、hash 路径、工作目录/页面租约与 operation store；SDK 新增显式 opt-in 的 imageApply 写动作，默认四个安全动作不扩张。独立图片上传不需要 Actor；可选目标为世界 Actor、世界/嵌入 Item、Journal 图片页。Actor 分支复用已有 Token 图片同步和冲突检查，其他文档使用原生 img/src 字段及局部快照检查。同步条件仅属于 Actor 应用参数，通用图片资源类型不含 Actor 语义。Journal 正文图片通过返回的路径和原生 API 插入，避免猜测或覆盖页面内容。
+
+模型入口仅新增一个工具：备团 19 个（含通用工具），跑团仍 7 个（含 request_user_input）。系统提示同步路由；benchmark 从各代码版本的策略读取准确工具集合，不再硬编码历史 18/16 数量。历史实验工具集合与结论不回写。
+
+验证见[交付记录](prep-image-delivery-results.json)：
+
+- 真实 tool → service → runtime 完成 JPEG 路径复用和全新 PNG 首次上传；检查 SHA-256，重复同一 toolCallId 无再次 dispatch。
+- Actor 头像/原型、linked 与 unlinked Token、世界 Item、嵌入 Item、Journal 图片页均确认更新；Token 布局和名称、Journal 文本页、当前场景保持不变。合集目标、文本页直接覆盖和非 Actor 同步拒绝。
+- 首次 smoke 的验证脚本误用 Collection.every；写入回执均完成，独立复核后仅清理本次标记对象。修为 contents.every 后两次完整通过，原失败保留。
+- Qwen3.7-plus、thinking off、COS 五项各一次：授物 19.81 秒，布局 23.38 秒，状态 14.71 秒，上传 10.25 秒，字段/图片同步 19.16 秒，全部通过。上传路径为 content_search → foundry_image，字段同步明确分别使用 image 与 actor_update。单样本证明入口可用，不宣称稳定提速。运行时工作区尚未提交，记录 runtime/tool 文件 hash 而不只依赖 HEAD。
+- SDK 100 项测试覆盖旧能力及新图片文档行为；Desktop 相关测试及类型检查覆盖工具集合、审批绑定、世界绑定、重复调用与内部上传字节不泄露。提供可复用 `node apps/desktop/test/smoke-foundry-image.mjs --target=local-cos --fresh-image`，失败保留自有对象供核查，成功仅清理自有 fixture，上传的内容寻址文件保留复用。
