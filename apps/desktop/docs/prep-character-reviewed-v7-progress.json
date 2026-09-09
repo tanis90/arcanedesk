@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 12,
+  "auditedTrials": 14,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -203,6 +203,34 @@
       "seconds": 223.235,
       "calls": 46,
       "toolSeconds": 8.025,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958550242",
+      "case": "B1",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 130.132,
+      "calls": 17,
+      "toolSeconds": 0.436,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958689502",
+      "case": "B1",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 99.754,
+      "calls": 11,
+      "toolSeconds": 0.402,
       "success": true,
       "timeout": false,
       "failures": [],
