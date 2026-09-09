@@ -103,3 +103,12 @@ test('single-class rounding does not grant level-one 2014 half-caster slots',asy
  docs.get('auto-class').system.spellcasting={progression:'artificer'};
  assert.equal((await execute({className:'wizard',subclassName:'evocation',level:1})).spellAccess.level,1);
 });
+
+test('grant description lists preserve exact links and choice hints without inventing grants',async()=>{
+ const {execute,docs}=fixture();docs.get('auto-feature').system.description={value:'<ul><li>@UUID[sub-feature]</li></ul>'};
+ docs.get('auto-class').system.advancement.grant.hint='Choose one; replaces the original feature.';
+ const r=await execute({className:'wizard',subclassName:'evocation',level:5});
+ assert.equal(r.linkedLists[0].entries[0].uuid,'sub-feature');
+ assert.equal(r.class.advancements[0].hint,'Choose one; replaces the original feature.');
+ assert.equal(r.class.advancements[0].configuration.items.length,1);
+});

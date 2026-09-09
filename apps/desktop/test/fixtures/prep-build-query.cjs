@@ -150,14 +150,35 @@ async function queryBuild({className,level,raceName,subclassName,rules='2014',cl
       if(a.type==='ItemGrant')c.items=await Promise.all((c.items||[]).map(async r=>({...await resolve(typeof r==='string'?r:r.uuid),optional:!!r.optional})));
       if(a.type==='Subclass'&&sub.selected)continue;
       if(a.type==='Subclass'&&!sub.selected)unresolved.push({kind:'subclass',reason:'select subclassName to include its cumulative grants'});
-      advancements.push({id:a._id,sourceUuid:root.selected.uuid,level:a.level??null,type:a.type,title:a.title,configuration:c});
+      advancements.push({id:a._id,sourceUuid:root.selected.uuid,level:a.level??null,type:a.type,title:a.title,hint:a.hint||undefined,configuration:c});
     }
     const actual=root.selected.toObject().system;
     return {...ref(root.selected),hitDice:actual.hd?.denomination||actual.hitDice,
       spellcasting:actual.spellcasting,movement:actual.movement,advancements};
   };
   const projected={class:await project(cls),subclass:await project(sub),race:await project(race)};
-  return {version:5,level,rules,classRole,...projected,spellAccess,spellTables,documents:[...documents.values()].map(d=>{
+  const linkedLists=[];
+  // Preserve explicitly linked lists in granted features. They are references, not
+  // automatic grants or an inferred replacement for a differently typed choice pool.
+  const granted=new Set([projected.class,projected.subclass,projected.race].filter(Boolean).flatMap(r=>r.advancements.filter(a=>a.type==='ItemGrant').flatMap(a=>a.configuration.items.filter(i=>!i.unresolved).map(i=>i.uuid))));
+  for(const uuid of granted){
+    const d=await read(uuid);if(!d)continue;
+    const lists=String(d.system.description?.value||'').match(/<(?:ul|ol)\b[^>]*>[\s\S]*?<\/(?:ul|ol)>/gi)||[];
+    const entries=[],seen=new Set();
+    for(const list of lists){
+      const lis=list.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi)||[];
+      if(!lis.length||!lis.every(li=>!li.replace(/@UUID\[[^\]]+\](?:\{[^}]*\})?/g,'').replace(/<[^>]*>/g,'').trim()))continue;
+      for(const m of list.matchAll(/@UUID\[([^\]]+)\]/g)){
+      if(/\.subclasses\./.test(m[1]))continue;
+      const item=await read(m[1]);
+      if(!item){unresolved.push({uuid:m[1],sourceUuid:uuid,reason:'description list link missing'});continue;}
+      if(!['feat','spell','equipment','weapon'].includes(item.type)||seen.has(item.uuid))continue;
+      seen.add(item.uuid);const entry=await candidate(item.uuid);if(entry)entries.push(entry);
+    }
+    }
+    if(entries.length)linkedLists.push({sourceUuid:uuid,name:d.name,interpretation:'source-linked-references-not-automatic-grants',entries});
+  }
+  return {version:6,level,rules,classRole,...projected,spellAccess,spellTables,linkedLists,documents:[...documents.values()].map(d=>{
       const prune=v=>Array.isArray(v)?v.map(prune):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,prune(x)]).filter(([k,x])=>x!==undefined&&x!==null&&x!==''&&!(typeof x==='object'&&Object.keys(x).length===0))):v;
       return prune(d);
     }),fallbacks,unresolved,
