@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 10,
+  "auditedTrials": 12,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -175,6 +175,37 @@
         "skills.abilities",
         "gear.light-hammer"
       ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958159170",
+      "case": "A3",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_tool",
+      "seconds": 146.542,
+      "calls": 22,
+      "toolSeconds": 3.922,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "movement.walk",
+        "armor.effective"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958316022",
+      "case": "A3",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_js",
+      "seconds": 223.235,
+      "calls": 46,
+      "toolSeconds": 8.025,
+      "success": true,
+      "timeout": false,
+      "failures": [],
       "verifier": "v4",
       "timeoutMs": 300000
     }
