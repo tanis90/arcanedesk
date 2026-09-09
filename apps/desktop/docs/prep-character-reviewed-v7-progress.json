@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 8,
+  "auditedTrials": 9,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -134,6 +134,26 @@
       "success": true,
       "timeout": false,
       "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788957697900",
+      "case": "A3",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 272.345,
+      "calls": 25,
+      "toolSeconds": 2.52,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "movement.walk",
+        "skills.abilities",
+        "spells.cantrips",
+        "spells.book",
+        "spells.prepared"
+      ],
       "verifier": "v4",
       "timeoutMs": 300000
     }
