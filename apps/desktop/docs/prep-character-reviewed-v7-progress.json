@@ -1,7 +1,7 @@
 {
   "status": "running",
   "expectedTrials": 24,
-  "auditedTrials": 14,
+  "auditedTrials": 16,
   "scope": "one sample per combination; no stable speed claim",
   "rows": [
     {
@@ -231,6 +231,34 @@
       "seconds": 99.754,
       "calls": 11,
       "toolSeconds": 0.402,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958798482",
+      "case": "B1",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_tool",
+      "seconds": 54.093,
+      "calls": 13,
+      "toolSeconds": 0.211,
+      "success": true,
+      "timeout": false,
+      "failures": [],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788958861488",
+      "case": "B1",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_js",
+      "seconds": 120.233,
+      "calls": 26,
+      "toolSeconds": 0.429,
       "success": true,
       "timeout": false,
       "failures": [],
