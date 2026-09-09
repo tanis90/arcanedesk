@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
   console.log(`Usage: npm run benchmark:prep -- --qa-root=<private profile> --qa-report=<QA fixture report> [--samples=10]
-Requires logged-in QA-A (30101/9231, cos-a), built SDK and encrypted qa-kimi-coding provider.
+Requires a logged-in target world, built SDK and an encrypted provider in the private profile.
+For local COS (30000/9230), pass --target=local-cos; character tasks also use --character-suite --comparison=build-query --cases=A1,A2,A3,B1,B2,B3.
+Character benchmark guide: apps/desktop/docs/prep-character-benchmark-manual.md.
 Set ARCANE_QA_ELECTRON to an Electron executable if it is not installed locally.
 Reports are written beneath qa-root. See apps/desktop/docs/prep-benchmark.md.`);
 } else {

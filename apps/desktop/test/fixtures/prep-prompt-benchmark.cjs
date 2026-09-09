@@ -8,17 +8,22 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
-  const npcCases=["npc_wizard","npc_werewolf","npc_priest"];
+  const characterSuite=process.argv.includes("--character-suite");
+  const character=characterSuite?require("../character-benchmark/model-adapter.cjs")(evaluate):null;
+  if(characterSuite)assert.equal(comparison,"build-query");
+  const npcCases=[...(character?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
   const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision","native-skill","skill-revision"].includes(comparison));
-  if(["native-skill","skill-revision"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
+  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","build-query"].includes(comparison));
+  if(["native-skill","skill-revision","pack-skill","rules-ablation","build-query"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
   const nativeRevision=process.argv.includes("--native-npc");
+  const withRulesSkill=process.argv.includes("--rules-skill");
+  if(withRulesSkill)assert.equal(comparison,"pack-skill","Rules skill pilot uses the production pack-skill candidate");
   if(nativeRevision)assert.ok(comparison==="revision"&&cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
-  const arms=comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  const arms=comparison==="build-query"?["native_skill_build_js","native_skill_build_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
   if(process.argv.includes("--reverse-first"))arms.reverse();
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
@@ -32,13 +37,19 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="revision"){assert.equal(promptMode,"production");assert.ok(baselineRevision);assert.equal(fs.readFileSync(path.join(baselinePath,"apps/desktop/system-prompts/prep.md"),"utf8").trim(),productionPrep,"Revision experiments freeze the production prompt");report.experiment.kind="paired tool revisions, fixed production prompt";report.experiment.baselineCommit=require("node:child_process").execFileSync("git",["rev-parse","HEAD"],{cwd:baselinePath,encoding:"utf8"}).trim();}
   if(comparison==="native-skill"){report.experiment.kind="current tools versus native NPC skill without actor create/update";report.experiment.promptPolicy="Production prompt control; native skill workflow routing for candidate";}
   if(comparison==="skill-revision"){report.experiment.kind="paired skill revisions; identical exposed tools and native routing";report.experiment.promptPolicy="Same native skill routing; only skill body differs";}
+  if(comparison==="pack-skill"){report.experiment.kind="native NPC guide versus same guide plus production actor skill";report.experiment.promptPolicy="Same tools and native NPC guide; candidate additionally exposes the unchanged production arcane-actor-update skill and asks the model to read it for source discovery";}
+  if(comparison==="rules-ablation"){report.experiment.kind="paired SRD rules skill ablation";report.experiment.promptPolicy="Same native NPC guide, production pack guide and tools; only candidate receives SRD rules skill and read instruction";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
+  if(comparison==="build-query"){report.experiment.kind="source progression query tool ablation";report.experiment.promptPolicy="Same native, pack and build-query guides; candidate additionally exposes one read-only query tool; no SRD rules skill";}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
-  report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??180000);
+  if(characterSuite){report.experiment.suiteVersion="character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
+  report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??(characterSuite?300000:180000));
   report.experiment.experienceTargetMs=120000;
+
   const thinkingOverride=process.argv.find(a=>a.startsWith("--thinking="))?.slice(11);
   if(thinkingOverride)assert.ok(["off","low","medium","high"].includes(thinkingOverride));
   report.experiment.thinkingOverride=thinkingOverride??null;
+  report.experiment.rulesSkill=withRulesSkill||comparison==="rules-ablation";
   assert.ok(Number.isInteger(report.experiment.taskTimeoutMs)&&report.experiment.taskTimeoutMs>=120000&&report.experiment.taskTimeoutMs<=300000);
   report.experiment.imageSha256=imageHash;
   report.prepTrials=[];
@@ -47,6 +58,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     assert.equal(previous.status,"failed");assert.ok(["Ambiguous run retained for inspection; no automatic retry/cleanup","InvalidStateError: The source image could not be decoded."].includes(previous.error));
     assert.equal(previous.experiment.candidateCommit,report.experiment.candidateCommit);
     assert.equal(previous.experiment.comparison,comparison);assert.equal(previous.experiment.baselineCommit,report.experiment.baselineCommit);assert.deepEqual(previous.experiment.cases,cases);
+    assert.ok(!["pack-skill","rules-ablation","build-query"].includes(comparison),"Skill injection experiments start fresh blocks; do not resume unfrozen sources");
     assert.equal(previous.experiment.promptMode,promptMode);assert.equal(previous.experiment.suiteVersion,report.experiment.suiteVersion);assert.equal(previous.experiment.imageSha256,imageHash);
     assert.equal(previous.fixtureRun,report.fixtureRun);assert.equal(previous.experiment.samplesPerCase,samples);
     report.prepTrials=previous.prepTrials;report.experiment=previous.experiment;
@@ -75,7 +87,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     conditions:`给世界角色“${label} 角色1”和“${label} 角色2”都加上倒地和中毒状态，不影响“${label} 角色3”。`
   })[id];
   const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
-  const verify=(id,f)=>id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
+  const verify=(id,f)=>characterSuite?character.verify(id,f):id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
   for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
@@ -89,8 +101,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const nativeSkillArm=nativeRevision||arm.startsWith("native_skill");
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
-    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
-    const trial={sample,caseId,arm,fixture:f,prompt:prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
+    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=characterSuite?await character.setup(caseId,label):await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
+    const trial={sample,caseId,arm,fixture:f,prompt:characterSuite?character.prompt(caseId,label):prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
     if(caseId==="upload_image"){
       const localImage=path.join(cwd,"benchmark20260508180804.jpg");fs.copyFileSync(imageFile,localImage);
@@ -99,13 +111,54 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
     if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
     if(nativeRevision){report.experiment.nativeSkillHash??=trial.skillHash;assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Native revision comparison must freeze its skill");}
+    const skillPaths=nativeSkillArm?[path.dirname(skillPath)]:[];
+    if(["pack-skill","rules-ablation","build-query"].includes(comparison)){
+      report.experiment.nativeSkillHash??=trial.skillHash;
+      assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Pack comparison must freeze the native guide");
+    }
+    if(["native_skill_pack","native_skill_rules","native_skill_build_js","native_skill_build_tool"].includes(arm)){
+      const sourcePath=path.resolve(__dirname,"../../skills/prep/arcane-actor-update/SKILL.md");
+      const injectedPath=path.join(cwd,"skills/arcane-actor-update/SKILL.md");
+      fs.mkdirSync(path.dirname(injectedPath),{recursive:true});fs.copyFileSync(sourcePath,injectedPath);
+      const hash=crypto.createHash("sha256").update(fs.readFileSync(injectedPath)).digest("hex");
+      report.experiment.packSkillHash??=hash;assert.equal(hash,report.experiment.packSkillHash,"Production skill must stay frozen during the batch");
+      trial.packSkill={sourcePath,path:injectedPath,sha256:hash};skillPaths.push(path.dirname(injectedPath));
+      if(withRulesSkill||arm==="native_skill_rules"){
+        const sourceDir=path.resolve(__dirname,"../../skills/prep/arcane-dnd5e-rules");
+        const targetDir=path.join(cwd,"skills/arcane-dnd5e-rules");
+        fs.cpSync(sourceDir,targetDir,{recursive:true,errorOnExist:true,force:false});
+        const walk=dir=>fs.readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]);
+        const files=walk(targetDir).map(file=>({path:path.relative(targetDir,file).split(path.sep).join("/"),sha256:crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex")}));
+        const sha256=crypto.createHash("sha256").update(JSON.stringify(files)).digest("hex");
+        report.experiment.rulesSkillHash??=sha256;assert.equal(sha256,report.experiment.rulesSkillHash);
+        trial.rulesSkill={path:path.join(targetDir,"SKILL.md"),sha256,fileCount:files.length};skillPaths.push(targetDir);
+      }
+    }
+    if(comparison==="build-query"){
+      const sourcePath=path.join(__dirname,"prep-build-query-skill/SKILL.md");
+      const targetPath=path.join(cwd,"skills/fvtt-build-query/SKILL.md");
+      fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));
+      trial.buildSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};
+      trial.buildToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-build-query.cjs"))).digest("hex");
+      report.experiment.buildSkillHash??=trial.buildSkill.sha256;assert.equal(trial.buildSkill.sha256,report.experiment.buildSkillHash);
+      report.experiment.buildToolHash??=trial.buildToolHash;assert.equal(trial.buildToolHash,report.experiment.buildToolHash);
+      trial.prompt=trial.prompt.replace("其他未指定选项自行合理决定", "其他未指定项沿用系统或来源默认；必要选择没有默认时做最少的合理补充");
+    }
+    if(characterSuite){const sourcePath=path.join(__dirname,"../character-benchmark/skill/SKILL.md"),targetPath=path.join(cwd,"skills/character-benchmark/SKILL.md");fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));trial.characterSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};}
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
-      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>nativeSkillArm?[path.dirname(skillPath)]:[]},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
+      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
+    if(arm==="native_skill_build_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original(),require("./prep-build-query.cjs").createTool(evaluate)];}
     setHost(host);await host.start({fresh:true});
+    if(arm==="native_skill_build_tool"){
+      // Test-only addition to Pi's explicit tool allowlist; production policy stays unchanged.
+      assert.ok(host.session._allowedToolNames instanceof Set);
+      host.session._allowedToolNames.add("foundry_build_query");
+      host.session._refreshToolRegistry();
+    }
     if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
     trial.modelConfiguration={reasoning:host.session.model.reasoning,compat:host.session.model.compat??null};
     trial.requestModes=[];
@@ -113,13 +166,15 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     host.session.agent.onPayload=async(payload,model)=>{
       const replacement=await priorPayload?.(payload,model);
       const actual=replacement??payload;
-      trial.requestModes.push({enable_thinking:actual.enable_thinking??"omitted",reasoning_effort:actual.reasoning_effort??"omitted"});
+      trial.requestModes.push({enable_thinking:actual.enable_thinking??"omitted",thinking:actual.thinking??"omitted",reasoning_effort:actual.reasoning_effort??"omitted"});
       return replacement;
     };
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
+    if(arm==="native_skill_build_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_build_query"])]);
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
     const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
+    if(arm==="native_skill_build_tool")expectedTools.push("foundry_build_query");
     assert.deepEqual([...trial.activeTools].sort(),[...expectedTools].sort(),"Ablated tool set changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
@@ -129,8 +184,20 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       assert.ok(host.session.systemPrompt.includes("fvtt-native-npc"),"Skill metadata must be loaded through resource loader");
       prompt=host.session.systemPrompt.replace(productionPrep,common+" 创建或修改 NPC 前先读取可用的 fvtt-native-npc skill。使用 foundry_content_search 发现资源，普通角色创建和修改使用 browser_evaluate 原生 API；其他已开放工具按需要使用。不要调用未开放的 actor_create 或 actor_update。");
     }
+    if(trial.packSkill){
+      assert.ok(host.session.systemPrompt.includes("arcane-actor-update"),"Production skill metadata must be exposed by the resource loader");
+      prompt+="\n查找法术、能力等合集素材前，先用 read 读取生产备团指南："+trial.packSkill.path+"。按其中的来源包优先级和中英文检索方法定位素材；NPC 创建流程仍遵循 fvtt-native-npc。";
+    }
+    if(trial.rulesSkill){
+      assert.ok(host.session.systemPrompt.includes("arcane-dnd5e-rules"));
+      prompt+="\n创建前用 read 读取规则资料索引："+trial.rulesSkill.path+"，按索引查询本次任务所需的规则依据，并用这些依据核对实际结果。";
+    }
+    if(trial.buildSkill)prompt+="\n创建前读取车卡查询指南："+trial.buildSkill.path+"。本指南关于未指定项走默认的约束优先于其他指南的自由补充建议。";
+    if(trial.characterSkill)prompt+="\n本轮是完整职业车卡测试。先读取 "+trial.characterSkill.path+"，其中完整成长范围与默认优先于旧指南的最小NPC建议。";
     host.session._baseSystemPrompt=prompt;host.session.agent.state.systemPrompt=prompt;
     trial.systemPromptHash=crypto.createHash("sha256").update(prompt).digest("hex");trial.systemPromptChars=prompt.length;
+    trial.normalizedSystemPromptHash=crypto.createHash("sha256").update(prompt.split(cwd).join("<TASK_CWD>").split(cwd.split(path.sep).join("/")).join("<TASK_CWD>")).digest("hex");
+    trial.promptNormalizationVersion=2;
     const start=performance.now();let firstEvent=false;
     const unsubscribe=host.session.subscribe(e=>{
       if(!firstEvent&&["message_update","tool_execution_start"].includes(e.type)){trial.firstEventMs=performance.now()-start;firstEvent=true;}

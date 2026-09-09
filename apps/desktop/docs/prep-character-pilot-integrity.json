@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-09T09:53:40.628Z",
+  "attempts": 24,
+  "uniqueCombinations": 24,
+  "terminalAndAudited": 24,
+  "sameSharedInputs": true,
+  "toolDifference": [
+    "foundry_build_query"
+  ],
+  "timeoutCohorts": {
+    "180": 4,
+    "300": 20
+  },
+  "providerFailures": 1,
+  "timeouts": 4,
+  "snapshotsMatch": true,
+  "verifierMatches": true,
+  "manualAutomationCertification": false
+}

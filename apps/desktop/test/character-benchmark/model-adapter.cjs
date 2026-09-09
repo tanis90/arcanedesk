@@ -1,0 +1,8 @@
+const {cases}=require('./cases.cjs'),{snapshot}=require('./runtime.cjs'),{selectVerifier}=require('./verifier.cjs'),sources=require('./sources.json');
+module.exports=(evaluate,{verifierVersion='v4'}={})=>{const selected=selectVerifier(verifierVersion),verify=selected.verify;return {
+ verifier:{version:selected.version,sha256:selected.sha256,dependencyHashes:selected.dependencyHashes},
+ ids:cases.map(p=>p.id),
+ prompt(id,label){const p=cases.find(p=>p.id===id);return p.prompt.replace('{SOURCE_UUID}',p.sourceUuid)+` 命名为“${label} 霜牙”。遵循 character-benchmark 共用默认；只创建这一张卡，不修改已有角色。`;},
+ async setup(id,label){const p=cases.find(p=>p.id===id);return evaluate(`(async()=>{const p=${JSON.stringify(p)},refs=${JSON.stringify(sources[id])};const sourceBefore=p.sourceUuid?(await fromUuid(p.sourceUuid)).toObject():null;const importedSources=[];for(const r of refs){const d=await fromUuid(r.uuid);if(!d)throw Error('Missing frozen source '+r.uuid);importedSources.push({...r,raw:d.toObject()});}return {newName:${JSON.stringify(label+' 霜牙')},name:${JSON.stringify(label+' 霜牙')},sourceBefore,importedSources,beforeActorIds:game.actors.map(a=>a.id)};})()`);},
+ async verify(id,f){const p=cases.find(p=>p.id===id);const ids=await evaluate(`game.actors.filter(a=>a.name===${JSON.stringify(f.name)}).map(a=>a.id)`);let a=null;if(ids.length)[a]=await evaluate(`(${snapshot.toString()})(${JSON.stringify({ids:[ids[0]],sourceUuid:p.sourceUuid})})`);const plan={...p,requiredFeatures:p.requiredFeatures.filter(x=>x!=='dueling'),gear:({A1:[['quarterstaff',1]],A2:[['longsword',1],['shield',1]],A3:[['light-hammer',1]]})[id]||[]};const result=verify(plan,a,f);result.ok=result.configurationPass;return result;}
+};};

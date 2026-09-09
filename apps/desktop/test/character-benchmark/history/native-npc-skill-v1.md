@@ -12,10 +12,9 @@ inspect only the affected fields. Do not modify compendiums, module files or aut
 ## 1. Choose the base and discover the missing content
 
 For a named creature, find a suitable Actor template with foundry_content_search. For a custom NPC,
-choose reasonable unspecified values. When the DM requests class levels, include the cumulative class and
-selected subclass benefits and required choices through that level, even on an NPC sheet. For a plain
-stat-block request without class levels, keep additions proportionate. Identify requirements and their
-expected effective values before writing; identity is separate from display name.
+choose reasonable unspecified values; this is not player class advancement. Identify explicit requirements
+and their data checks, including identity separately from display name. Keep optional additions coherent
+and proportionate to the request; do not turn a simple NPC request into a complete player build.
 
 Search documentType is case-sensitive Actor, Item or Scene. Use returned references and the requested
 rules edition. Do not invent pack IDs. For several items, discover the relevant packs first, then read
@@ -42,8 +41,7 @@ and completed steps available if an operation fails. Stop dependent writes on fa
 - Before import, inspect formulas such as `system.uses.max` and activity consumption targets for references
   to class scales or other items absent from this NPC. Importing a feature's name does not resolve those
   dependencies. If source rules specify a standalone allowance, configure that allowance on this NPC's
-  embedded Item and preserve recovery/consumption. When class levels were requested, import that actual class with numeric system.levels and the selected
-  subclass with system.classIdentifier; do not invent an unrelated class to satisfy a scale.
+  embedded Item and preserve recovery/consumption. Do not invent a class to satisfy an absent scale.
   If the allowance cannot be determined, report the unresolved dependency instead of claiming readiness.
 - After creation/import, read effective values. Fill intended remaining resources from their derived
   maxima with an awaited update in the same script. Check `item.system.uses.max`, `.value`, `.spent`
@@ -55,13 +53,11 @@ Use Actor.create({name,type:'npc',system,...}) or actor.update(patch). Unknown k
 
 | Requirement | Native data and read-back |
 | --- | --- |
-| Skills and expertise | `system.skills[key].value` is 0/1/2; preserve/set `ability` from the source or `CONFIG.DND5E.skills[key].ability`. Read effective `ability`, `value`, `total`; do not write derived `proficient`. |
-| Saving throw proficiency | `system.abilities[key].proficient=1`; verify the effective save. Importing a class does not apply its Trait choices automatically. |
 | Abilities | `system.abilities.str/dex/con/int/wis/cha.value` |
 | Humanoid identity | `system.details.type.value='humanoid'`, ancestry in `system.details.type.subtype` |
 | HP and AC | `system.attributes.hp.value/max`; choose `ac.calc`, then read derived `ac.value` |
 | Caster | `system.attributes.spellcasting`; level in `system.attributes.spell.level` |
-| Proficiency | Read `system.attributes.prof`; derived from CR and native class Items (local NPC uses max(CR,class level)). Caster level is independent of CR; don't try to write proficiency or raise CR to imitate a PC. |
+| Proficiency | Read `system.attributes.prof`; derived from `system.details.cr`. Caster level is independent of CR; don't try to write proficiency or raise CR to imitate a PC. |
 | Slots | Read `system.spells.spellN.max`; set `.value` to intended remaining amount. Inherited `.override` or class Items may alter derivation; inspect and adjust inherited resources to the requested level. |
 | Spells | Preserve actual spell activities; `system.method='spell'`, numeric `system.prepared` (0 unprepared, 1 prepared, 2 always). Old `system.preparation` is not the current path. Cantrips need no slots/preparation. |
 | Equipment | `system.quantity`, `system.equipped` when requested. Preserve native weapon activities. NPC `proficient=null` can mean native default; inspect effective data if relevant. |
@@ -96,10 +92,7 @@ const spellCheck = spell.system.level === 0
 // In the full task, build one data array and import all selected items together.
 ```
 
-Use `Array.from(item.system.activities)` or `item.toObject().system.activities` to inspect activities;
-Object.keys on the live collection is not an activity count.
-
-A false check is an unfinished requirement. Inspect the actual scalar/number before another patch;
+A false check is an unresolved requirement. Inspect the actual scalar/number before another patch;
 do not repeatedly update invented nested fields or verify them instead of the current fields.
 
 ## 3. Return evidence, then stop
@@ -107,8 +100,6 @@ do not repeatedly update invented nested fields or verify them instead of the cu
 Return compact actual checks for the DM's requirements, source-mechanic preservation and resource readiness,
 plus the Actor UUID and mismatches. Use assertions against effective fields, not names alone. Avoid another
 read call if this script already checked the result. If the task is partial or uncertain, report exactly what
-exists; inspect before any retry. Missing normal skills, saves, choices or prepared spells are not an
-accepted automation limitation: finish them when sources are available. Only stop partial for an actual
-blocker or deadline, without labeling the card complete. Do not claim automation execution was tested from data checks alone.
+exists; inspect before any retry. Do not claim automation execution was tested from data checks alone.
 Keep the final answer concise. No automatic concentration, initiative, rest or profession-action mechanisms
 are required merely to configure an NPC.

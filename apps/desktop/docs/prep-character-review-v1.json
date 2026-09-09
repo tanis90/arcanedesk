@@ -1,0 +1,2904 @@
+{
+  "date": "2026-09-09",
+  "phase": "deterministic review fixtures; not model results",
+  "world": "COS",
+  "foundry": "13.351",
+  "system": "dnd5e 5.3.3",
+  "priorities": "provisional pending DM review",
+  "tests": {
+    "positive": 6,
+    "negative": 22,
+    "results": [
+      {
+        "id": "A1.positive",
+        "ok": true
+      },
+      {
+        "id": "A2.positive",
+        "ok": true
+      },
+      {
+        "id": "A3.positive",
+        "ok": true
+      },
+      {
+        "id": "B1.positive",
+        "ok": true
+      },
+      {
+        "id": "B2.positive",
+        "ok": true
+      },
+      {
+        "id": "B3.positive",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.actor.unique",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.class.level",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.class.subclass",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.feature.sculpt-spells",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.abilities.requested",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.hp.full",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.movement.walk",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.spells.slots",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.spells.prepared",
+        "ok": true
+      },
+      {
+        "id": "A1.reject.fireball.ready",
+        "ok": true
+      },
+      {
+        "id": "B2.reject.scale.sneak-attack",
+        "ok": true
+      },
+      {
+        "id": "A2.reject.resource.action-surge",
+        "ok": true
+      },
+      {
+        "id": "A2.reject.gear.shield",
+        "ok": true
+      },
+      {
+        "id": "A2.reject.feature.action-surge",
+        "ok": true
+      },
+      {
+        "id": "A3.reject.domain.bless",
+        "ok": true
+      },
+      {
+        "id": "B1.reject.preserve.trait.di",
+        "ok": true
+      },
+      {
+        "id": "B1.reject.source.unchanged",
+        "ok": true
+      },
+      {
+        "id": "B2.reject.skills.selected",
+        "ok": true
+      },
+      {
+        "id": "B3.reject.preserve.image",
+        "ok": true
+      },
+      {
+        "id": "B1.reject.deleted-source-item",
+        "ok": true
+      },
+      {
+        "id": "B2.reject.deleted-source-item",
+        "ok": true
+      },
+      {
+        "id": "B3.reject.deleted-source-item",
+        "ok": true
+      }
+    ]
+  },
+  "cases": [
+    {
+      "caseId": "A1",
+      "name": "A1 人类法师5级〔验收样例〕",
+      "actorId": "s3uuC7OF6UwVFTd3",
+      "hp": 32,
+      "ac": 12,
+      "walk": 30,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "A1 人类法师5级〔验收样例〕",
+          "observed": "A1 人类法师5级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": 5
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "school-of-evocation",
+          "observed": [
+            "wizard"
+          ]
+        },
+        {
+          "id": "feature.spellcasting",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL"
+          ]
+        },
+        {
+          "id": "feature.arcane-recovery",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9"
+          ]
+        },
+        {
+          "id": "feature.arcane-tradition",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT"
+          ]
+        },
+        {
+          "id": "feature.evocation-savant",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3"
+          ]
+        },
+        {
+          "id": "feature.sculpt-spells",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh"
+          ]
+        },
+        {
+          "id": "abilities.legal",
+          "priority": "important",
+          "ok": true,
+          "expected": "standard array + race + legal ASI",
+          "observed": [
+            9,
+            15,
+            14,
+            18,
+            13,
+            11
+          ]
+        },
+        {
+          "id": "race.source",
+          "priority": "important",
+          "ok": true,
+          "expected": "human",
+          "observed": [
+            "human"
+          ]
+        },
+        {
+          "id": "abilities.requested",
+          "priority": "core",
+          "ok": true,
+          "expected": 18,
+          "observed": 18
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 32,
+          "observed": {
+            "max": 32,
+            "value": 32
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": 30,
+          "observed": 30
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "int",
+            "wis"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "arc": 1,
+            "inv": 1
+          }
+        },
+        {
+          "id": "spells.caster",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": {
+            "level": 5,
+            "abilityLabel": "智力",
+            "attack": 7,
+            "dc": 15,
+            "mod": 4
+          }
+        },
+        {
+          "id": "spells.slots",
+          "priority": "core",
+          "ok": true,
+          "expected": [
+            4,
+            3,
+            2
+          ],
+          "observed": {
+            "spell1": [
+              4,
+              4
+            ],
+            "spell2": [
+              3,
+              3
+            ],
+            "spell3": [
+              2,
+              2
+            ],
+            "spell4": [
+              0,
+              0
+            ],
+            "spell5": [
+              0,
+              0
+            ],
+            "spell6": [
+              0,
+              0
+            ],
+            "spell7": [
+              0,
+              0
+            ],
+            "spell8": [
+              0,
+              0
+            ],
+            "spell9": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "spells.cantrips",
+          "priority": "important",
+          "ok": true,
+          "expected": 4,
+          "observed": 4
+        },
+        {
+          "id": "spells.book",
+          "priority": "important",
+          "ok": true,
+          "expected": 14,
+          "observed": 14
+        },
+        {
+          "id": "spells.prepared",
+          "priority": "important",
+          "ok": true,
+          "expected": 9,
+          "observed": 9
+        },
+        {
+          "id": "fireball.ready",
+          "priority": "core",
+          "ok": true,
+          "expected": "prepared level3 DEX/8d6fire/half/slot",
+          "observed": [
+            "save"
+          ]
+        },
+        {
+          "id": "resource.arcane-recovery",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "长休后充能"
+          }
+        },
+        {
+          "id": "gear.quarterstaff",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.dagger",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.component-pouch",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": false
+            }
+          ]
+        },
+        {
+          "id": "gear.spellbook",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1
+            }
+          ]
+        },
+        {
+          "id": "armor.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 12,
+          "observed": 12
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": null,
+      "sourceSha256": null,
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.wZK2Q0rXB0AQo8h3",
+          "type": "class",
+          "identifier": "wizard",
+          "sha256": "0698470ae66bf4c154997b6ce47923d081c9d92a3a94b0fc7ada3b1099369805"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.Ye5f3FReEnuXfi0y",
+          "type": "subclass",
+          "identifier": "school-of-evocation",
+          "sha256": "64de6a173999f7e5aff69b5001a5b3dd068088e972cbffbd095d0d437ff4ca6f"
+        },
+        {
+          "uuid": "Compendium.dnd5e.races.Item.ydP3QzCmur55mtY2",
+          "type": "race",
+          "identifier": "human",
+          "sha256": "22de5cbc4681e5f564e51e282cd0459bf75043fb7910265fabffc42851cf4bb1"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "type": "feat",
+          "identifier": "spellcasting",
+          "sha256": "ee59c2f24c259cd1b6c02f78152d9eb9920a5c95f51608a9c20b54522caa6e89"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+          "type": "feat",
+          "identifier": "arcane-recovery",
+          "sha256": "a16e481298fbb80262a133fb6833cabd793b875d3656ee602d40918d475c1f3c"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+          "type": "feat",
+          "identifier": "arcane-tradition",
+          "sha256": "0aaa3386133c02db3168b8e18b713c46259683458da2a10c317d8e1143c03b51"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "type": "feat",
+          "identifier": "evocation-savant",
+          "sha256": "3a2425d05e4a9233d5195c920df77bb9e710a77da3b27c53be9f9446d1b1f3a0"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+          "type": "feat",
+          "identifier": "sculpt-spells",
+          "sha256": "8c488415e33164b5922b9d127f88280d6b6c1649b83b61635ef8b3c38a7da969"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.F567808128333146",
+          "type": "weapon",
+          "identifier": "quarterstaff",
+          "sha256": "dd1e8c32b2fcdc9a0ca05896802adf4102b21064eaf8b4b003d25da36ffd6a62"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.78342EC246D19CE6",
+          "type": "weapon",
+          "identifier": "dagger",
+          "sha256": "3112bd31d2133d83d9f549b12d6d606f2ec0c4f523b8fd775eb8cf4d8ed45d64"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.eZGmdOhaTWMicXPW",
+          "type": "container",
+          "identifier": "component-pouch",
+          "sha256": "da152e3c858733d1005cc870cdcb06c202067779c5f4d40053d80547b6e2bc9e"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.LBajgahniRJbAgDr",
+          "type": "loot",
+          "identifier": "spellbook",
+          "sha256": "9c530b2ea838416bdb374fb2dbc9528e38e94f47aaa2609eb2761fd364825dee"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio",
+          "type": "spell",
+          "identifier": "fire-bolt",
+          "sha256": "c3ab0e16fc260e8f1ecdc3e4cc4a346650f30bc4b295986d0dd6bda176870db5"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+          "type": "spell",
+          "identifier": "mage-hand",
+          "sha256": "5d2a63ab6450eb106cb04ee1e78241a99a82d8ac0de7f834533e015faaf13f03"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ",
+          "type": "spell",
+          "identifier": "prestidigitation",
+          "sha256": "3203ec6c199ad66dad85df4885c0396f8af8c9909aeaffce43a9746b3f5d6680"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ctW81uiX56xZR2c5",
+          "type": "spell",
+          "identifier": "ray-of-frost",
+          "sha256": "0e0c258548bcb79bee20dba4ef62046b08962988aa7ee3d7616e26276d1947dc"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H",
+          "type": "spell",
+          "identifier": "mage-armor",
+          "sha256": "eabbc9b920352b19063b18e797dd05b47b9f3a27b9d7efede6b420ebad2ddce9"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7",
+          "type": "spell",
+          "identifier": "shield",
+          "sha256": "c2069d0dd7a638f6882b5ef8933439e67be6cefa9e3f1bfdee506953f2e55940"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+          "type": "spell",
+          "identifier": "magic-missile",
+          "sha256": "626387c0d74f167ddcd6b8f7e43256c5e6fe0fde0fe156be32409d78a221561e"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+          "type": "spell",
+          "identifier": "detect-magic",
+          "sha256": "6ca5480c96ee354a7b9b9e7ee1c6edd5a6d09a68989d2d242982c55fdf9147ea"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.3OZnNhunvRtPOQmH",
+          "type": "spell",
+          "identifier": "identify",
+          "sha256": "b361ca4d5b4cd4bb1ffc1eb169a32e7387af611c8401ce833c5d52f2f06868ba"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz",
+          "type": "spell",
+          "identifier": "find-familiar",
+          "sha256": "217fb0e233a6d51d582abb67f7f0a1e731a6aef36f362cae557d313ac75fbb5c"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.pub0OWVEB71XQx1n",
+          "type": "spell",
+          "identifier": "feather-fall",
+          "sha256": "3f71787cfa901cb2e8da61ee6a35631300dea64e05ba3d766c42837e6e850be5"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku",
+          "type": "spell",
+          "identifier": "sleep",
+          "sha256": "eaabc91383fe2759e352bdd57505526f2145638cc56a2e4b213567463624342d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.1N8dDMMgZ1h1YJ3B",
+          "type": "spell",
+          "identifier": "invisibility",
+          "sha256": "613733423f3182a13048dabad029a08379c0095a0a4ddf71bf90479d147aea45"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL",
+          "type": "spell",
+          "identifier": "misty-step",
+          "sha256": "1c1bde18f21dc007d63748213beec248b4c89f4f90a2688eebf6956bf8e8114d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz",
+          "type": "spell",
+          "identifier": "mirror-image",
+          "sha256": "11d33057b970a56a03bdd7065ad0db8474b8f815fca650fdd6760ba8776fd0f0"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP",
+          "type": "spell",
+          "identifier": "web",
+          "sha256": "9c7b439ea5a30cce8c2a430dde052e8a93c9aaabc0e0c302e5ac394a9ed237bf"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+          "type": "spell",
+          "identifier": "fireball",
+          "sha256": "66c2b6d53ad1e41ebe758fb934d1c46258f99898bca06cfede24210abd5e765d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy",
+          "type": "spell",
+          "identifier": "counterspell",
+          "sha256": "c664a228a1e0605f29789c08974628878e8acefa26151248e722ecd10ace0aa0"
+        }
+      ]
+    },
+    {
+      "caseId": "A2",
+      "name": "A2 人类冠军勇士5级〔验收样例〕",
+      "actorId": "CXTssXZg78i5jU0U",
+      "hp": 44,
+      "ac": 18,
+      "walk": 30,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "A2 人类冠军勇士5级〔验收样例〕",
+          "observed": "A2 人类冠军勇士5级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": 5
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "champion",
+          "observed": [
+            "fighter"
+          ]
+        },
+        {
+          "id": "feature.fighting-style",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c"
+          ]
+        },
+        {
+          "id": "feature.second-wind",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc"
+          ]
+        },
+        {
+          "id": "feature.action-surge",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ"
+          ]
+        },
+        {
+          "id": "feature.martial-archetype",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j"
+          ]
+        },
+        {
+          "id": "feature.extra-attack",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg"
+          ]
+        },
+        {
+          "id": "feature.improved-critical",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM"
+          ]
+        },
+        {
+          "id": "feature.dueling",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4"
+          ]
+        },
+        {
+          "id": "abilities.legal",
+          "priority": "important",
+          "ok": true,
+          "expected": "standard array + race + legal ASI",
+          "observed": [
+            18,
+            14,
+            15,
+            9,
+            13,
+            11
+          ]
+        },
+        {
+          "id": "race.source",
+          "priority": "important",
+          "ok": true,
+          "expected": "human",
+          "observed": [
+            "human"
+          ]
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 44,
+          "observed": {
+            "max": 44,
+            "value": 44
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": 30,
+          "observed": 30
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "str",
+            "con"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "ath": 1,
+            "prc": 1
+          }
+        },
+        {
+          "id": "resource.second-wind",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "在短休或长休后充能"
+          }
+        },
+        {
+          "id": "resource.action-surge",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "在短休或长休后充能"
+          }
+        },
+        {
+          "id": "gear.longsword",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.shield",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.chain-mail",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.handaxe",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 2,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 2,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "armor.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 18,
+          "observed": 18
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": null,
+      "sourceSha256": null,
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.ABEBgWyRhVlDUIfq",
+          "type": "class",
+          "identifier": "fighter",
+          "sha256": "e27b9d51ec116ef4daf17da439426f1a6e884f85daa0447406bb45fe569b21f6"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.sprHbe7cRg9osTzf",
+          "type": "subclass",
+          "identifier": "champion",
+          "sha256": "d369992c77e3f19054ba58145d2c22bc285d9f6c99a0ff6087831c5172ca6442"
+        },
+        {
+          "uuid": "Compendium.dnd5e.races.Item.ydP3QzCmur55mtY2",
+          "type": "race",
+          "identifier": "human",
+          "sha256": "22de5cbc4681e5f564e51e282cd0459bf75043fb7910265fabffc42851cf4bb1"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+          "type": "feat",
+          "identifier": "fighting-style",
+          "sha256": "04b5fd4572026682cddd1ce897f16a57672db897da35f74f0c69a7b52e714f12"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+          "type": "feat",
+          "identifier": "second-wind",
+          "sha256": "b6f558757ea2a1a8f95c60e9748e3ca30fd8aae74171ca4184811b76e775060f"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+          "type": "feat",
+          "identifier": "action-surge",
+          "sha256": "407a8f4e53318b8fea91745644bd976108deabf8af677c0532e15e8ae5c8f1a2"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+          "type": "feat",
+          "identifier": "martial-archetype",
+          "sha256": "893ff254b2e1fefb18579972567c036aff728d95eb49915462ca93a521e9e4af"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "type": "feat",
+          "identifier": "extra-attack",
+          "sha256": "8a42dc8348423e4b898eeecd6a1306cb482686b5fd14122f0cf13c9ec9b6ae02"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+          "type": "feat",
+          "identifier": "improved-critical",
+          "sha256": "5a9b34e3482fe875b3a45e8f0534b9f84276de85ac6667f0aacb48173e1f5843"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+          "type": "feat",
+          "identifier": "dueling",
+          "sha256": "c5234883461e94d647734fc10e1cbd505a1b0338b510a07d1cb0f0a31f79d318"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.ACF6564A64EEDF3D",
+          "type": "weapon",
+          "identifier": "longsword",
+          "sha256": "ac698a02d0a6eaff278d9325166411438cf6ac2613a9cefc1268047e5938dd07"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.sSs3hSzkKBMNBgTs",
+          "type": "equipment",
+          "identifier": "shield",
+          "sha256": "b2e869c93bbd934a4171ba124ae15f033d42d77ef7e6b45c4dfdb11c8ffe1a27"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.rLMflzmxpe8JGTOA",
+          "type": "equipment",
+          "identifier": "chain-mail",
+          "sha256": "5376f4ca4a28b7c2a832cda537796dfff977e9c566bed8ccaba72cee831a83cd"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.5680E5DF807D71EA",
+          "type": "weapon",
+          "identifier": "handaxe",
+          "sha256": "c43695c683a01dae3a3f74512de424e4a31713887ec3bd3227a4937a50acba2f"
+        }
+      ]
+    },
+    {
+      "caseId": "A3",
+      "name": "A3 丘陵矮人生命牧师3级〔验收样例〕",
+      "actorId": "peRyohpA2fw5CyrR",
+      "hp": 30,
+      "ac": 18,
+      "walk": 25,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "A3 丘陵矮人生命牧师3级〔验收样例〕",
+          "observed": "A3 丘陵矮人生命牧师3级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "life-domain",
+          "observed": [
+            "cleric"
+          ]
+        },
+        {
+          "id": "feature.spellcasting",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7"
+          ]
+        },
+        {
+          "id": "feature.divine-domain",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.x637K2Icp2ZFM1TB",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.x637K2Icp2ZFM1TB"
+          ]
+        },
+        {
+          "id": "feature.channel-divinity",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.YpiLQEKGalROn7iJ",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.YpiLQEKGalROn7iJ"
+          ]
+        },
+        {
+          "id": "feature.channel-divinity-turn-undead",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.r91UIgwFdHwkXdia",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.r91UIgwFdHwkXdia"
+          ]
+        },
+        {
+          "id": "feature.bonus-proficiency",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW"
+          ]
+        },
+        {
+          "id": "feature.disciple-of-life",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.jF8AFfEMICIJnAkR",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.jF8AFfEMICIJnAkR"
+          ]
+        },
+        {
+          "id": "feature.channel-divinity-preserve-life",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.hEymt45rICi4f9eL",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.hEymt45rICi4f9eL"
+          ]
+        },
+        {
+          "id": "abilities.legal",
+          "priority": "important",
+          "ok": true,
+          "expected": "standard array + race + legal ASI",
+          "observed": [
+            13,
+            10,
+            16,
+            12,
+            16,
+            8
+          ]
+        },
+        {
+          "id": "race.source",
+          "priority": "important",
+          "ok": true,
+          "expected": "hill-dwarf",
+          "observed": [
+            "hill-dwarf"
+          ]
+        },
+        {
+          "id": "abilities.requested",
+          "priority": "core",
+          "ok": true,
+          "expected": 16,
+          "observed": 16
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 30,
+          "observed": {
+            "max": 30,
+            "value": 30
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": 25,
+          "observed": 25
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 2,
+          "observed": 2
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "wis",
+            "cha"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "med": 1,
+            "rel": 1
+          }
+        },
+        {
+          "id": "spells.caster",
+          "priority": "core",
+          "ok": true,
+          "expected": 3,
+          "observed": {
+            "level": 3,
+            "abilityLabel": "感知",
+            "attack": 5,
+            "dc": 13,
+            "mod": 3
+          }
+        },
+        {
+          "id": "spells.slots",
+          "priority": "core",
+          "ok": true,
+          "expected": [
+            4,
+            2
+          ],
+          "observed": {
+            "spell1": [
+              4,
+              4
+            ],
+            "spell2": [
+              2,
+              2
+            ],
+            "spell3": [
+              0,
+              0
+            ],
+            "spell4": [
+              0,
+              0
+            ],
+            "spell5": [
+              0,
+              0
+            ],
+            "spell6": [
+              0,
+              0
+            ],
+            "spell7": [
+              0,
+              0
+            ],
+            "spell8": [
+              0,
+              0
+            ],
+            "spell9": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "spells.cantrips",
+          "priority": "important",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "spells.book",
+          "priority": "important",
+          "ok": true,
+          "expected": 10,
+          "observed": 10
+        },
+        {
+          "id": "spells.prepared",
+          "priority": "important",
+          "ok": true,
+          "expected": 6,
+          "observed": 6
+        },
+        {
+          "id": "domain.bless",
+          "priority": "core",
+          "ok": true,
+          "expected": "always prepared",
+          "observed": 2
+        },
+        {
+          "id": "domain.cure-wounds",
+          "priority": "core",
+          "ok": true,
+          "expected": "always prepared",
+          "observed": 2
+        },
+        {
+          "id": "domain.lesser-restoration",
+          "priority": "core",
+          "ok": true,
+          "expected": "always prepared",
+          "observed": 2
+        },
+        {
+          "id": "domain.spiritual-weapon",
+          "priority": "core",
+          "ok": true,
+          "expected": "always prepared",
+          "observed": 2
+        },
+        {
+          "id": "resource.channel-divinity",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "在短休或长休后充能"
+          }
+        },
+        {
+          "id": "gear.light-hammer",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.mace",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.shield",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.chain-mail",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "gear.light-crossbow",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "q": 1,
+            "equipped": true
+          },
+          "observed": [
+            {
+              "q": 1,
+              "equipped": true
+            }
+          ]
+        },
+        {
+          "id": "armor.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 18,
+          "observed": 18
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": null,
+      "sourceSha256": null,
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.tlwBnN8GmqJcTgub",
+          "type": "class",
+          "identifier": "cleric",
+          "sha256": "fe3af278f36d04f15d720403a99dc4a4e556bf205eb30942e9e51bb33a482781"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.H3RYLGqCiqm8BP3q",
+          "type": "subclass",
+          "identifier": "life-domain",
+          "sha256": "d894ac17c791209c6b7c58a15bb433acd8910d3d530452245c2febb8c0605012"
+        },
+        {
+          "uuid": "Compendium.dnd5e.races.Item.UQiRQUTBcsz8gZU1",
+          "type": "race",
+          "identifier": "hill-dwarf",
+          "sha256": "5e39723edbb729ed781d169ab9aabd72e39f6c3fb50fdcfeaa372070a19850fd"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7",
+          "type": "feat",
+          "identifier": "spellcasting",
+          "sha256": "80207c941a200a5d58c1b8fcc3d6ca74011b6907752981c0a578218296bd74e9"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.x637K2Icp2ZFM1TB",
+          "type": "feat",
+          "identifier": "divine-domain",
+          "sha256": "79d95e188dd6aff79e02d23d10b0d81e2b3dfe2af199761ed79cf5896f9a9917"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.YpiLQEKGalROn7iJ",
+          "type": "feat",
+          "identifier": "channel-divinity",
+          "sha256": "088be9ed585acdb826fbbf0d796c0d9f9f68ec430f22b52320c15188639a8ee9"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.r91UIgwFdHwkXdia",
+          "type": "feat",
+          "identifier": "channel-divinity-turn-undead",
+          "sha256": "24f62cd1e517d0fe8f1bfde747bd3b085e9f1fdfe854d35a141d03b36dcae85a"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW",
+          "type": "feat",
+          "identifier": "bonus-proficiency",
+          "sha256": "96e523bfc6a575b99cb3d177dfa127773588162ffd033895476a6d6ced3bc728"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.jF8AFfEMICIJnAkR",
+          "type": "feat",
+          "identifier": "disciple-of-life",
+          "sha256": "9c168a274b869bfe135cfd4f9112beb2e829f245ab7723d34c47bde5bf5224f2"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.hEymt45rICi4f9eL",
+          "type": "feat",
+          "identifier": "channel-divinity-preserve-life",
+          "sha256": "474facdbcf281bb6a0db77d9903d7fd8e579f355f42a42d00b6a18221e2c8d73"
+        },
+        {
+          "uuid": "Compendium.dnd5e.races.Item.ufysTkqet2Ctmtyi",
+          "type": "feat",
+          "identifier": "dwarven-resilience",
+          "sha256": "c81d3d8dcdddf4b47fd987ebe088fe1098cee134ec6ce8bdc328a6efa02e71d3"
+        },
+        {
+          "uuid": "Compendium.dnd5e.races.Item.mQPZDRbUhgYTbXKa",
+          "type": "feat",
+          "identifier": "stonecunning",
+          "sha256": "8346f45b643d3e51be8983af7bd209942deca64365633f41b63e3775c09e2419"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.6007BDFC48583052",
+          "type": "weapon",
+          "identifier": "light-hammer",
+          "sha256": "8982b83d58337f3736a96d15d70f564bb274ff997826f6627dbfc0d6d4c2cd98"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.FA55F1F44608ED67",
+          "type": "weapon",
+          "identifier": "mace",
+          "sha256": "7047f32cf225ddca2f7937a9f6a2fe1fb9e10effd7ac493b859be118c6cc0fd0"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.sSs3hSzkKBMNBgTs",
+          "type": "equipment",
+          "identifier": "shield",
+          "sha256": "b2e869c93bbd934a4171ba124ae15f033d42d77ef7e6b45c4dfdb11c8ffe1a27"
+        },
+        {
+          "uuid": "Compendium.dnd5e.items.Item.rLMflzmxpe8JGTOA",
+          "type": "equipment",
+          "identifier": "chain-mail",
+          "sha256": "5376f4ca4a28b7c2a832cda537796dfff977e9c566bed8ccaba72cee831a83cd"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.15A3A6D6FEF0A465",
+          "type": "weapon",
+          "identifier": "light-crossbow",
+          "sha256": "5a14dff40938fa1fa228fd86058300ac01cb9f9d3ab7734926d0ce72a9550560"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.P7mF2MxSuVJwHRRY",
+          "type": "spell",
+          "identifier": "guidance",
+          "sha256": "b5bc3d1a8fbae1dbea2f535063751d6155aa3184d232adef2f1d99c01fa5e8f5"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.n9pJzTDsAwQxJVRl",
+          "type": "spell",
+          "identifier": "sacred-flame",
+          "sha256": "54a4a63f4d68b1d38ed4e87b3a1889481d2f0b20a1fe5e7f4f2f3ee4f160f95e"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.MUO1uYN7JR1hm4dR",
+          "type": "spell",
+          "identifier": "thaumaturgy",
+          "sha256": "cf892d39eab13a776fb25569c2b61a1c3ccb3b14ea4168e0ab2f9f3e907e4030"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.o8Dh7fblk1d16tnO",
+          "type": "spell",
+          "identifier": "healing-word",
+          "sha256": "ca8e0a5d926b2278979dd9e2235b2fd3c803e46c2ab1b7875be307377532ca03"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.gvdA9nPuWLck4tBl",
+          "type": "spell",
+          "identifier": "sanctuary",
+          "sha256": "0e5867a0c9bbbb04146db34173dd26c1840e7236adfaea1fd05f83f5fc58f569"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.arzCrMRgcNiQuh43",
+          "type": "spell",
+          "identifier": "command",
+          "sha256": "d83998fff1ffa0d6f1765fa15fdb2666374b19700cd02523c21f0448b9c77ead"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+          "type": "spell",
+          "identifier": "detect-magic",
+          "sha256": "6ca5480c96ee354a7b9b9e7ee1c6edd5a6d09a68989d2d242982c55fdf9147ea"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.7buEm5KhI5lP8m1z",
+          "type": "spell",
+          "identifier": "guiding-bolt",
+          "sha256": "377b6a1238d3a763287741c0660ad4535b620e584c446bd4d2e826065e40df6b"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Opwh2PdX4runSBlm",
+          "type": "spell",
+          "identifier": "aid",
+          "sha256": "a3d96c6bff3d644209ce2828d4e2c8ed5def1ab30f7fc053a359658428f6dddb"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+          "type": "spell",
+          "identifier": "bless",
+          "sha256": "04c92bcb5fac26f2ebc145b0daaaceda6c743c2fe08a52e96c482ecd737e1cfd"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+          "type": "spell",
+          "identifier": "cure-wounds",
+          "sha256": "46d6d59aadbd24140a491cd037ab7e1c4f72ccfb92439a07a09335da991b7d87"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+          "type": "spell",
+          "identifier": "lesser-restoration",
+          "sha256": "c3b9b0ac489d4d5b6bbfe26c5246aa3c72a67ff4da5ded307efef33c75b33776"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+          "type": "spell",
+          "identifier": "spiritual-weapon",
+          "sha256": "20ec0dd5af5d208071ffdbc86d2395719d3d2d1ed2c27577bd13c79ece7d176a"
+        }
+      ]
+    },
+    {
+      "caseId": "B1",
+      "name": "B1 狼人＋冠军勇士5级〔验收样例〕",
+      "actorId": "GH5Bv7MYav8Nb3m5",
+      "hp": 98,
+      "ac": 11,
+      "walk": 40,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "B1 狼人＋冠军勇士5级〔验收样例〕",
+          "observed": "B1 狼人＋冠军勇士5级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": 5
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "champion",
+          "observed": [
+            "fighter"
+          ]
+        },
+        {
+          "id": "feature.fighting-style",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c"
+          ]
+        },
+        {
+          "id": "feature.second-wind",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc"
+          ]
+        },
+        {
+          "id": "feature.action-surge",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ"
+          ]
+        },
+        {
+          "id": "feature.martial-archetype",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j"
+          ]
+        },
+        {
+          "id": "feature.extra-attack",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg"
+          ]
+        },
+        {
+          "id": "feature.improved-critical",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM"
+          ]
+        },
+        {
+          "id": "feature.dueling",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4"
+          ]
+        },
+        {
+          "id": "abilities.increment",
+          "priority": "important",
+          "ok": true,
+          "expected": "only legal class ASI",
+          "observed": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 98,
+          "observed": {
+            "max": 98,
+            "value": 98
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": "40",
+          "observed": 40
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "str",
+            "con"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "ath": 1,
+            "prc": 2
+          }
+        },
+        {
+          "id": "resource.second-wind",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "在短休或长休后充能"
+          }
+        },
+        {
+          "id": "resource.action-surge",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "sr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "在短休或长休后充能"
+          }
+        },
+        {
+          "id": "source.unchanged",
+          "priority": "core",
+          "ok": true,
+          "expected": "888ab99a0af6a3b675edc1f940e6886ab81f68648e7b1ee785d66b36cd4969f8",
+          "observed": "888ab99a0af6a3b675edc1f940e6886ab81f68648e7b1ee785d66b36cd4969f8"
+        },
+        {
+          "id": "preserve.item.tWfR8uJNnQxpXgDw",
+          "priority": "core",
+          "ok": true,
+          "expected": "Bite (Wolf or Hybrid Form Only)",
+          "observed": "Bite (Wolf or Hybrid Form Only)"
+        },
+        {
+          "id": "preserve.item.abhGXKzA0XGprXED",
+          "priority": "core",
+          "ok": true,
+          "expected": "Multiattack (Humanoid or Hybrid Form Only)",
+          "observed": "Multiattack (Humanoid or Hybrid Form Only)"
+        },
+        {
+          "id": "preserve.item.TiKtAuqd6urQ45Ds",
+          "priority": "core",
+          "ok": true,
+          "expected": "Spear (Humanoid Form Only)",
+          "observed": "Spear (Humanoid Form Only)"
+        },
+        {
+          "id": "preserve.item.36H4LGNMMEYS1Irm",
+          "priority": "core",
+          "ok": true,
+          "expected": "Claws (Hybrid Form Only)",
+          "observed": "Claws (Hybrid Form Only)"
+        },
+        {
+          "id": "preserve.item.2kHNI1T4gg879fDv",
+          "priority": "core",
+          "ok": true,
+          "expected": "Shapechanger",
+          "observed": "Shapechanger"
+        },
+        {
+          "id": "preserve.item.9v8vBxcPazXyBUmo",
+          "priority": "core",
+          "ok": true,
+          "expected": "Keen Hearing and Smell",
+          "observed": "Keen Hearing and Smell"
+        },
+        {
+          "id": "preserve.effects",
+          "priority": "core",
+          "ok": true,
+          "expected": 0,
+          "observed": 0
+        },
+        {
+          "id": "preserve.trait.di",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [
+              "bludgeoning",
+              "piercing",
+              "slashing"
+            ],
+            "bypasses": [
+              "mgc",
+              "sil"
+            ],
+            "custom": ""
+          },
+          "observed": {
+            "value": [
+              "bludgeoning",
+              "piercing",
+              "slashing"
+            ],
+            "bypasses": [
+              "mgc",
+              "sil"
+            ],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dr",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dv",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.ci",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.size",
+          "priority": "core",
+          "ok": true,
+          "expected": "med",
+          "observed": "med"
+        },
+        {
+          "id": "preserve.image",
+          "priority": "important",
+          "ok": true,
+          "expected": "systems/dnd5e/tokens/humanoid/Werewolf.webp",
+          "observed": "systems/dnd5e/tokens/humanoid/Werewolf.webp"
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": "Compendium.dnd5e.monsters.Actor.7tRhrxuknTpHpYcA",
+      "sourceSha256": "51675c4c3880b356db83cbae168ec4c111fff9df55732858cf9d2f27541133ff",
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.ABEBgWyRhVlDUIfq",
+          "type": "class",
+          "identifier": "fighter",
+          "sha256": "e27b9d51ec116ef4daf17da439426f1a6e884f85daa0447406bb45fe569b21f6"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.sprHbe7cRg9osTzf",
+          "type": "subclass",
+          "identifier": "champion",
+          "sha256": "d369992c77e3f19054ba58145d2c22bc285d9f6c99a0ff6087831c5172ca6442"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+          "type": "feat",
+          "identifier": "fighting-style",
+          "sha256": "04b5fd4572026682cddd1ce897f16a57672db897da35f74f0c69a7b52e714f12"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+          "type": "feat",
+          "identifier": "second-wind",
+          "sha256": "b6f558757ea2a1a8f95c60e9748e3ca30fd8aae74171ca4184811b76e775060f"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+          "type": "feat",
+          "identifier": "action-surge",
+          "sha256": "407a8f4e53318b8fea91745644bd976108deabf8af677c0532e15e8ae5c8f1a2"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+          "type": "feat",
+          "identifier": "martial-archetype",
+          "sha256": "893ff254b2e1fefb18579972567c036aff728d95eb49915462ca93a521e9e4af"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "type": "feat",
+          "identifier": "extra-attack",
+          "sha256": "8a42dc8348423e4b898eeecd6a1306cb482686b5fd14122f0cf13c9ec9b6ae02"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+          "type": "feat",
+          "identifier": "improved-critical",
+          "sha256": "5a9b34e3482fe875b3a45e8f0534b9f84276de85ac6667f0aacb48173e1f5843"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+          "type": "feat",
+          "identifier": "dueling",
+          "sha256": "c5234883461e94d647734fc10e1cbd505a1b0338b510a07d1cb0f0a31f79d318"
+        }
+      ]
+    },
+    {
+      "caseId": "B2",
+      "name": "B2 地精＋盗贼3级〔验收样例〕",
+      "actorId": "0B5fEc9xlCcIjyTb",
+      "hp": 22,
+      "ac": 15,
+      "walk": 30,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "B2 地精＋盗贼3级〔验收样例〕",
+          "observed": "B2 地精＋盗贼3级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "thief",
+          "observed": [
+            "rogue"
+          ]
+        },
+        {
+          "id": "feature.expertise",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.3sYPftQKnbbVnHrh",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.3sYPftQKnbbVnHrh"
+          ]
+        },
+        {
+          "id": "feature.sneak-attack",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.DPN2Gfk8yi1Z5wp7",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.DPN2Gfk8yi1Z5wp7"
+          ]
+        },
+        {
+          "id": "feature.thieves-cant",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.ohwfuwnvuoBWlSQr",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.ohwfuwnvuoBWlSQr"
+          ]
+        },
+        {
+          "id": "feature.cunning-action",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.01pcLg6PRu5zGrsb",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.01pcLg6PRu5zGrsb"
+          ]
+        },
+        {
+          "id": "feature.roguish-archetype",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.80USV8ZFPIahpLd0",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.80USV8ZFPIahpLd0"
+          ]
+        },
+        {
+          "id": "feature.fast-hands",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.ga3dt2zrCn2MHK8R",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.ga3dt2zrCn2MHK8R"
+          ]
+        },
+        {
+          "id": "feature.second-story-work",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.FGrbXs6Ku5qxFK5G",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.FGrbXs6Ku5qxFK5G"
+          ]
+        },
+        {
+          "id": "abilities.increment",
+          "priority": "important",
+          "ok": true,
+          "expected": "only legal class ASI",
+          "observed": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 22,
+          "observed": {
+            "max": 22,
+            "value": 22
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": "30",
+          "observed": 30
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 2,
+          "observed": 2
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "dex",
+            "int"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "ste": 2,
+            "slt": 2,
+            "acr": 1,
+            "prc": 1
+          }
+        },
+        {
+          "id": "scale.sneak-attack",
+          "priority": "important",
+          "ok": true,
+          "expected": "2d6",
+          "observed": {
+            "number": 2,
+            "faces": 6,
+            "modifiers": {}
+          }
+        },
+        {
+          "id": "source.unchanged",
+          "priority": "core",
+          "ok": true,
+          "expected": "34004ae25d0a583781339ff0bb174d0d8c5870a8280321839e93297676f2b668",
+          "observed": "34004ae25d0a583781339ff0bb174d0d8c5870a8280321839e93297676f2b668"
+        },
+        {
+          "id": "preserve.item.Ti3XQOmTKdgcnpAa",
+          "priority": "core",
+          "ok": true,
+          "expected": "Leather Armor",
+          "observed": "Leather Armor"
+        },
+        {
+          "id": "preserve.item.sSs3hSzkKBMNBgTs",
+          "priority": "core",
+          "ok": true,
+          "expected": "Shield",
+          "observed": "Shield"
+        },
+        {
+          "id": "preserve.item.SxVatHq02vURYDt3",
+          "priority": "core",
+          "ok": true,
+          "expected": "Nimble Escape",
+          "observed": "Nimble Escape"
+        },
+        {
+          "id": "preserve.item.S6UTTLu0bEB32HNG",
+          "priority": "core",
+          "ok": true,
+          "expected": "Scimitar",
+          "observed": "Scimitar"
+        },
+        {
+          "id": "preserve.item.YqS3dsIlpWb2Q2UI",
+          "priority": "core",
+          "ok": true,
+          "expected": "Shortbow",
+          "observed": "Shortbow"
+        },
+        {
+          "id": "preserve.effects",
+          "priority": "core",
+          "ok": true,
+          "expected": 0,
+          "observed": 0
+        },
+        {
+          "id": "preserve.trait.di",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dr",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dv",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.ci",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.size",
+          "priority": "core",
+          "ok": true,
+          "expected": "sm",
+          "observed": "sm"
+        },
+        {
+          "id": "preserve.image",
+          "priority": "important",
+          "ok": true,
+          "expected": "systems/dnd5e/tokens/humanoid/Goblin.webp",
+          "observed": "systems/dnd5e/tokens/humanoid/Goblin.webp"
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": "Compendium.dnd5e.monsters.Actor.TjWQOgI3A4UAl7lC",
+      "sourceSha256": "1702999a8ae719f21f91a93cc27c70e766ba76528529e849d70c41b4f44d420b",
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.xEb8jmA5HlNs7xTF",
+          "type": "class",
+          "identifier": "rogue",
+          "sha256": "12986993401a610812e9b4530d8f884a13ca64dda9534824b4c4c20ec781982b"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.k8iuefRorWOjb9gR",
+          "type": "subclass",
+          "identifier": "thief",
+          "sha256": "0b9362aabbc3214a51f42715d4e75244095eea6c99264df52e6e0824b753b169"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.3sYPftQKnbbVnHrh",
+          "type": "feat",
+          "identifier": "expertise",
+          "sha256": "1e07edb62d6bb66f1ae4836e1485c78e27939c5682d1a268377313e7420a4f05"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.DPN2Gfk8yi1Z5wp7",
+          "type": "feat",
+          "identifier": "sneak-attack",
+          "sha256": "3302a317abad308cd893f7a3b040c2a1ebf1f2f3b723f82801110303098db13b"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.ohwfuwnvuoBWlSQr",
+          "type": "feat",
+          "identifier": "thieves-cant",
+          "sha256": "5cb2e03a016099c08f65b794b93297525df2997e8fe2b18e7449a19bf4db78d9"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.01pcLg6PRu5zGrsb",
+          "type": "feat",
+          "identifier": "cunning-action",
+          "sha256": "3b49a44753e42625ff8832a7b8bd4c37bc9a253c65308da16f38f68727909717"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.80USV8ZFPIahpLd0",
+          "type": "feat",
+          "identifier": "roguish-archetype",
+          "sha256": "9506e3517ded25bb253f5917b7907082a466e4cb89c617a2df2165a4de5d0152"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.ga3dt2zrCn2MHK8R",
+          "type": "feat",
+          "identifier": "fast-hands",
+          "sha256": "103936a8f67136b3a47e1ebe36ee215fc03390b728ae87be41378bb45f9a9208"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.FGrbXs6Ku5qxFK5G",
+          "type": "feat",
+          "identifier": "second-story-work",
+          "sha256": "d50f7a9dc2fe256825d28fa69ed2e5ab512f3c8cbd099972d5bceca80713bc12"
+        }
+      ]
+    },
+    {
+      "caseId": "B3",
+      "name": "B3 兽人＋法师5级〔验收样例〕",
+      "actorId": "0bL6Y0FqxyBS81hr",
+      "hp": 50,
+      "ac": 13,
+      "walk": 30,
+      "checks": [
+        {
+          "id": "actor.unique",
+          "priority": "core",
+          "ok": true,
+          "expected": 1,
+          "observed": 1
+        },
+        {
+          "id": "actor.name",
+          "priority": "core",
+          "ok": true,
+          "expected": "B3 兽人＋法师5级〔验收样例〕",
+          "observed": "B3 兽人＋法师5级〔验收样例〕"
+        },
+        {
+          "id": "class.level",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": 5
+        },
+        {
+          "id": "class.subclass",
+          "priority": "core",
+          "ok": true,
+          "expected": "school-of-evocation",
+          "observed": [
+            "wizard"
+          ]
+        },
+        {
+          "id": "feature.spellcasting",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL"
+          ]
+        },
+        {
+          "id": "feature.arcane-recovery",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9"
+          ]
+        },
+        {
+          "id": "feature.arcane-tradition",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT"
+          ]
+        },
+        {
+          "id": "feature.evocation-savant",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3"
+          ]
+        },
+        {
+          "id": "feature.sculpt-spells",
+          "priority": "core",
+          "ok": true,
+          "expected": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+          "observed": [
+            "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh"
+          ]
+        },
+        {
+          "id": "abilities.increment",
+          "priority": "important",
+          "ok": true,
+          "expected": "only legal class ASI",
+          "observed": [
+            0,
+            0,
+            0,
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "hp.full",
+          "priority": "core",
+          "ok": true,
+          "expected": 50,
+          "observed": {
+            "max": 50,
+            "value": 50
+          }
+        },
+        {
+          "id": "movement.walk",
+          "priority": "important",
+          "ok": true,
+          "expected": "30",
+          "observed": 30
+        },
+        {
+          "id": "proficiency.effective",
+          "priority": "important",
+          "ok": true,
+          "expected": 3,
+          "observed": 3
+        },
+        {
+          "id": "saves.granted",
+          "priority": "important",
+          "ok": true,
+          "expected": [
+            "int",
+            "wis"
+          ],
+          "observed": [
+            1,
+            1
+          ]
+        },
+        {
+          "id": "skills.selected",
+          "priority": "important",
+          "ok": true,
+          "expected": "review preset skill selections",
+          "observed": {
+            "arc": 1,
+            "inv": 1
+          }
+        },
+        {
+          "id": "spells.caster",
+          "priority": "core",
+          "ok": true,
+          "expected": 5,
+          "observed": {
+            "level": 5,
+            "abilityLabel": "智力",
+            "attack": 2,
+            "dc": 10,
+            "mod": -1
+          }
+        },
+        {
+          "id": "spells.slots",
+          "priority": "core",
+          "ok": true,
+          "expected": [
+            4,
+            3,
+            2
+          ],
+          "observed": {
+            "spell1": [
+              4,
+              4
+            ],
+            "spell2": [
+              3,
+              3
+            ],
+            "spell3": [
+              2,
+              2
+            ],
+            "spell4": [
+              0,
+              0
+            ],
+            "spell5": [
+              0,
+              0
+            ],
+            "spell6": [
+              0,
+              0
+            ],
+            "spell7": [
+              0,
+              0
+            ],
+            "spell8": [
+              0,
+              0
+            ],
+            "spell9": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "spells.cantrips",
+          "priority": "important",
+          "ok": true,
+          "expected": 4,
+          "observed": 4
+        },
+        {
+          "id": "spells.book",
+          "priority": "important",
+          "ok": true,
+          "expected": 14,
+          "observed": 14
+        },
+        {
+          "id": "spells.prepared",
+          "priority": "important",
+          "ok": true,
+          "expected": 4,
+          "observed": 4
+        },
+        {
+          "id": "fireball.ready",
+          "priority": "core",
+          "ok": true,
+          "expected": "prepared level3 DEX/8d6fire/half/slot",
+          "observed": [
+            "save"
+          ]
+        },
+        {
+          "id": "resource.arcane-recovery",
+          "priority": "important",
+          "ok": true,
+          "expected": {
+            "max": 1,
+            "value": 1
+          },
+          "observed": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "长休后充能"
+          }
+        },
+        {
+          "id": "source.unchanged",
+          "priority": "core",
+          "ok": true,
+          "expected": "306c4a43ffd92173cabbd8c4627166dcd095639361d3b0edd0700ce6c8900e6c",
+          "observed": "306c4a43ffd92173cabbd8c4627166dcd095639361d3b0edd0700ce6c8900e6c"
+        },
+        {
+          "id": "preserve.item.MY9hQkOnh2onjZEh",
+          "priority": "core",
+          "ok": true,
+          "expected": "Hide Armor",
+          "observed": "Hide Armor"
+        },
+        {
+          "id": "preserve.item.Go8ESMzuWcYaFcqE",
+          "priority": "core",
+          "ok": true,
+          "expected": "Aggressive",
+          "observed": "Aggressive"
+        },
+        {
+          "id": "preserve.item.bGmBlXrvTBQgPMBJ",
+          "priority": "core",
+          "ok": true,
+          "expected": "Greataxe",
+          "observed": "Greataxe"
+        },
+        {
+          "id": "preserve.item.SrRZ2hBUcaXZiRab",
+          "priority": "core",
+          "ok": true,
+          "expected": "Javelin",
+          "observed": "Javelin"
+        },
+        {
+          "id": "preserve.effects",
+          "priority": "core",
+          "ok": true,
+          "expected": 0,
+          "observed": 0
+        },
+        {
+          "id": "preserve.trait.di",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dr",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.dv",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "bypasses": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.ci",
+          "priority": "core",
+          "ok": true,
+          "expected": {
+            "value": [],
+            "custom": ""
+          },
+          "observed": {
+            "value": [],
+            "custom": ""
+          }
+        },
+        {
+          "id": "preserve.trait.size",
+          "priority": "core",
+          "ok": true,
+          "expected": "med",
+          "observed": "med"
+        },
+        {
+          "id": "preserve.image",
+          "priority": "important",
+          "ok": true,
+          "expected": "systems/dnd5e/tokens/humanoid/Orc.webp",
+          "observed": "systems/dnd5e/tokens/humanoid/Orc.webp"
+        }
+      ],
+      "corePass": true,
+      "configurationPass": true,
+      "automationCertified": false,
+      "sourceUuid": "Compendium.dnd5e.monsters.Actor.HB49mCOVBXwWeKWQ",
+      "sourceSha256": "3794081adb160d10075d767f364c551bf35d8ada871699dd47b46f28b1777ef9",
+      "importedSources": [
+        {
+          "uuid": "Compendium.dnd5e.classes.Item.wZK2Q0rXB0AQo8h3",
+          "type": "class",
+          "identifier": "wizard",
+          "sha256": "0698470ae66bf4c154997b6ce47923d081c9d92a3a94b0fc7ada3b1099369805"
+        },
+        {
+          "uuid": "Compendium.dnd5e.subclasses.Item.Ye5f3FReEnuXfi0y",
+          "type": "subclass",
+          "identifier": "school-of-evocation",
+          "sha256": "64de6a173999f7e5aff69b5001a5b3dd068088e972cbffbd095d0d437ff4ca6f"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "type": "feat",
+          "identifier": "spellcasting",
+          "sha256": "ee59c2f24c259cd1b6c02f78152d9eb9920a5c95f51608a9c20b54522caa6e89"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+          "type": "feat",
+          "identifier": "arcane-recovery",
+          "sha256": "a16e481298fbb80262a133fb6833cabd793b875d3656ee602d40918d475c1f3c"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+          "type": "feat",
+          "identifier": "arcane-tradition",
+          "sha256": "0aaa3386133c02db3168b8e18b713c46259683458da2a10c317d8e1143c03b51"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "type": "feat",
+          "identifier": "evocation-savant",
+          "sha256": "3a2425d05e4a9233d5195c920df77bb9e710a77da3b27c53be9f9446d1b1f3a0"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+          "type": "feat",
+          "identifier": "sculpt-spells",
+          "sha256": "8c488415e33164b5922b9d127f88280d6b6c1649b83b61635ef8b3c38a7da969"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio",
+          "type": "spell",
+          "identifier": "fire-bolt",
+          "sha256": "c3ab0e16fc260e8f1ecdc3e4cc4a346650f30bc4b295986d0dd6bda176870db5"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+          "type": "spell",
+          "identifier": "mage-hand",
+          "sha256": "5d2a63ab6450eb106cb04ee1e78241a99a82d8ac0de7f834533e015faaf13f03"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ",
+          "type": "spell",
+          "identifier": "prestidigitation",
+          "sha256": "3203ec6c199ad66dad85df4885c0396f8af8c9909aeaffce43a9746b3f5d6680"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ctW81uiX56xZR2c5",
+          "type": "spell",
+          "identifier": "ray-of-frost",
+          "sha256": "0e0c258548bcb79bee20dba4ef62046b08962988aa7ee3d7616e26276d1947dc"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H",
+          "type": "spell",
+          "identifier": "mage-armor",
+          "sha256": "eabbc9b920352b19063b18e797dd05b47b9f3a27b9d7efede6b420ebad2ddce9"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7",
+          "type": "spell",
+          "identifier": "shield",
+          "sha256": "c2069d0dd7a638f6882b5ef8933439e67be6cefa9e3f1bfdee506953f2e55940"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+          "type": "spell",
+          "identifier": "magic-missile",
+          "sha256": "626387c0d74f167ddcd6b8f7e43256c5e6fe0fde0fe156be32409d78a221561e"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+          "type": "spell",
+          "identifier": "detect-magic",
+          "sha256": "6ca5480c96ee354a7b9b9e7ee1c6edd5a6d09a68989d2d242982c55fdf9147ea"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.3OZnNhunvRtPOQmH",
+          "type": "spell",
+          "identifier": "identify",
+          "sha256": "b361ca4d5b4cd4bb1ffc1eb169a32e7387af611c8401ce833c5d52f2f06868ba"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz",
+          "type": "spell",
+          "identifier": "find-familiar",
+          "sha256": "217fb0e233a6d51d582abb67f7f0a1e731a6aef36f362cae557d313ac75fbb5c"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.pub0OWVEB71XQx1n",
+          "type": "spell",
+          "identifier": "feather-fall",
+          "sha256": "3f71787cfa901cb2e8da61ee6a35631300dea64e05ba3d766c42837e6e850be5"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku",
+          "type": "spell",
+          "identifier": "sleep",
+          "sha256": "eaabc91383fe2759e352bdd57505526f2145638cc56a2e4b213567463624342d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.1N8dDMMgZ1h1YJ3B",
+          "type": "spell",
+          "identifier": "invisibility",
+          "sha256": "613733423f3182a13048dabad029a08379c0095a0a4ddf71bf90479d147aea45"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL",
+          "type": "spell",
+          "identifier": "misty-step",
+          "sha256": "1c1bde18f21dc007d63748213beec248b4c89f4f90a2688eebf6956bf8e8114d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz",
+          "type": "spell",
+          "identifier": "mirror-image",
+          "sha256": "11d33057b970a56a03bdd7065ad0db8474b8f815fca650fdd6760ba8776fd0f0"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP",
+          "type": "spell",
+          "identifier": "web",
+          "sha256": "9c7b439ea5a30cce8c2a430dde052e8a93c9aaabc0e0c302e5ac394a9ed237bf"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+          "type": "spell",
+          "identifier": "fireball",
+          "sha256": "66c2b6d53ad1e41ebe758fb934d1c46258f99898bca06cfede24210abd5e765d"
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy",
+          "type": "spell",
+          "identifier": "counterspell",
+          "sha256": "c664a228a1e0605f29789c08974628878e8acefa26151248e722ecd10ace0aa0"
+        }
+      ]
+    }
+  ]
+}

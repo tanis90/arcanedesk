@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const adapter=require('./model-adapter.cjs');
+const {selectVerifier}=require('./verifier.cjs');
+const fixture=require('./real-a1-projection.json');
+const actual=structuredClone(fixture.actual);
+for(const key of ['arc','inv']){actual.raw.system.skills[key].ability='int';actual.effective.skills[key].ability='int';}
+const evaluate=async code=>code.startsWith('game.actors.filter')?[actual.id]:[actual];
+const current=adapter(evaluate,{verifierVersion:'v3'});
+const historical=adapter(evaluate,{verifierVersion:'v2'});
+assert.equal((await current.verify('A1',fixture.receipt)).ok,true,'adapter invokes revised grader');
+assert.equal((await historical.verify('A1',fixture.receipt)).ok,false,'original source-format false negatives remain reproducible');
+assert.equal(current.verifier.version,'v3');
+assert.equal(adapter(evaluate).verifier.version,'v4','new runs default to v4');
+assert.match(current.verifier.sha256,/^[a-f0-9]{64}$/);
+assert.equal(Object.keys(current.verifier.dependencyHashes).length,3);
+assert.throws(()=>selectVerifier('missing'),/Unknown/);
+const absent=adapter(async()=>[],{verifierVersion:'v3'});
+assert.equal((await absent.verify('A1',fixture.receipt)).ok,false,'missing actor fails in formal adapter');
+console.log('adapter: v3, historical v2, verifier fingerprint, invalid version and missing actor checks passed');

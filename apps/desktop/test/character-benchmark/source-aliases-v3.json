@@ -1,0 +1,157 @@
+{
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP": {
+    "identifier": "spellcasting",
+    "cls": "wizard",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW": {
+    "identifier": "arcane-recovery",
+    "cls": "wizard",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu": {
+    "identifier": "arcane-tradition",
+    "cls": "wizard",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6": {
+    "identifier": "sculpt-spells",
+    "cls": "wizard",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SLo1i2EiMrGl2MzS": {
+    "identifier": "empowered-evocation",
+    "cls": "wizard",
+    "level": 10
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT": {
+    "identifier": "second-wind",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416": {
+    "identifier": "action-surge",
+    "cls": "fighter",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB": {
+    "identifier": "extra-attack",
+    "cls": "fighter",
+    "level": 5
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa": {
+    "identifier": "improved-critical",
+    "cls": "fighter",
+    "level": 3
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gJ9mPN6tqyxo0tyV": {
+    "identifier": "remarkable-athlete",
+    "cls": "fighter",
+    "level": 7
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3": {
+    "identifier": "dueling",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.06NVMYf58Z76O85O": {
+    "identifier": "protection",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.3Nc6u9pyStByuJsm": {
+    "identifier": "great-weapon-fighting",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.8YwPFv3UAPjWVDNf": {
+    "identifier": "archery",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4": {
+    "identifier": "dueling",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.mHcSjcHJ8oZu3hkb": {
+    "identifier": "two-weapon-fighting",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.dnd5e.classfeatures.Item.zSlV0O2rQMdoq6pB": {
+    "identifier": "defense",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ": {
+    "identifier": "defense",
+    "cls": "fighter",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P92k8OSu7UBA9EUy": {
+    "identifier": "spellcasting",
+    "cls": "cleric",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fdrypzReS8PCtLFN": {
+    "identifier": "divine-domain",
+    "cls": "cleric",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk": {
+    "identifier": "channel-divinity",
+    "cls": "cleric",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYuxMvRIO9feIxSe": {
+    "identifier": "channel-divinity-turn-undead",
+    "cls": "cleric",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu": {
+    "identifier": "disciple-of-life",
+    "cls": "cleric",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.cVCWDgOyiytOouwE": {
+    "identifier": "channel-divinity-preserve-life",
+    "cls": "cleric",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zwXiai18a2q90THH": {
+    "identifier": "expertise",
+    "cls": "rogue",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AlFAC3Lz1ud2ry9T": {
+    "identifier": "sneak-attack",
+    "cls": "rogue",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eXqCYX6BlKodEbgy": {
+    "identifier": "thieves-cant",
+    "cls": "rogue",
+    "level": 1
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.biPF9xysyu0WBtJe": {
+    "identifier": "cunning-action",
+    "cls": "rogue",
+    "level": 2
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8cxR6XZCphM9Y7qx": {
+    "identifier": "roguish-archetype",
+    "cls": "rogue",
+    "level": 3
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nL8KdY6H1RD3FEqC": {
+    "identifier": "fast-hands",
+    "cls": "rogue",
+    "level": 3
+  },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FUwvN3wZZvuWDJDn": {
+    "identifier": "second-story-work",
+    "cls": "rogue",
+    "level": 3
+  }
+}
