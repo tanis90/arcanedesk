@@ -1,0 +1,77 @@
+{
+  "status": "running",
+  "expectedTrials": 24,
+  "auditedTrials": 4,
+  "scope": "one sample per combination; no stable speed claim",
+  "rows": [
+    {
+      "run": "benchmark-1788956350975",
+      "case": "A1",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_js",
+      "seconds": 276.91,
+      "calls": 20,
+      "toolSeconds": 3.303,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "spells.known-membership",
+        "spells.cantrips"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788956639523",
+      "case": "A1",
+      "model": "qwen3.7-plus",
+      "arm": "native_skill_build_tool",
+      "seconds": 158.768,
+      "calls": 19,
+      "toolSeconds": 2.998,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "abilities.legal",
+        "hp.full",
+        "spells.known-membership",
+        "armor.effective"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788956812053",
+      "case": "A1",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_tool",
+      "seconds": 64.732,
+      "calls": 15,
+      "toolSeconds": 1.17,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "abilities.legal"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    },
+    {
+      "run": "benchmark-1788956888629",
+      "case": "A1",
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "arm": "native_skill_build_js",
+      "seconds": 113.947,
+      "calls": 30,
+      "toolSeconds": 2.06,
+      "success": false,
+      "timeout": false,
+      "failures": [
+        "movement.walk",
+        "spells.book"
+      ],
+      "verifier": "v4",
+      "timeoutMs": 300000
+    }
+  ]
+}

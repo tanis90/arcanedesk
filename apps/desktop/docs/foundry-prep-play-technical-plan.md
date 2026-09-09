@@ -1625,3 +1625,15 @@ CR准确性继续不参与benchmark评分；“按要求保留CR”是操作边�
 新输入标记character-v7-reviewed-growth，查询v6，两臂继续共用native/找包/build/character四份skill，只有工具组多foundry_build_query。启动器固定记录超时、thinking、验收与输入hash，中途变更输入则停止；本机新配置300秒、thinking high、24试次，独立目录未启动，dry-run通过。
 
 COS登录GM/ready确认，85个环境与固定来源UUID全部可读；Electron和两份私有profile存在，已选provider/model与Qwen3.7-plus和DeepSeek灰度配置一致。未发起模型请求，因此不声明供应商当前可用性或时延。auto pack未改、参考卡未写、历史报告未重评。下一步可按使用手册启动新批次。
+
+
+## 33. Reviewed v7模型对照已启动
+
+按用户要求正式启动24试次（六题×Qwen/DeepSeek×JS/查询工具）。代码基线56daaaf，输入character-v7-reviewed-growth，查询v6、验收v4，thinking high，全部300秒。启动前COS GM/ready、85个固定UUID复核通过，无同批次manifest，未重放历史试次。
+
+批次目录：本机TEMP/character-reviewed-v7-1788955489849，配置TEMP/character-reviewed-v7-config.json。初始顺序每题Qwen JS→工具、DeepSeek工具→JS。运行句柄24450；真实完成/失败由manifest和独立audit确认，句柄只用于本次跟踪。主要评价正确完成率、双方成功题耗时、查找/返工次数；未出完整结果前不作提速结论。运行期间不修改被冻结输入，供应商错误或不确定工具结果暂停审查，不自动重跑。
+
+
+### 33.1 A1首组终态证据
+
+四试次均在300秒内返回并独立审计，正式验收均失败。Qwen JS/工具276.910/158.768秒、20/19调用；DeepSeek JS/工具113.947/64.732秒、30/15调用。工具组耗时下降但没有成功样本，不能宣布有效提速。详见[进度原始摘要](prep-character-reviewed-v7-progress.json)和[复核旁注](prep-character-reviewed-v7-notes.md)。Qwen工具组的TCE卜筮术与mage AC记录为合同/验收歧义，暂不改冻结标准；即使这两项放行，属性及HP错误仍使该试次失败。批次继续A2。
