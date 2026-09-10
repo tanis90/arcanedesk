@@ -1,6 +1,6 @@
 # ArcaneDesk 国际化技术方案
 
-状态：M0 已完成、M1 启动 · 日期：2026-09-10 · 分支：docs/internationalization-plan
+状态：M0 / M1 / M2 已完成 · 日期：2026-09-10 · 分支：docs/internationalization-plan
 
 **2026-09-10 决策记录（拍板）：**
 
@@ -159,7 +159,7 @@ Workers Analytics Engine 做实时仪表盘（注意只保留 3 个月，另设�
 
 ### M0：账号与基础设施就绪（阻塞一切，见 §5）
 
-R2 桶、D1 库、CF API token、OpenRouter 主 key、Discord、waitlist 工具、GitHub Secrets。
+R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工具、GitHub Secrets。
 
 ### M1：Region 真源（本仓库，S，必须第一个做）
 
@@ -170,13 +170,19 @@ R2 桶、D1 库、CF API token、OpenRouter 主 key、Discord、waitlist 工具�
 - renderer 经 IPC 拿 websiteUrl/社区链接；`test/` 加 region 快照测试
 - 验收：`ARCANE_REGION=intl npm start` 全部默认值指向 `.app` 域名；`verify:source` 通过
 
-### M2：发布双轨（本仓库 + ops，M）
+### M2：发布双轨（本仓库 + ops，M）— ✅ 代码与配置完成（2026-09-10，`fad803a`）
 
-- `publish-release.mjs`：`--region` + R2 双写 + `--signed-dir`（先签后发）
-- electron-builder artifactName 加 `-intl` 后缀；release workflow 加 intl 构建腿，
-  冒烟断言包内 region.json
-- ops 签名 runbook 改为先签后发；R2 配 `dl.arcanedesk.app` 自定义域 + CORS
-- 验收：一次完整发版，两 flavor 各落其位，`dl.arcanedesk.app/.../latest.json` 公开可读
+- ✅ `publish-release.mjs`：`--region cn|intl`（默认读 `generated/region.json`，冲突即报错）；
+  intl 走 R2 `arcane-desk-intl`（内置最小 SigV4 S3 客户端，零新依赖），`--signed-dir`
+  先签后发（缺 staged `.exe` 签名件即失败）
+- ✅ electron-builder artifactName 经 `${env.ARCANE_ARTIFACT_SUFFIX}` 宏加 `-intl` 后缀，
+  新增 `scripts/dist.mjs` 包装器按 region.json 注入；intl 默认 releaseId 带 `-intl` 后缀
+- ✅ release workflow：build 矩阵 4 平台 × 2 region 共 8 腿，verify 冒烟断言包内
+  region.json（`--expected-region`），publish 拆 cn/intl 两路、GitHub Release 分 tag
+- ✅ ops 签名 runbook 改先签后发（覆盖补签降级为应急，`b3547a3`）；
+  ✅ R2 `dl.arcanedesk.app` CORS 已配（GET/HEAD、Origin `*`）
+- ⏳ 验收待触发：一次完整发版，两 flavor 各落其位，`dl.arcanedesk.app/.../latest.json`
+  公开可读（需用户 dispatch 一次 release workflow）
 
 ### M3：Mod 链路（本仓库 + mods 仓库，M）
 
