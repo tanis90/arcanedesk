@@ -228,8 +228,9 @@ function canOpenNotes() {
 }
 
 // 路径分量里的字符:含 CJK(npc-张三.md),排除空白、引号/反引号/尖括号这类包裹符、
-// 以及 ()[]{} 与 ,;: 这类中英文标点——它们在句子里做分隔符比在文件名里出现得多得多。
-const SEGMENT_CHAR = "[^\\s<>\"'`|*?()\\[\\]{},;:/\\\\]";
+// ASCII 标点,以及全角引号与句读——它们在句子里做分隔符比在文件名里出现得多得多,
+// 不排除就会把 “notes/a.md” 的左引号一起吃进路径。
+const SEGMENT_CHAR = "[^\\s<>\"'`|*?()\\[\\]{},;:/\\\\“”‘’「」『』《》（）【】、。，；：！？…]";
 const NOTE_PATH_PATTERN = new RegExp(
   "(?:[A-Za-z]:[\\\\/]|\\.{1,2}[\\\\/]|/)?" + // 盘符 / ./ ../ / 绝对 POSIX 起点
   "(?:" + SEGMENT_CHAR + "+[\\\\/])*" + // 中间分量
@@ -245,14 +246,48 @@ function startsAscii(value) {
   return /^[A-Za-z0-9_]/.test(value);
 }
 
+/** 去掉行号与后缀后的文件名主干;空主干(".md")不是路径。 */
+function stemOf(name) {
+  return name.replace(/\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i, "");
+}
+
+/**
+ * 能不能当路径字符。直接复用 SEGMENT_CHAR:两份字符集写两遍早晚会走形,
+ * 而"能不能当路径字符"与"是不是词边界"就是同一个问题的正反两面。
+ */
+const PATH_CHAR = new RegExp(SEGMENT_CHAR);
+
+/**
+ * 命中处是否被词边界夹住(串首与串尾算边界)。
+ * 只有 CJK 开头的裸文件名需要这个判定:汉字没有词边界,不夹住就会把前后的散文一起吃进链接。
+ */
+function isDelimited(source, start, end) {
+  const before = start === 0 ? "" : source[start - 1];
+  const after = end >= source.length ? "" : source[end];
+  return (before === "" || !PATH_CHAR.test(before)) && (after === "" || !PATH_CHAR.test(after));
+}
+
+/**
+ * 命中处所在的空白分隔词元是不是个 URL(scheme:// 或 www. 开头)。那段属于外部链接,不是本地笔记。
+ * 正常渲染时 marked 的 gfm 自动链接已经把裸 URL 包成 <a>,walker 会跳过;
+ * 这里守的是行内 <code> 里的 URL 与 findNotePaths 被单独调用的场合。
+ */
+function insideUrl(source, start) {
+  let tokenStart = start;
+  while (tokenStart > 0 && !/\s/.test(source[tokenStart - 1])) tokenStart--;
+  const token = source.slice(tokenStart).replace(/^[^\w]+/, "");
+  return /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)/i.test(token);
+}
+
 /**
  * 在一段文本里找出所有笔记路径形态。
  * 覆盖:相对(notes/a.md、./a.md)、绝对 POSIX(/home/u/a.md)、Windows 盘符
  * (C:\Users\x\a.md 与 C:/Users/x/a.md)、行号(a.md:12)。包裹符与尾部标点已不在字符集里。
  *
- * CJK 开头的文件名只在两种情况下认:前面紧接路径分隔符(notes/张三.md),
- * 或整段文本就是它(<code>张三.md</code>)。否则先剥掉开头的 CJK 再试:
- * 这条限制换来的是"见README.md"不会连前面的汉字一起吃进去。
+ * CJK 开头的裸文件名分两步判:先看汉字后面是不是藏着一个 ASCII 名
+ * ("见README.md" → 让回粘着的散文,只链 "README.md");不是就要求它独立成词
+ * ("笔记 张三.md 很好" / <code>张三.md</code>)。两头都不成立则丢弃——宁可不链也不错链:
+ * 链错了用户点进去只看见"找不到这份笔记",却看不出是自己名字写错了还是程序吃错了字。
  *
  * @param {string} text
  * @returns {Array<{ start: number, end: number, path: string }>}
@@ -263,19 +298,22 @@ function findNotePaths(text) {
   for (const match of source.matchAll(NOTE_PATH_PATTERN)) {
     const start = match.index;
     const path = match[0];
+    if (insideUrl(source, start)) continue;
     // 文件名在 path 里的起点 = 跳过盘符与各层分量之后
     const nameOffset = pathLengthBeforeName(path);
     const name = path.slice(nameOffset);
-    if (startsAscii(name) || nameOffset > 0 || source.trim() === path) {
+    if (!stemOf(name)) continue; // ".md" 这种没主干的不是路径
+    if (startsAscii(name) || nameOffset > 0) {
       hits.push({ start, end: start + path.length, path });
       continue;
     }
-    // 文件名以 CJK 开头、前面又不是分隔符:把开头粘着的汉字让回去
-    // ("见README.md" → "README.md");让完不成立就丢弃,宁可不链也不错链。
     const stripped = name.replace(/^[^\x00-\x7f]+/, "");
-    if (!startsAscii(stripped)) continue;
-    const offset = start + name.length - stripped.length;
-    hits.push({ start: offset, end: offset + stripped.length, path: stripped });
+    if (startsAscii(stripped)) {
+      const offset = start + name.length - stripped.length;
+      hits.push({ start: offset, end: offset + stripped.length, path: stripped });
+      continue;
+    }
+    if (isDelimited(source, start, start + path.length)) hits.push({ start, end: start + path.length, path });
   }
   return hits;
 }

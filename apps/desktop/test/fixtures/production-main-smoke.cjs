@@ -8,6 +8,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const panelUi = process.argv.includes("--panel-ui");
+const mdReader = process.argv.includes("--md-reader");
 const sidebarRestart = process.argv.includes("--sidebar-restart");
 const sidebarScenario = process.argv.includes("--sidebar-scenario");
 const quitProbe = process.argv.find(arg => arg.startsWith("--quit-probe="))?.split("=")[1];
@@ -175,6 +176,7 @@ app.on("will-quit", () => {
       return;
     }
     if (panelUi) { assert.equal(requests.length, 0); console.log("PASS panel UI: real connection retry, right-pane failure, agent recovery and reload"); return; }
+    if (mdReader) { assert.equal(requests.length, 0); console.log("PASS md reader: note click opens the right pane, both exits, Foundry takeover with keep-alive and the error pages"); return; }
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
@@ -269,6 +271,14 @@ app.on("quit", () => {
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
   if (panelUi) {
     await require("./panel-ui.cjs")({ window, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
+  if (mdReader) {
+    // 阅读器的 resolve 基准是当前会话的工作目录(spec §4.2),所以先把备团目录指到 scratch 里。
+    pickedDirectory = path.join(scratch, "campaign"); mkdirSync(pickedDirectory, { recursive: true });
+    assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
+    await ui('workspaceReady.has(selectedSessionId) && !restoringView');
+    await require("./md-reader-panel.cjs")({ window, evaluate, ui, until, sleep, project: pickedDirectory });
     finalExit = true; app.quit(); return;
   }
   if (sidebarRestart) {
