@@ -181,22 +181,35 @@ test("READER_F: ④ hides the reader, keeps it alive and tells chat nothing", as
   }
 });
 
-test("READER_F: ① remembers the reader so reopening does not pull FVTT up again", async () => {
+test("① restores Foundry when closed from READER_F, the reader when closed from READER_C (BUG-3)", async () => {
+  // READER_F 关闭:lastContent 记 foundry,重开落在 Foundry——笔记仍可从 chat 链接再进,
+  // 否则 ②→①→② 形成死循环,用户够不到 Foundry(review BUG-3,方案 A)。
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
+  assert.equal(h.controller.state, STATE.READER_F);
   h.controller.closePanel();
   assert.equal(h.controller.state, STATE.CLOSED);
   assert.equal(h.live("foundry").length, 0);
   assert.equal(h.live("reader").length, 0, "① 关面板销毁两个 view(§8)");
 
   await h.controller.openPanel();
-  // §3.4 CLOSED 行:关闭前是笔记 → READER_C(origin 重新快照,底下确实没有 Foundry 了)
+  assert.equal(h.controller.state, STATE.FOUNDRY, "READER_F 关闭后重开落在 Foundry");
+  assert.equal(h.calls.loadFoundry, 2);
+  assert.deepEqual(h.calls.readNote, ["notes/a.md"], "重开 Foundry 不重读笔记");
+
+  // READER_C 关闭:底下本来就没有 Foundry,重开恢复笔记(§3.4 CLOSED 行)。
+  h.controller.closePanel();
+  h.controller.showReader("notes/b.md");
   assert.equal(h.controller.state, STATE.READER_C);
+  h.controller.closePanel();
+
+  await h.controller.openPanel();
+  assert.equal(h.controller.state, STATE.READER_C, "READER_C 关闭后重开恢复笔记");
   assert.equal(h.controller.origin, "closed");
-  assert.equal(h.calls.loadFoundry, 1, "重开笔记不得静默拉起一次 FVTT 加载");
+  assert.equal(h.calls.loadFoundry, 2, "重开笔记不得静默拉起一次 FVTT 加载");
   assert.equal(h.live("foundry").length, 0);
-  assert.deepEqual(h.calls.readNote, ["notes/a.md", "notes/a.md"], "重开 = 重读文件(§2 保活范围)");
+  assert.equal(h.controller.readerPath, "notes/b.md");
 
   h.controller.leaveReader();
   assert.equal(h.controller.state, STATE.CLOSED, "origin=closed 时 ③ 只能关面板(不变量 3)");

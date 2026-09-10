@@ -153,7 +153,8 @@ export class PanelSurfaceController {
 
   /**
    * ①开:恢复关闭前的当前内容(§3.4 CLOSED 行)。
-   * 关闭时两个 view 都销毁,所以重开笔记一律是 READER_C——foundryView 已不存在,
+   * lastContent 记的是 foundry → 走 loadFoundry 重开落在 Foundry;
+   * 记的是 reader → 一律落 READER_C:关闭时两个 view 都销毁,foundryView 已不存在,
    * 按 §3.1 重新快照现场即 origin=closed,顺带避开"点一下开关就静默拉起一次 FVTT 加载"。
    */
   async openPanel() {
@@ -164,10 +165,18 @@ export class PanelSurfaceController {
     return this.#hooks.loadFoundry();
   }
 
-  /** ①关:整个右屏收起,两个 view 都销毁(与现状对齐),现场记进 lastContent。 */
+  /**
+   * ①关:整个右屏收起,两个 view 都销毁(与现状对齐),现场记进 lastContent。
+   * 例外:关闭时是 READER_F(阅读器底下压着活 Foundry)则改记 foundry——重开落在
+   * Foundry,笔记仍可从 chat 里的路径链接再次进入;否则 ②→①→② 形成死循环,
+   * 用户够不到 Foundry(review BUG-3,方案 A)。
+   */
   closePanel() {
     if (!this.#open && !this.#foundryView && !this.#readerView) return { ok: true, state: this.state };
-    this.#lastContent = this.#surface ? { surface: this.#surface, origin: this.#origin, path: this.#readerPath } : null;
+    this.#lastContent = !this.#surface ? null
+      : this.#surface === SURFACE_READER && this.#origin === SURFACE_FOUNDRY
+        ? { surface: SURFACE_FOUNDRY }
+        : { surface: this.#surface, origin: this.#origin, path: this.#readerPath };
     this.#destroyReader();
     this.#destroyFoundry("panel-closed");
     this.#open = false;
