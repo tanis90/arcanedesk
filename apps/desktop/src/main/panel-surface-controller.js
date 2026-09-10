@@ -68,6 +68,10 @@ export class PanelSurfaceController {
       它们绝不能拿到 readerView(spec §8 收编表最后一行),所以这里只暴露 foundry 那一个。 */
   get foundryView() { return this.#foundryView; }
 
+  /** 仅供 main 校验 `md-reader:back` 的 sender 身份(isTrustedReaderIpc)。
+      页面访问一律走 foundryView / activeView(),不要拿它去 evaluate 或截图。 */
+  get readerView() { return this.#readerView; }
+
   /** 当前可见的 view:bounds 分发、分栏拖拽穿透、指针转发都消费它(spec §8 收编表)。 */
   activeView() { return this.#open ? (this.#surface === SURFACE_READER ? this.#readerView : this.#foundryView) : null; }
 

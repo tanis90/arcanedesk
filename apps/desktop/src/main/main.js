@@ -30,6 +30,8 @@ import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
+import { PanelSurfaceController } from "./panel-surface-controller.js";
+import { loadNotePayload } from "./md-reader-note.js";
 
 // Pi shell tools and other Arcane-owned child processes inherit process.env.
 // Establish the Windows UTF-8 contract before creating any of them.
@@ -81,7 +83,9 @@ if (app.isPackaged) {
 
 let mainWindow = null;
 let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
-let foundryView = null; // 按需创建:agent 调 foundry_open 或用户点顶栏开关时才打开
+// 右屏两个 view(foundry / md 阅读器)的生命周期归 panel-surface 控制器(spec §8),
+// main.js 只留只读访问,不再持有可变引用——否则 readerView 可见时下面这些直摸点会静默失效。
+let panelSurfaces = null; // whenReady 里建;建好之前没有任何面板可排
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
 let chatWidthPx = null; // 用户可拖;null = 按比例初始化
@@ -141,6 +145,15 @@ function isTrustedChatIpc(event) {
   return senderFrameId != null && senderFrameId === chat.mainFrame?.frameTreeNodeId;
 }
 
+/** readerView 发来的 IPC 是否可信(md-reader:back 的唯一门禁)。
+    形状对齐 isTrustedChatIpc:同一个 webContents + 同一个主 frame。 */
+function isTrustedReaderIpc(event) {
+  const reader = panelSurfaces?.readerView?.webContents;
+  if (!reader || reader.isDestroyed() || event?.sender !== reader) return false;
+  const senderFrameId = event.senderFrame?.frameTreeNodeId;
+  return senderFrameId != null && senderFrameId === reader.mainFrame?.frameTreeNodeId;
+}
+
 function clearFoundryPermissionState(reason, { keepSessionGrants = false } = {}) {
   if (keepSessionGrants) webPermissionPolicy?.cancelPending(reason);
   else webPermissionPolicy?.clearSessionGrants(reason);
@@ -167,27 +180,34 @@ function effectiveChatWidth(winWidth) {
   return chatWidthPx;
 }
 
-function layoutViews() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+/** 右屏 Foundry 页面的只读访问。权限策略、direct-foundry-runtime 与 AgentHost 用它取页面;
+    它们绝不能拿到 readerView(spec §8 收编表末行),所以这里只暴露 foundry 那一个。 */
+const foundryView = () => panelSurfaces?.foundryView ?? null;
+
+/** 右屏区域几何:chat 居左,面板从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
+    给贯穿全窗的标题栏带(overlay 三键落在带上),面板从带下沿开始,不被压;
+    真全屏(F11)时三键与带子都消失,面板回满高。 */
+function computePanelLayout() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
   const [width, height] = mainWindow.getContentSize();
-  if (!foundryView) {
-    // 无面板:chat 全屏
-    return;
-  }
   const chatWidth = effectiveChatWidth(width);
-  // chat 居左,Foundry 主视觉从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
-  // 给贯穿全窗的标题栏带(overlay 三键落在带上),Foundry 从带下沿开始,不被压;
-  // 真全屏(F11)时三键与带子都消失,Foundry 回满高。
   const topOffset = process.platform === "win32" && !mainWindow.isFullScreen() ? TITLEBAR_HEIGHT : 0;
-  foundryView.setBounds({
-    x: chatWidth + SPLITTER_GUTTER,
-    y: topOffset,
-    width: Math.max(0, width - chatWidth - SPLITTER_GUTTER),
-    height: Math.max(0, height - topOffset),
-  });
-  // chat 页面是整窗的,告诉 renderer 把内容让出右屏(margin-right),
-  // 否则 chat 内容被 Foundry view 直接盖住。
-  sendToRenderer({ type: "panel_layout", open: true, chatWidth, gutter: SPLITTER_GUTTER });
+  return {
+    bounds: {
+      x: chatWidth + SPLITTER_GUTTER,
+      y: topOffset,
+      width: Math.max(0, width - chatWidth - SPLITTER_GUTTER),
+      height: Math.max(0, height - topOffset),
+    },
+    chatWidth,
+    gutter: SPLITTER_GUTTER,
+  };
+}
+
+/** 重排右屏。bounds 同时发给两个 view(隐藏的那个也保持正确尺寸,切换时不闪旧布局),
+    并由控制器发一次 panel_layout 让 chat 页面 margin-right 让出右屏——事件协议不变。 */
+function layoutViews() {
+  panelSurfaces?.layout();
 }
 
 function sameOrigin(a, b) {
@@ -305,10 +325,101 @@ function dropIfSessionRejected(view, origin, restored) {
   }
 }
 
+/** 从主窗口摘下并关闭一个 view。两个 surface 共用,销毁时机由控制器定。 */
+function detachAndCloseView(view) {
+  try {
+    mainWindow?.contentView.removeChildView(view);
+  } catch {
+    /* view already detached */
+  }
+  try {
+    if (view.webContents && !view.webContents.isDestroyed()) view.webContents.close();
+  } catch {
+    /* view gone */
+  }
+}
+
+/** 建 foundryView 并挂全部 Foundry 专属监听(指针、F11、导航权限、崩溃、devtools)。
+    显隐、bounds 与销毁时机都不在这里——那是控制器的事(spec §8)。 */
+function createFoundryView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  mainWindow.contentView.addChildView(view);
+  const panelWebContents = view.webContents;
+  panelWebContents.on("before-mouse-event", (_event, mouse) => {
+    if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
+  });
+  if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
+  panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame === false || isInPlace) return;
+    foundryRuntime?.invalidate();
+    let sameTrustedOrigin = false;
+    try {
+      sameTrustedOrigin = Boolean(foundryPermissionOrigin) && new URL(url).origin === foundryPermissionOrigin;
+    } catch {
+      /* Invalid navigation target is never trusted. */
+    }
+    clearFoundryPermissionState("foundry-navigation", { keepSessionGrants: sameTrustedOrigin });
+  });
+  panelWebContents.once("destroyed", () => {
+    foundryRuntime?.invalidate();
+    clearFoundryPermissionState("foundry-view-destroyed");
+  });
+  if (isDev) panelWebContents.openDevTools({ mode: "detach" });
+  return view;
+}
+
+/** 销毁 foundryView:runtime 句柄与权限授权跟着一起作废(reason 由控制器给)。 */
+function destroyFoundryView(view, reason) {
+  foundryRuntime?.invalidate();
+  clearFoundryPermissionState(reason);
+  detachAndCloseView(view);
+}
+
+/** 建 readerView:本地 md-reader.html + 专用小 preload(spec §7/§8)。
+    内容只由 main 侧推送(§3.5 不变量 5),页面自身不读盘,所以焦点在阅读器里按
+    Chromium 默认 F5 重载后,did-finish-load 再推一次内容就必然回来。 */
+function createReaderView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload-reader.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  mainWindow.contentView.addChildView(view);
+  const contents = view.webContents;
+  // 点阅读器也要能收起覆盖式抽屉(spec §8 收编表 before-mouse-event 行)
+  contents.on("before-mouse-event", (_event, mouse) => {
+    if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
+  });
+  if (process.platform === "win32") bindFullScreenHotkey(contents); // 焦点在阅读器里 F11 也生效
+  contents.on("did-finish-load", () => {
+    if (contents.isDestroyed()) return;
+    panelSurfaces?.onReaderReady();
+  });
+  if (isDev) contents.openDevTools({ mode: "detach" });
+  void contents.loadFile(path.join(__dirname, "..", "renderer", "md-reader.html"), {
+    query: {
+      theme: resolveTheme(),
+      lang: resolveLocale(),
+      frameless: process.platform === "win32" ? "1" : "0",
+    },
+  }).catch(error => console.error("[reader] page load failed", error?.message ?? error));
+  return view;
+}
+
 /**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
- * 只有跨源或当前页面失效时才导航。
+ * 只有跟源或当前页面失效时才导航。
+ * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
   const target = /^https?:\/\//i.test(rawUrl ?? "") ? rawUrl : DEFAULT_FOUNDRY_URL;
@@ -325,66 +436,29 @@ async function openFoundryView(rawUrl) {
 
   foundryTargetUrl = target;
 
-  // 面板 renderer 可能已崩溃/被销毁:不可复用,重建
-  if (foundryView && (!foundryView.webContents || foundryView.webContents.isDestroyed())) {
-    foundryRuntime?.invalidate();
-    clearFoundryPermissionState("foundry-renderer-gone");
-    try {
-      mainWindow?.contentView.removeChildView(foundryView);
-    } catch {
-      /* view already detached */
-    }
-    foundryView = null;
-  }
+  // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
+  // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
+  const before = foundryView();
+  panelSurfaces.showFoundry();
+  const view = foundryView();
 
-  if (!foundryView) {
-    foundryView = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        backgroundThrottling: false,
-      },
-    });
-    mainWindow.contentView.addChildView(foundryView);
-    const panelWebContents = foundryView.webContents;
-    panelWebContents.on("before-mouse-event", (_event, mouse) => {
-      if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
-    });
-    if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
-    panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
-      if (isMainFrame === false || isInPlace) return;
-      foundryRuntime?.invalidate();
-      let sameTrustedOrigin = false;
-      try {
-        sameTrustedOrigin = Boolean(foundryPermissionOrigin) && new URL(url).origin === foundryPermissionOrigin;
-      } catch {
-        /* Invalid navigation target is never trusted. */
-      }
-      clearFoundryPermissionState("foundry-navigation", { keepSessionGrants: sameTrustedOrigin });
-    });
-    panelWebContents.once("destroyed", () => {
-      foundryRuntime?.invalidate();
-      clearFoundryPermissionState("foundry-view-destroyed");
-    });
-    if (isDev) foundryView.webContents.openDevTools({ mode: "detach" });
-    sendToRenderer({ type: "panel_status", open: true });
-    layoutViews(); // 立刻让出左屏,不等首次 load 完成
-    // 有记住的登录态:先回填 cookie,直接进 /game,跳过 /join
-    const restored = await restoreSessionCookie(foundryView, origin);
+  if (before !== view) {
+    // 全新 view(首次打开或刚重建):有记住的登录态就先回填 cookie,直接进 /game,跳过 /join
+    const restored = await restoreSessionCookie(view, origin);
     const initialUrl = restored ? new URL("/game", origin).href : target;
     const loaded = await loadFoundryPage(initialUrl);
     if (!loaded.ok) return loaded;
-    dropIfSessionRejected(foundryView, origin, restored);
-    void rememberSessionCookie(foundryView, origin);
+    dropIfSessionRejected(view, origin, restored);
+    void rememberSessionCookie(view, origin);
     return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
 
-  const current = foundryView.webContents.getURL();
+  const current = view.webContents.getURL();
   if (sameOrigin(current, target)) {
     // Same-origin idempotence only protects a real Foundry page. Chromium keeps
     // the failed URL after ERR_CONNECTION_RESET, so origin equality alone can
     // otherwise turn a blank/error page into a false-success tool result.
-    const inspected = await readFoundryPageState(foundryView.webContents);
+    const inspected = await readFoundryPageState(view.webContents);
     if (inspected.ok && inspected.state?.detected) {
       trustFoundryPermissionOrigin(current);
       return { ok: true, page: inspected.state, summary: await describePanel(current, inspected.state) };
@@ -393,20 +467,20 @@ async function openFoundryView(rawUrl) {
     if (!loaded.ok) return loaded;
     return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
-  const restored = await restoreSessionCookie(foundryView, origin);
+  const restored = await restoreSessionCookie(view, origin);
   const navUrl = restored ? new URL("/game", origin).href : target;
   const loaded = await loadFoundryPage(navUrl);
   if (!loaded.ok) return loaded;
-  dropIfSessionRejected(foundryView, origin, restored);
-  void rememberSessionCookie(foundryView, origin);
+  dropIfSessionRejected(view, origin, restored);
+  void rememberSessionCookie(view, origin);
   return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
 }
 
 async function loadFoundryPage(url) {
-  const contents = foundryView.webContents;
+  const contents = foundryView().webContents;
   foundryTargetUrl = url;
   const failedPage = async () => {
-    if (contents.isDestroyed() || foundryView?.webContents !== contents) return;
+    if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
     await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
       query: { message: globalThis.ARCANE_MESSAGES[resolveLocale()]["panel.connectionFailed"], theme: resolveTheme() },
     }).catch(() => {});
@@ -421,7 +495,7 @@ async function loadFoundryPage(url) {
       summary: `ERROR: failed to load ${url}: ${error.message}`,
     };
   }
-  const inspected = await readFoundryPageState(foundryView.webContents);
+  const inspected = await readFoundryPageState(foundryView().webContents);
   if (!inspected.ok) {
     await failedPage();
     return {
@@ -444,7 +518,7 @@ async function loadFoundryPage(url) {
 }
 
 async function describePanel(url, knownState) {
-  const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView?.webContents);
+  const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView()?.webContents);
   const pageState = inspected.ok ? JSON.stringify(inspected.state) : `(page not ready: ${inspected.error ?? inspected.status})`;
   return `panel at ${url}; page=${pageState}. ` +
     `runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.`;
@@ -578,7 +652,8 @@ function createWindow() {
     foundryRuntime?.invalidate();
     clearFoundryPermissionState("main-window-closed");
     mainWindow = null;
-    foundryView = null;
+    // 窗口没了,两个 view 随之而去:只丢引用,不发任何事件(renderer 已经不在了)。
+    panelSurfaces?.dispose();
   });
   mainWindow.on("close", event => {
     if (quitAllowed) return;
@@ -599,13 +674,13 @@ app.whenReady().then(async () => {
   webPermissionPolicy = new WebPermissionPolicy({
     store: webPermissionStore,
     getChatWebContents: () => mainWindow?.webContents ?? null,
-    getFoundryWebContents: () => foundryView?.webContents ?? null,
+    getFoundryWebContents: () => foundryView()?.webContents ?? null,
     getFoundryOrigin: () => foundryPermissionOrigin,
     sendToRenderer,
   });
   displayMediaController = new DisplayMediaController({
     desktopCapturer,
-    getFoundryWebContents: () => foundryView?.webContents ?? null,
+    getFoundryWebContents: () => foundryView()?.webContents ?? null,
     getFoundryOrigin: () => foundryPermissionOrigin,
     sendToRenderer,
   });
@@ -622,6 +697,26 @@ app.whenReady().then(async () => {
   installDevicePermissionDenials(webSession);
 
   createWindow();
+  // 右屏 surface 状态机(spec §3/§8):两个 view 的创建、显隐、销毁与 bounds 分发全在这里。
+  // hooks 引用的 foundryRuntime / prepUiCwd / modeController 都是惰性调用(用户点击或 agent 工具),
+  // 不存在初始化时序问题。
+  panelSurfaces = new PanelSurfaceController({
+    getWindow: () => mainWindow,
+    computeLayout: computePanelLayout,
+    emit: sendToRenderer,
+    createFoundryView,
+    destroyFoundryView,
+    createReaderView,
+    destroyReaderView: detachAndCloseView,
+    loadFoundry: () => openFoundryView(),
+    reloadFoundry: async () => {
+      const view = foundryView();
+      if (!view || view.webContents.isDestroyed()) return { ok: false };
+      return loadFoundryPage(/^https?:/.test(view.webContents.getURL()) ? view.webContents.getURL() : foundryTargetUrl);
+    },
+    // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
+    readNote: rawPath => loadNotePayload(rawPath, noteBaseDir()),
+  });
   // 遥测先于窗口内的 Agent/Foundry 初始化失败也要能安全关闭(§16.1)
   try {
     telemetry = new TelemetryClient({
@@ -635,7 +730,7 @@ app.whenReady().then(async () => {
     console.log("[telemetry] initialization failed; continuing without telemetry:", error?.message ?? error);
   }
   foundryRuntime = new DirectFoundryRuntime({
-    getWebContents: () => foundryView?.webContents ?? null,
+    getWebContents: () => foundryView()?.webContents ?? null,
     onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
   });
 
@@ -718,6 +813,19 @@ app.whenReady().then(async () => {
   // 尚未选目录时也有稳定 cwd 的内部实现细节，不能冒充用户的备团项目。
   const prepUiCwd = () => prepStore.data.lastCwd ?? undefined;
 
+  /** md 阅读器相对路径的 resolve 基准(spec §4.2):当前活动会话的工作目录。
+      战斗模式下同样按此规则——一律用 prep cwd 会让战斗会话里的相对路径静默解析到
+      别的目录、落"文件不存在"错误页,而用户看不出原因。会话未启动时退回备团目录。 */
+  function noteBaseDir() {
+    try {
+      const cwd = modeController.snapshot().host?.cwd();
+      if (cwd) return cwd;
+    } catch {
+      /* host 尚未启动 */
+    }
+    return prepUiCwd();
+  }
+
   // Each mode owns a registry; command contexts capture an actual session host.
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
@@ -728,7 +836,7 @@ app.whenReady().then(async () => {
   const hosts = {
     combat: new SessionRegistry({ cleanup: id => reconciler.cleanup(id), navigation, listStored: () => listStoredSessions(getAgentDir(), "combat"), createHost: (directory) => new AgentHost({
       foundryRuntime,
-      getFoundryView: () => foundryView,
+      getFoundryView: () => foundryView(),
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
@@ -744,7 +852,7 @@ app.whenReady().then(async () => {
       const cwd = directory ?? prepStore.data.lastCwd ?? prepFallbackWorkspace;
       return new AgentHost({
       foundryRuntime,
-      getFoundryView: () => foundryView,
+      getFoundryView: () => foundryView(),
       openFoundry: openFoundryView,
       sendToRenderer,
       providerStore,
@@ -1419,6 +1527,8 @@ app.whenReady().then(async () => {
       mainWindow.setBackgroundColor(next === "light" ? "#f0e9d6" : "#0c0f16");
       syncTitleBarOverlay();
     }
+    // 阅读器页不重读文件,只收一条主题广播(spec §7 arcaneReader.onTheme)。
+    panelSurfaces?.setTheme(next);
     return { ok: true };
   });
 
@@ -1434,26 +1544,14 @@ app.whenReady().then(async () => {
     return { pref: UI_LOCALES.includes(saved) ? saved : "auto", resolved: resolveLocale() };
   });
 
-  // 顶栏"面板"开关:用户手动打开/关闭 Foundry 面板,不必经过 agent。
+  // 顶栏"面板"开关:右屏唯一的 chrome 开关(spec §3.2 ①)。三个动作全部委托控制器——
+  // 它同时管 foundry 与 reader 两个 surface,重开时按 lastContent 恢复关闭前的内容(§3.4 CLOSED 行)。
   const panelOperations = {
-    open: () => openFoundryView(),
-    close: () => {
-      if (!foundryView) return { ok: true };
-      foundryRuntime.invalidate();
-      clearFoundryPermissionState("panel-closed");
-      mainWindow?.contentView.removeChildView(foundryView);
-      if (!foundryView.webContents.isDestroyed()) foundryView.webContents.close();
-      foundryView = null;
-      sendToRenderer({ type: "panel_status", open: false });
-      sendToRenderer({ type: "panel_layout", open: false });
-      return { ok: true };
-    },
-
-    // Await navigation and inspection before reporting that reload finished.
-    reload: async () => {
-      if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
-      return loadFoundryPage(/^https?:/.test(foundryView.webContents.getURL()) ? foundryView.webContents.getURL() : foundryTargetUrl);
-    },
+    open: () => panelSurfaces.openPanel(),
+    close: () => panelSurfaces.closePanel(),
+    // F5 改为 surface 感知(spec §4.3):foundry → 等导航与巡检完成再报;reader → 重读当前文件。
+    // 于是 READER_C 下的 F5 不再静默哑掉(design-rules R5)。
+    reload: () => panelSurfaces.reloadSurface(),
   };
   for (const action of ["open", "close", "reload"]) {
     ipcMain.handle(`panel:${action}`, async event => {
@@ -1463,8 +1561,27 @@ app.whenReady().then(async () => {
     });
   }
 
+  // ---- Markdown 阅读器(spec §7) ----
+  // ② chat 里点 md 路径。信任边界 ①:只认 chat 主 frame;路径规范化与围栏在
+  // md-reader-note.js 里一次做完,这里不重复校验(design-rules R1)。
+  // 读链失败也照样进阅读器——错误页渲染在阅读器里,不在 chat 弹任何东西(R5)。
+  ipcMain.handle("md-reader:open", (event, rawPath) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    if (typeof rawPath !== "string" || !rawPath.trim()) return { ok: false, code: "INVALID_REQUEST" };
+    if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, code: "NO_WINDOW" };
+    try { return panelSurfaces.showReader(rawPath); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  // ③ 阅读器顶栏返回/关闭与 Esc。来源校验对齐 isTrustedChatIpc 的形状:
+  // 只认阅读器自己的主 frame,chat 页面与 Foundry 页面都调不到它。
+  ipcMain.handle("md-reader:back", event => {
+    if (!isTrustedReaderIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try { return panelSurfaces.leaveReader(); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
 
-  // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整 Foundry view 宽度。
+
+  // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整右屏 view 宽度。
   ipcMain.handle("panel:set-chat-width", (_event, px) => {
     const n = Number(px);
     if (!Number.isFinite(n)) return { ok: false };
@@ -1472,22 +1589,15 @@ app.whenReady().then(async () => {
     layoutViews();
     return { ok: true };
   });
-  // 拖拽期间让 Foundry view 鼠标事件穿透到下层 chat 页面:指针划过左屏时
+  // 拖拽期间让当前可见 view 的鼠标事件穿透到下层 chat 页面:指针划过左屏时
   // chat 仍能收到 pointermove/pointerup,拖拽不会在分栏边界"断流"。
+  // 作用于 activeView():只绑 foundryView 的话,拖拽划过阅读器会在边界断流(spec §8)。
   ipcMain.handle("panel:drag-start", () => {
-    try {
-      foundryView?.webContents?.setIgnoreMouseEvents(true);
-    } catch {
-      /* view gone */
-    }
+    panelSurfaces?.setPointerPassthrough(true);
     return { ok: true };
   });
   ipcMain.handle("panel:drag-end", () => {
-    try {
-      foundryView?.webContents?.setIgnoreMouseEvents(false);
-    } catch {
-      /* view gone */
-    }
+    panelSurfaces?.setPointerPassthrough(false);
     layoutViews();
     return { ok: true };
   });
