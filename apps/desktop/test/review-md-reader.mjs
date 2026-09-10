@@ -324,7 +324,7 @@ try {
   assert.equal(await readerTarget(), null, "restoring Foundry does not resurrect the reader");
   note("① 关闭前是 Foundry → 重开落 FOUNDRY(§3.4 CLOSED 行),走的就是 ④ 那个归位动词");
 
-  // ---------- ② 再进阅读器,然后 ① 关掉重开:这次要恢复笔记 ----------
+  // ---------- ② 再进阅读器(origin=foundry),然后 ① 关掉重开:重开落 Foundry,不囤笔记(spec §3.4 修订) ----------
   await sayAndClick("回到 notes/gatekeeper.md。");
   const reopened = await attachReader();
   state = await waitNote("gatekeeper.md");
@@ -334,6 +334,20 @@ try {
   await chat.evaluate('window.arcane.closePanel()');
   await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "① destroys both views again");
   await chat.evaluate('window.arcane.openPanel()');
+  await until(async () => Boolean(await foundryTarget()), "① reopens onto Foundry after a Foundry-backed note");
+  assert.equal(await readerTarget(), null, "关闭时有 Foundry 压底的笔记,重开落 FOUNDRY(spec §3.4 修订)");
+  note("① 关闭前是 origin=foundry 的笔记 → 重开落 FOUNDRY;笔记从 chat 路径可再次进入");
+
+  // ---------- ② origin=closed 的阅读周期被 ① 关掉重开:恢复笔记 ----------
+  await chat.evaluate('window.arcane.closePanel()');
+  await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "① destroys both views once more");
+  await sayAndClick("回到 notes/gatekeeper.md。");
+  await attachReader();
+  state = await waitNote("gatekeeper.md");
+  assert.equal(state.back, await word("reader.close"), "从 CLOSED 进入的周期 origin=closed(§3.1)");
+  await chat.evaluate('window.arcane.closePanel()');
+  await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "① destroys the reader view");
+  await chat.evaluate('window.arcane.openPanel()');
   // 重开的是一张全新的 target,旧的 session 随 view 一起没了:必须重新 attach,
   // 否则后面的 evaluate 全部打在死 socket 上。
   const restored = await attachReader();
@@ -342,7 +356,7 @@ try {
   report.targets.readerReopened = restored.id;
   state = await waitNote("gatekeeper.md");
   assert.equal(state.back, await word("reader.close"), "重开后 foundryView 已不存在,origin 重新快照成 closed(§3.1)");
-  note("① 关闭前是笔记 → 重开落 READER_C,并且不静默拉起一次 FVTT 加载");
+  note("① 关闭前是 origin=closed 的笔记 → 重开落 READER_C,并且不静默拉起一次 FVTT 加载");
   await shoot(readerSession, "06-reader-restored.png");
 
   // ---------- ③ origin=closed 时 Esc 关掉整个右屏 ----------

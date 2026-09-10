@@ -148,15 +148,16 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     // ---------- ④ 顶掉后 ② 唤回:同一份笔记保留滚动位置(§2) ----------
     await clickTall();
     await until(async () => reader()?.getVisible() === true, "② brings the reader back over Foundry");
-    await readerEval('document.getElementById("reader-scroll").scrollTop = 600');
-    assert.ok(Number(await readerEval('document.getElementById("reader-scroll").scrollTop')) > 0, "the note is long enough to scroll");
+    await readerEval('(() => { const el = document.getElementById("reader-scroll"); el.scrollTop = Math.floor((el.scrollHeight - el.clientHeight) / 2); })()');
+    const wantedScroll = Number(await readerEval('document.getElementById("reader-scroll").scrollTop'));
+    assert.ok(wantedScroll > 0, "the note is long enough to scroll");
     assert.equal((await host.openFoundry(target)).ok, true, "④ takes the pane back");
     await until(async () => foundry()?.getVisible() === true, "④ shows Foundry again");
     assert.equal(reader().getVisible(), false, "the reader is hidden, not destroyed");
     assert.ok(!reader().webContents.isDestroyed());
     await clickTall();
     await until(async () => reader()?.getVisible() === true, "② recalls the same note");
-    assert.equal(Number(await readerEval('document.getElementById("reader-scroll").scrollTop')), 600, "keep-alive restores the reading position");
+    assert.equal(Number(await readerEval('document.getElementById("reader-scroll").scrollTop')), wantedScroll, "keep-alive restores the reading position");
 
     // ---------- ② 阅读中换笔记:原地换内容,滚动回顶,origin 不重置 ----------
     const clickSecond = await say("另一份是 notes/second.md。");
@@ -200,7 +201,7 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     assert.equal(await errorText(), null);
     assert.ok((await docText()).length > 0, "the truncated head is still rendered");
 
-    // ---------- ① 顶栏开关:关掉销毁两个 view,重开按 lastContent 恢复笔记 ----------
+    // ---------- ① origin=foundry 的阅读周期被 ① 关掉:重开回 Foundry,笔记留在 chat 里(spec §3.4 修订) ----------
     await evaluate('window.arcane.closePanel()');
     await ui('panelOpen === false');
     await until(async () => views().length === 0, "① closing destroys both views");
@@ -208,24 +209,30 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     assert.equal(foundry(), null, "① closing collapses the whole right pane (§2)");
     await evaluate('window.arcane.openPanel()');
     await ui('panelOpen === true');
+    // 重开回到关闭前那个 Foundry 地址(spec §3.4):不是默认地址,也不是刚才那份笔记。
+    await waitFoundryAt();
+    assert.equal(reader(), null, "closing over a Foundry-backed note reopens on Foundry (spec §3.4)");
+
+    // ---------- ① origin=closed 的阅读周期被 ① 关掉:重开恢复笔记 ----------
+    await evaluate('window.arcane.closePanel()');
+    await ui('panelOpen === false');
+    const clickHugeAgain = await say("再看一次 notes/huge.md。");
+    await clickHugeAgain();
+    await waitReader();
+    await readerSettled('document.getElementById("reader-name").textContent === "huge.md"');
+    await evaluate('window.arcane.closePanel()');
+    await ui('panelOpen === false');
+    await until(async () => views().length === 0, "① closing destroys the reader view");
+    await evaluate('window.arcane.openPanel()');
+    await ui('panelOpen === true');
     await waitReader();
     await readerSettled('document.getElementById("reader-name").textContent === "huge.md"');
     assert.equal(foundry(), null, "restoring a note never silently pulls up FVTT (§3.4)");
     assert.equal(await backLabel(), await evaluate('t("reader.close")'), "the restored cycle re-snapshots origin=closed (§3.1)");
 
-    // ---------- ① 再关再开,回到 Foundry 那一路 ----------
-    await evaluate('window.arcane.closePanel()');
-    await ui('panelOpen === false');
+    // ---------- 回到 READER_F 现场:Foundry 在位,再蒙上笔记 ----------
     assert.equal((await host.openFoundry(target)).ok, true);
-    await ui('panelOpen === true');
     await waitFoundryAt();
-    await evaluate('window.arcane.closePanel()');
-    await ui('panelOpen === false');
-    await evaluate('window.arcane.openPanel()');
-    await ui('panelOpen === true');
-    // 重开要回到关闭前那个地址(spec §3.4),不是默认地址。
-    await waitFoundryAt();
-    assert.equal(reader(), null);
 
     // ---------- 阅读器页里没有它兑现不了的锚点(R5) ----------
     const clickGatekeeperAgain = await say("回到 notes/gatekeeper.md。");
