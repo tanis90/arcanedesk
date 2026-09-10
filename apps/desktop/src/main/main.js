@@ -1551,6 +1551,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("ui:locale", (_event, pref) => {
     const next = UI_LOCALES.includes(pref) ? pref : "auto";
     writeUiState({ locale: next });
+    // 与 ui:theme 对称:阅读器页也热切换语言,不必销毁重建(review M2)。
+    // auto 推解析后的值:阅读器页拿不到 ui.json,无法自己跟随系统。
+    panelSurfaces?.setLocale(next === "auto" ? resolveLocale() : next);
     return { ok: true, pref: next };
   });
   ipcMain.handle("ui:get-locale", () => {

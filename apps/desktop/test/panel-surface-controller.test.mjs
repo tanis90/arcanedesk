@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   PanelSurfaceController,
   READER_CONTENT_CHANNEL,
+  READER_LOCALE_CHANNEL,
   READER_THEME_CHANNEL,
   STATE,
 } from "../src/main/panel-surface-controller.js";
@@ -362,6 +363,40 @@ test("setTheme reaches the reader only; the Foundry page keeps its own theming",
   // 非法值归一到 light,与 resolveTheme() 的取值域一致
   h.controller.setTheme("nonsense");
   assert.equal(themes().at(-1).payload, "light");
+});
+
+test("setLocale reaches the reader only and is re-pushed on reload (M2)", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  h.controller.showReader("notes/a.md");
+  const reader = h.live("reader")[0];
+  const locales = () => reader.sent.filter((message) => message.channel === READER_LOCALE_CHANNEL);
+
+  h.controller.setLocale("en-US");
+  assert.equal(locales().at(-1).payload, "en-US");
+  assert.equal(h.live("foundry")[0].sent.length, 0);
+  // 非法值丢弃,且不覆盖已记住的语言
+  h.controller.setLocale("klingon");
+  assert.equal(locales().length, 1);
+
+  // F5 重载后页面回到 ?lang= 的启动语言,onReaderReady 必须重推热切换过的值
+  reader.sent.length = 0;
+  h.controller.onReaderReady();
+  assert.deepEqual(reader.sent.map((message) => message.channel),
+    [READER_THEME_CHANNEL, READER_LOCALE_CHANNEL, READER_CONTENT_CHANNEL]);
+  assert.equal(reader.sent[1].payload, "en-US");
+});
+
+test("onReaderReady skips the locale push when the language was never hot-switched", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  h.controller.showReader("notes/a.md");
+  const reader = h.live("reader")[0];
+  reader.sent.length = 0;
+
+  h.controller.onReaderReady();
+  assert.deepEqual(reader.sent.map((message) => message.channel), [READER_THEME_CHANNEL, READER_CONTENT_CHANNEL],
+    "首屏语言已从 ?lang= query 拿到,未热切换过就不多推一条");
 });
 
 test("layout feeds both views the same bounds and emits panel_layout once per transition", async () => {

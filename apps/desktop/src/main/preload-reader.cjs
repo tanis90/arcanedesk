@@ -1,16 +1,17 @@
 // readerView 专用小 preload(md-reader-spec §7)。
 //
-// 只有三个方法,而且全是单向的:内容/主题由 main 推下来,③ 由页面报上去。
+// 只有四个方法,而且全是单向的:内容/主题/语言由 main 推下来,③ 由页面报上去。
 // 阅读器页拿不到任何文件系统、会话或 agent 能力——它是一个只读的渲染面,
 // 信任边界 ① 在 main 的 `md-reader:open` 上,不在这里。
 //
 // 频道名与 src/main/panel-surface-controller.js 的 READER_CONTENT_CHANNEL /
-// READER_THEME_CHANNEL 必须一致;preload 是 CJS,不能 import 那个 ESM 模块,
-// 所以在这里重复一次字面量(改一处就得改两处,test/preload-reader 会盯着)。
+// READER_THEME_CHANNEL / READER_LOCALE_CHANNEL 必须一致;preload 是 CJS,
+// 不能 import 那个 ESM 模块,所以在这里重复一次字面量(改一处就得改两处)。
 const { contextBridge, ipcRenderer } = require("electron");
 
 const CONTENT_CHANNEL = "arcane-reader:content";
 const THEME_CHANNEL = "arcane-reader:theme";
+const LOCALE_CHANNEL = "arcane-reader:locale";
 
 contextBridge.exposeInMainWorld("arcaneReader", {
   /**
@@ -30,6 +31,12 @@ contextBridge.exposeInMainWorld("arcaneReader", {
     const listener = (_event, theme) => callback(theme);
     ipcRenderer.on(THEME_CHANNEL, listener);
     return () => ipcRenderer.removeListener(THEME_CHANNEL, listener);
+  },
+  /** 订阅语言热切换广播(review M2):与主题同链路。 @returns {() => void} */
+  onLocale: (callback) => {
+    const listener = (_event, locale) => callback(locale);
+    ipcRenderer.on(LOCALE_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(LOCALE_CHANNEL, listener);
   },
   /** ③ 顶栏返回/关闭与 Esc。origin=foundry → 回 FOUNDRY;origin=closed → 关面板。 */
   back: () => ipcRenderer.invoke("md-reader:back"),

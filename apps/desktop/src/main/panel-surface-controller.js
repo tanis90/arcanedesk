@@ -10,6 +10,8 @@
 export const READER_CONTENT_CHANNEL = "arcane-reader:content";
 /** readerView 的主题广播通道;主题切换时与内容分开发,避免重读文件。 */
 export const READER_THEME_CHANNEL = "arcane-reader:theme";
+/** readerView 的语言热切换通道;与主题同链路,热切换不必重建页面(review M2)。 */
+export const READER_LOCALE_CHANNEL = "arcane-reader:locale";
 
 /** §3.1 的四个状态。CLOSED 之外都由 (open, surface, origin) 三元组导出。 */
 export const STATE = Object.freeze({
@@ -33,6 +35,7 @@ export class PanelSurfaceController {
   #readerPath = null; // 当前笔记的原始路径,F5 重读与 ① 恢复都用它
   #readerPayload = null; // 当前笔记内容;保活期间留在内存(§3.5 不变量 4)
   #theme = "light";
+  #locale = null; // 未热切换过:readerView 首屏已从 ?lang= query 拿到权威语言,无需再推
 
   /**
    * @param {object} hooks
@@ -244,13 +247,22 @@ export class PanelSurfaceController {
     this.#sendToReader(READER_THEME_CHANNEL, this.#theme);
   }
 
+  /** 语言热切换广播:与主题同链路,只推给阅读器页(ui:locale 处理器调用,review M2)。 */
+  setLocale(locale) {
+    if (locale !== "zh-CN" && locale !== "en-US") return; // 非法值丢弃,不覆盖已记住的语言
+    this.#locale = locale;
+    this.#sendToReader(READER_LOCALE_CHANNEL, this.#locale);
+  }
+
   /**
    * readerView 每次加载完成时由 main 调用(did-finish-load)。
    * §3.5 不变量 5:内容只由 main 侧这一条推送路径供给,页面自身不读盘,
    * 所以焦点在阅读器里按 F5(Chromium 默认重载)后内容必然回来。
+   * 主题与热切换过的语言一并重推:重载后页面回到 ?lang= 的启动语言。
    */
   onReaderReady() {
     this.#sendToReader(READER_THEME_CHANNEL, this.#theme);
+    if (this.#locale) this.#sendToReader(READER_LOCALE_CHANNEL, this.#locale);
     this.#pushReaderContent();
   }
 

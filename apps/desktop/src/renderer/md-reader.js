@@ -48,6 +48,8 @@
 
   /** 上一次渲染的笔记路径:分辨"同一份被唤回"与"换了一份"。 */
   let shownPath = null;
+  /** 最后一次内容推送:语言热切换时按它重上 chrome 文案,不重渲染正文(review M2)。 */
+  let lastPayload = null;
 
   /**
    * 渲染一份 payload。arcaneMd.render 只追加不清空,所以整段重建。
@@ -71,6 +73,7 @@
   }
 
   window.arcaneReader.onContent(payload => {
+    lastPayload = payload ?? null;
     applyOrigin(payload?.origin);
     if (payload?.error) {
       shownPath = null; // 错误页不是任何一份笔记:下次真读到东西时不该当成"同一份"
@@ -85,6 +88,19 @@
   // 主题与内容分开发:切主题不重读文件、不重渲染(§7 arcaneReader.onTheme)。
   window.arcaneReader.onTheme(theme => {
     document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+  });
+
+  // 语言热切换(review M2):ArcaneI18n.setLocale 会更新 <html lang> 并回填 data-i18n;
+  // 本页没有 data-i18n 节点,chrome 文案(返回按钮/截断提示/错误页)全是 JS 按状态
+  // 派生的,按最后一次 payload 重上一遍即可,正文不碰(重渲染会丢滚动位置)。
+  window.arcaneReader.onLocale(locale => {
+    window.ArcaneI18n.setLocale(locale);
+    applyOrigin(lastPayload?.origin ?? null);
+    if (lastPayload?.error) {
+      errorText.textContent = t(ERROR_KEYS[lastPayload.error] ?? ERROR_KEYS.missing);
+    } else if (lastPayload) {
+      notice.textContent = lastPayload.truncated ? t("reader.truncated") : "";
+    }
   });
 
   back.addEventListener("click", leave);
