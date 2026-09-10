@@ -250,8 +250,8 @@ function renderHistoryNavigation() {
     node.addEventListener("click", () => { void showHistoryPage(query, intent); });
     return node;
   };
-  if (historyPage.hasOlder) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
-  if (historyPage.hasNewer) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
+  if (historyPage.hasOlder && historyPage.firstKey != null) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
+  if (historyPage.hasNewer && historyPage.lastKey != null) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
 }
 
 function scheduleWorkspaceSave() {
@@ -302,7 +302,9 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     try { saved = await workspaceStore.load(id); } catch { saved = {}; }
     if (token !== snapshotRequest || selectedSessionId !== id) return;
     if (!keepReading) historyPage = payload.historyPage ?? null;
-    else if (historyPage) historyPage = { ...historyPage, hasNewer: true };
+    // keepReading 是"翻旧页不要被拽走",不是无中生有:只有之前已经 hasNewer 才保留,
+    // 否则按 payload 的实际值——无差别置 true 会造出点进去是空页的「查看后续消息」
+    else if (historyPage) historyPage = { ...historyPage, hasNewer: historyPage.hasNewer || Boolean(payload.historyPage?.hasNewer) };
     selectedTaskId = payload.task?.id ?? null;
     showTaskState(payload.task); showPendingModel(payload.pendingModel);
     viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;

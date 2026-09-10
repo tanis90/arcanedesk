@@ -40,6 +40,23 @@ test("stable cursors walk a 10000-message history without gaps or duplicates", (
   assert.deepEqual(index.page({ after: "entry:9999" }).history, []);
 });
 
+test("an empty page carries no cursors and claims no neighbours", () => {
+  // 空页没有可当游标的 key:报 hasOlder/hasNewer 只会让渲染层画出 null key 的死按钮
+  const index = new HistoryIndex(records(300));
+  for (const page of [index.page({ before: "entry:0" }), index.page({ after: "entry:299" })]) {
+    assert.deepEqual(page.history, []);
+    assert.equal(page.historyPage.firstKey, null);
+    assert.equal(page.historyPage.lastKey, null);
+    assert.equal(page.historyPage.hasOlder, false);
+    assert.equal(page.historyPage.hasNewer, false);
+    assert.equal(page.historyPage.total, 300);
+  }
+  // 空历史本身同理
+  const blank = new HistoryIndex([]).page({});
+  assert.equal(blank.historyPage.hasOlder, false);
+  assert.equal(blank.historyPage.hasNewer, false);
+});
+
 test("invalid and missing pagination cursors are explicit", () => {
   const index = new HistoryIndex(records(500));
   for (const query of [null, [], "path", { limit: 0 }, { limit: 201 }, { limit: 1.5 }, { limit: "100" }, { before: "" }, { before: "x", after: "y" }, { path: "file" }, { around: "entry:250" }]) {
