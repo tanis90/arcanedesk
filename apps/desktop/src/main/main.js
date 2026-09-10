@@ -706,7 +706,10 @@ app.whenReady().then(async () => {
     destroyFoundryView,
     createReaderView,
     destroyReaderView: detachAndCloseView,
-    loadFoundry: () => openFoundryView(),
+    // ① 重开面板要回到关闭前那个 Foundry 地址,而不是默认地址(spec §3.4 CLOSED 行"恢复关闭前内容")。
+    // foundryTargetUrl 初值就是 DEFAULT_FOUNDRY_URL,所以首次打开的行为与改造前一致;
+    // 而"关掉面板再打开就从远端 world 掉回 localhost:30000"是既有缺陷,在这里一并修掉。
+    loadFoundry: () => openFoundryView(foundryTargetUrl),
     reloadFoundry: async () => {
       const view = foundryView();
       if (!view || view.webContents.isDestroyed()) return { ok: false };
