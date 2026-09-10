@@ -1,0 +1,45 @@
+{
+  "port": 60604,
+  "scratch": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-md-reader-review-wddkZZ",
+  "targets": {
+    "chat": "CB22B25DE3DDD3B4DA050B8706F4D8C1",
+    "foundry": {
+      "id": "4C538ACAF4EB82ECF74E5090794DE2EE",
+      "url": "file:///C:/Users/yangqi/code/arcane-family/arcanedesk-md-reader-impl/apps/desktop/src/renderer/foundry-unavailable.html?message=%E6%97%A0%E6%B3%95%E8%BF%9E%E6%8E%A5%20Foundry&theme=light"
+    },
+    "reader": {
+      "id": "D876624957BA7D3A0DCC7ABF4DE7696D",
+      "url": "file:///C:/Users/yangqi/code/arcane-family/arcanedesk-md-reader-impl/apps/desktop/src/renderer/md-reader.html?theme=light&lang=zh-CN"
+    },
+    "readerRestored": "9884CB8C40CD6991B185189DEB3B1521",
+    "readerReopened": "6EB75F4A45D2F7896A21274400EF6327"
+  },
+  "assertions": [
+    "① 开面板 → Foundry surface 是独立 page target(本地没有 FVTT,落到既有的连接失败页)",
+    "② 生产渲染管线把 notes/gatekeeper.md 变成一个无 href、可聚焦、role=link 的锚点",
+    "② 点击后多出一个独立 page target(D876624957BA7D3A0DCC7ABF4DE7696D)——阅读器是 WebContentsView,不是 chat 页里的 DOM",
+    "② READER_F:正文渲染、返回按钮自称返回、68ch 衬线排版、Foundry 隐藏保活",
+    "② 阅读中换笔记:同一个 target、同一个文档,只换内容",
+    "① 顶栏切主题 → 阅读器页 dataset.theme 跟着变,内容不动",
+    "② 含 mermaid 围栏的笔记:阅读器页里真渲染出 SVG,不是失败回退(§9)",
+    "② 越界路径 → 阅读器里的错误页,chat 侧零打扰,Foundry 不受影响",
+    "③ origin=foundry 时 Esc 回 FOUNDRY:Foundry 页没重载(探针存活),阅读器隐藏保活",
+    "① 关面板:两个 view 一起销毁(§2 保活范围之外)",
+    "① 关闭前是 Foundry → 重开落 FOUNDRY(§3.4 CLOSED 行),走的就是 ④ 那个归位动词",
+    "① 关闭前是笔记 → 重开落 READER_C,并且不静默拉起一次 FVTT 加载",
+    "③ origin=closed 时 Esc 关掉整个右屏(§3.4)"
+  ],
+  "screenshots": [
+    "01-foundry-surface.png",
+    "02-chat-anchor.png",
+    "03-reader-over-foundry.png",
+    "04-reader-dark.png",
+    "07-reader-mermaid.png",
+    "05-reader-error.png",
+    "06-reader-restored.png"
+  ],
+  "visibilityStateAfterEscape": {
+    "foundry": "visible",
+    "reader": "visible"
+  }
+}

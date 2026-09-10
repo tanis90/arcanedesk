@@ -252,6 +252,20 @@ renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件
 - 门禁：`npm run verify:source && npm test` 全绿；
 - 手测清单：三种主题/语言组合下的阅读器页；含 mermaid 围栏的笔记渲染；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
 
+### 验收落点（2026-09-10）
+
+| 清单项 | 落点 |
+| --- | --- |
+| 主题组合（light/dark） | `test/review-md-reader.mjs` 真点顶栏按钮，截图 03/04，见 [md-reader-evidence](md-reader-evidence/README.md) |
+| 语言组合 | zh-CN 同上；en-US 键集由 i18n 单测把守，观感留人工 |
+| mermaid 围栏 | 同上截图 07：vendored 库在阅读器 CSP 下真渲染出 SVG（单测里的 mermaid 是假全局，只证明注册表分发） |
+| 2MB+ 截断提示 | `test/fixtures/md-reader-panel.cjs` 在真阅读器页断言截断提示文案与截断后正文 |
+| 删除中的文件报错页 | 同上，断言 `reader.error.missing` 文案渲染在阅读器内 |
+| 拖拽/resize/F11 无闪烁 | 留人工：闪烁是感知项，自动化只能证明 bounds 与可见性正确 |
+
+进程内不变量（同一时刻最多一个 view 可见、③④ 绝不重载 Foundry 页）由 `smoke-md-reader.mjs` 把守；
+进程外的点击/按键/截图证据由 `review-md-reader.mjs` 产出，两者分工见各自文件头注释。
+
 ## 10. 被否决方案存档
 
 | 方案 | 否决原因 |

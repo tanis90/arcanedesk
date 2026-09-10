@@ -9,6 +9,7 @@ const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const panelUi = process.argv.includes("--panel-ui");
 const mdReader = process.argv.includes("--md-reader");
+const mdReaderReview = process.argv.includes("--md-reader-review");
 const sidebarRestart = process.argv.includes("--sidebar-restart");
 const sidebarScenario = process.argv.includes("--sidebar-scenario");
 const quitProbe = process.argv.find(arg => arg.startsWith("--quit-probe="))?.split("=")[1];
@@ -75,7 +76,8 @@ Tray.prototype.setContextMenu = function (value) { if (quitProbe === "tray-failu
 if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: 0 }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
-  if (!nativeReview && !foundryScenario && !sidebarScenario && !deletionScenario) { value.hide(); value.on("show", () => value.hide()); }
+  // CDP 验收要真的看见窗口:隐藏着的页面不一定产帧,截出来就是空白。
+  if (!nativeReview && !foundryScenario && !sidebarScenario && !deletionScenario && !mdReaderReview) { value.hide(); value.on("show", () => value.hide()); }
   value.webContents.setBackgroundThrottling(false);
 });
 const streams = new Map();
@@ -273,11 +275,28 @@ app.on("quit", () => {
     await require("./panel-ui.cjs")({ window, evaluate, ui, until });
     finalExit = true; app.quit(); return;
   }
-  if (mdReader) {
+  if (mdReader || mdReaderReview) {
     // 阅读器的 resolve 基准是当前会话的工作目录(spec §4.2),所以先把备团目录指到 scratch 里。
     pickedDirectory = path.join(scratch, "campaign"); mkdirSync(pickedDirectory, { recursive: true });
     assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
     await ui('workspaceReady.has(selectedSessionId) && !restoringView');
+    if (mdReaderReview) {
+      // CDP 验收(test/review-md-reader.mjs)从进程外驱动:这里只把现场准备好然后待命。
+      // 笔记写在真的磁盘上,点击、换页、Esc 全部由 runner 通过 CDP 发——
+      // 夹具不替它按任何按钮,否则"验收"就成了自己给自己打分。
+      const notes = path.join(pickedDirectory, "notes"); mkdirSync(notes, { recursive: true });
+      // 笔记正文里故意带两个 md 路径:阅读器页不该把它们变成锚点(R5)。
+      writeFileSync(path.join(notes, "gatekeeper.md"), "# 守门人\n\n石门后面站着一个不说话的人。\n\n另见 notes/second.md 与 ../outside.md。\n");
+      writeFileSync(path.join(notes, "second.md"), "# 第二份\n\n换一份笔记。\n");
+      // mermaid 围栏:单测里的 mermaid 是注进去的假全局,证明不了真 vendored 库
+      // 能在阅读器页的 CSP 下加载。这份笔记给 CDP 验收用。
+      writeFileSync(path.join(notes, "diagram.md"), "# 守门流程\n\n```mermaid\ngraph TD; A[石门]-->B[守门人];\n```\n");
+      writeFileSync(path.join(scratch, "review-ready.txt"), pickedDirectory);
+      const deadline = Date.now() + 240000;
+      while (!existsSync(path.join(scratch, "review-done.txt")) && Date.now() < deadline) await sleep(100);
+      assert.ok(existsSync(path.join(scratch, "review-done.txt")), "the CDP reviewer never signalled completion");
+      finalExit = true; app.quit(); return;
+    }
     await require("./md-reader-panel.cjs")({ window, evaluate, ui, until, sleep, project: pickedDirectory });
     finalExit = true; app.quit(); return;
   }
