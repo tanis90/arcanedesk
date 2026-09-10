@@ -617,6 +617,30 @@ function renderMarkdown(container, text) {
   }
 }
 
+// ---------- ② 消息体里的 .md 路径 → 右屏阅读器(md-reader-spec §4.2/§8) ----------
+
+// 委托挂在消息列表上而不是每个锚点:历史回显、流式定稿、翻页都会重建消息体,
+// 逐个绑定既漏又贵。锚点没有 href(file:// 下会把整个页面导航走),所以键盘激活也在这里。
+messages.addEventListener("click", event => {
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (anchor) openNote(/** @type {HTMLElement} */ (anchor));
+});
+messages.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (!anchor) return;
+  event.preventDefault();
+  openNote(/** @type {HTMLElement} */ (anchor));
+});
+
+/** 把锚点上的原始路径交给 main:规范化、resolve、围栏、读取都在那边一次做完(§7)。
+    结果不消费:读链失败也在阅读器里出错误页,chat 侧不弹任何东西(design-rules R5)。 */
+function openNote(anchor) {
+  const path = anchor.dataset.mdPath;
+  if (!path) return;
+  window.arcane.openMdReader(path).catch(() => { /* main 不可用时聊天本身也已经不可用 */ });
+}
+
 // ---------- messages ----------
 
 // /skill:xxx 被 pi 展开成 <skill>...</skill> 全文存进历史;回显时折成小卡
