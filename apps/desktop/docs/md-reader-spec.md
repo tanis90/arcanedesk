@@ -67,8 +67,9 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 ```mermaid
 stateDiagram-v2
     [*] --> CLOSED
-    CLOSED --> FOUNDRY : ①顶栏 / ④FVTT打开
+    CLOSED --> FOUNDRY : ①顶栏(关闭前是foundry) / ④FVTT打开
     CLOSED --> READER_C : ②点md路径
+    CLOSED --> READER_C : ①顶栏(关闭前是笔记)
     FOUNDRY --> CLOSED : ①顶栏(记住当前内容)
     FOUNDRY --> READER_F : ②点md路径
     READER_F --> FOUNDRY : ③返回
@@ -84,10 +85,12 @@ stateDiagram-v2
 
 | 当前 | ①顶栏 | ②点 md 路径 | ③返回 | ④FVTT 打开 |
 |---|---|---|---|---|
-| CLOSED | FOUNDRY（恢复关闭前内容） | READER_C | — | FOUNDRY |
+| CLOSED | 恢复关闭前内容：foundry → FOUNDRY；笔记 → READER_C | READER_C | — | FOUNDRY |
 | FOUNDRY | CLOSED | READER_F | — | （已在） |
 | READER_F | CLOSED（记住 reader+origin） | READER_F（换内容） | FOUNDRY | FOUNDRY（阅读器隐藏保活） |
 | READER_C | CLOSED（记住 reader+origin） | READER_C（换内容） | CLOSED | FOUNDRY（阅读器隐藏保活） |
+
+表中 CLOSED 行的 ① 是实现时定下的：原文写"FOUNDRY（恢复关闭前内容）"，与 §3.2①、§3.3 的边标签"记住 surface+origin"互相矛盾。取后者：① 关面板销毁两个 view（§8），重开时 foundryView 必不存在，因此按 §3.1"退出后再开重新快照现场"，关闭前是笔记的一律落 **READER_C**（③ 于是关面板，而不是"返回 Foundry"——底下确实没有 Foundry 了）。这也避开了"点一下顶栏开关就静默拉起一次 FVTT 加载"；origin 不会跨关闭周期保留为 foundry。
 
 ### 3.5 不变量（实现即断言）
 
