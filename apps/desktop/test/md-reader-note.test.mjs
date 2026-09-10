@@ -15,8 +15,9 @@ import {
 
 const IS_WIN = process.platform === "win32";
 
-function workspace() {
+function workspace(t) {
   const base = mkdtempSync(path.join(tmpdir(), "arcane-md-reader-"));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
   mkdirSync(path.join(base, "notes"), { recursive: true });
   return base;
 }
@@ -68,16 +69,16 @@ test("hasNoteExtension accepts only md and markdown", () => {
 
 // ---------- resolveNote:§7 围栏 ----------
 
-test("resolveNote resolves relative paths inside the base directory", () => {
-  const base = workspace();
+test("resolveNote resolves relative paths inside the base directory", (t) => {
+  const base = workspace(t);
   const resolved = resolveNote("notes/npc.md", base);
   assert.equal(resolved.ok, true);
   assert.equal(resolved.absolute, path.join(base, "notes", "npc.md"));
   assert.equal(resolved.line, null);
 });
 
-test("resolveNote accepts an absolute path inside the base and keeps the line number", () => {
-  const base = workspace();
+test("resolveNote accepts an absolute path inside the base and keeps the line number", (t) => {
+  const base = workspace(t);
   const absolute = path.join(base, "notes", "npc.md");
   const resolved = resolveNote(`${absolute}:7`, base);
   assert.equal(resolved.ok, true);
@@ -85,8 +86,8 @@ test("resolveNote accepts an absolute path inside the base and keeps the line nu
   assert.equal(resolved.line, 7);
 });
 
-test("resolveNote rejects traversal, foreign absolute paths, wrong extension and a missing base", () => {
-  const base = workspace();
+test("resolveNote rejects traversal, foreign absolute paths, wrong extension and a missing base", (t) => {
+  const base = workspace(t);
   assert.equal(resolveNote("../escape.md", base).reason, "outside");
   assert.equal(resolveNote("notes/../../escape.md", base).reason, "outside");
   assert.equal(resolveNote(path.join(tmpdir(), "elsewhere.md"), base).reason, "outside");
@@ -112,8 +113,8 @@ test("NOTE_MAX_BYTES is the 2 MB cap from the spec", () => {
   assert.equal(NOTE_MAX_BYTES, 2 * 1024 * 1024);
 });
 
-test("readNote returns name, text and truncated=false for a small note", () => {
-  const base = workspace();
+test("readNote returns name, text and truncated=false for a small note", (t) => {
+  const base = workspace(t);
   const absolute = path.join(base, "notes", "npc.md");
   writeFileSync(absolute, "# NPC：张三\n正文。", "utf8");
   const note = readNote(absolute);
@@ -123,8 +124,8 @@ test("readNote returns name, text and truncated=false for a small note", () => {
   assert.equal(note.truncated, false);
 });
 
-test("readNote truncates at the cap without splitting a multi-byte character", () => {
-  const base = workspace();
+test("readNote truncates at the cap without splitting a multi-byte character", (t) => {
+  const base = workspace(t);
   const absolute = path.join(base, "notes", "big.md");
   // 每个"字"是三字节;16 字节的窗口会落在第 6 个字的中间
   writeFileSync(absolute, "字".repeat(64), "utf8");
@@ -135,14 +136,14 @@ test("readNote truncates at the cap without splitting a multi-byte character", (
   assert.equal(note.text.includes("\uFFFD"), false, "the split character must not reach the user");
 });
 
-test("readNote reports missing files and directories alike", () => {
-  const base = workspace();
+test("readNote reports missing files and directories alike", (t) => {
+  const base = workspace(t);
   assert.deepEqual(readNote(path.join(base, "notes", "gone.md")), { ok: false, reason: "missing" });
   assert.deepEqual(readNote(path.join(base, "notes")), { ok: false, reason: "missing" });
 });
 
-test("readNote refuses binary and non-UTF-8 payloads instead of rendering garbage", () => {
-  const base = workspace();
+test("readNote refuses binary and non-UTF-8 payloads instead of rendering garbage", (t) => {
+  const base = workspace(t);
   const binary = path.join(base, "notes", "bin.md");
   writeFileSync(binary, Buffer.from([0x68, 0x00, 0x69, 0x00, 0x21, 0x00]));
   assert.deepEqual(readNote(binary), { ok: false, reason: "encoding" });
@@ -158,14 +159,14 @@ test("readNote refuses binary and non-UTF-8 payloads instead of rendering garbag
 
 // ---------- loadNotePayload:②/F5/① 共用的那条读链 ----------
 
-test("loadNotePayload returns rendered content for a reachable note", () => {
-  const base = workspace();
+test("loadNotePayload returns rendered content for a reachable note", (t) => {
+  const base = workspace(t);
   writeFileSync(path.join(base, "notes", "npc.md"), "# NPC", "utf8");
   assert.deepEqual(loadNotePayload("`notes/npc.md`", base), { name: "npc.md", text: "# NPC", truncated: false });
 });
 
-test("loadNotePayload turns every fence and read failure into one of the three spec errors", () => {
-  const base = workspace();
+test("loadNotePayload turns every fence and read failure into one of the three spec errors", (t) => {
+  const base = workspace(t);
   writeFileSync(path.join(base, "notes", "bin.md"), Buffer.alloc(64, 0xff));
   assert.deepEqual(loadNotePayload("../escape.md", base), { error: "outside" });
   assert.deepEqual(loadNotePayload("notes/npc.txt", base), { error: "outside" });
@@ -174,12 +175,11 @@ test("loadNotePayload turns every fence and read failure into one of the three s
   assert.deepEqual(loadNotePayload("notes/bin.md", base), { error: "encoding" });
 });
 
-test("loadNotePayload never throws away the click: a missing note still yields a page payload", () => {
-  const base = workspace();
+test("loadNotePayload never throws away the click: a missing note still yields a page payload", (t) => {
+  const base = workspace(t);
   // R5:围栏失败也要有响应,所以返回值永远是一个可直接渲染的 payload
   const payload = loadNotePayload("notes/gone.md", base);
   assert.equal(typeof payload, "object");
   assert.equal("error" in payload, true);
   assert.equal("text" in payload, false);
-  rmSync(base, { recursive: true, force: true });
 });
