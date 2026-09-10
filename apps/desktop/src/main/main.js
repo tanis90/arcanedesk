@@ -366,6 +366,14 @@ function createFoundryView() {
     }
     clearFoundryPermissionState("foundry-navigation", { keepSessionGrants: sameTrustedOrigin });
   });
+  // 阅读器盖住期间 Foundry 的 renderer 可能崩溃(WebGL 页面被 Chromium 判定 occlusion 后丢弃):
+  // 崩溃后 isDestroyed() 仍是 false,不在这里作废 runtime 与权限授权的话,
+  // 它们会握着一块死黑屏;重建由控制器 isUsable() 的 isCrashed 检查在下次使用时完成(review BUG-4)。
+  panelWebContents.on("render-process-gone", (_event, details) => {
+    console.error("[panel] Foundry renderer process gone:", details?.reason ?? "unknown");
+    foundryRuntime?.invalidate();
+    clearFoundryPermissionState("foundry-render-process-gone");
+  });
   panelWebContents.once("destroyed", () => {
     foundryRuntime?.invalidate();
     clearFoundryPermissionState("foundry-view-destroyed");

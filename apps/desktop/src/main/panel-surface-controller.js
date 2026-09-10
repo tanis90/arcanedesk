@@ -309,7 +309,11 @@ export class PanelSurfaceController {
   }
 }
 
-/** view 是否还能用:close() 之后 webContents 会变 undefined,直接 isDestroyed() 会抛 TypeError。 */
+/**
+ * view 是否还能用:close() 之后 webContents 会变 undefined,直接 isDestroyed() 会抛 TypeError。
+ * renderer 崩溃(render-process-gone)后 isDestroyed() 仍是 false,必须另查 isCrashed()——
+ * 否则 leaveReader 的守卫会把一块死黑屏重新摆出来,ensureFoundryView 的重建兜底也进不去(review BUG-4)。
+ */
 function isUsable(view) {
-  return Boolean(view?.webContents) && !view.webContents.isDestroyed();
+  return Boolean(view?.webContents) && !view.webContents.isDestroyed() && !view.webContents.isCrashed();
 }

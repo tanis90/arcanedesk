@@ -10,7 +10,9 @@ import {
 
 // 状态机不 import electron,所以整套四态 × 四事件转移表用假 view 就能跑完(md-reader-spec §9)。
 
-/** 假 WebContentsView:记录显隐、bounds、穿透与收到的 IPC。 */
+/** 假 WebContentsView:记录显隐、bounds、穿透与收到的 IPC。
+    destroyed 与 crashed 分开建模:真实 renderer 崩溃(render-process-gone)后
+    isDestroyed() 仍是 false,只有 isCrashed() 为 true(review BUG-4)。 */
 function fakeView(label) {
   const view = {
     label,
@@ -18,11 +20,13 @@ function fakeView(label) {
     bounds: null,
     ignoreMouse: null,
     destroyed: false,
+    crashed: false,
     sent: [],
     setVisible(value) { view.visible = value; },
     setBounds(value) { view.bounds = value; },
     webContents: {
       isDestroyed: () => view.destroyed,
+      isCrashed: () => view.crashed,
       send: (channel, payload) => view.sent.push({ channel, payload }),
       setIgnoreMouseEvents: (value) => { view.ignoreMouse = value; },
     },
@@ -387,22 +391,33 @@ test("pointer passthrough follows the visible surface", async () => {
 test("ensureFoundryView rebuilds a crashed renderer instead of showing a blank view", () => {
   const h = harness();
   const first = h.controller.ensureFoundryView();
-  first.destroyed = true;
+  // 真实崩溃语义:isCrashed() === true 而 isDestroyed() === false(review BUG-4)
+  first.crashed = true;
+  assert.equal(first.webContents.isDestroyed(), false);
   const second = h.controller.ensureFoundryView();
   assert.notEqual(first, second);
   assert.deepEqual(h.calls.destroyed.at(-1), { label: "foundry", reason: "foundry-renderer-gone" });
   assert.equal(h.controller.foundryView, second);
+
+  // 销毁语义同样触发重建
+  second.destroyed = true;
+  const third = h.controller.ensureFoundryView();
+  assert.notEqual(second, third);
 });
 
-test("③ falls back to closing the panel when the Foundry renderer died while reading", async () => {
+test("③ falls back to closing the panel when the Foundry renderer crashed while reading", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
   assert.equal(h.controller.state, STATE.READER_F);
-  h.live("foundry")[0].destroyed = true; // renderer 崩溃(R1:崩溃即常态)
+  // 阅读期间 Foundry 的 renderer 崩溃(R1:崩溃即常态):view 没销毁,只是死了
+  const foundry = h.live("foundry")[0];
+  foundry.crashed = true;
+  assert.equal(foundry.destroyed, false, "render-process-gone 后 isDestroyed() 仍是 false");
 
   h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED, "没有可返回的 Foundry,就不摆一块白屏给用户");
+  assert.equal(h.controller.state, STATE.CLOSED, "没有可返回的 Foundry,就不摆一块死黑屏给用户");
+  assert.equal(assertSingleVisible(h, "READER_F --③ crash"), null);
 });
 
 test("Foundry consumers never see the reader view", async () => {
