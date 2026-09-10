@@ -424,7 +424,7 @@ function createReaderView() {
 /**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
- * 只有跟源或当前页面失效时才导航。
+ * 只有跨源或当前页面失效时才导航。
  * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
@@ -483,7 +483,12 @@ async function openFoundryView(rawUrl) {
 }
 
 async function loadFoundryPage(url) {
-  const contents = foundryView().webContents;
+  // 与 failedPage 同款守卫:调用方(reloadFoundry 等)检查过之后到这里之间,
+  // view 仍可能被销毁/重建,无条件解引用 webContents 会抛 TypeError(review F3)。
+  const contents = foundryView()?.webContents;
+  if (!contents || contents.isDestroyed() || contents.isCrashed()) {
+    return { ok: false, summary: `ERROR: ${url} not loaded: the panel view is gone` };
+  }
   foundryTargetUrl = url;
   const failedPage = async () => {
     if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
@@ -501,7 +506,7 @@ async function loadFoundryPage(url) {
       summary: `ERROR: failed to load ${url}: ${error.message}`,
     };
   }
-  const inspected = await readFoundryPageState(foundryView().webContents);
+  const inspected = await readFoundryPageState(contents);
   if (!inspected.ok) {
     await failedPage();
     return {
