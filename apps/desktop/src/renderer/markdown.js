@@ -236,8 +236,9 @@ const NOTE_PATH_PATTERN = new RegExp(
   "(?:" + SEGMENT_CHAR + "+[\\\\/])*" + // 中间分量
   SEGMENT_CHAR + "*?" + // 文件名(懒匹配,允许 CJK 名)
   "\\.(?:md|markdown)" +
-  "(?::\\d+(?::\\d+)?)?" + // 行号:v1 只剥除、不跳转
-  "(?![\\w.\\-])", // 右边界:a.md.bak / a.mdx 不算
+  // 行号:v1 只剥除、不跳转。行号组没参与时边界还要额外拒绝 ":"——
+  // 否则 a.md:12x 会回溯成 "a.md" + 悬空 ":12x",把非路径链成链接
+  "(?:(?::\\d+(?::\\d+)?)(?![\\w.\\-])|(?![\\w.\\-:]))", // 右边界:a.md.bak / a.mdx 不算
   "gi",
 );
 
@@ -349,6 +350,7 @@ function noteAnchor(rawPath, tokens, math) {
 /**
  * 渲染完的容器里遍历文本节点,把裸路径包成锚点。
  * 围栏代码块里的路径是源码不是入口,跳过;已包好的锚点不重复处理。
+ * KaTeX 产物(.md-katex)里的"路径"是公式文本,包上链接会把公式视觉破坏,同样跳过。
  * 行内 <code> 里的路径要处理——反引号包裹是 spec §4.2 明列的形态。
  */
 function linkifyNotePaths(root) {
@@ -356,7 +358,7 @@ function linkifyNotePaths(root) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
-      if (node.parentElement?.closest("pre, a")) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("pre, a, .md-katex")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });

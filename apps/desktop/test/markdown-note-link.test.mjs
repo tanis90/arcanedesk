@@ -41,6 +41,13 @@ test("a line suffix is stripped, not followed", () => {
   assert.equal("见 notes/npc.md:42 那段".slice(hit.start, hit.end), hit.path, "offsets must slice back to the path");
 });
 
+test("a dangling colon after the extension rejects the whole match", () => {
+  // 行号组回溯掉之后,边界必须连 ":" 一起拒绝,否则 a.md:12x 会链成 "a.md" + 悬空 ":12x"
+  assert.deepEqual(pathsOf("a.md:12x"), []);
+  assert.deepEqual(pathsOf("a.md:12"), ["a.md:12"]); // 行号仍含在 path 里,main 侧剥除(v1 不跳转)
+  assert.deepEqual(pathsOf("a.md"), ["a.md"]);
+});
+
 test("wrappers and trailing punctuation stay outside the match", () => {
   assert.deepEqual(pathsOf("`notes/npc.md`"), ["notes/npc.md"]);
   assert.deepEqual(pathsOf('"notes/npc.md"'), ["notes/npc.md"]);
@@ -135,6 +142,19 @@ test("paths inside a code fence stay source, paths inside inline code link", () 
   const inline = [...descendants(container)].filter((node) => node.tagName === "CODE" && node.parentElement?.tagName !== "PRE");
   assert.equal(inline.length, 1);
   assert.equal(inline[0].querySelector("a.md-path")?.dataset.mdPath, "notes/inline.md");
+});
+
+test("rendered math is display, not an entry point: no anchors inside KaTeX output", () => {
+  // katex 桩把公式源码原样填进 .md-katex span;公式里的"路径"是公式文本,linkify 不得碰
+  const katex = { render: (tex, node) => { node.textContent = tex; } };
+  const { container, arcaneMd } = loadMarkdownPipeline({ globals: { katex } });
+  arcaneMd.render(container, "公式 $notes/formula.md$ 与正文 notes/prose.md。");
+  const math = container.querySelector(".md-katex");
+  assert.ok(math, "math renders through the KaTeX path");
+  assert.equal(math.textContent, "notes/formula.md");
+  assert.equal(math.querySelectorAll("a.md-path").length, 0, "paths inside rendered formulas stay formula text");
+  const anchors = [...descendants(container)].filter((node) => node.classList.contains("md-path"));
+  assert.deepEqual(anchors.map((node) => node.dataset.mdPath), ["notes/prose.md"], "prose paths still link");
 });
 
 test("the reader page produces no anchors it cannot honour", () => {
