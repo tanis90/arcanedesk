@@ -1,6 +1,19 @@
 # ArcaneDesk 国际化技术方案
 
-状态：已评审待启动 · 日期：2026-09-10 · 分支：docs/internationalization-plan
+状态：M0 已完成、M1 启动 · 日期：2026-09-10 · 分支：docs/internationalization-plan
+
+**2026-09-10 决策记录（拍板）：**
+
+- M0 已完成：R2 桶 `arcane-desk-intl` + 自定义域 `dl.arcanedesk.app`、D1 库
+  `arcane-desk-intl`、Workers Paid、R2 S3 密钥对、CF API Token，GitHub Secrets
+  （仓库级 + `desktop-release` environment）均已就位。
+- LLM 上游改 **DeepSeek 海外站**（不再用 OpenRouter，见 D3 修订）；海外 LLM 整体
+  暂缓，首发 BYOK，M5 推迟。
+- arcane-agent-bridge **弃用不开源**：桌面端已切换 DirectFoundryRuntime
+  （main.js 直注 Foundry 页，测试断言不再引用该模块），旧 loopback 桥为残留架构。
+- intl 自动化内容口径**已拍板接受降级**：国际版 = arcane-spells-2014（SRD 5.1，
+  167 法术 + 20 戏法配方，不含任何全文/描述/美术/怪物数据，对用户自备内容施加
+  自动化）；完整 Auto 2014 不出海。对外文案不得宣称"完整 2014 自动化"。
 
 本文是国际化的总战略文档：现状结论、设计决策、里程碑（M0–M8）、人员任务清单、
 拓扑排序与并发方案。涉及四个仓库：
@@ -85,14 +98,16 @@ R2 + 自定义域 `dl.arcanedesk.app`：零出口流量费（对比 OSS 国际�
 约 $0.09/GB），S3 兼容 API 可直接接入现有发布脚本。需要搬运的三类对象：
 安装包 + latest 指针、技能包（intl 独立前缀隔离）、国际 mod 索引。
 
-### D3：LLM 上游选 OpenRouter，NewAPI 不出海
+### D3：LLM 上游改 DeepSeek 海外站，NewAPI 不出海（2026-09-10 修订）
 
-- DeepSeek 直连海外可用，但充值主体在中国、数据按政策在中国处理，不做国际版默认底座。
-- OpenRouter 有 DeepSeek 全系模型（价与官方持平）、美区结算、多上游冗余，
-  且有 provisioning API 可编程创建带额度上限的子 key。
-- 国内 NewAPI 的四项职责在海外版的落点：双闸门配额 → D1 配额表 + OpenRouter
-  sub-key limit；模型别名 → Worker 内改写 `arcane-spark`；定价 → OpenRouter 账单；
-  生命周期 → provisioned key 禁用/轮换。
+- 原方案选 OpenRouter（ provisioning API 发子 key），已拍板改为 **DeepSeek 海外站**
+  （api.deepseek.com，模型 `deepseek-flash` / `deepseek-v4-pro`，已充值并实测连通）。
+- DeepSeek 海外站**没有 sub-key provisioning API**，M5 的配额执行完全落在
+  D1 配额表 + Worker 内记账，不再有两层兜底。
+- 国内 NewAPI 的四项职责在海外版的落点：双闸门配额 → D1 配额表；
+  模型别名 → Worker 内改写 `arcane-spark` → `deepseek-flash`；定价 → DeepSeek 账单；
+  生命周期 → D1 登记 + 禁用/轮换。
+- **M5 整体暂缓**：首发 BYOK（零后端），Spark-intl 在需要发试用 key 验证付费意愿时再启动。
 
 ### D4：订阅三段式，首发不做订阅
 
@@ -122,7 +137,7 @@ Workers Analytics Engine 做实时仪表盘（注意只保留 3 个月，另设�
 | 组 | 包 | 国际处置 |
 |---|---|---|
 | arcane | arcane-common-display-vision、arcane-dice-so-nice-dnd5e-fix | 已开源，指 GitHub manifest |
-| arcane | arcane-agent-bridge | 待开源（自己的代码，Apache-2.0 补进 mods 仓库） |
+| arcane | arcane-agent-bridge | **弃用，不开源**（2026-09-10 拍板：桌面端已切换 DirectFoundryRuntime，该模块为旧 loopback 桥残留；国内镜像暂留 0.1.0 供存量，intl 索引剔除） |
 | arcane | arcane-dnd5e-2014-automation（0.3.19/0.4.1/0.4.2） | 不出海，替换为 arcane-spells-2014（SRD 5.1，167 法术） |
 | arcane | zzzz_arcane_dnd5e_cn | 剔除（中文专属） |
 | core ×12 | midi-qol、dae、times-up、socketlib、lib-wrapper、itemacro、ActiveAuras、ATL、auraeffects、dfreds-convenient-effects、lib-dfreds-migrations、lib-dfreds-ui-extender | 上游原始路径（Foundry 官方注册表/GitHub） |
@@ -133,7 +148,7 @@ Workers Analytics Engine 做实时仪表盘（注意只保留 3 个月，另设�
 | zh ×4 | 5e_chn、babele、foundry_chn、zzz_mod_chn | 剔除 |
 | worlds | arcane-demo 0.1.2 + arcane-demo-full profile | 内容审计（是否含 2014 全文本产物），profile 清单按本表替换 |
 
-净结论：31 个直接上游、2 个自有已开源、1 个待开源、1 个替换、5 个剔除、1 组待审计。
+净结论：31 个直接上游、2 个自有已开源、1 个弃用剔除（agent-bridge）、1 个替换、5 个剔除、1 组待审计。
 
 注意：镜像是重新打包的，字节与上游不同，**国际索引的 bytes/sha256 必须对上游 zip 实测**，
 不能复用镜像哈希。版本钉与国内镜像保持一致，保证海内海外跑同一套验证过的组合。
@@ -169,7 +184,7 @@ R2 桶、D1 库、CF API token、OpenRouter 主 key、Discord、waitlist 工具�
   （参数名与语义在 M1 规格中钉死）
 - 新增 `scripts/prepare-intl-index.mjs`：策展清单 → 上游实测哈希 → `index-en.json`，
   哈希漂移报警；周更 cron workflow 发 R2
-- mods 仓库：开源 arcane-agent-bridge；release workflow（module.json 稳定 manifest URL）
+- mods 仓库：release workflow（module.json 稳定 manifest URL）；~~开源 arcane-agent-bridge~~（已拍板弃用）
 - arcane-demo 世界审计 + intl 版 profile
 - 验收：intl 构建里 agent 装 midi-qol 从上游下载且索引哈希校验通过；自有 mod 从 GitHub 装通
 
@@ -180,11 +195,12 @@ R2 桶、D1 库、CF API token、OpenRouter 主 key、Discord、waitlist 工具�
 - `system-prompts/prep.md`、`combat.md` 原生英文版
 - 验收：intl 构建自更新到英文技能包；英文 agent 全流程无中文渗漏
 
-### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）
+### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— **暂缓**
 
-- `services/arcane-spark-edge/` Worker：key 校验（D1）→ 别名改写 → 转发 OpenRouter
-  （provisioned sub-key 兜底）→ 按 usage 扣额度；流式透传
-- `tools/arcane-key-intl/` CLI：provisioning API 发子 key + D1 登记 + 手工发放纪律
+- `services/arcane-spark-edge/` Worker：key 校验（D1）→ 别名改写 `arcane-spark` →
+  `deepseek-flash` → 转发 DeepSeek 海外站 → 按 usage 扣 D1 额度；流式透传
+- `tools/arcane-key-intl/` CLI：生成 Spark key + D1 登记 + 手工发放纪律
+  （DeepSeek 无 provisioning API，上游额度不在 key 层兜底）
 - 主仓库 `provider-catalog.json` intl 排序；`voice/asr.js`/`preset.js` intl 默认
 - 验收：intl 构建填 Spark-intl key 跑通 prep 会话；BYOK 目录前三位海外厂商
 
@@ -208,21 +224,23 @@ Privacy Policy / ToS 页；hreflang。
 
 ## 5. 人员任务清单（账号 / 充值 / 决策）
 
-**立即（阻塞 M2/M4/M5/M6）：**
+**立即（阻塞 M2/M4/M5/M6）：**（1–3 已于 2026-09-10 完成）
 
-1. Cloudflare：开通 R2（需绑支付方式）；升级 Workers Paid（$5/月）；建 R2 桶
-   （建议名 `arcane-desk-intl`）、D1 库；建 `dl./api./llm.arcanedesk.app` 自定义域；
-   生成 R2 S3 API 密钥对与 CF API Token
-2. OpenRouter：注册，充值 $50–100，开 provisioning 权限主 key
-3. GitHub Secrets：`R2_ACCESS_KEY_ID/SECRET`、`CF_ACCOUNT_ID`、`CF_API_TOKEN`、
-   `OPENROUTER_PROVISIONING_KEY`（含 `desktop-release` environment）
-4. Discord 建服务器 + 永久邀请链接
-5. waitlist：Buttondown 或 ConvertKit 注册（免费档）
+1. ~~Cloudflare~~ ✅ R2 桶 `arcane-desk-intl`、D1 库、`dl.arcanedesk.app` 自定义域、
+   R2 S3 密钥对、CF API Token、Workers Paid 均已就位（`api./llm.` 域在 M5/M6 部署
+   Worker 时再加）
+2. ~~OpenRouter~~ ✅ 改为 DeepSeek 海外站：已注册充值，key 实测连通
+   （可用模型 `deepseek-flash`、`deepseek-v4-pro`）
+3. ~~GitHub Secrets~~ ✅ `R2_ACCESS_KEY_ID/SECRET`、`CF_ACCOUNT_ID`、`CF_API_TOKEN`
+   已写入仓库级 + `desktop-release` environment（`OPENROUTER_PROVISIONING_KEY` 取消）
+4. Discord 建服务器 + 永久邀请链接（暂缓，M7 前需要）
+5. waitlist：Buttondown 或 ConvertKit 注册（免费档）（暂缓，M7 前需要）
 
 **本周内（阻塞 M3）：**
 
-6. 拍板 arcane-agent-bridge 开源
-7. 拍板 intl 自动化内容口径（arcane-spells-2014 替代完整版 Auto 2014 的产品文案）
+6. ~~拍板 arcane-agent-bridge 开源~~ ✅ 已拍板**弃用**（DirectFoundryRuntime 替代）
+7. ~~拍板 intl 自动化内容口径~~ ✅ 已拍板**接受降级**：国际版 = SRD 5.1 共 167 法术
+   （+20 戏法）自动化配方、用户自备内容；对外文案不得宣称"完整 2014 自动化"
 8. mods 仓库开 workflow 权限（配 release 自动化）
 
 **下周前（阻塞 M7/M8）：**
@@ -236,7 +254,7 @@ Privacy Policy / ToS 页；hreflang。
 11. Paddle / Lemon Squeezy 入驻（需公司主体与收款账户）——BYOK + 手工 key 验证付费意愿后
 12. DeepSeek 国际站账号（可选 provider）
 
-**预算：当期现金 ≈ $5/月（CF）+ $50–100（OpenRouter），无其他采购。**
+**预算：当期现金 ≈ $5/月（CF）+ DeepSeek 充值，无其他采购。**
 
 ---
 
