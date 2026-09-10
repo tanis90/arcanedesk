@@ -194,6 +194,7 @@ try {
       probe: window.__cdpProbe ?? null,
       columnWidth: Math.round(doc.getBoundingClientRect().width),
       paneWidth: Math.round(pane.getBoundingClientRect().width),
+      columnPadding: Math.round(parseFloat(getComputedStyle(doc).paddingLeft)),
       headFont: getComputedStyle(document.getElementById("reader-name")).fontFamily,
     };
   })()`);
@@ -239,10 +240,10 @@ try {
   assert.equal(state.ariaBack, state.back, "按钮的 aria-label 与可见文案一致");
   assert.equal(state.title, "gatekeeper.md · ArcaneDesk");
   assert.match(state.headFont, /Georgia|Palatino|Songti|STSong|serif/, "页眉文件名用衬线(§5.2 signature)");
-  assert.ok(state.columnWidth < state.paneWidth, `正文栏不拉满右屏:${state.columnWidth}px < ${state.paneWidth}px(§5.2 的 68ch)`);
-  assert.ok(state.columnWidth >= 320 && state.columnWidth <= 900, `正文栏宽 ${state.columnWidth}px 落在可读区间`);
+  assert.equal(state.columnWidth, state.paneWidth, "正文栏满铺右屏(§5.2:68ch 居中栏在窄面板下重心失衡,已改满铺)");
+  assert.ok(state.columnPadding >= 16 && state.columnPadding <= 72, `正文横向 padding ${state.columnPadding}px 落在 clamp 区间`);
   assert.ok((await foundryTarget()).id === report.targets.foundry.id, "READER_F 底下压着活的 Foundry(§3.5 不变量 2)");
-  note("② READER_F:正文渲染、返回按钮自称返回、68ch 衬线排版、Foundry 隐藏保活");
+  note("② READER_F:正文渲染、返回按钮自称返回、满铺衬线排版、Foundry 隐藏保活");
   await shoot(readerSession, "03-reader-over-foundry.png");
   await readerSession.evaluate('window.__cdpProbe = "alive"');
 

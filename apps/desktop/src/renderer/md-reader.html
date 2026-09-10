@@ -132,16 +132,19 @@
       color: var(--muted);
     }
 
-    /* ---------- 正文栏 ---------- */
+    /* ---------- 正文栏 ----------
+       满铺:右屏常被分栏挤窄,再套 68ch 居中栏会让重心偏右(§5.2);
+       横向 padding 随面板宽度 clamp,宽面板仍有适度留白 */
     .reader-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
     .md-doc {
-      max-width: 68ch;
-      margin: 0 auto;
-      padding: 26px 30px 72px;
+      padding: 26px clamp(24px, 6%, 72px) 72px;
       overflow-wrap: break-word;
     }
-    /* 窄栏时 padding 收缩,不出现横向滚动(§5.4) */
-    @media (max-width: 720px) { .md-doc { padding: 18px 16px 56px; } }
+    /* 窄栏时 padding 收得比 clamp 下限更紧,不出现横向滚动(§5.4) */
+    @media (max-width: 720px) {
+      .md-doc { padding: 18px 16px 56px; }
+      .reader-notice { padding: 10px 16px 0; }
+    }
     /* 文档里的标题需要比气泡里的更分级:arcaneMd 一律输出 h4,这里按位置给层次 */
     .md-doc h4 { font-size: 17px; line-height: 1.5; margin: 26px 0 8px; }
     .md-doc h4:first-child { margin-top: 0; }
@@ -149,9 +152,7 @@
 
     /* ---------- 超限截断提示 / 错误页 ---------- */
     .reader-notice {
-      max-width: 68ch;
-      margin: 0 auto;
-      padding: 10px 30px 0;
+      padding: 10px clamp(24px, 6%, 72px) 0; /* 与 .md-doc 同一套 padding 方案 */
       color: var(--muted);
       font-size: var(--fs-meta);
     }
