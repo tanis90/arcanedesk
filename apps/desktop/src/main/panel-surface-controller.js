@@ -298,7 +298,9 @@ export class PanelSurfaceController {
     if (!this.#readerPayload) return;
     // origin 随内容一起下发:返回按钮的文案("← 返回 Foundry" / "✕ 关闭")由它决定,
     // 而 origin 在一个阅读周期内不变,所以不需要第二条状态通道(§7)。
-    this.#sendToReader(READER_CONTENT_CHANNEL, { ...this.#readerPayload, origin: this.#origin });
+    // path 也一并下发:页面靠它分辨"同一份笔记被唤回"与"换了一份",
+    // 前者保留滚动位置,后者回顶(§2 保活范围)。
+    this.#sendToReader(READER_CONTENT_CHANNEL, { ...this.#readerPayload, origin: this.#origin, path: this.#readerPath });
   }
 
   #sendToReader(channel, payload) {

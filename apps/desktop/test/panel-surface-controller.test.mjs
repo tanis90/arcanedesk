@@ -265,19 +265,34 @@ test("a fence failure still opens the reader and shows the error page (R5)", () 
   const h = harness({ notes: { "../escape.md": { error: "outside" } } });
   h.controller.showReader("../escape.md");
   assert.equal(h.controller.state, STATE.READER_C, "点击意图必须得到响应,不能无声拒绝");
-  assert.deepEqual(h.content(), { error: "outside", origin: "closed" });
+  assert.deepEqual(h.content(), { error: "outside", origin: "closed", path: "../escape.md" });
 });
 
 test("content push carries origin so the back button can name its own action", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
-  assert.deepEqual(h.content(), { name: "npc.md", text: "# notes/a.md", truncated: false, origin: "foundry" });
+  assert.deepEqual(h.content(), { name: "npc.md", text: "# notes/a.md", truncated: false, origin: "foundry", path: "notes/a.md" });
 
   h.controller.leaveReader();
   h.controller.closePanel();
   h.controller.showReader("notes/b.md");
   assert.equal(h.content().origin, "closed");
+});
+
+test("content push carries the path so the page can tell a recall from a new note (§2)", () => {
+  const h = harness();
+  h.controller.showReader("notes/a.md");
+  assert.equal(h.content().path, "notes/a.md");
+
+  // ④ 顶掉后 ② 唤回同一条路径:path 不变,页面据此保留滚动位置。
+  h.controller.showFoundry();
+  h.controller.showReader("notes/a.md");
+  assert.equal(h.content().path, "notes/a.md");
+
+  // 换一份:path 跟着变,页面回顶。
+  h.controller.showReader("notes/b.md");
+  assert.equal(h.content().path, "notes/b.md");
 });
 
 test("onReaderReady re-pushes theme and content without re-reading the file (invariant 5)", () => {

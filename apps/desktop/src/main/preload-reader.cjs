@@ -14,8 +14,9 @@ const THEME_CHANNEL = "arcane-reader:theme";
 
 contextBridge.exposeInMainWorld("arcaneReader", {
   /**
-   * 订阅笔记内容。payload = { name, text, truncated, origin } 或 { error, origin };
+   * 订阅笔记内容。payload = { name, text, truncated, origin, path } 或 { error, origin, path };
    * error 取值对应 §5.5 的文案键:outside | missing | encoding。
+   * path 是页面分辨"同一份笔记被唤回"与"换了一份"的依据(§2 滚动位置)。
    * 订阅而非一次性取值:阅读中换笔记(②再点)与 F5 重读都走同一条推送(§3.5 不变量 5)。
    * @returns {() => void} 退订函数
    */

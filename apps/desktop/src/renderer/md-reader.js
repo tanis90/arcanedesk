@@ -46,11 +46,18 @@
     notice.hidden = true;
   }
 
+  /** 上一次渲染的笔记路径:分辨"同一份被唤回"与"换了一份"。 */
+  let shownPath = null;
+
   /**
-   * 渲染一份 payload。换笔记时整段重建:arcaneMd.render 只追加,不清空。
-   * 滚动位置回到顶部——换了一份文件,停在上一份的位置没有意义。
+   * 渲染一份 payload。arcaneMd.render 只追加不清空,所以整段重建。
+   * 滚动位置分两种情况(§2 保活范围):同一份笔记被 ④ 顶掉后又 ② 唤回,
+   * 保活买的就是"接着读",位置原样留着;换了一份文件,停在上一份的位置没有意义,回顶。
    */
   function showNote(payload) {
+    const sameNote = payload.path != null && payload.path === shownPath;
+    const keepScroll = sameNote ? scroll.scrollTop : 0;
+    shownPath = payload.path ?? null;
     errorBox.hidden = true;
     scroll.hidden = false;
     doc.textContent = "";
@@ -60,12 +67,13 @@
     nameEl.title = payload.name ?? "";
     document.title = payload.name ? `${payload.name} · ArcaneDesk` : "ArcaneDesk";
     window.arcaneMd.render(doc, payload.text ?? "");
-    scroll.scrollTop = 0;
+    scroll.scrollTop = keepScroll;
   }
 
   window.arcaneReader.onContent(payload => {
     applyOrigin(payload?.origin);
     if (payload?.error) {
+      shownPath = null; // 错误页不是任何一份笔记:下次真读到东西时不该当成"同一份"
       nameEl.textContent = "";
       document.title = "ArcaneDesk";
       showError(ERROR_KEYS[payload.error] ?? ERROR_KEYS.missing);

@@ -169,9 +169,11 @@ interface ArcaneMdApi {
   findNotePaths(text: string): Array<{ start: number; end: number; path: string }>;
 }
 
-/** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)。 */
+/** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)。
+    origin 决定 ③ 的文案与语义,path 让页面分辨"同一份被唤回"与"换了一份"(§2)。 */
 type ArcaneReaderPayload = {
   origin?: "foundry" | "closed" | null;
+  path?: string | null;
 } & ({ name: string; text: string; truncated: boolean; error?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined });
 
 /** preload-reader.cjs 暴露给 md-reader.html 的三方法桥:全是单向,页面拿不到任何文件系统能力。 */

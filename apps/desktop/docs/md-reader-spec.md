@@ -27,7 +27,9 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 
 因此阅读器**必须也是 main 侧的一个 `WebContentsView`**（下称 readerView），加载本地 `renderer/md-reader.html`。两个 view 同一时刻最多一个可见，切换只做显隐，不销毁对方——Foundry 页面重建昂贵（加载 + 会话），阅读器重建廉价（读文件 + 渲染），但保活成本同样极低，保活换来重复点击时的瞬时恢复（滚动位置保留）。
 
-保活的适用范围只有两处：④ 被 Foundry 顶掉、以及阅读中换笔记。这两种情况 readerView 一直挂着，滚动位置与渲染结果原样保留。① 关面板**不**保活——`panel:close` 语义是"整个右屏收起"，两个 view 都销毁（与现状对齐）；重开时按 `lastContent` 恢复指的是重新读文件、重新渲染，滚动位置不保。两处不要混成一个机制。
+保活的适用范围只有两处：④ 被 Foundry 顶掉、以及阅读中换笔记。这两种情况 readerView 一直挂着，页面文档不重建（不白闪、不重跑 vendor 脚本）。滚动位置只在**同一份笔记被唤回**时原样保留（④ 顶掉后 ② 再点同一条路径）；换了一份文件就重渲染并回顶——停在上一份的位置没有意义。① 关面板**不**保活——`panel:close` 语义是"整个右屏收起"，两个 view 都销毁（与现状对齐）；重开时按 `lastContent` 恢复指的是重新读文件、重新渲染，滚动位置不保。两处不要混成一个机制。
+
+因此 `pushReaderContent()` 的 payload 里带上 `path`：页面靠它分辨"同一份被唤回"与"换了一份"，不需要为此再开一条状态通道。
 
 复用清单与新增依赖：
 
@@ -98,7 +100,7 @@ stateDiagram-v2
 2. `READER_F` ⟹ foundryView 活着；③返回只做显隐切换，永不加载 FVTT。
 3. `READER_C` ⟹ 打开时 foundryView 不存在；③只能是关面板。
 4. 阅读器状态全在内存，不落盘；崩溃/重启后回到 CLOSED，无需对账（R1）。
-5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。
+5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。payload = `{ name, text, truncated, origin, path }` 或 `{ error, origin, path }`。
 
 ## 4. 交互语义
 
