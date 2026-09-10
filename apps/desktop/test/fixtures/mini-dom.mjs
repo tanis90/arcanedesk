@@ -189,11 +189,16 @@ export function createMiniDom({ canOpenNotes = true, globals = {} } = {}) {
     createDocumentFragment: () => new MiniFragment(),
     getElementById: (id) => byId.get(String(id)) ?? null,
     createTreeWalker(root, _whatToShow, filter) {
+      // 单趟深度优先,按文档序收集文本节点(linkify 边走边改 DOM,
+      // 顺序错了测试会与真实浏览器静默分叉)
       const texts = [];
-      for (const node of descendants(root)) {
-        for (const child of node.childNodes) if (child.nodeType === 3) texts.push(child);
-      }
-      for (const child of root.childNodes ?? []) if (child.nodeType === 3) texts.unshift(child);
+      const walk = (node) => {
+        for (const child of node.childNodes ?? []) {
+          if (child.nodeType === 3) texts.push(child);
+          else if (child.nodeType === 1) walk(child);
+        }
+      };
+      walk(root);
       let cursor = -1;
       let currentNode = root;
       return {
