@@ -406,11 +406,9 @@ function createReaderView() {
   });
   if (isDev) contents.openDevTools({ mode: "detach" });
   void contents.loadFile(path.join(__dirname, "..", "renderer", "md-reader.html"), {
-    query: {
-      theme: resolveTheme(),
-      lang: resolveLocale(),
-      frameless: process.platform === "win32" ? "1" : "0",
-    },
+    // 只传 theme / lang:阅读器页没有可拖拽 chrome(win 下 view 已从标题栏带下沿开始),
+    // 所以不需要 frameless。
+    query: { theme: resolveTheme(), lang: resolveLocale() },
   }).catch(error => console.error("[reader] page load failed", error?.message ?? error));
   return view;
 }
