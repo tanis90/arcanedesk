@@ -41,6 +41,7 @@ export const requiredFiles = [
   "scripts/archive.mjs",
   "distribution/community-distribution.json",
   "generated/desktop-release.json",
+  "generated/region.json",
   "generated/renderer-assets/marked/lib/marked.umd.js",
   "generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js",
   "generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css",
@@ -76,7 +77,7 @@ export const exactDirectories = new Map([
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
-  ["generated", ["desktop-release.json", "renderer-assets"]],
+  ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
 ]);
 
 function packagedElectronPath(appRoot, productName) {
@@ -207,6 +208,15 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     const appPackage = readJson(path.join(appRoot, "package.json"));
     const releaseManifest = readJson(path.join(appRoot, "generated", "desktop-release.json"));
     const distribution = readJson(path.join(appRoot, "distribution", "community-distribution.json"));
+    // 包内 region flavor 冒烟（国际化方案 D1/D5）：region.json 必须合法，
+    // 传了 --expected-region 时还必须与构建目标一致。
+    const regionManifest = readJson(path.join(appRoot, "generated", "region.json"));
+    if (!["cn", "intl"].includes(regionManifest.region)) {
+      errors.push(`packaged generated/region.json has unknown region: ${String(regionManifest.region)}`);
+    }
+    if (options.expectedRegion && regionManifest.region !== options.expectedRegion) {
+      errors.push(`packaged region: expected ${options.expectedRegion}; got ${regionManifest.region}`);
+    }
     const directPackages = directDependencyPackages(appRoot, appPackage);
     const electronRuntime = options.electronRuntime ?? inspectElectronRuntime(
       packagedElectronPath(appRoot, appPackage.productName),
@@ -242,10 +252,12 @@ if (invokedPath === import.meta.url) {
   let appRootArg = null;
   let runtimeFromManifest = false;
   let expectedNodePlatform = null;
+  let expectedRegion = null;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--runtime-from-manifest") runtimeFromManifest = true;
     else if (value === "--expected-node-platform") expectedNodePlatform = argv[++index] ?? null;
+    else if (value === "--expected-region") expectedRegion = argv[++index] ?? null;
     else if (value.startsWith("--")) {
       console.error(`unknown option: ${value}`);
       process.exit(2);
@@ -255,8 +267,12 @@ if (invokedPath === import.meta.url) {
       process.exit(2);
     }
   }
+  if (expectedRegion && !["cn", "intl"].includes(expectedRegion)) {
+    console.error(`--expected-region must be one of cn/intl; got: ${expectedRegion}`);
+    process.exit(2);
+  }
   if (!appRootArg) {
-    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>]");
+    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>]");
     process.exit(2);
   }
   // 交叉构建（x64 runner 打 arm64 包）无法执行目标 exe：改用包内 manifest 的
@@ -270,6 +286,7 @@ if (invokedPath === import.meta.url) {
       }
     : {};
   options.expectedNodePlatform = expectedNodePlatform;
+  options.expectedRegion = expectedRegion;
   const result = verifyPackagedApp(appRootArg, options);
   const stream = result.ok ? process.stdout : process.stderr;
   stream.write(`${JSON.stringify(result, null, 2)}\n`);

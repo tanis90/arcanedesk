@@ -68,11 +68,21 @@ function resolveSourceCommit() {
   }
 }
 
+// 构建期 region flavor（国际化方案 D1）：ARCANE_BUILD_REGION 默认 cn，生成
+// 包内 generated/region.json，运行期由 src/main/region.mjs 读取。
+const buildRegion = String(process.env.ARCANE_BUILD_REGION ?? "cn").trim() || "cn";
+if (!["cn", "intl"].includes(buildRegion)) {
+  throw new Error(`ARCANE_BUILD_REGION must be one of cn/intl; got: ${buildRegion}`);
+}
+
 const commit = resolveSourceCommit();
 const latestFile = path.join(desktopRoot, "distribution", "desktop-latest.json");
 const previousReleaseId = fs.existsSync(latestFile) ? readJson(latestFile).releaseId ?? null : null;
 const sourceLabel = /^0+$/.test(commit) ? "working-tree" : commit.slice(0, 8);
-const releaseId = process.env.ARCANE_RELEASE_ID || `${appPackage.version}-${sourceLabel}`;
+// intl 默认 releaseId 带 -intl 后缀（国际化方案 D5），与 cn 版本目录/GitHub tag 区分；
+// 显式 ARCANE_RELEASE_ID 原样尊重。
+const releaseId = process.env.ARCANE_RELEASE_ID
+  || `${appPackage.version}-${sourceLabel}${buildRegion === "intl" ? "-intl" : ""}`;
 
 const manifest = {
   schemaVersion: DESKTOP_RELEASE_SCHEMA_VERSION,
@@ -104,12 +114,6 @@ const manifest = {
 
 if (process.env.ARCANE_RELEASE_PUBLISHED_AT) manifest.publishedAt = process.env.ARCANE_RELEASE_PUBLISHED_AT;
 
-// 构建期 region flavor（国际化方案 D1）：ARCANE_BUILD_REGION 默认 cn，生成
-// 包内 generated/region.json，运行期由 src/main/region.mjs 读取。
-const buildRegion = String(process.env.ARCANE_BUILD_REGION ?? "cn").trim() || "cn";
-if (!["cn", "intl"].includes(buildRegion)) {
-  throw new Error(`ARCANE_BUILD_REGION must be one of cn/intl; got: ${buildRegion}`);
-}
 const regionManifest = { schemaVersion: 1, region: buildRegion };
 
 const output = path.join(desktopRoot, "generated", "desktop-release.json");

@@ -22,11 +22,11 @@
     "verify:package": "node scripts/verify-package.mjs",
     "prepare:dist": "npm run verify:source && npm run prepare:renderer-assets && npm run prepare:node-runtime && npm run prepare:desktop-release",
     "predist:dir": "npm run prepare:dist",
-    "dist:dir": "electron-builder --dir",
+    "dist:dir": "node scripts/dist.mjs --dir",
     "predist:mac": "npm run prepare:dist",
-    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:mac": "node scripts/dist.mjs --mac dmg zip",
     "predist:win": "npm run prepare:dist",
-    "dist:win": "electron-builder --win nsis zip",
+    "dist:win": "node scripts/dist.mjs --win nsis zip",
     "publish:release": "node scripts/publish-release.mjs"
   },
   "dependencies": {
@@ -79,7 +79,7 @@
       }
     ],
     "mac": {
-      "artifactName": "Arcane-Desk-${version}-mac-${arch}.${ext}",
+      "artifactName": "Arcane-Desk-${version}-mac-${arch}${env.ARCANE_ARTIFACT_SUFFIX}.${ext}",
       "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
       "identity": "AE4865DBC4A663E90902131977AC43B79321B7A2",
@@ -93,7 +93,7 @@
       }
     },
     "win": {
-      "artifactName": "Arcane-Desk-${version}-win-${arch}.${ext}",
+      "artifactName": "Arcane-Desk-${version}-win-${arch}${env.ARCANE_ARTIFACT_SUFFIX}.${ext}",
       "icon": "src/renderer/logo-icon.ico"
     },
     "nsis": {
