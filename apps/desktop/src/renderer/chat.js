@@ -622,6 +622,7 @@ function renderMarkdown(container, text) {
 // 委托挂在消息列表上而不是每个锚点:历史回显、流式定稿、翻页都会重建消息体,
 // 逐个绑定既漏又贵。锚点没有 href(file:// 下会把整个页面导航走),所以键盘激活也在这里。
 messages.addEventListener("click", event => {
+  if (event.button !== 0) return; // 中键/右键不打开阅读器,留给浏览器默认行为
   const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
   if (anchor) openNote(/** @type {HTMLElement} */ (anchor));
 });
