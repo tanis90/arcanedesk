@@ -142,6 +142,19 @@ test("FOUNDRY: ① closes, ② covers with the reader, ④ is idempotent", async
   assert.equal(h.calls.loadFoundry, 2);
 });
 
+test("FOUNDRY: ③ is an explicit no-op — no state change, no events, no view side effects", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  assert.equal(h.controller.state, STATE.FOUNDRY);
+
+  const before = h.events.length;
+  h.controller.leaveReader();
+  assert.equal(h.controller.state, STATE.FOUNDRY, "③ only applies to an open reader");
+  assert.equal(h.events.length, before, "no panel_status/panel_layout noise");
+  assert.equal(h.live("reader").length, 0, "③ must not create a reader view");
+  assert.equal(assertSingleVisible(h, "FOUNDRY --③").label, "foundry");
+});
+
 // ---------- §3.4 转移表:READER_F 行 ----------
 
 test("READER_F: ② swaps content without resetting origin, ③ returns without loading FVTT", async () => {

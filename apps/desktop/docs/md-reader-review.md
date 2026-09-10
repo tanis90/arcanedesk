@@ -113,3 +113,15 @@
 | P1 | F1 KaTeX 排除、M1 spec §3.2 矛盾修正 | 代码 + spec |
 | P2 | BUG-2 拆独立修复（既有 bug）；F2/F3/F5/F6/M3/M4 一并处理 | 代码/测试 |
 | P3 | M2 语言热切换通道；范围 creep 的 bugfix 拆 PR | 流程 |
+
+## 6. 修复状态（2026-09-10，本分支已闭环）
+
+| 项 | 处置 | 验证 |
+|---|---|---|
+| BUG-1 版式 | `.md-doc` 改满铺 + `clamp(24px, 6%, 72px)` padding，spec §5.2 已回写 | CDP 断言正文栏宽 = 面板宽 |
+| BUG-2 幽灵分页 | `chat.js:305` 不再编造 hasNewer；空页不再带 null key 报有邻居；导航按钮跳过 null key | test/history-index.test.mjs 新增用例 |
+| BUG-3 死端 | 采用方案 A：origin=foundry 的阅读周期被 ① 关闭时 lastContent 记为 foundry，重开落 Foundry；spec §3.3/§3.4 已回写 | 控制器单测 + smoke + CDP 三路覆盖两种恢复分支 |
+| BUG-4 崩溃感知 | `isUsable()` 加 `isCrashed()`；`createFoundryView` 挂 `render-process-gone`（日志 + runtime 失效 + 权限清理）；崩溃 mock 改用真实语义 | 新增"阅读期间崩溃 → ③ 走兜底"单测；真实 FVTT 人工复测仍留人工 |
+| F1–F6、M1–M4 | 全部修复：KaTeX 排除、行号正则边界、左键限定、TreeWalker 文档序、loadFoundryPage 守卫、临时目录清理、spec §3.2 矛盾删除、FOUNDRY×③ 显式 no-op 测试、非目标补 UNC/空格/#anchor、语言热切换通道 | 对应单测 |
+
+验收：`npm test` 451/451、`verify:source`、`tsc --noEmit`、`node test/smoke-md-reader.mjs`（PASS）、`node test/review-md-reader.mjs`（CDP 14 项 OK）全绿。夹具两处适配了新语义：滚动断言改为自适应中点（满铺版式下 600px 硬编码失效），① 恢复场景拆成 origin=foundry/origin=closed 两条。
