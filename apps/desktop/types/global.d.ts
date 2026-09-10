@@ -176,12 +176,14 @@ type ArcaneReaderPayload = {
   path?: string | null;
 } & ({ name: string; text: string; truncated: boolean; error?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined });
 
-/** preload-reader.cjs 暴露给 md-reader.html 的三方法桥:全是单向,页面拿不到任何文件系统能力。 */
+/** preload-reader.cjs 暴露给 md-reader.html 的方法桥:全是单向,页面拿不到任何文件系统能力。 */
 interface ArcaneReaderApi {
   /** 订阅笔记内容。换笔记与 F5 重读走同一条推送(§3.5 不变量 5)。 @returns 退订函数 */
   onContent(callback: (payload: ArcaneReaderPayload) => void): () => void;
   /** 订阅主题广播:切主题不重读文件,所以与内容分开发。 @returns 退订函数 */
   onTheme(callback: (theme: string) => void): () => void;
+  /** 订阅语言广播:与主题同路,热切换不重读文件。 @returns 退订函数 */
+  onLocale(callback: (locale: string) => void): () => void;
   /** ③ 顶栏返回/关闭与 Esc。origin=foundry → 回 FOUNDRY;origin=closed → 关面板。 */
   back(): Promise<{ ok: boolean; state?: string }>;
 }
