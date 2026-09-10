@@ -208,6 +208,138 @@ function appendMermaidBlock(container, source) {
   })();
 }
 
+// ---------- 围栏渲染器注册表(md-reader-spec §6) ----------
+
+/**
+ * 按 fence language 查表,命中即渲染,未命中保持源码块(管线缺省行为,无需降级逻辑)。
+ * 表挂在渲染管线本体上,所以 chat 气泡与右屏阅读器两处同时生效;
+ * 扩展新图类型 = 加一条注册项。只收纯离线渲染器(服务器通道的否决理由见 spec §10)。
+ */
+const FENCE_RENDERERS = new Map([
+  ["mermaid", appendMermaidBlock],
+]);
+
+// ---------- .md 路径 → 可点锚点(md-reader-spec §4.2) ----------
+
+/** 页面能不能真的打开笔记:chat 页有 arcane.openMdReader,阅读器页没有(v1 不做笔记间跳转)。
+    打不开就不产出可点外观——摆一个点了没反应的锚点比纯文本更糟(design-rules R5)。 */
+function canOpenNotes() {
+  return typeof /** @type {any} */ (window).arcane?.openMdReader === "function";
+}
+
+// 路径分量里的字符:含 CJK(npc-张三.md),排除空白、引号/反引号/尖括号这类包裹符、
+// 以及 ()[]{} 与 ,;: 这类中英文标点——它们在句子里做分隔符比在文件名里出现得多得多。
+const SEGMENT_CHAR = "[^\\s<>\"'`|*?()\\[\\]{},;:/\\\\]";
+const NOTE_PATH_PATTERN = new RegExp(
+  "(?:[A-Za-z]:[\\\\/]|\\.{1,2}[\\\\/]|/)?" + // 盘符 / ./ ../ / 绝对 POSIX 起点
+  "(?:" + SEGMENT_CHAR + "+[\\\\/])*" + // 中间分量
+  SEGMENT_CHAR + "*?" + // 文件名(懒匹配,允许 CJK 名)
+  "\\.(?:md|markdown)" +
+  "(?::\\d+(?::\\d+)?)?" + // 行号:v1 只剥除、不跳转
+  "(?![\\w.\\-])", // 右边界:a.md.bak / a.mdx 不算
+  "gi",
+);
+
+/** 文件名首字符是否 ASCII。CJK 开头的文件名只在两种情况下认(见 findNotePaths)。 */
+function startsAscii(value) {
+  return /^[A-Za-z0-9_]/.test(value);
+}
+
+/**
+ * 在一段文本里找出所有笔记路径形态。
+ * 覆盖:相对(notes/a.md、./a.md)、绝对 POSIX(/home/u/a.md)、Windows 盘符
+ * (C:\Users\x\a.md 与 C:/Users/x/a.md)、行号(a.md:12)。包裹符与尾部标点已不在字符集里。
+ *
+ * CJK 开头的文件名只在两种情况下认:前面紧接路径分隔符(notes/张三.md),
+ * 或整段文本就是它(<code>张三.md</code>)。否则先剥掉开头的 CJK 再试:
+ * 这条限制换来的是"见README.md"不会连前面的汉字一起吃进去。
+ *
+ * @param {string} text
+ * @returns {Array<{ start: number, end: number, path: string }>}
+ */
+function findNotePaths(text) {
+  const source = String(text ?? "");
+  const hits = [];
+  for (const match of source.matchAll(NOTE_PATH_PATTERN)) {
+    const start = match.index;
+    const path = match[0];
+    // 文件名在 path 里的起点 = 跳过盘符与各层分量之后
+    const nameOffset = pathLengthBeforeName(path);
+    const name = path.slice(nameOffset);
+    if (startsAscii(name) || nameOffset > 0 || source.trim() === path) {
+      hits.push({ start, end: start + path.length, path });
+      continue;
+    }
+    // 文件名以 CJK 开头、前面又不是分隔符:把开头粘着的汉字让回去
+    // ("见README.md" → "README.md");让完不成立就丢弃,宁可不链也不错链。
+    const stripped = name.replace(/^[^\x00-\x7f]+/, "");
+    if (!startsAscii(stripped)) continue;
+    const offset = start + name.length - stripped.length;
+    hits.push({ start: offset, end: offset + stripped.length, path: stripped });
+  }
+  return hits;
+}
+
+/** 路径里文件名之前的长度(盘符 + 各层分量),用来定位文件名首字符。 */
+function pathLengthBeforeName(path) {
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return index === -1 ? 0 : index + 1;
+}
+
+/** href 形式的笔记路径([文字](笔记.md)):有 scheme 的一律不是本地笔记。 */
+function noteHref(href) {
+  const value = String(href ?? "").trim().replace(/^<(.*)>$/, "$1");
+  if (!value) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null;
+  return /\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i.test(value) ? value : null;
+}
+
+/**
+ * 可点笔记锚点。故意不挂 href:两个宿主页都是 file://,挂上去一点就把整个 view 导航走。
+ * 无 href 的 <a> 不可聚焦,所以自己补 tabIndex + role;点击由宿主页的事件委托接管(spec §8)。
+ */
+function noteAnchor(rawPath, tokens, math) {
+  const a = el("a", "md-path");
+  a.dataset.mdPath = rawPath;
+  a.tabIndex = 0;
+  a.setAttribute("role", "link");
+  if (tokens?.length) renderInlines(a, tokens, math);
+  else a.textContent = rawPath;
+  return a;
+}
+
+/**
+ * 渲染完的容器里遍历文本节点,把裸路径包成锚点。
+ * 围栏代码块里的路径是源码不是入口,跳过;已包好的锚点不重复处理。
+ * 行内 <code> 里的路径要处理——反引号包裹是 spec §4.2 明列的形态。
+ */
+function linkifyNotePaths(root) {
+  if (!canOpenNotes()) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("pre, a")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const targets = [];
+  while (walker.nextNode()) targets.push(walker.currentNode);
+  for (const node of targets) {
+    const text = node.nodeValue;
+    const hits = findNotePaths(text);
+    if (!hits.length) continue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const hit of hits) {
+      if (hit.start > cursor) fragment.appendChild(document.createTextNode(text.slice(cursor, hit.start)));
+      fragment.appendChild(noteAnchor(hit.path, null, null));
+      cursor = hit.end;
+    }
+    if (cursor < text.length) fragment.appendChild(document.createTextNode(text.slice(cursor)));
+    node.replaceWith(fragment);
+  }
+}
+
 // ---------- marked tokens → DOM ----------
 
 /** URL 白名单:链接只放行 http/https;图片额外放行 data:image/。其余返回 null 降级。 */
@@ -307,7 +439,13 @@ function renderInlines(container, tokens, math) {
       case "link": {
         const href = safeUrl(token.href, false);
         if (!href) {
-          // 非 http/https(javascript: 等):只渲染链接文字,不挂链接
+          // 非 http/https:指向 .md/.markdown 的转成可点笔记锚点(§4.2),
+          // 其余(javascript: 等)只渲染链接文字,不挂链接
+          const note = canOpenNotes() ? noteHref(token.href) : null;
+          if (note) {
+            container.appendChild(noteAnchor(note, token.tokens ?? [], math));
+            break;
+          }
           renderInlines(container, token.tokens ?? [], math);
           break;
         }
@@ -348,8 +486,9 @@ function renderInlines(container, tokens, math) {
 function renderCodeBlock(container, token) {
   const lang = String(token.lang ?? "").trim().split(/\s+/)[0].toLowerCase();
   const code = token.text ?? "";
-  if (lang === "mermaid") {
-    appendMermaidBlock(container, code);
+  const fenceRenderer = FENCE_RENDERERS.get(lang);
+  if (fenceRenderer) {
+    fenceRenderer(container, code);
     return;
   }
   const box = el("div", "md-codeblock");
@@ -456,6 +595,7 @@ function renderMarkdown(container, text) {
     return;
   }
   renderBlocks(container, tokens ?? [], math);
+  linkifyNotePaths(container);
 }
 
 // ---------- hljs 高亮主题:暗 nord / 亮 stackoverflow-light(均避开红色系) ----------
@@ -476,5 +616,6 @@ new MutationObserver(applyHljsTheme).observe(document.documentElement, {
 });
 
   // 入口挂 window:chat.js 通过 window.arcaneMd.render 调用(tsc 模块作用域下不能直接引用函数名)
-  /** @type {any} */ (window).arcaneMd = { render: renderMarkdown };
+  // findNotePaths 也挂出去:它是路径形态的唯一判据,单测按 spec §9 跑全形态。
+  /** @type {any} */ (window).arcaneMd = { render: renderMarkdown, findNotePaths };
 })();
