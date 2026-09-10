@@ -4,6 +4,8 @@
 
 2026-09-10 修订（对着代码核过后的四处补漏）：阅读器页 CSP 基准、相对路径 resolve 基准、F5/`panel:reload` 的 surface 感知语义、main.js 里四处直摸 `foundryView` 的代码收编入控制器。修订点在下文就地标注，不另开变更记录。
 
+2026-09-10 验收后再修订：§5.2 正文栏改满铺（固定 68ch 在窄面板下重心失衡）、§3.4 关面板恢复语义（READER_F 关闭时记 foundry，修掉"关面板再开只剩阅读器"的死端）、§3.2 ④ 触发源删掉"切战斗模式"（与 §4.4 对齐）、§1 非目标补不支持的路径形态。
+
 chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅读器占用右屏 Foundry 面板的位置展示该文件。本文是唯一设计方案，约束"怎么加"的规则见 [design-rules.md](design-rules.md)（下称 R1–R5），架构基线见 [architecture.md](architecture.md)。
 
 ## 1. 目标与非目标
@@ -19,7 +21,8 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 - 不做 tab 条、不多份笔记并存、不在顶栏加任何新按钮；
 - 不在阅读器被 Foundry 顶掉时往 chat 推系统消息（"顶掉就顶掉"，回看入口是 chat 里原有的路径）；
 - 不做战斗模式门禁——状态机模式无关（见 §4.4）；
-- 不做编辑、不做文件监听热重载（重复点击 = 重新读取，即手动刷新）。
+- 不做编辑、不做文件监听热重载（重复点击 = 重新读取，即手动刷新）；
+- 不识别 UNC 路径（`\\server\share\x.md`）、带空格的路径、`x.md#anchor` 锚点跳转——匹配不到就保持纯文本（§4.2 的形态清单即 v1 全部支持面），有真实需求再演进。
 
 ## 2. 架构前提（决定方案形态的事实）
 
@@ -62,23 +65,23 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 1. **① 顶栏「面板」按钮**：右屏唯一的 chrome 开关。开/关右屏；重新打开时恢复关闭前的当前内容（reader 侧 = 重读文件重渲染，见 §2 保活范围）。
 2. **② 点 chat 里的 md 路径**：内容寻址。当前内容 = 该笔记；面板关着则顺带打开；快照 origin；阅读中再点 = 原地换内容。
 3. **③ 阅读器内返回/关闭按钮**：退出阅读。origin=foundry → 回 FOUNDRY；origin=closed → 关面板（CLOSED）。永不触发 FVTT 加载。
-4. **④ FVTT 打开**（agent `foundry_open`、切战斗模式，以及任何使 foundryView 变为可见的路径）：当前内容 = foundry，面板开；阅读器若在场则隐藏保活，不销毁、不通知。
+4. **④ FVTT 打开**（agent `foundry_open`，以及任何使 foundryView 变为可见的路径）：当前内容 = foundry，面板开；阅读器若在场则隐藏保活，不销毁、不通知。切模式本身不改变 surface（§4.4），不在此处列举。
 
 ### 3.3 状态图
 
 ```mermaid
 stateDiagram-v2
     [*] --> CLOSED
-    CLOSED --> FOUNDRY : ①顶栏(关闭前是foundry) / ④FVTT打开
+    CLOSED --> FOUNDRY : ①顶栏(关闭前是foundry或READER_F) / ④FVTT打开
     CLOSED --> READER_C : ②点md路径
-    CLOSED --> READER_C : ①顶栏(关闭前是笔记)
+    CLOSED --> READER_C : ①顶栏(关闭前是READER_C)
     FOUNDRY --> CLOSED : ①顶栏(记住当前内容)
     FOUNDRY --> READER_F : ②点md路径
     READER_F --> FOUNDRY : ③返回
     READER_F --> FOUNDRY : ④FVTT打开(阅读器隐藏保活)
-    READER_F --> CLOSED : ①顶栏(记住surface+origin)
+    READER_F --> CLOSED : ①顶栏(记foundry,重开落FOUNDRY)
     READER_F --> READER_F : ②点md路径(换内容)
-    READER_C --> CLOSED : ③关闭 / ①顶栏
+    READER_C --> CLOSED : ③关闭 / ①顶栏(记reader,重开落READER_C)
     READER_C --> FOUNDRY : ④FVTT打开(阅读器隐藏保活)
     READER_C --> READER_C : ②点md路径(换内容)
 ```
@@ -87,12 +90,14 @@ stateDiagram-v2
 
 | 当前 | ①顶栏 | ②点 md 路径 | ③返回 | ④FVTT 打开 |
 |---|---|---|---|---|
-| CLOSED | 恢复关闭前内容：foundry → FOUNDRY；笔记 → READER_C | READER_C | — | FOUNDRY |
+| CLOSED | 恢复关闭前内容：foundry（含 READER_F 关闭）→ FOUNDRY；READER_C 关闭的笔记 → READER_C | READER_C | — | FOUNDRY |
 | FOUNDRY | CLOSED | READER_F | — | （已在） |
-| READER_F | CLOSED（记住 reader+origin） | READER_F（换内容） | FOUNDRY | FOUNDRY（阅读器隐藏保活） |
-| READER_C | CLOSED（记住 reader+origin） | READER_C（换内容） | CLOSED | FOUNDRY（阅读器隐藏保活） |
+| READER_F | CLOSED（记 foundry，重开落 FOUNDRY） | READER_F（换内容） | FOUNDRY | FOUNDRY（阅读器隐藏保活） |
+| READER_C | CLOSED（记 reader，重开落 READER_C） | READER_C（换内容） | CLOSED | FOUNDRY（阅读器隐藏保活） |
 
-表中 CLOSED 行的 ① 是实现时定下的：原文写"FOUNDRY（恢复关闭前内容）"，与 §3.2①、§3.3 的边标签"记住 surface+origin"互相矛盾。取后者：① 关面板销毁两个 view（§8），重开时 foundryView 必不存在，因此按 §3.1"退出后再开重新快照现场"，关闭前是笔记的一律落 **READER_C**（③ 于是关面板，而不是"返回 Foundry"——底下确实没有 Foundry 了）。这也避开了"点一下顶栏开关就静默拉起一次 FVTT 加载"；origin 不会跨关闭周期保留为 foundry。
+表中 CLOSED 行的 ① 是实现时定下的：① 关面板销毁两个 view（§8），重开时按关闭前记下的 `lastContent` 恢复——记的是 reader 时，恢复 = 重读文件重渲染、origin 重快照为 closed，落 READER_C。
+
+2026-09-10 验收修订：原方案"关闭前是笔记的一律落 READER_C、origin 不会跨关闭周期保留为 foundry"被判为死端——从 READER_F 关面板再开只剩阅读器，foundryView 已销毁、origin 重快照必为 closed，返回按钮变成「✕ 关闭」，用户再也够不到 Foundry。改为：**从 READER_F 关闭时 `lastContent` 记 foundry**——重开落 FOUNDRY（foundryView 本就要重建，代价一次 FVTT 加载）；笔记不丢入口，从 chat 里的路径可再次进入（内容寻址，② 随时可达）。从 READER_C 关闭仍记 reader：origin=closed 底下本来就没有 Foundry，重开落 READER_C 不构成死端。
 
 ### 3.5 不变量（实现即断言）
 
@@ -143,13 +148,15 @@ stateDiagram-v2
 │ ← 返回 Foundry            npc-张三.md      │  ← 窄顶栏：按钮(左) + 文件名(右,衬线)
 ├────────────────────────────────────────────┤  ← 发丝线
 │                                            │
-│        （正文栏，max-width 68ch 居中）       │
+│   （正文栏满铺，横向 padding 随面板宽 clamp）  │
 │                                            │
-│        # NPC：张三                          │
-│        正文 15px/1.8 …                     │
+│   # NPC：张三                               │
+│   正文 15px/1.8 …                          │
 │                                            │
 └────────────────────────────────────────────┘
 ```
+
+正文栏**满铺**，不设固定栏宽：右屏本身会被分栏挤窄，68ch 居中栏再吃掉两侧留白，正文实际宽度远小于面板宽度、重心明显偏右（2026-09-10 验收修订，原方案为 `max-width: 68ch` 居中）。横向 padding 用 `clamp(24px, 6%, 72px)` 随面板宽度缩放，宽面板仍有适度留白；≤720px 窄栏按 §5.4 收得更紧。
 
 ### 5.3 Signature（本设计唯一冒险处）
 
@@ -218,7 +225,7 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 - 公开动词：`openPanel()`（①开）、`closePanel()`（①关）、`showReader(path)`（②）、`leaveReader()`（③）、`showFoundry()`（④，供 `openFoundryView` 等所有 foundry 显示路径调用）、`reloadSurface()`（F5，surface 感知）、`activeView()`（供 bounds 分发、分栏拖拽、指针转发消费"当前可见 view"）；
 - 内部负责两个 view 的创建/显隐/销毁与 `layoutViews()` 的 bounds 分发；
 - `layoutViews()` 改为向"当前可见 view"发 bounds，双 view 同步更新避免切换闪烁；
-- `panel:close` 语义保持"整个右屏收起"（两个 view 都销毁，与现状对齐），重开按 `lastContent` 恢复。
+- `panel:close` 语义保持"整个右屏收起"（两个 view 都销毁，与现状对齐），重开按 `lastContent` 恢复；`lastContent` 的记录规则见 §3.4（READER_F 关闭时记 foundry，READER_C 关闭时记 reader）。
 
 main.js 里现存四处直接摸 `foundryView` 的代码必须一并收进控制器，否则 readerView 可见时会静默失效：
 
