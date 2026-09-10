@@ -227,3 +227,11 @@
 本 spec 不修改 Reviewed v7 的历史输入和结果。它提出下一轮待验证的查询合同：A1/A3 检查从零配置，B2 检查生命骰取整，B3 检查施法者增量，B1 作为已有收益的回归保护。下一轮比较旧查询流程与本 spec 流程时，必须保留独立预期和写后有效字段读回；不能把工具返回值直接当成验收结果。
 
 相关记录：[Reviewed v7 整批报告](prep-character-reviewed-v7-results.md)、[唯一技术方案](foundry-prep-play-technical-plan.md)。
+
+## 9. 已核实的法术列表来源（2026-09-10）
+
+本地 COS 的 Foundry 13 / dnd5e 5.3.3 已证明 dnd5e 系统原生维护了职业与子职业法术关系。系统启动时从 `DND5E.SPELL_LISTS` 注册 JournalEntryPage 类型的 spell list；规则版本为 modern 时来源是 `Compendium.dnd5e.content24`，legacy 时来源是 `Compendium.dnd5e.rules`。运行时通过 `dnd5e.registry.spellLists.forType("class", identifier)` 或 `forType("subclass", identifier)` 取得列表，通过 `forSpell(uuid)` 反查一个法术属于哪些列表；法术等级仍来自法术 Item 的 `system.level`。实测 COS 返回 `class:wizard` 219 项、`subclass:draconic` 10 项，且每项带可读 UUID 和 identifier。
+
+因此“某职业在某等级可选哪些法术”的主数据源应是 dnd5e 原生 spell-list registry，而不是从 spell Item 猜 class 字段，也不是把规则正文硬编码进查询器。查询工具只负责调用 registry、按 `system.level` 和角色可用最高环数筛选，并返回 `sourceKind: "dnd5e-spell-list-registry"`、规则版本、列表元数据和实际 UUID。Actor Studio/Arcane 兼容标记（如 `flags.foundryvtt-actor-studio.spellLists` 或 Arcane 的 `flags.<module>.spellClasses`）作为外部包补充来源，仅在原生 registry 没有该列表时使用，并明确 `sourceKind: "arcane-actor-studio-catalogue"`；不得静默混合两套来源。
+
+当前结论：不是降低 benchmark 预期，而是修复查询工具的数据源。新增/修复 list 分支时优先读取原生 registry；detail/search 仍读取实际 Item。版本或 registry 不可用时返回 `unknown` 与原因，不猜测职业归属。Actor Studio 关系的维护位置、字段和回退约束见[唯一技术方案](foundry-prep-play-technical-plan.md)。

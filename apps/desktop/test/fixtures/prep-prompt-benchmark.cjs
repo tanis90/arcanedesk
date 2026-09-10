@@ -9,21 +9,21 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
   const characterSuite=process.argv.includes("--character-suite");
-  const character=characterSuite?require("../character-benchmark/model-adapter.cjs")(evaluate):null;
-  if(characterSuite)assert.equal(comparison,"build-query");
+  const character=characterSuite?(comparison==="catalog"?require("../character-benchmark/catalog-model-adapter.cjs"):require("../character-benchmark/model-adapter.cjs"))(evaluate):null;
+  if(characterSuite)assert.ok(["build-query","catalog"].includes(comparison));
   const npcCases=[...(character?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
   const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","build-query"].includes(comparison));
-  if(["native-skill","skill-revision","pack-skill","rules-ablation","build-query"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
+  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","build-query","catalog"].includes(comparison));
+  if(["native-skill","skill-revision","pack-skill","rules-ablation","build-query","catalog"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
   const nativeRevision=process.argv.includes("--native-npc");
   const withRulesSkill=process.argv.includes("--rules-skill");
   if(withRulesSkill)assert.equal(comparison,"pack-skill","Rules skill pilot uses the production pack-skill candidate");
   if(nativeRevision)assert.ok(comparison==="revision"&&cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
-  const arms=comparison==="build-query"?["native_skill_build_js","native_skill_build_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  const arms=comparison==="build-query"?["native_skill_build_js","native_skill_build_tool"]:comparison==="catalog"?["native_skill_catalog_js","native_skill_catalog_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
   if(process.argv.includes("--reverse-first"))arms.reverse();
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
@@ -152,6 +152,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     if(arm==="native_skill_build_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original(),require("./prep-build-query.cjs").createTool(evaluate)];}
+    if(arm==="native_skill_catalog_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original(),...require("./prep-content-catalog.cjs").createTools(evaluate)];}
     setHost(host);await host.start({fresh:true});
     if(arm==="native_skill_build_tool"){
       // Test-only addition to Pi's explicit tool allowlist; production policy stays unchanged.
@@ -159,6 +160,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       host.session._allowedToolNames.add("foundry_build_query");
       host.session._refreshToolRegistry();
     }
+    if(arm==="native_skill_catalog_tool"){for(const n of ["foundry_content_search","foundry_content_list","foundry_content_detail"])host.session._allowedToolNames.add(n);host.session._refreshToolRegistry();}
     if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
     trial.modelConfiguration={reasoning:host.session.model.reasoning,compat:host.session.model.compat??null};
     trial.requestModes=[];
@@ -169,17 +171,20 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       trial.requestModes.push({enable_thinking:actual.enable_thinking??"omitted",thinking:actual.thinking??"omitted",reasoning_effort:actual.reasoning_effort??"omitted"});
       return replacement;
     };
-    if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
+    if(arm==="js"||arm==="native_skill_catalog_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     if(arm==="native_skill_build_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_build_query"])]);
+    if(arm==="native_skill_catalog_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_content_search","foundry_content_list","foundry_content_detail"])]);
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
+    const expectedTools=implementation.prepToolNames.filter(n=>!((arm==="js"||arm==="native_skill_catalog_js")&&newTools.has(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
     if(arm==="native_skill_build_tool")expectedTools.push("foundry_build_query");
-    assert.deepEqual([...trial.activeTools].sort(),[...expectedTools].sort(),"Ablated tool set changed");
+    if(arm==="native_skill_catalog_tool")expectedTools.push("foundry_content_search","foundry_content_list","foundry_content_detail");
+    const uniqueExpectedTools=[...new Set(expectedTools)];
+    assert.deepEqual([...trial.activeTools].sort(),uniqueExpectedTools.sort(),"Ablated tool set changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
     assert.ok(host.session.systemPrompt.includes(productionPrep),"Prep preamble anchor changed");
-    let prompt=promptMode==="production"&&arm!=="js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
+    let prompt=promptMode==="production"&&arm!=="js"&&arm!=="native_skill_catalog_js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
     if(nativeSkillArm){
       assert.ok(host.session.systemPrompt.includes("fvtt-native-npc"),"Skill metadata must be loaded through resource loader");
       prompt=host.session.systemPrompt.replace(productionPrep,common+" 创建或修改 NPC 前先读取可用的 fvtt-native-npc skill。使用 foundry_content_search 发现资源，普通角色创建和修改使用 browser_evaluate 原生 API；其他已开放工具按需要使用。不要调用未开放的 actor_create 或 actor_update。");
@@ -207,7 +212,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     });
     const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},report.experiment.taskTimeoutMs);
     trial.state="submitted";save();
-    try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.state="returned";save();}
+    try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.taskError=host.task?.error??host.task?.failure??null;trial.agentError=host.session?.lastError??null;trial.state="returned";save();}
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
@@ -218,3 +223,5 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   }
   report.status="prep-benchmark-completed";save();
 };
+
+

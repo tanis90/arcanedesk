@@ -1,0 +1,2816 @@
+{
+  "version": 3,
+  "level": 5,
+  "rules": "2014",
+  "classRole": "primary",
+  "class": {
+    "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+    "name": "魔契师 Warlock",
+    "type": "class",
+    "identifier": "warlock",
+    "hitDice": "d8",
+    "spellcasting": {
+      "progression": "pact",
+      "ability": "cha",
+      "preparation": {
+        "formula": ""
+      }
+    },
+    "advancements": [
+      {
+        "id": "n1xdebr24qtd1gsh",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": null,
+        "type": "HitPoints",
+        "configuration": {}
+      },
+      {
+        "id": "xxrjl9izkjqy6ko0",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 1,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rCUSoZKPAorzwiXR",
+              "name": "异界宗主 Otherworldly Patron",
+              "type": "feat",
+              "identifier": "",
+              "optional": false
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.D8bK0Szru97X9Qvc",
+              "name": "契约魔法 Pact Magic",
+              "type": "feat",
+              "identifier": "",
+              "optional": false
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NlynjOtBcxblMOkS",
+              "name": "额外魔契师法术 Additional Warlock Spells",
+              "type": "feat",
+              "identifier": "-additional-warlock-spells",
+              "optional": true
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "sgt3alxf85j6r8v7",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 2,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NuxbPM5TkEXEJkKQ",
+              "name": "魔能祈唤 Eldritch Invocations",
+              "type": "feat",
+              "identifier": "",
+              "optional": false
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.t26Nd728fW5zskrC",
+              "name": "额外魔能祈唤选项 Eldritch Invocation Options",
+              "type": "feat",
+              "identifier": "-eldritch-invocation-options",
+              "optional": true
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "3otx4z99ymywwajo",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 3,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SMJGVQvMPi5cL0iB",
+              "name": "魔契恩泽  Pact Boon",
+              "type": "feat",
+              "identifier": "",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "snqoxuz5vrjdyli8",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 4,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.vLBJr3FWtdYzJfcI",
+              "name": "魔能选项 Eldritch Versatility",
+              "type": "feat",
+              "identifier": "-eldritch-versatility",
+              "optional": true
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "PSBIpqQHiXvNgBbP",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": null,
+        "type": "ItemChoice",
+        "title": "魔能祈唤",
+        "configuration": {
+          "choices": {
+            "2": {
+              "count": 2,
+              "replacement": false
+            },
+            "5": {
+              "count": 1,
+              "replacement": false
+            }
+          },
+          "allowDrops": true,
+          "type": "feat",
+          "pool": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.x3prcX8PAqlBjAQd",
+              "name": "魔能祈唤：苦痛魔爆 Eldritch Invocations: Agonizing Blast",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8uVpuD4OYzzzJiOV",
+              "name": "魔能祈唤: 万形之主 Eldritch Invocations: Master of Myriad Forms",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0rpcjppc5yd7t05i",
+              "name": "魔能祈唤: 共视感官 Eldritch Invocations: Gaze of Two Minds",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EZOi1EL0NGt3wTxN",
+              "name": "魔能祈唤: 凶兆符记 Eldritch Invocations: Sign of Ill Omen",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.U1EOXRPcGKMP231t",
+              "name": "魔能祈唤: 千面之脸 Eldritch Invocations: Mask of Many Faces",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wwjPlNSVlVATDeTt",
+              "name": "魔能祈唤: 卡瑟利之链 Eldritch Invocations: Chains of Carceri",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eyc3NDrYPtFrVY7o",
+              "name": "魔能祈唤: 五运窃贼 Eldritch Invocations: Thief of Five Fates",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.QFqr4zgfwZjjohkW",
+              "name": "魔能祈唤: 坟墓低语 Eldritch Invocations: Whispers of the Grave",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xbXCzf8ZapFwjEEy",
+              "name": "魔能祈唤: 巫术视界 Eldritch Invocations: Witch Sight",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IW0M6QYHWIhDA7lT",
+              "name": "魔能祈唤: 心灵泥沼 Eldritch Invocations: Mire the Mind",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i90Qb2IFlFCovWxU",
+              "name": "魔能祈唤: 恐惧箴言 Eldritch Invocations: Dreadful Word",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mlcRzLhWk1gqYPo8",
+              "name": "魔能祈唤: 斥力魔爆 Eldritch Invocations: Repelling Blast",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.I6ElD91wXNgqq4QG",
+              "name": "魔能祈唤: 星移步法 Eldritch Invocations: Ascendant Step",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P0gw9NZuPq9qEqim",
+              "name": "魔能祈唤: 混沌手下 Eldritch Invocations: Minions of Chaos",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.l9qURZ54anQnexhq",
+              "name": "魔能祈唤: 穹宇尽视 Eldritch Invocations: Visions of Distant Realms",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.l1xuNvXSqByUUaZe",
+              "name": "魔能祈唤: 符文守护者之眼 Eldritch Invocations: Eyes of the Rune Keeper",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.c4cKNln4NfWXHnLV",
+              "name": "魔能祈唤: 邪魔活力 FieEldritch Invocations: ndish Vigor",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SqULcM1hBZ0kfScQ",
+              "name": "魔能祈唤: 缚主之音 Eldritch Invocations: Voice of the Chain Master",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.R6HolbSwwbG9Ea0p",
+              "name": "魔能祈唤: 融身入影 Eldritch Invocations: One with Shadows",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Tlq0BCJE6EPejRoI",
+              "name": "魔能祈唤: 诱导话术 Eldritch Invocations: Beguiling Influence",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.aLlPyE1YTWHmbNcq",
+              "name": "魔能祈唤: 超凡跳跃 Eldritch Invocations: Otherworldly Leap",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.RSQZmAfAE3u6fEm1",
+              "name": "魔能祈唤: 远古奥秘之书 Eldritch Invocations: Book of Ancient Secrets",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.yViiByfTZXQNlLPq",
+              "name": "魔能祈唤: 迷雾幻影 Eldritch Invocations: Misty Visions",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.K8QoLs8wyf58DtXJ",
+              "name": "魔能祈唤: 重塑血肉 Eldritch Invocations: Sculptor of Flesh",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Z9kXd0wfpHZfbOAf",
+              "name": "魔能祈唤: 野兽之语 Eldritch Invocations: Beast Speech",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JTCUrlb5faj56KiY",
+              "name": "魔能祈唤: 饥渴魔刃 Eldritch Invocations: Thirsting Blade",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.sNzfpsfPJ8neSuOK",
+              "name": "魔能祈唤: 饮命者 Eldritch Invocations: Lifedrinker",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rEonXJcEAAJBZyft",
+              "name": "魔能祈唤: 魔能视界 Eldritch Invocations: Eldritch Sight",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xhczSlT48ci8h8XY",
+              "name": "魔能祈唤: 魔能长枪 Eldritch Invocations: Eldritch Spear",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.pLs9KC0WOibsqE3v",
+              "name": "魔能祈唤: 魔鬼视界 Eldritch Invocations: Devil's Sight",
+              "type": "feat",
+              "identifier": "-"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EgNBe3AD9qFILhwS",
+              "name": "魔能祈唤：幽影护甲 Eldritch Invocations: Armor of Shadows",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.r6Oj5o9D9c1prBSE",
+              "name": "魔能祈唤:月之仪态 Eldritch Invocations: Aspect of the Moon",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.s6TuhxqMCztCVtDU",
+              "name": "魔能祈唤:飞蝇斗篷 Eldritch Invocations: Cloak of Flies",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.urASqqnLB2uWHEyI",
+              "name": "魔能祈唤:魔能斩击 Eldritch Invocations: Eldritch Smite",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rotldMyCxJBg6YUC",
+              "name": "魔能祈唤:幽魂凝视 Eldritch Invocations: Ghostly Gaze",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xk7Uo7AP1wzgznyg",
+              "name": "魔能祈唤:深海赠礼 Eldritch Invocations: Gift of the Depths",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.TeC0YHTFO8uOjORt",
+              "name": "魔能祈唤:永生者赠礼 Eldritch Invocations: Gift of the Ever-Living Ones",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.4jlIhGSh9MCUtruu",
+              "name": "魔能祈唤:哈达之攫 Eldritch Invocations: Grasp of Hadar",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.aGyZwY91LgYAdOnM",
+              "name": "魔能祈唤:进阶契约武器 Eldritch Invocations: Improved Pact Weapon",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VTnbBMUDqcJITK3v",
+              "name": "魔能祈唤:怠惰之枪 Eldritch Invocations: Lance of Lethargy",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.KzT2V9KxRmwK2SLi",
+              "name": "魔能祈唤:癫狂巫咒 Eldritch Invocations: Maddening Hex",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.qMO5Fzck82E1uhjT",
+              "name": "魔能祈唤:残酷巫咒 Eldritch Invocations: Relentless Hex",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WvlSIQ31NlAdIYny",
+              "name": "魔能祈唤:阴影环绕 Eldritch Invocations:  Shroud of Shadow",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0eakRXfMTchStjnH",
+              "name": "魔能祈唤:莱维斯图斯之墓 Eldritch Invocations: Tomb of Levistus",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NzJnsLZQ1oiPXNtC",
+              "name": "魔能祈唤:诡术师的逃脱术 Eldritch Invocations: Trickster's Escape",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.TieC6BcmIWTOYzQC",
+              "name": "魔能祈唤：护符牵绊Eldritch Invocation: Bond of the Talisman",
+              "type": "feat",
+              "identifier": "eldritch-invocationbond-of-the-talisman"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nkp511Gfd16b3d2g",
+              "name": "魔能祈唤：魔能意志Eldritch Invocation: Eldritch Mind",
+              "type": "feat",
+              "identifier": "eldritch-invocationeldritch-mind"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.BhZ1smcVbehFTyZ4",
+              "name": "魔能祈唤：遥远音讯Eldritch Invocation:  Far Scribe",
+              "type": "feat",
+              "identifier": "eldritch-invocation-far-scribe"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.w7YF2HtdcugREsx4",
+              "name": "魔能祈唤：守护馈赠Eldritch Invocation: Gift of the Protectors",
+              "type": "feat",
+              "identifier": "eldritch-invocationgift-of-the-protectors"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.a1JCKCXb7pCgs9wT",
+              "name": "魔能祈唤：链主赋能Eldritch Invocation: Investment of the Chain Master",
+              "type": "feat",
+              "identifier": "eldritch-invocationinvestment-of-the-chain-master"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EzFJHWfeZ4YNEn5L",
+              "name": "魔能祈唤：护符庇佑Eldritch Invocation: Protection of the Talisman",
+              "type": "feat",
+              "identifier": "eldritch-invocationprotection-of-the-talisman"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8ELKR6Qzmagy4RYK",
+              "name": "魔能祈唤：符令责斥Eldritch Invocation: Rebuke of the Talisman",
+              "type": "feat",
+              "identifier": "eldritch-invocationrebuke-of-the-talisman"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.QkDzUSuaqmTa1rwN",
+              "name": "魔能祈唤：永恒奴役Eldritch Invocation: Undying Servitude",
+              "type": "feat",
+              "identifier": "eldritch-invocationundying-servitude"
+            }
+          ],
+          "spell": null,
+          "restriction": {
+            "type": "class",
+            "subtype": "eldritchInvocation",
+            "list": []
+          }
+        }
+      },
+      {
+        "id": "Y2utWDcKa9CzNK4G",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": null,
+        "type": "ItemChoice",
+        "title": "魔契恩泽",
+        "configuration": {
+          "choices": {
+            "3": {
+              "count": 1,
+              "replacement": false
+            }
+          },
+          "allowDrops": true,
+          "type": "feat",
+          "pool": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wZTuyqjaVEmZgykR",
+              "name": "链之魔契 Pact of the Chain",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.MtURbXBBvh9LdJxf",
+              "name": "刃之魔契 Pact of the Blade",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jffAWIaUzgNdPQvM",
+              "name": "书之魔契 Pact of the Tome",
+              "type": "feat",
+              "identifier": ""
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.GTSTP2qr10wmyLDC",
+              "name": "符之魔契 Pact of the Talisman",
+              "type": "feat",
+              "identifier": "-pact-of-the-talisman"
+            }
+          ],
+          "spell": null,
+          "restriction": {
+            "type": "class",
+            "subtype": "pact",
+            "list": []
+          }
+        }
+      },
+      {
+        "id": "H0U9QH2KQj0lIrDK",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "saves:wis",
+            "saves:cha"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "4DBaeL7SR77vUp6F",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [],
+          "choices": [
+            {
+              "count": 2,
+              "pool": [
+                "skills:arc",
+                "skills:dec",
+                "skills:his",
+                "skills:itm",
+                "skills:inv",
+                "skills:nat",
+                "skills:rel"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "BTAE9XqCBbyv4O8P",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "armor:lgt"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "25XLH7yn1R41rKlk",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "weapon:sim"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "IXXGQe1feA5cBsOH",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": null,
+        "type": "ScaleValue",
+        "title": "Cantrips Known",
+        "configuration": {
+          "identifier": "cantrips-known",
+          "type": "number",
+          "distance": {
+            "units": ""
+          },
+          "current": {
+            "value": 3
+          }
+        }
+      },
+      {
+        "id": "zfiyBsaOuE359vfA",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": null,
+        "type": "ScaleValue",
+        "title": "Spells Known",
+        "configuration": {
+          "identifier": "spells-known",
+          "type": "number",
+          "distance": {
+            "units": ""
+          },
+          "current": {
+            "value": 6
+          }
+        }
+      },
+      {
+        "id": "rvfuW71lYEeJW7HS",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+        "level": 4,
+        "type": "AbilityScoreImprovement",
+        "title": "属性值提升",
+        "configuration": {
+          "points": 2,
+          "fixed": {
+            "str": 0,
+            "dex": 0,
+            "con": 0,
+            "int": 0,
+            "wis": 0,
+            "cha": 0
+          },
+          "cap": 2,
+          "locked": [],
+          "recommendation": null
+        }
+      }
+    ]
+  },
+  "subclass": {
+    "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.K8769YOGYqLIB902",
+    "name": "邪魔 The Fiend",
+    "type": "subclass",
+    "identifier": "the-fiend",
+    "spellcasting": {
+      "progression": "none",
+      "ability": "",
+      "preparation": {}
+    },
+    "advancements": [
+      {
+        "id": "zf1dkhumwcl5ybs7",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.K8769YOGYqLIB902",
+        "level": 1,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0M65FLBoPzoNWHZH",
+              "name": "黑暗赐福 Dark One's Blessing",
+              "type": "feat",
+              "identifier": "",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      }
+    ]
+  },
+  "race": null,
+  "documents": [
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.1bisexH4xwv2Mz5T",
+      "name": "魔契师 Warlock",
+      "type": "class",
+      "identifier": "warlock",
+      "rules": "2014",
+      "description": "",
+      "descriptionTruncated": false,
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.K8769YOGYqLIB902",
+      "name": "邪魔 The Fiend",
+      "type": "subclass",
+      "identifier": "the-fiend",
+      "rules": "2014",
+      "description": "你与某位下层位面的邪魔缔结了契约。这些存在抱有邪恶的企图，但你不一定愿意与之同流合污。邪魔们追求着世间万物的堕落与毁灭，而这连你本身也无法独善其身最终。那些强大到足以与凡人缔结契约的邪魔中有狄摩高根Demogorgon、奥喀斯Orcus、弗拉兹厄鲁Fraz\"Urb-luu 和巴弗米特Baphomet这样的恶魔领主;阿斯蒙蒂斯Asmodeus、迪斯帕特Dispa-ter、墨菲斯托费利斯Mephistopheles和贝利亚Belial 这样的大魔鬼;还包括深狱炼魔、巴洛炎魔这种强大存在;甚至还有奥登罗斯魔与其他尤格罗斯魔领主。 法术环阶 法术 1环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.5SuJewoa1CRWaj1F]{燃烧之手}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.arzCrMRgcNiQuh43]{命令术} 2环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.5GWYJBfc1aZ6415M]{目盲/耳聋术}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.7u2obDvuvtZBkTfq]{灼热射线} 3环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.ztgcdrWPshKRpFd0]{火球术}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.TwlD4PLcltv7Xh7j]{臭云术} 4环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.avD5XUtkBPQQR97c]{火焰护盾}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.X3DrXgxjwI2dvkD6]{火墙术} 5环 @U",
+      "descriptionTruncated": true,
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rCUSoZKPAorzwiXR",
+      "name": "异界宗主 Otherworldly Patron",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "第1级时，你就跟某个异界的存在订下契约。你可以在以下选项中选择其一。随后你将在第1、第6、第10、第14级获得相应的职业特性。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB901]{至高妖精} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB902]{邪魔} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB903]{旧日支配者} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB904]{不朽者（SCAG）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB905]{咒剑士（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB906]{天界宗主（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB907]{巨灵宗主（TCE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.K8769YOGYqLIB908]{深海意志（TCE）}",
+      "descriptionTruncated": false,
+      "requirements": "魔契师等级 1",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.D8bK0Szru97X9Qvc",
+      "name": "契约魔法 Pact Magic",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你的法术力量源于你的奥秘研究和宗主的魔法馈赠。参考施法规则，以及魔契师法术列表。 戏法Cantrips 你从魔契师法术列表中选择两个戏法作为已知法术。在获得更高的魔契师等级后你还可以习得其它的戏法，具体数据见“魔契师职业表”中“已知戏法”一栏。 法术位Spell Slots “魔契师职业表”里记录了你可用以施法的法术位数量。表格中还记录了法术位对应的法术环阶，且你所有的法术位都属于同一环阶。施展1环或更高环阶的魔契师法术时，都需要消耗 1 枚法术位。已消耗的法术位可在完成长休或短休后恢复。 例如，达到第5级时，你总共具有两枚3环法术位。你施展1环法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.lSG6t1YSAUcqSLSa]{巫术箭 Witch Bolt时，必须消耗消耗这些法术位其中之一，并把它作为一个3环法术施放。 已知法术Spell Known of 1st Level and Higher 第1级时，你从魔契师法术列表里选择两个1环法术作为已知法术。 “魔契师职业表”中“已知法术”一栏记录了你获得更多法术时的相应等级。每个被选的法术都必须在当前等级拥有可用以施展该法术的法术位，具体见表。比如，当你达到第6级时，你将获得一个1环、2环或3环的新邪术师法术。 另外，当你提升本职的职业等级时，你可以从魔契师法术列表里选择一个新法术来代替一个旧的魔契师已知法术，但是你的角色必须拥有用以施展新选法术的可用法术位。 施法关键属性Spellcasting Ability 魅力是你施展魔契师法术的关键属性。每当你的法术需要施法关键属性时均指向你的魅力值。而你魔契师法术的豁免DC和攻击检定，则使用你的魅力调整值。 法术豁免DC = 8+你的熟练加值+你的魅力调整值 法术攻击调整值 =你的熟练加值+你的魅力调整值 法器Spellcasting Focus 你可以使用奥术法器作为你施展魔契师法术的法器。",
+      "descriptionTruncated": false,
+      "requirements": "魔契师等级 1",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NlynjOtBcxblMOkS",
+      "name": "额外魔契师法术 Additional Warlock Spells",
+      "type": "feat",
+      "identifier": "-additional-warlock-spells",
+      "rules": "2014",
+      "description": "下表中的法术扩充了魔契师在玩家手册中的法术列表。此列表以法术环数而非角色等级排序。以下法术均存在于玩家手册中，除非其标有星号*（这说明该法术来自TCE的第三章）。珊娜萨的万事指南同样提供了更多可使用的新法术。 环阶 扩展法术 0环（戏法） @UUID[Compendium.arcane-dnd5e-2014-automation.spells.pumDQ5z7GSGX16nY]{轰雷剑*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.0TR7HOOqbttnAGzj]{翠炎剑*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9ez2X9q9mQmDqJ8Q]{闪电牵引*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Il0iA9nttKqh0ACr]{心灵之楔*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.FbWd9LrvqTSOdKwk]{剑刃爆发*} 3环 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.EPA95aL0TTwT4WCb]{智能壁垒*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.TH2wXQ3yssrGZ821]{魂灵环绕*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.p12lhL5QyiAvgpTx]{精类召唤术*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.n9tVU1jnmwUqoUnf]{暗影衍体召唤术*}@UUID[Compendium.arcane-dnd5e-2014-automation.spells.DWDgKtljaEhfs9XQ]{亡灵召唤术*} 4环",
+      "descriptionTruncated": true,
+      "requirements": "魔契师等级 1",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NuxbPM5TkEXEJkKQ",
+      "name": "魔能祈唤 Eldritch Invocations",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你在神秘学识的研习过程中发掘出魔能祈唤的方式，这些禁忌的知识残章让你获得了持久的魔法能力。 第2级时，你获得两种自选的魔能祈唤（祈唤的具体内容见后文）。在获得更高的邪术师等级后你还可以习得其它的魔能祈唤，具体数据见“邪术师职业表”中“已知祈唤”一栏。 另外，你提升本职的等级时，可以用新的祈唤替换一个已学会的祈唤，但你的角色必须满足学习新祈唤的先决条件。 祈唤列表： 魔能祈唤 先决条件 @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.x3prcX8PAqlBjAQd]{魔能祈唤：苦痛魔爆} 习得戏法@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.8uVpuD4OYzzzJiOV]{魔能祈唤：万形之主} 15级 @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.0rpcjppc5yd7t05i]{魔能祈唤：共视感官} - @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.EZOi1EL0NGt3wTxN]{魔能祈唤：凶兆符记} 5级 @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.U1EOXRPcGKMP231t]{魔能祈唤：千面之脸} - @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.wwjPlNSVlVATDeTt]{魔能祈唤：卡瑟利之链} 15级，@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.wZTuyqjaVEmZgykR",
+      "descriptionTruncated": true,
+      "requirements": "魔契师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.t26Nd728fW5zskrC",
+      "name": "额外魔能祈唤选项 Eldritch Invocation Options",
+      "type": "feat",
+      "identifier": "-eldritch-invocation-options",
+      "rules": "2014",
+      "description": "当你选择魔能祈唤时，你可以选用这些额外的内容。 祈唤列表： 魔能祈唤 先决条件 @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.TieC6BcmIWTOYzQC]{魔能祈唤：护符牵绊} 第12级，@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.GTSTP2qr10wmyLDC]{符之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.nkp511Gfd16b3d2g]{魔能祈唤：魔能意志} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.BhZ1smcVbehFTyZ4]{魔能祈唤：遥远音讯} 第5级，@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.jffAWIaUzgNdPQvM]{书之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.w7YF2HtdcugREsx4]{魔能祈唤：守护馈赠} 第9级，@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.jffAWIaUzgNdPQvM]{书之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.a1JCKCXb7pCgs9wT]{魔能祈唤：链主赋能} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.wZTuyqjaVEmZgykR]{链之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.EzFJHW",
+      "descriptionTruncated": true,
+      "requirements": "魔契师等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SMJGVQvMPi5cL0iB",
+      "name": "魔契恩泽  Pact Boon",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "第3级时，你的宗主赋予你一份馈赠作为你忠诚服务的回馈。你可以从下列特性中自选其一。 @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.jffAWIaUzgNdPQvM]{书之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.MtURbXBBvh9LdJxf]{刃之魔契} @UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.wZTuyqjaVEmZgykR]{链之魔契}",
+      "descriptionTruncated": false,
+      "requirements": "魔契师等级 3",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.vLBJr3FWtdYzJfcI",
+      "name": "魔能选项 Eldritch Versatility",
+      "type": "feat",
+      "identifier": "-eldritch-versatility",
+      "rules": "2014",
+      "description": "每当你的魔契师达到了可以获得属性值提升的等级，你可以做以下的一件事来代表你在奥秘研究当中重点的转变。 可以将你从该职业契约法术中学到的戏法替换为另一个魔契师法术列表中的戏法。 可以将你从@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.SMJGVQvMPi5cL0iB]{魔契恩泽}中选择的一个选项替换为此魔契的另一选项。 如果你的角色已经12级或者更高，你可以将一个@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.ot1DIKAnqrFIbwnj]{玄奥秘法}的法术替换为另一个同环魔契师法术。 如果这些改变让你不再符合某些@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.NuxbPM5TkEXEJkKQ]{魔能祈唤}的条件，你必须现在选择那些符合你条件的祈唤来替换它们。",
+      "descriptionTruncated": false,
+      "requirements": "魔契师等级 4",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.x3prcX8PAqlBjAQd",
+      "name": "魔能祈唤：苦痛魔爆 Eldritch Invocations: Agonizing Blast",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆 Eldritch Blast}时，你可以将魅力调整值加到其每次命中所造成的伤害中。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，魔能爆",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8uVpuD4OYzzzJiOV",
+      "name": "魔能祈唤: 万形之主 Eldritch Invocations: Master of Myriad Forms",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Item.8RTDOt80u8aBv9qx]{变身术 Alter Self}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 15",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0rpcjppc5yd7t05i",
+      "name": "魔能祈唤: 共视感官 Eldritch Invocations: Gaze of Two Minds",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你用动作触碰一个自愿的类人生物，并与其建立起感官的连接。连接状态持续到你下回合结束时终止。其间，只要你与该生物还处于同一位面中，就可以用动作继续维持连接，使其持续时间延长至你下回合结束时终止。 以所连接生物的感官进行观察时，你将拥有该生物所有的特殊感官收益，但你对于自身所处的环境则视为等同与处于目盲和耳聋状态。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EZOi1EL0NGt3wTxN",
+      "name": "魔能祈唤: 凶兆符记 Eldritch Invocations: Sign of Ill Omen",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个 @UUID[Compendium.arcane-dnd5e-2014-automation.spells.pO4zGe5LmFIYqJiL]{降咒}。你必须完成一次长休才能再次施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spell.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.U1EOXRPcGKMP231t",
+      "name": "魔能祈唤: 千面之脸 Eldritch Invocations: Mask of Many Faces",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.A3q2gTNqG6fvNGrv]{易容术 Disguise Self}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wwjPlNSVlVATDeTt",
+      "name": "魔能祈唤: 卡瑟利之链 Eldritch Invocations: Chains of Carceri",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展针对于天界生物、邪魔、或元素生物的@UUID[Compendium.arcane-dnd5e-2014-automation.spells.l9Ju5KE7bbn3WpTm]{怪物定身术 Hold Monster}，且无需消耗法术位和材料成分。你必须完成一次长休才能再次对同一生物使用此祈唤上。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 15，链之魔契",
+      "uses": {
+        "max": "1",
+        "spent": 0,
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ]
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eyc3NDrYPtFrVY7o",
+      "name": "魔能祈唤: 五运窃贼 Eldritch Invocations: Thief of Five Fates",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个@UUID[Compendium.arcane-dnd5e-2014-automation.spells.95K2aUhAGV9qXjnf]{灾祸术 Bane}。你必须完成一次长休才能再施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spell.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.QFqr4zgfwZjjohkW",
+      "name": "魔能祈唤: 坟墓低语 Eldritch Invocations: Whispers of the Grave",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.I2LUSF5ogc7Bj62e]{死者交谈 Speak with Dead}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 9",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xbXCzf8ZapFwjEEy",
+      "name": "魔能祈唤: 巫术视界 Eldritch Invocations: Witch Sight",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "变形生物以及由幻术和变化系魔法所变形的生物在你身边30尺视野范围内时，你将直接看出其真实形态。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 15",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IW0M6QYHWIhDA7lT",
+      "name": "魔能祈唤: 心灵泥沼 Eldritch Invocations: Mire the Mind",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个@UUID[Compendium.arcane-dnd5e-2014-automation.spells.yqUDoxk4x0NWG5Bz]{缓慢术 Slow}。你必须完成一次长休才能再次施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spell.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.i90Qb2IFlFCovWxU",
+      "name": "魔能祈唤: 恐惧箴言 Eldritch Invocations: Dreadful Word",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个@UUID[Compendium.arcane-dnd5e-2014-automation.spells.9hQXdMSmerkTsHDe]{困惑术 Confusion}。你必须完成一次长休才能再次施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spells.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mlcRzLhWk1gqYPo8",
+      "name": "魔能祈唤: 斥力魔爆 Eldritch Invocations: Repelling Blast",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆 Eldritch Blast}时，你可以将被命中的生物沿直线往远离你的方向推动至多10尺。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，魔能爆",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.I6ElD91wXNgqq4QG",
+      "name": "魔能祈唤: 星移步法 Eldritch Invocations: Ascendant Step",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意以自身为目标施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.MRxldJd6C4bsBo3O]{浮空术 Levitate}，且无需消耗法术位和材料成分。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 9",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.P0gw9NZuPq9qEqim",
+      "name": "魔能祈唤: 混沌手下 Eldritch Invocations: Minions of Chaos",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个@UUID[Compendium.arcane-dnd5e-2014-automation.spells.1LkZvINag7KqBmDR]{召唤元素生物 Conjure Elemental}。你必须完成一次长休才能再次施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 9",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spell.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.l9qURZ54anQnexhq",
+      "name": "魔能祈唤: 穹宇尽视 Eldritch Invocations: Visions of Distant Realms",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.ImlCJQwR1VL40Qem]{秘法眼 Arcane Eye}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 15",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.l1xuNvXSqByUUaZe",
+      "name": "魔能祈唤: 符文守护者之眼 Eldritch Invocations: Eyes of the Rune Keeper",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以读懂任何文字。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "魔能祈唤: 符文守护者之眼 Eldritch Invocations:",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.traits.languages.all",
+              "mode": 2,
+              "value": "+1",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.c4cKNln4NfWXHnLV",
+      "name": "魔能祈唤: 邪魔活力 FieEldritch Invocations: ndish Vigor",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展1环法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.7e3QXF10hLNDEdr6]{虚假生命 False Life}，且无需消耗法术位和材料成分。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.SqULcM1hBZ0kfScQ",
+      "name": "魔能祈唤: 缚主之音 Eldritch Invocations: Voice of the Chain Master",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "只要你与你的魔宠处于同一位面，你就可以用心灵感应与其进行交流，以及使用其感官感知世界。此外，当你通过魔宠的感官感知时，你可以通过魔宠用你自己的声音说话，而不论你的魔宠是否能够说话。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，链之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.R6HolbSwwbG9Ea0p",
+      "name": "魔能祈唤: 融身入影 Eldritch Invocations: One with Shadows",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "身处微光或黑暗环境时，你可以使用动作进入隐形，其效应持续至你进行移动、执行动作或执行反应时终止。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": [
+        {
+          "name": "魔能祈唤: 融身入影 Eldritch Invocations:",
+          "disabled": false,
+          "transfer": false,
+          "changes": []
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Tlq0BCJE6EPejRoI",
+      "name": "魔能祈唤: 诱导话术 Eldritch Invocations: Beguiling Influence",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你获得欺瞒和游说技能的熟练项。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "获得欺瞒、游说熟练",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.skills.per.value",
+              "mode": 4,
+              "value": "1",
+              "priority": null
+            },
+            {
+              "key": "system.skills.dec.value",
+              "mode": 4,
+              "value": "1",
+              "priority": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.aLlPyE1YTWHmbNcq",
+      "name": "魔能祈唤: 超凡跳跃 Eldritch Invocations: Otherworldly Leap",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意以自身为目标施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.ZrTc23tToJ0JpH2h]{跳跃术 Jump}，且无需消耗法术位和材料成分。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 9",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.RSQZmAfAE3u6fEm1",
+      "name": "魔能祈唤: 远古奥秘之书 Eldritch Invocations: Book of Ancient Secrets",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "现在你可以把魔法仪式抄录进你的“影之书”。你可以从任何法术列表中选择两个1环仪式（两法术可以属于不同法术列表）。所选法术将记录在“影之书”中，且不计入你的已知法术数量内。只要“影之书”在你的手中，你便可以施展所选的仪式法术。你不能通过仪式外的方式施展这些法术，除非你已经通过其他方式习得了这些法术。此外，你还可以把带有仪式描述的邪术师法术作为仪式法术进行施展。 冒险过程中，你还可以添加其他仪式法术到你的“影之书”中。当你发现一个这样的法术时，如果该法术的环阶等于或低于你邪术师等级的一半（向上取整），并且你能抽出时间抄录此法术，则你可以把此法术添加进“影之书”。抄录法术时其每环阶需要花费2小时时间和价值50gp的珍惜墨水。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，书之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.yViiByfTZXQNlLPq",
+      "name": "魔能祈唤: 迷雾幻影 Eldritch Invocations: Misty Visions",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.BrBZdCCrJRIVg7YX]{无声幻影 Silent Image}，且无需消耗法术位和材料成分。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.K8QoLs8wyf58DtXJ",
+      "name": "魔能祈唤: 重塑血肉 Eldritch Invocations: Sculptor of Flesh",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以消耗你的邪术师法术位施展一个@UUID[Compendium.arcane-dnd5e-2014-automation.spells.04nMsTWkIFvkbXlY]{变形术 Polymorph}。你必须完成一次长休才能再次施展该法术。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              },
+              {
+                "type": "attribute",
+                "value": "1",
+                "target": "spell.pact.value",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Z9kXd0wfpHZfbOAf",
+      "name": "魔能祈唤: 野兽之语 Eldritch Invocations: Beast Speech",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.aL1F8fvYLtNzUbKu]{动物交谈 Speak with Animals}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JTCUrlb5faj56KiY",
+      "name": "魔能祈唤: 饥渴魔刃 Eldritch Invocations: Thirsting Blade",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "当你自身回合内使用契约武器执行攻击动作时，你可以发动两次攻击而非一次。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5， 刃之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.sNzfpsfPJ8neSuOK",
+      "name": "魔能祈唤: 饮命者 Eldritch Invocations: Lifedrinker",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你使用契约武器命中某个生物时，额外造成相当于你魅力调整值的黯蚀伤害（最少为1）。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 12， 刃之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "damage",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          },
+          "damage": {
+            "critical": {
+              "allow": false,
+              "bonus": ""
+            },
+            "parts": [
+              {
+                "number": null,
+                "denomination": null,
+                "bonus": "",
+                "types": [
+                  "necrotic"
+                ],
+                "custom": {
+                  "enabled": true,
+                  "formula": "max(@abilities.cha.mod,1)"
+                },
+                "scaling": {
+                  "mode": "whole",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rEonXJcEAAJBZyft",
+      "name": "魔能祈唤: 魔能视界 Eldritch Invocations: Eldritch Sight",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你可以随意施展法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.ghXTfe7sgCbgf1Q8]{侦测魔法 Detect Magic}，且无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xhczSlT48ci8h8XY",
+      "name": "魔能祈唤: 魔能长枪 Eldritch Invocations: Eldritch Spear",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆 Eldritch Blast}时，射程变为300尺。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，魔能爆",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.pLs9KC0WOibsqE3v",
+      "name": "魔能祈唤: 魔鬼视界 Eldritch Invocations: Devil's Sight",
+      "type": "feat",
+      "identifier": "-",
+      "rules": "2014",
+      "description": "你在黑暗中拥有120尺的视野距离，而无论其属于魔法黑暗还是非魔法黑暗。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "获得 120 尺黑暗视野",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.attributes.senses.darkvision",
+              "mode": 4,
+              "value": "120",
+              "priority": 40
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EgNBe3AD9qFILhwS",
+      "name": "魔能祈唤：幽影护甲 Eldritch Invocations: Armor of Shadows",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以随意以自身为目标施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.CKZTpZlxj7hjjo2H]{法师护甲 Mage Armor}，且无需消耗法术位和材料成分。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "Mage Armor",
+          "type": "utility",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": false,
+            "targets": []
+          }
+        }
+      ],
+      "effects": [
+        {
+          "name": "Armor of Shadows: Mage Armor",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.attributes.ac.calc",
+              "mode": 5,
+              "value": "mage",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.r6Oj5o9D9c1prBSE",
+      "name": "魔能祈唤:月之仪态 Eldritch Invocations: Aspect of the Moon",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你不再需要睡眠，同样不能以任何手段强制入梦。为了获得长休息的益处，你可以花费8小时执行轻度的工作，例如阅读你的影之书和放哨。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，书之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "魔能祈唤:月之仪态 Eldritch Invocations: Aspect of the Moon",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.traits.ci.value",
+              "mode": 2,
+              "value": "",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.s6TuhxqMCztCVtDU",
+      "name": "魔能祈唤:飞蝇斗篷 Eldritch Invocations: Cloak of Flies",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "以一个附赠动作，你周身环绕起外观如同纷飞蚊蝇般的魔法灵光。灵光从你四周散发5尺，但不会穿过全掩蔽。灵光持续到你失能或以一个附赠动作解消它。 灵光给予你在魅力（威吓）检定的优势，但你在所有其他魅力检定上遭受劣势。任何在灵光内开始回合的生物，受到等于你魅力调整值的毒素伤害（最小为0）。 当你使用此魔能祈唤后，在完成一次短休或长休前，你无法再次使用这祈唤。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "utility",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": [
+        {
+          "name": "威吓优势",
+          "disabled": false,
+          "transfer": false,
+          "changes": [
+            {
+              "key": "flags.midi-qol.advantage.skill.itm",
+              "mode": 2,
+              "value": "+1",
+              "priority": 20
+            }
+          ]
+        },
+        {
+          "name": "魔能祈唤:飞蝇斗篷 Eldritch Invocations: Cloak of Flies",
+          "disabled": false,
+          "transfer": false,
+          "changes": [
+            {
+              "key": "flags.midi-qol.OverTime",
+              "mode": 2,
+              "value": "turn=start,allowIncapacitated=true,saveDamage=nodamage,saveRemove=true,saveMagic=true,damageRoll=max(@abilities.cha.mod,0),damageType=poison,rollMode=publicroll,",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.urASqqnLB2uWHEyI",
+      "name": "魔能祈唤:魔能斩击 Eldritch Invocations: Eldritch Smite",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "每回合一次，当你以契约武器命中一个生物，你可以消耗一个邪术士法术位，对目标造成额外[[/r 1d8]]+每法术位等级[[/r 1d8]]的力场伤害，如果目标体型是巨型或更小，你可以将它击倒。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5， 刃之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "damage",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          },
+          "damage": {
+            "critical": {
+              "allow": false,
+              "bonus": ""
+            },
+            "parts": [
+              {
+                "number": 1,
+                "denomination": 8,
+                "bonus": "1d8",
+                "types": [
+                  "force"
+                ],
+                "custom": {
+                  "enabled": false,
+                  "formula": ""
+                },
+                "scaling": {
+                  "mode": "whole",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "damage",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          },
+          "damage": {
+            "critical": {
+              "allow": false,
+              "bonus": ""
+            },
+            "parts": [
+              {
+                "number": 1,
+                "denomination": 8,
+                "bonus": "",
+                "types": [],
+                "custom": {
+                  "enabled": false,
+                  "formula": ""
+                },
+                "scaling": {
+                  "mode": "whole",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.rotldMyCxJBg6YUC",
+      "name": "魔能祈唤:幽魂凝视 Eldritch Invocations: Ghostly Gaze",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "以一个动作，你得到看穿30尺范围的固态物体的能力。这种特殊的视觉持续1分钟，或直到你的专注终止（如同你专注于一个法术）。在此期间，你观察物体所看到的是影子般的、透明的画面。 当你使用此魔能祈唤后，在完成一次短休或长休前，你无法再次使用这祈唤。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          },
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": [
+        {
+          "name": "魔能祈唤:幽魂凝视 Eldritch Invocations:",
+          "disabled": false,
+          "transfer": false,
+          "changes": []
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xk7Uo7AP1wzgznyg",
+      "name": "魔能祈唤:深海赠礼 Eldritch Invocations: Gift of the Depths",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以在水下呼吸，并且你得到等于你步行速度的游泳速度。 你可以施展一次法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.13uVuBQP6VaiSPvC]{水中呼吸}，而无需消耗法术位。当你结束一次长休后，你重新获得此能力。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.TeC0YHTFO8uOjORt",
+      "name": "魔能祈唤:永生者赠礼 Eldritch Invocations: Gift of the Ever-Living Ones",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "当你的魔宠距离你100尺内时，若你恢复生命值，所有决定你恢复生命值点数的骰子，都被视为骰出了最大值。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，链之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "魔能祈唤:永生者赠礼 Eldritch Invocations: Gift of the Ever-Living Ones",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "flags.midi-qol.grants.max.damage.heal",
+              "mode": 2,
+              "value": "+1",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.4jlIhGSh9MCUtruu",
+      "name": "魔能祈唤:哈达之攫 Eldritch Invocations: Grasp of Hadar",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "每回合一次，当你以@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆}击中一个生物时，你可以让此生物直线向你移动10尺。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，魔能爆",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.aGyZwY91LgYAdOnM",
+      "name": "魔能祈唤:进阶契约武器 Eldritch Invocations: Improved Pact Weapon",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以使用任何锋刃魔契职业特性召唤出来的武器作为邪术士法术的法器。 除此之外，武器在攻击骰和伤害骰上获得+1加值，除非它是一件已经有攻击骰和伤害骰加值的魔法武器。 最后，你塑造的武器可以是短弓、长弓、轻弩或者重弩。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2， 刃之魔契",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VTnbBMUDqcJITK3v",
+      "name": "魔能祈唤:怠惰之枪 Eldritch Invocations: Lance of Lethargy",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "每回合一次，当你以@UUID[Compendium.arcane-dnd5e-2014-automation.spells.Z9p1vezIn95jw1Yw]{魔能爆}击中一个生物时，你可以降低目标10尺的速度，直到你的下个回合结束。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，魔能爆",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.KzT2V9KxRmwK2SLi",
+      "name": "魔能祈唤:癫狂巫咒 Eldritch Invocations: Maddening Hex",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "以一个附赠动作，对你以@UUID[Compendium.arcane-dnd5e-2014-automation.spells.KhekI9OpHBERLsux]{脆弱诅咒}法术或@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.JRyFQmsWflAFkBgN]{咒剑诅咒}、@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.EZOi1EL0NGt3wTxN]{ 凶兆符记}等邪术士特性所诅咒的目标，你向他施加一种精神干扰。当你如此做时，你对诅咒目标和所有距他5尺内的、你所选择的生物造成精神伤害。精神伤害值等于你的魅力调整值（最低为1）。为了使用此祈唤，你必须能看到诅咒目标，且他必须距你30尺以内。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5，脆弱诅咒或进行诅咒的邪术师特性",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "damage",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          },
+          "damage": {
+            "critical": {
+              "allow": false,
+              "bonus": ""
+            },
+            "parts": [
+              {
+                "number": null,
+                "denomination": null,
+                "bonus": "",
+                "types": [
+                  "psychic"
+                ],
+                "custom": {
+                  "enabled": true,
+                  "formula": "max(@abilities.cha.mod,0)"
+                },
+                "scaling": {
+                  "mode": "whole",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.qMO5Fzck82E1uhjT",
+      "name": "魔能祈唤:残酷巫咒 Eldritch Invocations: Relentless Hex",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你的诅咒在你和你目标之间创造出一道暂时性的链接。以一个附赠动作，你可以用魔法传送到一处位于被你使用@UUID[Compendium.arcane-dnd5e-2014-automation.spells.KhekI9OpHBERLsux]{脆弱诅咒}法术或你的邪术士能力（像是@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.JRyFQmsWflAFkBgN]{咒剑诅咒}或@UUID[Compendium.arcane-dnd5e-2014-automation.classfeatures.EZOi1EL0NGt3wTxN]{ 凶兆符记}）所诅咒的目标5尺内，距离你最多30尺远，且你能看见的未被占据空间。若要通过这个方式传送，你必须要能够看见被诅咒的目标。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7，脆弱诅咒或进行诅咒的邪术师特性",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.WvlSIQ31NlAdIYny",
+      "name": "魔能祈唤:阴影环绕 Eldritch Invocations:  Shroud of Shadow",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以施展@UUID[Compendium.arcane-dnd5e-2014-automation.spells.1N8dDMMgZ1h1YJ3B]{隐形术}法术，而无需消耗法术位。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 15",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0eakRXfMTchStjnH",
+      "name": "魔能祈唤:莱维斯图斯之墓 Eldritch Invocations: Tomb of Levistus",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "当你受到伤害时，你可以以一个反应将自己封锁在冰墓中，冰墓会在你的下一个回合结束时融解。你得到每邪术士等级10点的临时生命值，此生命值会尽可能优先地抵消伤害。当你受到伤害之后，你立即得到对火焰伤害的易伤，速度降低至0，并且陷入失能状态。这些效果，以及剩余的临时生命值，会在冰墓融解时终止。 当你使用此魔能祈唤后，在完成一次短休或长休前，你无法再次使用这祈唤。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "type": "heal",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.NzJnsLZQ1oiPXNtC",
+      "name": "魔能祈唤:诡术师的逃脱术 Eldritch Invocations: Trickster's Escape",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以对自己施展一次@UUID[Compendium.arcane-dnd5e-2014-automation.spells.da0a1t2FqaTjRZGT]{行动自如}法术，而无需消耗法术位。当你结束一次长休后，你重新获得此能力。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.TieC6BcmIWTOYzQC",
+      "name": "魔能祈唤：护符牵绊Eldritch Invocation: Bond of the Talisman",
+      "type": "feat",
+      "identifier": "eldritch-invocationbond-of-the-talisman",
+      "rules": "2014",
+      "description": "当别人佩戴你的护身符时，只要你们存在于同一位面，你可以用一个标准动作将你传送至靠近他们的空区域。佩戴该护身符的人也能做同样的事，用他们的动作来传送到你身边。该传送能力可使用的次数等于你的熟练加值，且所有已消耗的次数会在你完成一次长休之后完全恢复。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 12，符之魔契",
+      "uses": {
+        "max": "@prof",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nkp511Gfd16b3d2g",
+      "name": "魔能祈唤：魔能意志Eldritch Invocation: Eldritch Mind",
+      "type": "feat",
+      "identifier": "eldritch-invocationeldritch-mind",
+      "rules": "2014",
+      "description": "你在保持专注的体质豁免检定上有优势，可以让你维持对某个法术的专注。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "魔能祈唤：魔能意志Eldritch Invocation: Eldritch Mind",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "flags.midi-qol.advantage.concentration",
+              "mode": 2,
+              "value": "+1",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.BhZ1smcVbehFTyZ4",
+      "name": "魔能祈唤：遥远音讯Eldritch Invocation:  Far Scribe",
+      "type": "feat",
+      "identifier": "eldritch-invocation-far-scribe",
+      "rules": "2014",
+      "description": "一张新的书页出现在你的影之书中。在你的允许之下，一个生物可以使用一个动作来将他的名字写在这一页上，这一页能包括的名字数量等于你的熟练加值。 你可以对一个名字在这一页上的生物使用短讯术，而不需要消耗法术位和施法材料。你必须将传讯写在这一页上来完成这一行为。目标将在他们的意识中听到这个传讯，且如果目标回复了传讯，他们的回复将会出现在书页上而不是在你的意识中。这些文字将会在一分钟后消失。 你可以使用一个动作，以触摸的形式魔法化地消除一个在书页上的名字。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5， 书之魔契",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.w7YF2HtdcugREsx4",
+      "name": "魔能祈唤：守护馈赠Eldritch Invocation: Gift of the Protectors",
+      "type": "feat",
+      "identifier": "eldritch-invocationgift-of-the-protectors",
+      "rules": "2014",
+      "description": "一张新的书页出现在你的影之书中。在你的允许之下，一个生物可以使用一个动作来将他的名字写在这一页上，这一页能包括的名字数量等于你的熟练加值。 当一个名字在这一页上的生物生命值降为0，但是还没有完全死亡，这个生物的生命值魔法化的变为1点。一旦这个魔法效应被触发，直到你完成一次长休，该效应无法再被任何生物触发。 你可以使用一个动作，以触摸的形式魔法化地消除一个在书页上的名字。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 9， 书之魔契",
+      "uses": {
+        "max": "1",
+        "spent": 0,
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ]
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.a1JCKCXb7pCgs9wT",
+      "name": "魔能祈唤：链主赋能Eldritch Invocation: Investment of the Chain Master",
+      "type": "feat",
+      "identifier": "eldritch-invocationinvestment-of-the-chain-master",
+      "rules": "2014",
+      "description": "当你使用获得魔宠时，你将一定程度的魔能力量灌注给被召唤的魔宠，给予这个生物以下的能力： 该魔宠获得40尺飞行速度或游泳速度（由你选择）。 你可以使用一个附赠动作指挥你的魔宠进行一次攻击动作。 该魔宠的武器攻击被认为是魔法武器攻击，旨在克服对于非魔法攻击的免疫和抗性。 如果该魔宠强迫一个生物进行豁免检定，它使用你的法术豁免DC。 当你的魔宠受到伤害时，你可以使用你的反应动作给予它对于该伤害的抗性。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，链之魔契",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.EzFJHWfeZ4YNEn5L",
+      "name": "魔能祈唤：护符庇佑Eldritch Invocation: Protection of the Talisman",
+      "type": "feat",
+      "identifier": "eldritch-invocationprotection-of-the-talisman",
+      "rules": "2014",
+      "description": "当佩戴者在一次豁免检定中失败，他们可以在骰掷结果上增加一个[[/r d4]]骰，这可能将结果变为成功。这一能力可使用的次数等于你的熟练加值，且所有已消耗的次数将会在你完成一次长休之后全部恢复。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 7，符之魔契",
+      "uses": {
+        "max": "@prof",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8ELKR6Qzmagy4RYK",
+      "name": "魔能祈唤：符令责斥Eldritch Invocation: Rebuke of the Talisman",
+      "type": "feat",
+      "identifier": "eldritch-invocationrebuke-of-the-talisman",
+      "rules": "2014",
+      "description": "当该护符的佩戴者被一个30尺以内对你可见的攻击者攻击，你可以使用你的反应动作对于攻击者造成等于你熟练加值的心灵伤害，并将它推至护符佩戴者10尺以外。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 2，符之魔契",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "damage",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          },
+          "damage": {
+            "critical": {
+              "allow": false,
+              "bonus": ""
+            },
+            "parts": [
+              {
+                "number": null,
+                "denomination": null,
+                "bonus": "",
+                "types": [
+                  "psychic"
+                ],
+                "custom": {
+                  "enabled": true,
+                  "formula": "@prof"
+                },
+                "scaling": {
+                  "mode": "whole",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.QkDzUSuaqmTa1rwN",
+      "name": "魔能祈唤：永恒奴役Eldritch Invocation: Undying Servitude",
+      "type": "feat",
+      "identifier": "eldritch-invocationundying-servitude",
+      "rules": "2014",
+      "description": "你可以在不消耗法术位的情况下使用@UUID[Compendium.arcane-dnd5e-2014-automation.spells.oyE5nVppa5mde5gT]{操纵死尸}。每当你这么做时，你不能再次以这种形式使用该法术直到你完成一次长休。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 5",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "cast",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": [
+              {
+                "type": "itemUses",
+                "value": "1",
+                "target": "",
+                "scaling": {}
+              }
+            ]
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.wZTuyqjaVEmZgykR",
+      "name": "链之魔契 Pact of the Chain",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你习得法术@UUID[Compendium.arcane-dnd5e-2014-automation.spells.JGT5bNqu9REL7Fuz]{获得魔宠}，并可以把它作为一个仪式施展。此法术不计入你的已知法术数量。 施展该法术时，你可以选择召唤一个普通的生物，或是下列特殊生物之一：小魔鬼、伪龙、夸塞魔、或小妖精。 此外，当你执行攻击动作时可以放弃所有攻击中的一次攻击，转而让你的魔宠使用其反应发动一次攻击。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 3",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "summon",
+          "consumption": {
+            "scaling": {
+              "allowed": false
+            },
+            "spellSlot": true,
+            "targets": []
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.MtURbXBBvh9LdJxf",
+      "name": "刃之魔契 Pact of the Blade",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你可以用一个动作从空着的手中创造一把契约武器。你每次创造契约武器时都可以从近战武器列表中选择它的形态（见第5章的武器选项）。当你使用该武器时，将视为拥有该武器的熟练项。在攻击对非魔法攻击或伤害具有抗性或免疫的目标时，该武器将视为魔法武器。 你的契约武器在离你5尺外的区域停留超过1分钟或更长时间，其将自然消失。当你再次创造契约武器、解散契约武器（无需动作）或是死亡的情况下，契约武器也会消失不见。 你可以通过一个特殊的仪式把持有的魔法武器变为你的契约武器。该仪式花费1小时，并且可以在短休时进行。仪式完成后，你随时可以解散该武器，以将其转移到一个异次元空间之中。而每当你再次创造契约武器时再将它召唤出来。该仪式无法对神器或智能武器起作用。如果你死亡；或是花费1小时对另外一把武器举行了仪式；或是你通过1小时的仪式打破该契约，则该武器便不再是你的契约武器。如果在它处于异次元空间时你打破契约，那么该武器将会出现在你的脚边。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 3",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.jffAWIaUzgNdPQvM",
+      "name": "书之魔契 Pact of the Tome",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "你的宗主给予你一本名为“影之书”的魔法书。获得该特性后，你可以从任何法术列表中选择三个戏法加入书中。该书随身时，你可以随意施展这些戏法。而这些戏法均不计入你的已知戏法数量中，并且你将这些戏法视为等同于邪术师法术。 如果你丢失了自己的影之书，你可以举行一个1小时的仪式，并从你的宗主处获得一个替代品。仪式可以在短休或长休期间完成，而它会摧毁之前的魔法书。当你死亡时，该书也将化为灰烬。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 3",
+      "uses": {
+        "max": "0",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.GTSTP2qr10wmyLDC",
+      "name": "符之魔契 Pact of the Talisman",
+      "type": "feat",
+      "identifier": "-pact-of-the-talisman",
+      "rules": "2014",
+      "description": "当你选用魔契恩泽的时候，此选项可供你选择。 你的宗主赐予你一个护身符，一个当需要的时候可以帮助佩戴者的护身符。当佩戴者在一次属性检定中失败，他们可以在骰掷结果上增加一个[[/r d4]]骰，这可能将结果变为成功。这一能力可使用的次数等于你的熟练加值，且所有已消耗的次数将会在你完成一次长休之后全部恢复。 如果你弄丢了护身符，你可以进行一个1小时的仪式从你的宗主那里得到一个替代品。这一仪式可以在一个短休或一个长休过程中完成，且它将会破坏之前的护身符。护身符将会在你死亡时消散为灰尘。",
+      "descriptionTruncated": false,
+      "requirements": "邪术师等级 3",
+      "uses": {
+        "max": "1",
+        "recovery": [
+          {
+            "period": "lr",
+            "type": "recoverAll"
+          }
+        ],
+        "spent": 0
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0M65FLBoPzoNWHZH",
+      "name": "黑暗赐福 Dark One's Blessing",
+      "type": "feat",
+      "identifier": "",
+      "rules": "2014",
+      "description": "第1级起，每当你把一个敌对生物的生命值降至0，你都会获得等同于你的魅力调整值＋你的邪术师等级的临时生命值（最低为1）。",
+      "descriptionTruncated": false,
+      "requirements": "邪魔等级 1",
+      "uses": {
+        "max": "",
+        "spent": 0,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "type": "heal",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    }
+  ],
+  "fallbacks": [],
+  "unresolved": [],
+  "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+  "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+}

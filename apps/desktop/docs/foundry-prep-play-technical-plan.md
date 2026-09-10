@@ -1677,3 +1677,32 @@ JS157.506秒/29调用、工具105.582秒/23调用均通过。工具少51.924秒�
 ### 33.9 内容查询工具 Spec
 
 下一轮待验证的查询接口设计已单独落盘：[Foundry 内容查询工具 Spec](foundry-content-catalog-spec.md)。它把“模糊找 UUID”的 Search、“按职业/等级取得候选集合”的 List 和“读取一个文档全文”的 Detail 分开，统一要求显式 scope 和 page/pageSize；并用 A1、A3、B1、B2、B3 演练预期信息获取步数。该 spec 目前只是设计，不代表生产工具已实现；Reviewed v7 历史结果不重评分。
+
+## 34. Actor Studio 法术关系来源核验与工具决策（2026-09-10）
+
+### 34.1 核验结果
+
+在本地 COS（Foundry 13、dnd5e 5.3.3）中，Actor Studio 模块当前未激活，但 dnd5e 原生 registry 已可直接取得职业/子职业法术关系。系统源码的 `DND5E.SPELL_LISTS` 指向规则包中的 JournalEntryPage；`registerSpellLists` 注册这些页面，`dnd5e.registry.spellLists` 提供 `forType("class", id)`、`forType("subclass", id)`、`forSpell(uuid)`。实测 `class:wizard` 返回 219 个法术，`subclass:draconic` 返回 10 个法术，列表项可解析为实际 compendium UUID；法术等级由 Item `system.level` 提供。
+
+Arcane 的 `auto2014-catalogue/src/spell-content.mjs` 是兼容层：它把调用方提供的职业和子职业映射写入 Actor Studio flags（职业列表为 `flags.foundryvtt-actor-studio.spellLists: [identifier]`，子职业列表为 `{level, lists}`），同时给法术写入 Arcane `spellClasses`；`auto2014-runtime/src/automation.js` 只在 Actor Studio 激活时选择 Arcane spell pack 并做 labels/来源配置。这些映射属于 Arcane 包侧维护的数据，不是 dnd5e Item 原生字段。
+
+### 34.2 设计决定
+
+1. `foundry_content_list` 的职业/子职业法术查询直接调用 dnd5e registry，按 Item `system.level` 做等级过滤；返回规则版本、list metadata、候选 UUID/identifier 和 `sourceKind`。
+2. 原生 registry 缺失时才读取 Arcane/Actor Studio 兼容标记，返回 `sourceKind: arcane-actor-studio-catalogue` 与实际来源包；绝不把普通 spell Item 的名称或描述当作职业资格证明。
+3. 查询工具承担统一输出和来源审计，关系本身由系统原生 registry 或 Arcane 包维护；不在 desktop 侧另建一份职业法术表，也不改 auto pack。任何包侧缺失、版本错位或映射异常按既有纪律记录到 TODO。
+4. 这项核验修复了 A1 的真实信息缺口：`foundry_build_query` 现有 `spellAccess/spellTables` 不等价于职业法术列表，不能继续作为该能力的唯一来源。下一步仅实现 registry 读取和 list/detail 验收，再重跑受影响 benchmark；旧分数不覆盖。
+
+关联设计：[Foundry 内容查询工具 Spec](foundry-content-catalog-spec.md#9-已核实的法术列表来源2026-09-10)。
+
+## 35. 内容查询工具演进 loop 启动（2026-09-10）
+
+本轮按以下闭环执行：
+
+1. 实现 `foundry_content_list/search/detail` 的最小可用版本；list 读取 dnd5e 原生 spell-list registry，search/detail 读取实际 Document，并在结果中附带规则来源与可执行来源的对应关系。
+2. 用 A1（5级法师法术）、A3（子职/职业增量）、B1/B2（已有 Actor 与 Item 来源）、B3（模糊资源发现）按 spec 运行，不用裸写 JS 代替查询步骤。
+3. 独立检查：职业资格来自 registry；实际导入 UUID 来自当前配置的 Arcane/世界包；法术等级、Item 类型、自动化状态和来源包分别可审计。工具不得只返回模型刚刚写入的值。
+4. 发现以下任一问题则修工具：返回全量噪声、缺少规则/实现链接、把规则合法误报成当前包可执行、漏掉子职列表、分页或筛选导致模型需要重复搜索。
+5. 如果查询已返回唯一规则关系和唯一可执行 UUID，而失败只剩包中没有实现或模型对结果的选择错误，则记录为边界并停止扩张输出。
+
+首个实现尚未宣称完成：当前生产 `foundry_content_search` 仍只是名称/identifier 搜索，`foundry_build_query` 也没有职业法术列表；本节记录的是已验证的数据源和实施顺序，旧 benchmark 分数不覆盖。

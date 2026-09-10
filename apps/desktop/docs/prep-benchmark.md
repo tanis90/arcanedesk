@@ -221,6 +221,16 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 
 ## 固定 NPC 指南比较工具版本
 
+### 生产查包 skill 地址注入对照
+
+规则skill单因素对照：`--comparison=rules-ablation --cases=npc_wizard --samples=3 --thinking=high --task-timeout-ms=180000`。两臂同工具、实验NPC指南、生产查包指南；仅 `native_skill_rules` 额外暴露规则skill和查阅指令，`native_skill_pack` 为不提供规则资料的对照。顺序为无/有、有/无、无/有。不要同时传`--rules-skill`，那个开关用于前述thinking小测。当前单因素包含规则资料的可用性与读取路由，不是在同一资料均可读时单测索引措辞。
+
+规则资料与thinking小测：在本节配置上加 `--arm-only=native_skill_pack --rules-skill`，将同一份生产查包skill、实验NPC指南及整个生产规则skill复制进任务目录。分别以 `--thinking=off` 和 `--thinking=high` 各跑一次，其他配置相同；Qwen当前适配中high表示开启enable_thinking，不发送reasoning_effort，不代表供应商支持独立high档。报告记录规则目录内容hash（含正文）、各skill hash、去掉任务目录差异的prompt hash及实际出站参数。此时测的是固定资料下思考开关，不是有无规则资料的对照。单对仅用于观察，不能推断稳定成功率或速度。
+
+使用 `--comparison=pack-skill --cases=npc_wizard --samples=3 --thinking=off --task-timeout-ms=180000`，并提供通常的 target、qa-root、qa-report、provider、model 参数。两臂分别是 `native_skill` 和 `native_skill_pack`，交错执行；工具集合和实验 NPC 指南相同。候选额外复制生产 `apps/desktop/skills/prep/arcane-actor-update/SKILL.md` 到任务目录，通过正常 skill loader 暴露元数据，并在系统提示中注入可读绝对路径、要求查素材前读取。全文不预塞进系统提示，不改用户题目、不注入具体条目 UUID。
+
+记录两份指南 hash、候选源路径与实际读取路径。使用原样生产指南（包括其非查包章节），因此测量的是整个生产 skill 的增量效果，不能把所有变化都归因于包名。重点检查实际 read、检索往返、首次写入时间、总耗时和原有独立正确性验收；未读取也保留为实验结果。历史对照默认行为不变。新增入口目前仅完成语法与差异检查，尚未实跑，不能宣称提速。
+
 使用 `--comparison=revision --native-npc --cases=npc_wizard --baseline=<冻结代码工作树>`。两臂都从当前实验 fixture 加载同一份指南，隐藏 actor_create/update，保留相同 16 工具和原生路由；分别加载 baseline/当前工作树的工具和 runtime。报告的 experiment.nativeNpc=true，逐次 skillHash 必须相同；同时记录 runtime 与工具文件 hash，尤其候选尚未提交时，不能只用 HEAD 标识它。不要在批次运行中修改 SDK、工具、指南或模型配置。
 
 ### 修正后的迭代协议
@@ -228,3 +238,6 @@ node apps/desktop/test/smoke-prep-read-status.mjs --target=local-cos --qa-report
 以[唯一技术方案 §14.26](foundry-prep-play-technical-plan.md#1426-修正后的-goal-与-loop)为准。每轮单因素，两臂各 3 次交错；迁移与既有题回归必须在冻结候选后执行。新增 `--thinking=off` 显式固定客户端档位；逐次 `modelConfiguration` 与 `requestModes` 保存模型能力和实际出站思考参数（不保存凭据或请求正文）。Qwen 基线校正后单独分组，不能与旧服务端默认思考报告混算提速。汇总 v3 新增 withinExperienceTarget / withinExperienceTargetRate。
 
 本轮结算与停止依据见[技术方案 §14.29](foundry-prep-play-technical-plan.md#1429-修正后-loop-的回归与最终结算)。批量接口已撤回；实验 NPC skill 尚未推广。牧师现为已见题，后续用例版本 draft2 忽略导入元数据比较机制并显式检查 2014 法术来源。历史 draft1 原始评分不改写，[独立复核](prep-priest-transfer-results.json)单独记录，不能当作重新预注册的成功率。
+# 车卡成长查询实验入口
+
+`--comparison=build-query --cases=npc_wizard --samples=1 --thinking=high --task-timeout-ms=180000`：同一NPC/查包/成长查询skill，对照用JS，候选额外开放实验只读foundry_build_query；不加载SRD正文。`--reverse-first`反转首对顺序；其余连接及provider参数沿用下文。设计与首轮记录见[车卡查询实验](prep-build-query-results.md)。此实验调整未指定项为走默认，不能与旧轮自由补充措辞混算。

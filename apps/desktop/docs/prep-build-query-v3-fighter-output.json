@@ -1,0 +1,662 @@
+{
+  "version": 3,
+  "level": 5,
+  "rules": "2014",
+  "classRole": "primary",
+  "class": {
+    "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+    "name": "战士 Fighter",
+    "type": "class",
+    "identifier": "fighter",
+    "hitDice": "d10",
+    "spellcasting": {
+      "progression": "none",
+      "ability": "",
+      "preparation": {
+        "formula": ""
+      }
+    },
+    "advancements": [
+      {
+        "id": "gilq1vjnpur64iv3",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": null,
+        "type": "HitPoints",
+        "configuration": {}
+      },
+      {
+        "id": "httwqnsfvwcjbjyc",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+              "name": "回气 Second Wind",
+              "type": "feat",
+              "identifier": "second-wind",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "quc0rwf3eqgj2dyg",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 2,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+              "name": "动作如潮 Action Surge",
+              "type": "feat",
+              "identifier": "action-surge",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "4uym61w20kml93uf",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 3,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+              "name": "武术范型",
+              "type": "feat",
+              "identifier": "martial-archetype",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "2sp8e2prwjpuoh32",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 5,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+              "name": "额外攻击 (战士)",
+              "type": "feat",
+              "identifier": "extra-attack-fighter",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      },
+      {
+        "id": "wt78ty9vqkbx2how",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": null,
+        "type": "ScaleValue",
+        "title": "动作如潮次数",
+        "configuration": {
+          "identifier": "action-surge",
+          "type": "number",
+          "distance": {
+            "units": ""
+          },
+          "current": {
+            "value": 1
+          }
+        }
+      },
+      {
+        "id": "u5uzss2r9fuygelv",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": null,
+        "type": "ScaleValue",
+        "title": "额外攻击次数",
+        "configuration": {
+          "identifier": "extra-attack",
+          "type": "number",
+          "distance": {
+            "units": ""
+          },
+          "current": {
+            "value": 1
+          }
+        }
+      },
+      {
+        "id": "6KJ1wz4CENVjg4Mo",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "weapon:sim",
+            "weapon:mar"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "WZLiDroNw8S2pZvD",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "armor:lgt",
+            "armor:med",
+            "armor:hvy",
+            "armor:shl"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "rvfuW71lYEeJW7HS",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 4,
+        "type": "AbilityScoreImprovement",
+        "title": "属性值提升",
+        "configuration": {
+          "points": 2,
+          "fixed": {
+            "str": 0,
+            "dex": 0,
+            "con": 0,
+            "int": 0,
+            "wis": 0,
+            "cha": 0
+          },
+          "cap": 2,
+          "locked": [],
+          "recommendation": null
+        }
+      },
+      {
+        "id": "3o2s8ZVAyJd74CrP",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [
+            "saves:str",
+            "saves:con"
+          ],
+          "choices": []
+        }
+      },
+      {
+        "id": "JEZnz3P7ydbNAdwN",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "Trait",
+        "title": "",
+        "configuration": {
+          "mode": "default",
+          "allowReplacements": false,
+          "grants": [],
+          "choices": [
+            {
+              "count": 2,
+              "pool": [
+                "skills:acr",
+                "skills:ani",
+                "skills:ath",
+                "skills:his",
+                "skills:ins",
+                "skills:itm",
+                "skills:prc",
+                "skills:sur"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "lH5Y3fzDe7Mezemr",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "level": 1,
+        "type": "ItemChoice",
+        "title": "战斗风格 Fighting Style",
+        "configuration": {
+          "choices": {
+            "1": {
+              "count": 1,
+              "replacement": false
+            }
+          },
+          "allowDrops": false,
+          "type": "feat",
+          "pool": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+              "name": "战斗风格：防御 Fighting Style: Defense",
+              "type": "feat",
+              "identifier": "fighting-style-defense"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+              "name": "战斗风格：对决 Fighting Style: Dueling",
+              "type": "feat",
+              "identifier": "fighting-style-dueling"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+              "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+              "type": "feat",
+              "identifier": "fighting-style-great-weapon-fighting"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+              "name": "战斗风格：守护 Fighting Style:Protection",
+              "type": "feat",
+              "identifier": "fighting-style-protection"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+              "name": "战斗风格：箭术 Fighting Style: Archery",
+              "type": "feat",
+              "identifier": "fighting-style-archery"
+            },
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+              "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+              "type": "feat",
+              "identifier": "fighting-style-two-weapon-fighting"
+            }
+          ],
+          "spell": null,
+          "restriction": {
+            "type": "class",
+            "subtype": "fightingStyle",
+            "list": []
+          }
+        }
+      }
+    ]
+  },
+  "subclass": {
+    "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+    "name": "勇士 Champion",
+    "type": "subclass",
+    "identifier": "champion",
+    "spellcasting": {
+      "progression": "none",
+      "ability": "",
+      "preparation": {
+        "formula": ""
+      }
+    },
+    "advancements": [
+      {
+        "id": "9gd70onmans30zvr",
+        "sourceUuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+        "level": 3,
+        "type": "ItemGrant",
+        "title": "职业特性",
+        "configuration": {
+          "items": [
+            {
+              "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+              "name": "精通重击 Improved Critical",
+              "type": "feat",
+              "identifier": "improved-critical",
+              "optional": false
+            }
+          ],
+          "optional": false,
+          "spell": null
+        }
+      }
+    ]
+  },
+  "race": null,
+  "documents": [
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+      "name": "战士 Fighter",
+      "type": "class",
+      "identifier": "fighter",
+      "rules": "2014",
+      "description": "",
+      "descriptionTruncated": false,
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+      "name": "勇士 Champion",
+      "type": "subclass",
+      "identifier": "champion",
+      "rules": "2014",
+      "description": "勇士范型追求在肉体力量上登峰造极。选择此范型的人将战斗训练与强身健体相结合，令自己的攻击无坚不摧。",
+      "descriptionTruncated": false,
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+      "name": "回气 Second Wind",
+      "type": "feat",
+      "identifier": "second-wind",
+      "rules": "2014",
+      "description": "你拥有少量的精力储备，可以用来保护自己免受伤害。你可以在自己回合内用一个附赠动作恢复生命值，其总值为[[/r 1d10]]＋你的战士职业等级。你必须完成一次短休或长休才能再次使用该特性。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1",
+      "uses": {
+        "max": "1",
+        "spent": 0,
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ]
+      },
+      "activities": [
+        {
+          "type": "heal",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+      "name": "动作如潮 Action Surge",
+      "type": "feat",
+      "identifier": "action-surge",
+      "rules": "2014",
+      "description": "第2级起，你可以在短时间内突破极限，以使你在自己回合内执行一个额外的动作。 该特性在使用后必须完成一次短休或长休才能再次使用。第17级起，你可以在休息前使用两次该特性，但每个回合只能使用一次。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 2",
+      "uses": {
+        "max": "@scale.fighter.action-surge",
+        "spent": 0,
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ]
+      },
+      "activities": [
+        {
+          "type": "utility",
+          "consumption": {
+            "targets": [
+              {
+                "type": "itemUses",
+                "target": "",
+                "value": "1",
+                "scaling": {
+                  "mode": "",
+                  "formula": ""
+                }
+              }
+            ],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+      "name": "武术范型",
+      "type": "feat",
+      "identifier": "martial-archetype",
+      "rules": "2014",
+      "description": "第3级时，你选择一种范型以体现你的战斗风格和技巧。你可以从以下范型中选择其一。随后，你将在第3、第7、第10、第15、第18级获得所选范型的相应特性。 @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs01]{勇士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs02]{战斗大师} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs03]{奥法骑士} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs04]{紫龙骑士（SCAG）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs05]{武士（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs06]{魔射手（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs07]{骑兵（XGE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs08]{回音骑士（EGtW）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJs09]{符文骑士（TCE）} @UUID[Compendium.arcane-dnd5e-2014-automation.subclasses.NOdNl8paEppqJ",
+      "descriptionTruncated": true,
+      "requirements": "战士等级 3",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.ug1Y5YXiU65DLpsB",
+      "name": "额外攻击 (战士)",
+      "type": "feat",
+      "identifier": "extra-attack-fighter",
+      "rules": "2014",
+      "description": "第5级起，你在自己回合内执行攻击动作时可以发动两次攻击而非一次。 第11级后，你可以攻击三次。第20级后，你可以攻击四次。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 5",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.En7ex9752IkmvyKQ",
+      "name": "战斗风格：防御 Fighting Style: Defense",
+      "type": "feat",
+      "identifier": "fighting-style-defense",
+      "rules": "2014",
+      "description": "着装护甲时，你的AC获得 +1加值。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级 10，圣武士等级 2，游侠等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "战斗风格：防御",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.attributes.ac.bonus",
+              "mode": 2,
+              "value": "+1",
+              "priority": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.VoKRG6XqUxTz4rT3",
+      "name": "战斗风格：对决 Fighting Style: Dueling",
+      "type": "feat",
+      "identifier": "fighting-style-dueling",
+      "rules": "2014",
+      "description": "单手持用一把近战武器，且并未同时持用其他武器时，你用该武器攻击的伤害掷骰获得 +2加值。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级  10，圣武士等级  2，游侠等级 2，剑舞学院等级 3",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.bfBqO9i1IWHXezXk",
+      "name": "战斗风格：巨武器战斗 Fighting Style:Great Weapon Fighting",
+      "type": "feat",
+      "identifier": "fighting-style-great-weapon-fighting",
+      "rules": "2014",
+      "description": "双手持用一把近战武器发动攻击时，如果你的伤害掷骰掷出1或2，则可以选择重掷。不过哪怕其仍是1或2，你都必须接受重掷的数值。此外，该武器必须具有双手或两用属性。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8OGJqqmq5Vtx0QJy",
+      "name": "战斗风格：守护 Fighting Style:Protection",
+      "type": "feat",
+      "identifier": "fighting-style-protection",
+      "rules": "2014",
+      "description": "当某个你能看见的生物攻击你身边5尺内除你之外的目标时，你可以用反应迫使该攻击的攻击检定具有劣势。此时你必须持用盾牌。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级 10，圣武士等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [
+        {
+          "name": "",
+          "type": "utility",
+          "consumption": {
+            "targets": [],
+            "scaling": {
+              "allowed": false,
+              "max": ""
+            },
+            "spellSlot": true
+          }
+        }
+      ],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.uZjBfwzuVt0KO2iD",
+      "name": "战斗风格：箭术 Fighting Style: Archery",
+      "type": "feat",
+      "identifier": "fighting-style-archery",
+      "rules": "2014",
+      "description": "你使用远程武器进行攻击检定时具有 +2加值。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级 10，游侠等级 2",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "战斗风格：箭术",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "system.bonuses.rwak.attack",
+              "mode": 2,
+              "value": "+2",
+              "priority": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.9U4ePVABZME8Syk9",
+      "name": "战斗风格：双武器战斗 Fighting Style:Two-Weapon Fighting",
+      "type": "feat",
+      "identifier": "fighting-style-two-weapon-fighting",
+      "rules": "2014",
+      "description": "使用两把武器战斗时，你可以将相应属性调整值加到第二次攻击的伤害上。",
+      "descriptionTruncated": false,
+      "requirements": "战士等级 1，勇士等级  10，圣武士等级 2，游侠等级 2，剑舞学院等级 3",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": []
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+      "name": "精通重击 Improved Critical",
+      "type": "feat",
+      "identifier": "improved-critical",
+      "rules": "2014",
+      "description": "从你第3级选择此范型起，你的武器攻击在掷出19或20时即可造成重击。",
+      "descriptionTruncated": false,
+      "requirements": "勇士等级 3",
+      "uses": {
+        "max": "",
+        "spent": null,
+        "recovery": []
+      },
+      "activities": [],
+      "effects": [
+        {
+          "name": "精通重击",
+          "disabled": false,
+          "transfer": true,
+          "changes": [
+            {
+              "key": "flags.dnd5e.weaponCriticalThreshold",
+              "mode": 0,
+              "value": "19",
+              "priority": 20
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "fallbacks": [],
+  "unresolved": [],
+  "sourcePolicy": "Select roots with automation-pack preference; follow their exact advancement UUIDs without cross-pack replacement. Missing links are unresolved, not silently substituted.",
+  "scope": "Cumulative configured grants and choices from selected sources, not a completeness certification. Class and subclass contributions remain separate; no text conflict arbitration. Choices require selection. Importing class Items does not apply all advancements; write and verify normal proficiencies/resources."
+}

@@ -156,7 +156,7 @@ app.whenReady().then(async () => {
   report.status = "passed"; save(); socket.close();
   console.log(JSON.stringify({ status: report.status, output })); app.exit(0);
 }).catch(async error => {
-  report.status = "failed"; report.error = String(error.message).replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]"); save();
+  report.status = "failed"; report.error = String(error.message).replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]"); report.errorStack = String(error.stack ?? '').replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]"); save();
   try { await host?.stop(); host?.dispose(); } catch {}
   socket?.close(); console.error(JSON.stringify({ status: report.status, output, error: report.error })); app.exit(1);
 });

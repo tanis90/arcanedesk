@@ -1,0 +1,786 @@
+{
+  "status": "completed-initial-pilot",
+  "date": "2026-09-09",
+  "hypothesis": "One read-only source progression projection reduces native JS discovery/expansion work",
+  "primaryModel": "qwen3.7-plus",
+  "supplementaryModel": "deepseek-v4.1-flash-expires-on-0910",
+  "samplesPerModelPerArm": 1,
+  "taskTimeoutMs": 180000,
+  "experienceTargetMs": 120000,
+  "skillAndToolSourcesFrozen": true,
+  "trials": [
+    {
+      "model": "qwen3.7-plus",
+      "profile": "arcane-prep-play-aliyun-qa",
+      "rawReport": "benchmark-1788935818079.json",
+      "arm": "native_skill_build_js",
+      "session": "2026-09-09T06-37-05-659Z_01a084e2-68fb-79ad-957c-c34e43d5cfdf.jsonl",
+      "ms": 160189.12529999999,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "toolCount": 12,
+      "toolMs": 2100.836399999971,
+      "allToolsSettled": true,
+      "errors": [],
+      "modelToolRounds": 10,
+      "queryCalls": [],
+      "jsChars": 13899,
+      "reads": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md",
+        "fvtt-build-query/SKILL.md"
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "observed": {
+        "movement": {
+          "walk": "30",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "cr": 5,
+        "actorCount": 1,
+        "itemCount": 17
+      },
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "RscGAbPKllQffyIv",
+          "H3fmwEsZud0yknEm",
+          "SHVeDB2zWCps69kN"
+        ],
+        "sceneId": "Bpq883ptE1xH9Rmi",
+        "label": "PB1788935818079-0-npc_wizard-native_skill_build_js",
+        "newName": "PB1788935818079-0-npc_wizard-native_skill_build_js 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "buildSkill": {
+        "path": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-aliyun-qa\\benchmark-1788935818079\\0-npc_wizard-native_skill_build_js\\skills\\fvtt-build-query\\SKILL.md",
+        "sha256": "4afa1e9818a28283316f73d05bf4798c8661744e568224bbb30db612888654d6"
+      },
+      "buildToolHash": "53ca256329fe61f68cc636f33bd022ba4bc9de81d3cadd6549e3c9ad313aa246",
+      "rulesSkill": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "requestModes": [
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "normalizedSystemPromptHash": "b44a8e3f01267f2709c327bddde52f9b9b77d487328444d06ee0f7f068f59d9d",
+      "usage": {
+        "input": 38112,
+        "output": 8604,
+        "reasoning": 3345,
+        "cacheRead": 139264
+      }
+    },
+    {
+      "model": "qwen3.7-plus",
+      "profile": "arcane-prep-play-aliyun-qa",
+      "rawReport": "benchmark-1788936116469.json",
+      "arm": "native_skill_build_tool",
+      "session": "2026-09-09T06-42-03-425Z_01a084e6-f421-7d57-8ccd-69a7b72bb97e.jsonl",
+      "ms": 136397.4669,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "toolCount": 9,
+      "toolMs": 1229.3354999999738,
+      "allToolsSettled": true,
+      "errors": [],
+      "modelToolRounds": 6,
+      "queryCalls": [
+        {
+          "ms": 94.97549999999683,
+          "isError": false,
+          "bytes": 4446
+        }
+      ],
+      "jsChars": 12742,
+      "reads": [
+        "arcane-actor-update/SKILL.md",
+        "fvtt-native-npc/SKILL.md",
+        "fvtt-build-query/SKILL.md"
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "observed": {
+        "movement": {
+          "units": null,
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "cr": 5,
+        "actorCount": 1,
+        "itemCount": 16
+      },
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "S70U9vLXEGDVLQZq",
+          "GBHitVM7CkaNBmmu",
+          "RdsgD7c314bPYeJh"
+        ],
+        "sceneId": "Q1Gac2kU8WYjhHPQ",
+        "label": "PB1788936116469-0-npc_wizard-native_skill_build_tool",
+        "newName": "PB1788936116469-0-npc_wizard-native_skill_build_tool 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "buildSkill": {
+        "path": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-aliyun-qa\\benchmark-1788936116469\\0-npc_wizard-native_skill_build_tool\\skills\\fvtt-build-query\\SKILL.md",
+        "sha256": "4afa1e9818a28283316f73d05bf4798c8661744e568224bbb30db612888654d6"
+      },
+      "buildToolHash": "53ca256329fe61f68cc636f33bd022ba4bc9de81d3cadd6549e3c9ad313aa246",
+      "rulesSkill": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write",
+        "foundry_build_query"
+      ],
+      "requestModes": [
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": true,
+          "thinking": "omitted",
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "normalizedSystemPromptHash": "b44a8e3f01267f2709c327bddde52f9b9b77d487328444d06ee0f7f068f59d9d",
+      "usage": {
+        "input": 30858,
+        "output": 7593,
+        "reasoning": 2706,
+        "cacheRead": 89216
+      }
+    },
+    {
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "profile": "arcane-prep-play-deepseek-gray-qa",
+      "rawReport": "benchmark-1788936283972.json",
+      "arm": "native_skill_build_tool",
+      "session": "2026-09-09T06-44-50-191Z_01a084e9-7f8f-75e3-ae68-d64e5203021e.jsonl",
+      "ms": 28891.7842,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "toolCount": 8,
+      "toolMs": 439.8094000000001,
+      "allToolsSettled": true,
+      "errors": [],
+      "modelToolRounds": 5,
+      "queryCalls": [
+        {
+          "ms": 9.30160000000069,
+          "isError": false,
+          "bytes": 4446
+        }
+      ],
+      "jsChars": 5008,
+      "reads": [
+        "arcane-actor-update/SKILL.md",
+        "fvtt-native-npc/SKILL.md",
+        "fvtt-build-query/SKILL.md"
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "observed": {
+        "movement": {
+          "walk": "30",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "cr": 1,
+        "actorCount": 1,
+        "itemCount": 8
+      },
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "XkApKiwnt6jPTSoW",
+          "eZoZ3wxaANQ7N4ai",
+          "x5e4NTE5dEULhL1v"
+        ],
+        "sceneId": "cdkVB91rQGHuLgkV",
+        "label": "PB1788936283972-0-npc_wizard-native_skill_build_tool",
+        "newName": "PB1788936283972-0-npc_wizard-native_skill_build_tool 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "buildSkill": {
+        "path": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-gray-qa\\benchmark-1788936283972\\0-npc_wizard-native_skill_build_tool\\skills\\fvtt-build-query\\SKILL.md",
+        "sha256": "4afa1e9818a28283316f73d05bf4798c8661744e568224bbb30db612888654d6"
+      },
+      "buildToolHash": "53ca256329fe61f68cc636f33bd022ba4bc9de81d3cadd6549e3c9ad313aa246",
+      "rulesSkill": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write",
+        "foundry_build_query"
+      ],
+      "requestModes": [
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        }
+      ],
+      "normalizedSystemPromptHash": "b44a8e3f01267f2709c327bddde52f9b9b77d487328444d06ee0f7f068f59d9d",
+      "usage": {
+        "input": 17375,
+        "output": 6221,
+        "reasoning": 3667,
+        "cacheRead": 72704
+      }
+    },
+    {
+      "model": "deepseek-v4.1-flash-expires-on-0910",
+      "profile": "arcane-prep-play-deepseek-gray-qa",
+      "rawReport": "benchmark-1788936283972.json",
+      "arm": "native_skill_build_js",
+      "session": "2026-09-09T06-45-19-696Z_01a084e9-f2d0-7890-88d0-f71328e99ab2.jsonl",
+      "ms": 96264.0416,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "toolCount": 26,
+      "toolMs": 939.1826999999685,
+      "allToolsSettled": true,
+      "errors": [
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "modelToolRounds": 22,
+      "queryCalls": [],
+      "jsChars": 19056,
+      "reads": [
+        "arcane-actor-update/SKILL.md",
+        "fvtt-build-query/SKILL.md",
+        "fvtt-native-npc/SKILL.md"
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "observed": {
+        "movement": {
+          "walk": "30",
+          "units": "ft",
+          "hover": false,
+          "ignoredDifficultTerrain": []
+        },
+        "cr": 1,
+        "actorCount": 1,
+        "itemCount": 16
+      },
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "1fv1X0vw4wkkPmql",
+          "egS3I5UfFFz5icFJ",
+          "NSeZwjuuBPBv3xhr"
+        ],
+        "sceneId": "3x32wJ0xdtLzcTcl",
+        "label": "PB1788936283972-0-npc_wizard-native_skill_build_js",
+        "newName": "PB1788936283972-0-npc_wizard-native_skill_build_js 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "buildSkill": {
+        "path": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-gray-qa\\benchmark-1788936283972\\0-npc_wizard-native_skill_build_js\\skills\\fvtt-build-query\\SKILL.md",
+        "sha256": "4afa1e9818a28283316f73d05bf4798c8661744e568224bbb30db612888654d6"
+      },
+      "buildToolHash": "53ca256329fe61f68cc636f33bd022ba4bc9de81d3cadd6549e3c9ad313aa246",
+      "rulesSkill": null,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "requestModes": [
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        }
+      ],
+      "normalizedSystemPromptHash": "b44a8e3f01267f2709c327bddde52f9b9b77d487328444d06ee0f7f068f59d9d",
+      "usage": {
+        "input": 29584,
+        "output": 19045,
+        "reasoning": 11419,
+        "cacheRead": 565632
+      }
+    }
+  ],
+  "preflightIssues": [
+    {
+      "report": "benchmark-1788935818079.json",
+      "error": "Ablated tool set changed\n+ actual - expected\n\n  [\n    'browser_evaluate',\n    'edit',\n    'foundry_actor_get',\n    'foundry_actor_grant_items',\n-   'foundry_build_query',\n    'foundry_conditions_set',\n    'foundry_content_search',\n    'foundry_image',\n    'foundry_open',\n    'foundry_play_context',\n",
+      "unsubmittedTrials": [
+        {
+          "arm": "native_skill_build_tool",
+          "state": "prepared",
+          "requestCount": 0,
+          "fixture": {
+            "protectedEffects": [],
+            "actorIds": [
+              "JKPIdEkszpggabH5",
+              "ocx0pppaVRsjBJ9I",
+              "RYYNpkBVkNl84FDB"
+            ],
+            "sceneId": "YXBuVyBZk6Gzekrf",
+            "label": "PB1788935818079-0-npc_wizard-native_skill_build_tool",
+            "newName": "PB1788935818079-0-npc_wizard-native_skill_build_tool 霜牙",
+            "originalSceneId": "A6V8lDKFVtg36CDP"
+          }
+        }
+      ]
+    },
+    {
+      "report": "benchmark-1788936010820.json",
+      "error": "Ablated tool set changed\n+ actual - expected\n\n  [\n    'browser_evaluate',\n    'edit',\n    'foundry_actor_get',\n    'foundry_actor_grant_items',\n-   'foundry_build_query',\n    'foundry_conditions_set',\n    'foundry_content_search',\n    'foundry_image',\n    'foundry_open',\n    'foundry_play_context',\n",
+      "unsubmittedTrials": [
+        {
+          "arm": "native_skill_build_tool",
+          "state": "prepared",
+          "requestCount": 0,
+          "fixture": {
+            "protectedEffects": [],
+            "actorIds": [
+              "DKweBd0w1TBXYXwq",
+              "FDIRMo1J7Rk4n2y3",
+              "yVwthbH7iQavCYhm"
+            ],
+            "sceneId": "6TAFyL01qMzYqS9q",
+            "label": "PB1788936010820-0-npc_wizard-native_skill_build_tool",
+            "newName": "PB1788936010820-0-npc_wizard-native_skill_build_tool 霜牙",
+            "originalSceneId": "A6V8lDKFVtg36CDP"
+          }
+        }
+      ]
+    },
+    {
+      "report": "benchmark-1788936093097.json",
+      "error": "Ablated tool set changed\n+ actual - expected\n\n  [\n    'browser_evaluate',\n    'edit',\n    'foundry_actor_get',\n    'foundry_actor_grant_items',\n    'foundry_build_query',\n+   'foundry_build_query',\n    'foundry_conditions_set',\n    'foundry_content_search',\n    'foundry_image',\n    'foundry_open',\n    'foundry_play_context',\n",
+      "unsubmittedTrials": [
+        {
+          "arm": "native_skill_build_tool",
+          "state": "prepared",
+          "requestCount": 0,
+          "fixture": {
+            "protectedEffects": [],
+            "actorIds": [
+              "rJfzSJhzlwjPUfRS",
+              "kZqP4KXuaDf8P2GC",
+              "UMHNUdLQLX6HrqoU"
+            ],
+            "sceneId": "ngBztZJIAhCoMAzo",
+            "label": "PB1788936093097-0-npc_wizard-native_skill_build_tool",
+            "newName": "PB1788936093097-0-npc_wizard-native_skill_build_tool 霜牙",
+            "originalSceneId": "A6V8lDKFVtg36CDP"
+          }
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "unitTests": 2,
+    "liveReadOnlySmoke": "2014 class/race, level cutoff, scale threshold, UUID resolution, movement and unchanged Actor/Item counts passed"
+  },
+  "limitations": [
+    "Single pair per model; no statistical stability claim.",
+    "User prompt now says preserve defaults; old trials not mixed as controls.",
+    "Same guides and query algorithm in both arms, candidate adds one tool. JS models may deviate from guidance/source preference.",
+    "Nine core checks pass but do not certify all class mechanics or actual spell execution.",
+    "Qwen candidate omitted movement despite tool returning it. CR is not an evaluation criterion.",
+    "Tool covers class/race advancement projection, not subclass application, complete spell selection or NPC advancement execution.",
+    "World and provider caches not reset; provider latency not model-only performance.",
+    "Three candidate preparation failures occurred before any model request; not scored or replayed as model trials."
+  ],
+  "evaluationPolicyRevision": {
+    "date": "2026-09-09",
+    "crScored": false,
+    "reason": "User excludes CR evaluation for player-class character building; retain raw observed values without quality judgment",
+    "coreScoresUnchanged": true
+  }
+}
