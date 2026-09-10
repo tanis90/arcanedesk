@@ -65,6 +65,7 @@
       "scripts/archive-zip.mjs",
       "distribution/community-distribution.json",
       "generated/desktop-release.json",
+      "generated/region.json",
       "generated/renderer-assets/**/*",
       "LICENSE",
       "NOTICE",

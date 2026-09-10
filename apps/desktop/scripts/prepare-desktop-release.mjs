@@ -104,7 +104,20 @@ const manifest = {
 
 if (process.env.ARCANE_RELEASE_PUBLISHED_AT) manifest.publishedAt = process.env.ARCANE_RELEASE_PUBLISHED_AT;
 
+// 构建期 region flavor（国际化方案 D1）：ARCANE_BUILD_REGION 默认 cn，生成
+// 包内 generated/region.json，运行期由 src/main/region.mjs 读取。
+const buildRegion = String(process.env.ARCANE_BUILD_REGION ?? "cn").trim() || "cn";
+if (!["cn", "intl"].includes(buildRegion)) {
+  throw new Error(`ARCANE_BUILD_REGION must be one of cn/intl; got: ${buildRegion}`);
+}
+const regionManifest = { schemaVersion: 1, region: buildRegion };
+
 const output = path.join(desktopRoot, "generated", "desktop-release.json");
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-process.stdout.write(`Prepared Desktop release ${releaseId} (${electronRuntime.electron}/${electronRuntime.node})\n`);
+fs.writeFileSync(
+  path.join(desktopRoot, "generated", "region.json"),
+  `${JSON.stringify(regionManifest, null, 2)}\n`,
+  "utf8",
+);
+process.stdout.write(`Prepared Desktop release ${releaseId} (${electronRuntime.electron}/${electronRuntime.node}, region ${buildRegion})\n`);
