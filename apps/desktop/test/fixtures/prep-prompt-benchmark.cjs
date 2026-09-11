@@ -10,20 +10,20 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
   const characterSuite=process.argv.includes("--character-suite");
   const character=characterSuite?(comparison==="catalog"?require("../character-benchmark/catalog-model-adapter.cjs"):require("../character-benchmark/model-adapter.cjs"))(evaluate):null;
-  if(characterSuite)assert.ok(["build-query","catalog"].includes(comparison));
+  if(characterSuite)assert.equal(comparison,"catalog");
   const npcCases=[...(character?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
   const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","build-query","catalog"].includes(comparison));
-  if(["native-skill","skill-revision","pack-skill","rules-ablation","build-query","catalog"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
+  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","catalog"].includes(comparison));
+  if(["native-skill","skill-revision","pack-skill","rules-ablation","catalog"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
   const nativeRevision=process.argv.includes("--native-npc");
   const withRulesSkill=process.argv.includes("--rules-skill");
   if(withRulesSkill)assert.equal(comparison,"pack-skill","Rules skill pilot uses the production pack-skill candidate");
   if(nativeRevision)assert.ok(comparison==="revision"&&cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
-  const arms=comparison==="build-query"?["native_skill_build_js","native_skill_build_tool"]:comparison==="catalog"?["native_skill_catalog_js","native_skill_catalog_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  const arms=comparison==="catalog"?["native_skill_catalog_js","native_skill_catalog_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
   if(process.argv.includes("--reverse-first"))arms.reverse();
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
@@ -40,7 +40,6 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="pack-skill"){report.experiment.kind="native NPC guide versus same guide plus production actor skill";report.experiment.promptPolicy="Same tools and native NPC guide; candidate additionally exposes the unchanged production arcane-actor-update skill and asks the model to read it for source discovery";}
   if(comparison==="rules-ablation"){report.experiment.kind="paired SRD rules skill ablation";report.experiment.promptPolicy="Same native NPC guide, production pack guide and tools; only candidate receives SRD rules skill and read instruction";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
-  if(comparison==="build-query"){report.experiment.kind="source progression query tool ablation";report.experiment.promptPolicy="Same native, pack and build-query guides; candidate additionally exposes one read-only query tool; no SRD rules skill";}
   if(comparison==="catalog"){report.experiment.kind="catalog query ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same write tools; only search/list/detail availability differs";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-content-catalog.cjs"))).digest("hex");}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?"character-v8-catalog-controlled":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
@@ -59,7 +58,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     assert.equal(previous.status,"failed");assert.ok(["Ambiguous run retained for inspection; no automatic retry/cleanup","InvalidStateError: The source image could not be decoded."].includes(previous.error));
     assert.equal(previous.experiment.candidateCommit,report.experiment.candidateCommit);
     assert.equal(previous.experiment.comparison,comparison);assert.equal(previous.experiment.baselineCommit,report.experiment.baselineCommit);assert.deepEqual(previous.experiment.cases,cases);
-    assert.ok(!["pack-skill","rules-ablation","build-query","catalog"].includes(comparison),"Skill injection experiments start fresh blocks; do not resume unfrozen sources");
+    assert.ok(!["pack-skill","rules-ablation","catalog"].includes(comparison),"Skill injection experiments start fresh blocks; do not resume unfrozen sources");
     assert.equal(previous.experiment.promptMode,promptMode);assert.equal(previous.experiment.suiteVersion,report.experiment.suiteVersion);assert.equal(previous.experiment.imageSha256,imageHash);
     assert.equal(previous.fixtureRun,report.fixtureRun);assert.equal(previous.experiment.samplesPerCase,samples);
     report.prepTrials=previous.prepTrials;report.experiment=previous.experiment;
@@ -113,11 +112,11 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
     if(nativeRevision){report.experiment.nativeSkillHash??=trial.skillHash;assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Native revision comparison must freeze its skill");}
     const skillPaths=nativeSkillArm?[path.dirname(skillPath)]:[];
-    if(["pack-skill","rules-ablation","build-query","catalog"].includes(comparison)){
+    if(["pack-skill","rules-ablation","catalog"].includes(comparison)){
       report.experiment.nativeSkillHash??=trial.skillHash;
       assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Pack comparison must freeze the native guide");
     }
-    if(["native_skill_pack","native_skill_rules","native_skill_build_js","native_skill_build_tool","native_skill_catalog_js","native_skill_catalog_tool"].includes(arm)){
+    if(["native_skill_pack","native_skill_rules","native_skill_catalog_js","native_skill_catalog_tool"].includes(arm)){
       const sourcePath=path.resolve(__dirname,"../../skills/prep/arcane-actor-update/SKILL.md");
       const injectedPath=path.join(cwd,"skills/arcane-actor-update/SKILL.md");
       fs.mkdirSync(path.dirname(injectedPath),{recursive:true});fs.copyFileSync(sourcePath,injectedPath);
@@ -135,16 +134,6 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
         trial.rulesSkill={path:path.join(targetDir,"SKILL.md"),sha256,fileCount:files.length};skillPaths.push(targetDir);
       }
     }
-    if(["build-query","catalog"].includes(comparison)){
-      const sourcePath=path.join(__dirname,"prep-build-query-skill/SKILL.md");
-      const targetPath=path.join(cwd,"skills/fvtt-build-query/SKILL.md");
-      fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));
-      trial.buildSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};
-      trial.buildToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-build-query.cjs"))).digest("hex");
-      report.experiment.buildSkillHash??=trial.buildSkill.sha256;assert.equal(trial.buildSkill.sha256,report.experiment.buildSkillHash);
-      report.experiment.buildToolHash??=trial.buildToolHash;assert.equal(trial.buildToolHash,report.experiment.buildToolHash);
-      trial.prompt=trial.prompt.replace("其他未指定选项自行合理决定", "其他未指定项沿用系统或来源默认；必要选择没有默认时做最少的合理补充");
-    }
     if(comparison==="catalog"){
       const sourcePath=path.join(__dirname,"prep-content-catalog-skill/SKILL.md"),targetPath=path.join(cwd,"skills/fvtt-content-catalog/SKILL.md");
       fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));trial.catalogSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};report.experiment.catalogSkillHash??=trial.catalogSkill.sha256;assert.equal(trial.catalogSkill.sha256,report.experiment.catalogSkillHash);
@@ -156,15 +145,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
       providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
-    if(arm==="native_skill_build_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original(),require("./prep-build-query.cjs").createTool(evaluate)];}
     if(arm==="native_skill_catalog_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original().filter(t=>t.name!=="foundry_content_search"),...require("./prep-content-catalog.cjs").createTools(evaluate)];}
     setHost(host);await host.start({fresh:true});
-    if(arm==="native_skill_build_tool"){
-      // Test-only addition to Pi's explicit tool allowlist; production policy stays unchanged.
-      assert.ok(host.session._allowedToolNames instanceof Set);
-      host.session._allowedToolNames.add("foundry_build_query");
-      host.session._refreshToolRegistry();
-    }
     if(arm==="native_skill_catalog_tool"){for(const n of ["foundry_content_search","foundry_content_list","foundry_content_detail"])host.session._allowedToolNames.add(n);host.session._refreshToolRegistry();}
     if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
     trial.modelConfiguration={reasoning:host.session.model.reasoning,compat:host.session.model.compat??null};
@@ -179,11 +161,9 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(arm==="native_skill_catalog_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>n!=="foundry_content_search"));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
-    if(arm==="native_skill_build_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_build_query"])]);
     if(arm==="native_skill_catalog_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_content_search","foundry_content_list","foundry_content_detail"])]);
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
     const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(arm==="native_skill_catalog_js"&&n==="foundry_content_search")&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
-    if(arm==="native_skill_build_tool")expectedTools.push("foundry_build_query");
     if(arm==="native_skill_catalog_tool")expectedTools.push("foundry_content_search","foundry_content_list","foundry_content_detail");
     const uniqueExpectedTools=[...new Set(expectedTools)];
     assert.deepEqual([...trial.activeTools].sort(),uniqueExpectedTools.sort(),"Ablated tool set changed");
