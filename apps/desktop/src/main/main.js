@@ -31,7 +31,7 @@ import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 import { PanelSurfaceController } from "./panel-surface-controller.js";
-import { loadNotePayload } from "./md-reader-note.js";
+import { loadNotePayload, reloadNotePayload } from "./md-reader-note.js";
 
 // Pi shell tools and other Arcane-owned child processes inherit process.env.
 // Establish the Windows UTF-8 contract before creating any of them.
@@ -390,8 +390,9 @@ function destroyFoundryView(view, reason) {
 }
 
 /** 建 readerView:本地 md-reader.html + 专用小 preload(spec §7/§8)。
-    内容只由 main 侧推送(§3.5 不变量 5),页面自身不读盘,所以焦点在阅读器里按
-    Chromium 默认 F5 重载后,did-finish-load 再推一次内容就必然回来。 */
+    内容只由 main 侧推送(§3.5 不变量 5),页面自身不读盘:F5 被 before-input-event
+    接到控制器的 reloadSurface 重读磁盘;devtools Ctrl+R / 崩溃恢复造成的整页重载,
+    由 did-finish-load → onReaderReady 重读重推,内容都必然回来。 */
 function createReaderView() {
   const view = new WebContentsView({
     webPreferences: {
@@ -408,6 +409,13 @@ function createReaderView() {
     if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
   });
   if (process.platform === "win32") bindFullScreenHotkey(contents); // 焦点在阅读器里 F11 也生效
+  bindReaderReloadHotkey(contents); // 焦点在阅读器里 F5 = 重读当前笔记(spec §4.3)
+  denyWindowOpenToSystemBrowser(contents); // target="_blank" 交系统浏览器,不开裸窗口(N14)
+  // 与 foundryView 同款崩溃处理:崩溃后 isDestroyed() 仍是 false,这里记日志;
+  // 重建由控制器 isUsable() 的 isCrashed 检查在下次 F5/② 时完成(review BUG-4 同型,N5)
+  contents.on("render-process-gone", (_event, details) => {
+    console.error("[reader] renderer process gone:", details?.reason ?? "unknown");
+  });
   contents.on("did-finish-load", () => {
     if (contents.isDestroyed()) return;
     panelSurfaces?.onReaderReady();
@@ -487,7 +495,12 @@ async function loadFoundryPage(url) {
   // view 仍可能被销毁/重建,无条件解引用 webContents 会抛 TypeError(review F3)。
   const contents = foundryView()?.webContents;
   if (!contents || contents.isDestroyed() || contents.isCrashed()) {
-    return { ok: false, summary: `ERROR: ${url} not loaded: the panel view is gone` };
+    // 与其他 IPC 错误同款的 error 字段:chat 的 F5 只据 result.error 判定失败(N3)
+    return {
+      ok: false,
+      error: err("err.panel.viewGone", { url }),
+      summary: `ERROR: ${url} not loaded: the panel view is gone`,
+    };
   }
   foundryTargetUrl = url;
   const failedPage = async () => {
@@ -599,6 +612,26 @@ function bindFullScreenHotkey(webContents) {
   });
 }
 
+/** 阅读器里的 F5:surface 感知重载(spec §4.3),走控制器重读当前笔记,而不是整页 reload。
+    不带修饰键才接管:Ctrl+R 等组合留给 devtools,整页重载由 onReaderReady 重读兜底(N8)。 */
+function bindReaderReloadHotkey(webContents) {
+  webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || input.key !== "F5") return;
+    if (input.control || input.alt || input.shift || input.meta) return;
+    event.preventDefault();
+    void panelSurfaces?.reloadSurface();
+  });
+}
+
+/** target="_blank" / window.open 不在应用内开裸 Chromium 窗口:http(s) 交给系统浏览器,
+    其余一律拒绝(N14)。foundryView 故意不挂——Foundry 是真实 web 应用,弹窗行为归它自己。 */
+function denyWindowOpenToSystemBrowser(contents) {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+}
+
 function createWindow() {
   // mac 不能摘菜单:macOS 的 Cmd+C/V/A/Z 靠菜单 role 承载,null 菜单 = 输入框
   // 复制粘贴全废。darwin 装最小骨架(应用菜单带 Cmd+Q + 预置 Edit 菜单);
@@ -646,6 +679,8 @@ function createWindow() {
   });
   if (isDev) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (process.platform === "win32") bindFullScreenHotkey(mainWindow.webContents);
+  // chat 气泡里的 target="_blank" 链接(markdown.js 渲染)交系统浏览器打开(N14)
+  denyWindowOpenToSystemBrowser(mainWindow.webContents);
 
   const relayout = () => layoutViews();
   mainWindow.on("resize", relayout);
@@ -724,12 +759,16 @@ app.whenReady().then(async () => {
     // 而"关掉面板再打开就从远端 world 掉回 localhost:30000"是既有缺陷,在这里一并修掉。
     loadFoundry: () => openFoundryView(foundryTargetUrl),
     reloadFoundry: async () => {
-      const view = foundryView();
-      if (!view || view.webContents.isDestroyed()) return { ok: false };
+      // 崩掉的 view 先经控制器重建(N3):只查 isDestroyed 会让崩溃的 Foundry
+      // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
+      // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
+      const view = panelSurfaces.ensureFoundryView();
       return loadFoundryPage(/^https?:/.test(view.webContents.getURL()) ? view.webContents.getURL() : foundryTargetUrl);
     },
     // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
     readNote: rawPath => loadNotePayload(rawPath, noteBaseDir()),
+    // F5/① 恢复的重读:按打开时快照的 absolute + baseDir 复检,不随当前 cwd 漂移(N4)。
+    rereadNote: (absolute, baseDir) => reloadNotePayload(absolute, baseDir),
   });
   // 遥测先于窗口内的 Agent/Foundry 初始化失败也要能安全关闭(§16.1)
   try {

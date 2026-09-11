@@ -439,6 +439,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "无法打开 {url}:{error}",
     "err.panel.inspectFailed": "页面已打开,但无法检查:{error}",
     "err.panel.notFoundry": "{url} 不是 Foundry Virtual Tabletop 页面",
+    "err.panel.viewGone": "面板视图已销毁,{url} 未能加载",
     "err.permission.systemDenied": "{media} 的系统权限被拒绝",
     "err.prep.invalidDir": "备团目录不存在或不是目录:{dir}",
 
@@ -880,6 +881,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "Could not open {url}: {error}",
     "err.panel.inspectFailed": "The page opened but could not be inspected: {error}",
     "err.panel.notFoundry": "{url} is not a Foundry Virtual Tabletop page",
+    "err.panel.viewGone": "The panel view is gone; {url} was not loaded",
     "err.permission.systemDenied": "System permission for {media} was denied",
     "err.prep.invalidDir": "The prep path does not exist or is not a directory: {dir}",
 
