@@ -134,10 +134,13 @@ export class TaskCoordinator {
     if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
     const executionText = prepare ? prepare(text, images) : text;
     const supplement = this.busy;
+    // 投递方式只在"补充且 SDK 正在流式"时存在;busy 但非流式(如等调度)时 input 停留 app 层,delivery=null。
+    const streaming = supplement && Boolean(this.adapter.isStreaming?.());
+    const delivery = streaming ? this.adapter.streamingDelivery?.() ?? "steer" : null;
     const task = supplement ? this.task : { id: randomUUID(), state: this.scheduler ? "queued" : "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
-    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
+    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null, delivery };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
-      taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
+      taskId: task.id, disposition: supplement ? "supplement" : "new_task", delivery };
     const record = { type: "accepted", commandId, fingerprint, input, task, ack };
     const replaced = this.inputs.get(replacesInputId);
     const replaceId = replaced?.state === "interrupted" ? replaced.id : null;
@@ -153,8 +156,8 @@ export class TaskCoordinator {
     this.emit({ type: "task_state", task: { ...task } });
     this.emit({ type: "input_state", inputId: input.id, commandId, taskId: task.id, state: "accepted" });
     if (!this.run) this.schedule();
-    else if (supplement && this.adapter.isStreaming?.()) {
-      this.queueSteer(input);
+    else if (streaming) {
+      this.queueInput(input);
     }
     return ack;
   }
@@ -172,10 +175,12 @@ export class TaskCoordinator {
     this.run.catch(() => {});
   }
 
-  queueSteer(input) {
+  queueInput(input) {
     this.queueing = input;
+    // 缺 followUp 能力的 adapter(旧 mock)回退 steer,与 streamingDelivery 的 "steer" 默认值一致。
+    const deliver = input.delivery === "followUp" && this.adapter.followUp ? this.adapter.followUp : this.adapter.steer;
     let pending;
-    try { pending = this.adapter.steer(input.executionText ?? input.text, input.images); }
+    try { pending = deliver.call(this.adapter, input.executionText ?? input.text, input.images); }
     catch { pending = Promise.reject(new Error("Unable to queue input")); }
     this.queueing = null;
     const write = Promise.resolve(pending).catch(() => {
@@ -187,9 +192,13 @@ export class TaskCoordinator {
 
   observe(event) {
     if (!this.busy) return;
-    if (event.type === "queue_update" && this.queueing && event.steering?.length) {
-      this.queueing.expandedText = event.steering.at(-1);
-      this.setInputState(this.queueing, "queued");
+    if (event.type === "queue_update" && this.queueing) {
+      // 两模式各只写一条队列;按本次投递方式读对应数组,取末位(刚压入的那条)。
+      const queued = this.queueing.delivery === "followUp" ? event.followUp : event.steering;
+      if (queued?.length) {
+        this.queueing.expandedText = queued.at(-1);
+        this.setInputState(this.queueing, "queued");
+      }
     }
     if (event.type === "message_start" && event.message?.role === "user") {
       const text = messageText(event.message);

@@ -11,6 +11,7 @@ export const EVENT_NAMES = new Set([
   "input.submitted",
   "turn.started",
   "turn.steered",
+  "turn.queued",
   "turn.aborted",
   "turn.summary",
   "model.completed",
@@ -264,6 +265,7 @@ export const buildEventData = {
   }),
   "turn.started": ({ source }) => ({ source: String(source) }),
   "turn.steered": ({ elapsedBucket: elapsed }) => ({ elapsed_bucket: String(elapsed) }),
+  "turn.queued": ({ elapsedBucket: elapsed }) => ({ elapsed_bucket: String(elapsed) }),
   "turn.aborted": ({ elapsedBucket: elapsed, trigger }) => ({
     elapsed_bucket: String(elapsed),
     trigger: String(trigger),

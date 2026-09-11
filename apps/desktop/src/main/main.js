@@ -760,6 +760,7 @@ app.whenReady().then(async () => {
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate", "request_user_input"],
         fence: true,
+        streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },
     }); } }),
   };
@@ -1363,7 +1364,11 @@ app.whenReady().then(async () => {
       };
       const result = host.submitInput(message, images, payload?.commandId, prepare, payload?.replacesInputId);
       if (result.ok && !result.duplicate) {
-        if (result.disposition !== "new_task") host.telemetry?.turnSteered(mode);
+        if (result.disposition !== "new_task") {
+          // delivery="followUp" 是排队(备团);null/"steer" 维持原 turnSteered 口径(见 spec §3④)。
+          if (result.delivery === "followUp") host.telemetry?.turnQueued(mode);
+          else host.telemetry?.turnSteered(mode);
+        }
         host.telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
       }
       return { ...result, ...modeController.publicSnapshot(context) };
