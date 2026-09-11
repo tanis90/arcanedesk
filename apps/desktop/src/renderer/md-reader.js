@@ -1,8 +1,9 @@
 // 右屏 Markdown 阅读器页(md-reader-spec §4.3/§5)。
 //
 // 这个页面不读盘、不持久化、不自己决定显示什么:内容全部由 main 侧一条
-// arcane-reader:content 推送供给(§3.5 不变量 5)。因此 Chromium 默认 F5 重载后
-// did-finish-load 会再推一次,内容必然回来,不需要为刷新另设通道。
+// arcane-reader:content 推送供给(§3.5 不变量 5)。F5 由 main 侧接管成 surface 感知的
+// 重读文件再推送;真发生页面重载时,did-finish-load 触发 onReaderReady,main 按
+// lastContent 重推一遍,内容必然回来,不需要为刷新另设通道。
 //
 // 与 chat 侧共用 markdown.js 的渲染管线,所以代码高亮、表格、公式、mermaid
 // 的输出与气泡里完全一致,这里零再设计(§5.3)。

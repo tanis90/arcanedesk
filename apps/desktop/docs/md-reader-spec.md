@@ -24,6 +24,11 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 - 不做编辑、不做文件监听热重载（重复点击 = 重新读取，即手动刷新）；
 - 不识别 UNC 路径（`\\server\share\x.md`）、带空格的路径、`x.md#anchor` 锚点跳转——匹配不到就保持纯文本（§4.2 的形态清单即 v1 全部支持面），有真实需求再演进。
 
+已知限制（接受现状，记录在案，不视为缺陷）：
+
+- mermaid 图不随主题热切换换肤——继承自 chat 的既有行为，需重新渲染才生效；
+- 英文句尾紧跟句点的路径（`...to summary.md.`）按保守边界刻意不链（§4.2 的形态清单即全部支持面）。
+
 ## 2. 架构前提（决定方案形态的事实）
 
 右屏 Foundry 面板是 main 进程的 `WebContentsView`（`main.js` 的 `openFoundryView`），原生压在整窗 chat 渲染层之上，renderer DOM 任何 z-index 都盖不住它。布局由 main 侧 `layoutViews()` 计算 bounds，chat 页面靠 `panel_layout` 事件设置 `margin-right` 让出右屏。
