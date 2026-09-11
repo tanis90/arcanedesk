@@ -4,7 +4,7 @@
 //
 // 本文件只 import node:fs / node:path,不碰 electron,因此可以直接被
 // test/md-reader-note.test.mjs 用 node --test 跑(含 Windows 盘符与越界形态)。
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 /** 只读笔记后缀;其余一律走错误页(§7 围栏第 3 步)。 */
@@ -71,6 +71,29 @@ function isInsideBase(target, base) {
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
+/** realpath 失败(目标不存在/读不动)返回 null:是否存在交给下游的 missing 流程判断。 */
+function realpathOrNull(target) {
+  try {
+    return realpathSync.native(target);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 词法围栏之外的符号链接复检(N1):cwd 里的 junction/symlink 指向外部时,
+ * path.resolve 的结果在词法上仍"在 base 内",必须对真实路径再跑一次 isInsideBase。
+ * base 自身也可能经由 junction 到达,所以两边都取 realpath。
+ * 任一侧 realpath 失败(文件/目录不存在)返回 null,交回词法结果走 missing 流程,不在这里崩。
+ * @returns {boolean | null} null = 无法判定(目标不存在)
+ */
+function realpathInsideBase(absolute, base) {
+  const realBase = realpathOrNull(base);
+  const realTarget = realpathOrNull(absolute);
+  if (!realBase || !realTarget) return null;
+  return isInsideBase(realTarget, realBase);
+}
+
 /**
  * 原始路径 → 可读绝对路径,并过 §7 围栏。
  * 绝对路径不用 baseDir 参与 resolve,但同样必须落在 baseDir 内(§4.2):
@@ -79,7 +102,7 @@ function isInsideBase(target, base) {
  *
  * @param {string} rawPath
  * @param {string | undefined} baseDir
- * @returns {{ ok: true, absolute: string, line: number | null } | { ok: false, reason: string, path?: string }}
+ * @returns {{ ok: true, absolute: string, baseDir: string, line: number | null } | { ok: false, reason: string, path?: string }}
  */
 export function resolveNote(rawPath, baseDir) {
   const normalized = normalizeNotePath(rawPath);
@@ -91,7 +114,10 @@ export function resolveNote(rawPath, baseDir) {
     ? path.resolve(normalized.path)
     : path.resolve(base, normalized.path);
   if (!isInsideBase(absolute, base)) return { ok: false, reason: "outside", path: normalized.path };
-  return { ok: true, absolute, line: normalized.line };
+  // 词法通过之后再过真实路径围栏:null(文件不存在)放行,由 readNote 报 missing
+  const realInside = realpathInsideBase(absolute, base);
+  if (realInside === false) return { ok: false, reason: "outside", path: normalized.path };
+  return { ok: true, absolute, baseDir: base, line: normalized.line };
 }
 
 /**
@@ -148,6 +174,8 @@ export function readNote(absolute, maxBytes = NOTE_MAX_BYTES) {
 
   const truncated = stats.size > maxBytes;
   let text = buffer.toString("utf8");
+  // UTF-8 BOM 剥掉:留给 marked 的话首个 ATX 标题解析不出来(N10)
+  if (text.startsWith("\uFEFF")) text = text.slice(1);
   // 截断点可能正好劈开一个多字节字符,尾部会留下替换字符:去掉,别让用户看见半个字
   if (truncated) text = text.replace(/\uFFFD+$/, "");
   if (!isProbablyUtf8(buffer, text)) return { ok: false, reason: "encoding" };
@@ -164,7 +192,7 @@ export function readNote(absolute, maxBytes = NOTE_MAX_BYTES) {
  *
  * @param {string} rawPath
  * @param {string | undefined} baseDir
- * @returns {{ name: string, text: string, truncated: boolean } | { error: string }}
+ * @returns {{ name: string, text: string, truncated: boolean, absolute: string, baseDir: string } | { error: string }}
  */
 export function loadNotePayload(rawPath, baseDir) {
   const resolved = resolveNote(rawPath, baseDir);
@@ -172,6 +200,29 @@ export function loadNotePayload(rawPath, baseDir) {
   // 对这四种情况是同一句人话,不值得为不可达的形态多写一条文案(R3/R4)。
   if (!resolved.ok) return { error: "outside" };
   const note = readNote(resolved.absolute);
+  if (!note.ok) return { error: note.reason };
+  // absolute/baseDir 给 main 侧的控制器快照用(N4):F5 与 ① 恢复按"打开时的工作目录"复检,
+  // 不随会话切换漂到新的 cwd;下发给页面的 payload 由控制器剥掉这两个字段。
+  return { name: note.name, text: note.text, truncated: note.truncated, absolute: resolved.absolute, baseDir: resolved.baseDir };
+}
+
+/**
+ * F5 / ① 恢复的重读:按打开时快照的 absolute + baseDir 复检后再读(N4)。
+ * 授权范围是"它当初被打开的那个目录",不是"现在活跃的 cwd"——会话/项目切换后
+ * cwd 已变,重新 resolve 原始路径会静默读到另一个项目的同名文件。
+ * 校验失败一律落成普通错误 payload,由阅读器错误页呈现。
+ *
+ * @param {string} absolute 打开时 resolveNote 给出的绝对路径
+ * @param {string} baseDir 打开时的工作目录
+ * @returns {{ name: string, text: string, truncated: boolean } | { error: string }}
+ */
+export function reloadNotePayload(absolute, baseDir) {
+  const realBase = baseDir ? realpathOrNull(path.resolve(baseDir)) : null;
+  const realTarget = absolute ? realpathOrNull(absolute) : null;
+  // 文件已不在 = missing;基准目录已不在 = 无法重建授权范围,按 outside 处理
+  if (!realTarget) return { error: "missing" };
+  if (!realBase || !isInsideBase(realTarget, realBase)) return { error: "outside" };
+  const note = readNote(realTarget);
   if (!note.ok) return { error: note.reason };
   return { name: note.name, text: note.text, truncated: note.truncated };
 }

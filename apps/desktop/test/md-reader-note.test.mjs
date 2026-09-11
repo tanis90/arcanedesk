@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,6 +10,7 @@ import {
   loadNotePayload,
   normalizeNotePath,
   readNote,
+  reloadNotePayload,
   resolveNote,
 } from "../src/main/md-reader-note.js";
 
@@ -107,6 +108,47 @@ test("resolveNote rejects another Windows drive as outside the working directory
   assert.equal(resolveNote("c:\\CAMPAIGN\\notes\\npc.md", base).ok, true);
 });
 
+// ---------- §7 围栏的符号链接复检(N1) ----------
+
+test("resolveNote rejects a junction/symlink inside the base that points outside (N1)", (t) => {
+  const base = workspace(t);
+  const outside = mkdtempSync(path.join(tmpdir(), "arcane-md-outside-"));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  writeFileSync(path.join(outside, "secret.md"), "# secret", "utf8");
+  const link = path.join(base, "notes", "link");
+  try {
+    // junction 在 Windows 上不需要管理员权限;POSIX 走 dir symlink
+    symlinkSync(outside, link, IS_WIN ? "junction" : "dir");
+  } catch (error) {
+    return t.skip(`symlink not permitted here: ${error.code ?? error.message}`);
+  }
+  // 词法上 "notes/link/secret.md" 在 base 内;真实路径已逃逸
+  assert.equal(resolveNote("notes/link/secret.md", base).reason, "outside");
+  assert.equal(loadNotePayload("notes/link/secret.md", base).error, "outside");
+});
+
+test("resolveNote still accepts a note under a junction that stays inside the base", (t) => {
+  const base = workspace(t);
+  mkdirSync(path.join(base, "real"), { recursive: true });
+  writeFileSync(path.join(base, "real", "npc.md"), "# NPC", "utf8");
+  try {
+    symlinkSync(path.join(base, "real"), path.join(base, "notes", "alias"), IS_WIN ? "junction" : "dir");
+  } catch (error) {
+    return t.skip(`symlink not permitted here: ${error.code ?? error.message}`);
+  }
+  // 内部 junction 不构成逃逸:base 与 target 取 realpath 后仍在内部
+  const resolved = resolveNote("notes/alias/npc.md", base);
+  assert.equal(resolved.ok, true);
+});
+
+test("resolveNote falls back to the missing flow when realpath fails on a nonexistent note", (t) => {
+  const base = workspace(t);
+  // 文件不存在 → realpath 抛错 → 不能崩,也不能误判 outside:readNote 报 missing
+  const resolved = resolveNote("notes/gone.md", base);
+  assert.equal(resolved.ok, true);
+  assert.equal(loadNotePayload("notes/gone.md", base).error, "missing");
+});
+
 // ---------- readNote:上限、截断、编码 ----------
 
 test("NOTE_MAX_BYTES is the 2 MB cap from the spec", () => {
@@ -136,6 +178,15 @@ test("readNote truncates at the cap without splitting a multi-byte character", (
   assert.equal(note.text.includes("\uFFFD"), false, "the split character must not reach the user");
 });
 
+test("readNote strips a UTF-8 BOM so the first heading parses (N10)", (t) => {
+  const base = workspace(t);
+  const absolute = path.join(base, "notes", "bom.md");
+  writeFileSync(absolute, "\uFEFF# 标题\n正文。", "utf8");
+  const note = readNote(absolute);
+  assert.equal(note.ok, true);
+  assert.equal(note.text.startsWith("# 标题"), true);
+});
+
 test("readNote reports missing files and directories alike", (t) => {
   const base = workspace(t);
   assert.deepEqual(readNote(path.join(base, "notes", "gone.md")), { ok: false, reason: "missing" });
@@ -162,7 +213,15 @@ test("readNote refuses binary and non-UTF-8 payloads instead of rendering garbag
 test("loadNotePayload returns rendered content for a reachable note", (t) => {
   const base = workspace(t);
   writeFileSync(path.join(base, "notes", "npc.md"), "# NPC", "utf8");
-  assert.deepEqual(loadNotePayload("`notes/npc.md`", base), { name: "npc.md", text: "# NPC", truncated: false });
+  const payload = loadNotePayload("`notes/npc.md`", base);
+  // absolute/baseDir 是 main 侧控制器快照用的(N4),页面拿到的副本由控制器剥掉
+  assert.deepEqual(payload, {
+    name: "npc.md",
+    text: "# NPC",
+    truncated: false,
+    absolute: path.join(base, "notes", "npc.md"),
+    baseDir: path.resolve(base),
+  });
 });
 
 test("loadNotePayload turns every fence and read failure into one of the three spec errors", (t) => {
@@ -182,4 +241,30 @@ test("loadNotePayload never throws away the click: a missing note still yields a
   assert.equal(typeof payload, "object");
   assert.equal("error" in payload, true);
   assert.equal("text" in payload, false);
+});
+
+// ---------- reloadNotePayload:F5/① 恢复按打开时的基准复检(N4) ----------
+
+test("reloadNotePayload re-reads the snapshot against its original base directory", (t) => {
+  const base = workspace(t);
+  const absolute = path.join(base, "notes", "npc.md");
+  writeFileSync(absolute, "# v1", "utf8");
+  const payload = reloadNotePayload(absolute, base);
+  assert.deepEqual(payload, { name: "npc.md", text: "# v1", truncated: false });
+  // 磁盘内容变了就拿到新内容:页面重载(devtools Ctrl+R)不靠缓存
+  writeFileSync(absolute, "# v2", "utf8");
+  assert.equal(reloadNotePayload(absolute, base).text, "# v2");
+});
+
+test("reloadNotePayload refuses a snapshot that no longer sits inside its base", (t) => {
+  const base = workspace(t);
+  const other = workspace(t); // 另一个"项目"的目录:同名文件但不是授权范围
+  writeFileSync(path.join(other, "notes", "npc.md"), "# other project", "utf8");
+  // 别的目录里的同名文件,拿当前 base 复检 = outside
+  assert.deepEqual(reloadNotePayload(path.join(other, "notes", "npc.md"), base), { error: "outside" });
+  // 基准目录没了 = 里面的笔记也随之不存在,按 missing 落到错误页
+  const gone = path.join(base, "vanished");
+  assert.deepEqual(reloadNotePayload(path.join(gone, "npc.md"), gone), { error: "missing" });
+  // 快照里的文件被删了 = missing(交给错误页,不抛错)
+  assert.deepEqual(reloadNotePayload(path.join(base, "notes", "gone.md"), base), { error: "missing" });
 });
