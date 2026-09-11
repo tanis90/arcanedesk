@@ -16,3 +16,12 @@
 轨迹初审：A1工具臂两次spell list（首次 class=Wizard 因大小写失败，重试wizard成功）；成功返回约78,215字符，输出仍偏大。A2只用3次search，未调用classFeature list，之后反复探索advancement与NPC API直到超时。B1只用2次search；B2/B3完全没用目录工具。六个工具试次均未使用detail，亦未使用classFeature list。因此B3更快不能解释为“工具被调用后提速”；本轮尤其反映采用率不足。
 
 目前不支持扩大生产工具面或宣称LLM收益已成立。优先修正入口说明与标识符大小写，让模型知道classFeature list替代哪些来源探索；保持源数据/完整机制可读，再审查列表重复数据。A2的写入后API探索和A3种族/步速错误不能仅靠加更多查询字段解决。需要单独冻结下一版，保留本轮成绩，验证是否实际调用查询并减少错误，再决定生产接入。以上是初审；尚未完成逐条调用归因和修复后复测。
+
+## Full A1-B3 rerun on D:\\FVTT_DATA COS (2026-09-11)
+
+- Target: `http://127.0.0.1:30000`, world `COS`, Foundry 13.351, dnd5e 5.3.3; login and readiness verified with `packages/fvtt-cli` over Chrome CDP 9230.
+- Batch: `C:\\Users\\yangqi\\AppData\\Local\\Temp\\deepseek-flash-full-178910\\manifest.json`.
+- JS arm passed 6/6. Catalog-tool arm passed 4/6: A2, B1, B2, B3 passed; A1 failed `hp.full,movement.walk`; A3 failed `skills.abilities,resource.channel-divinity`.
+- Catalog calls occurred in 4/6 tool trials and 0/6 JS trials. Tool arm call counts were A1 0, A2 19 catalog calls, A3 1, B1 0, B2 2, B3 0.
+- Mean elapsed time: JS 205.3s; tool 189.6s. This is one paired batch, so it is directional rather than a stable performance estimate.
+- Interpretation: exposing catalog tools does not automatically improve every task. It helped A2/B2 where the model actively searched for exact content, but did not improve A1/A3 and sometimes caused extra exploration or incorrect grants. Keep the tools, tighten the skill around when to search, exact source/UUID verification, and stop conditions; do not expand the catalog surface without another controlled batch.
