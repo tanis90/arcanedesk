@@ -173,8 +173,9 @@
 </head>
 <body>
   <header class="reader-bar">
-    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「✕ 关闭」(§4.3) -->
-    <button id="reader-back" class="reader-back" type="button"></button>
+    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「✕ 关闭」(§4.3)。
+         起步 hidden:第一次内容推送的 applyOrigin 才亮相,免得先画「✕ 关闭」再闪成「← 返回」(N12) -->
+    <button id="reader-back" class="reader-back" type="button" hidden></button>
     <span id="reader-name" class="reader-name"></span>
   </header>
   <p id="reader-notice" class="reader-notice" role="status" hidden></p>
