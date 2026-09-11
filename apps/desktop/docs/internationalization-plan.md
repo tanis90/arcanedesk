@@ -276,6 +276,25 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
    修复后全量 438/438 + verify:source 干净；三条落掉，解冻 push + dispatch 验收
    才是一次能过的状态。
 
+**追加（2026-09-11 二轮评审）：P4 修复于 `7a4c78a` + CI/CD 全链自查：**
+
+6. **P4（阻断）staging glob 不匹配 intl 产物名**：build job 的 Stage artifacts 用
+   `*-<arch>.*` 匹配，而 intl 文件名是 `-<arch>-intl.<ext>`（后缀插在 arch 与扩展名
+   之间）——4 条 intl 腿会以 `copied=0` 失败，走不到公证完成之后的任何一步。
+   修复：模式改为 `*-<arch><suffix>.*`，suffix 由 `matrix.region` 精确推导；顺带
+   fail-closed——intl 腿混进 cn 命名文件会 0 件报错而不是错发。已用 cn/intl ×
+   arm64/x64 × mac/win 文件名矩阵模拟验证。
+7. **CI/CD 全链自查结论（同类文件名/region 假设，逐项过）**：mac 签名与公证机制
+   region 无关（证书/公证 secret 按 `startsWith(platform,'macos')` 共享，notarytool
+   按内容工作，4→8 个 dmg 只是 CI 时长）；`platformForFile` 分拣已 `(?:-intl)?`
+   感知；`--signed-dir` 按同名替换且缺 `.exe` 签名件即失败，ops 签名 runbook 已
+   写明 intl 文件名（`Arcane-Desk-<version>-win-<arch>-intl.exe`）且签名流程无脚本
+   化文件名假设；artifact 上传/下载/展平（`arcane-desk-<platform>-<region>-<sha>`
+   命名 + sed 剥离）经核无歧义；GitHub Release 12 件资产去重与分 tag 逻辑双
+   flavor 成立；`prepare-desktop-release` 的 buildRegion 校验、intl 默认 releaseId
+   后缀、`predist:*` → `prepare:dist` 链条均正确；`arcane-intl-mod-index.yml` 的
+   R2 env 与发布步骤干净；两个改动过的 workflow 均过 YAML 解析。
+
 ### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 已部署并验收（2026-09-11）；启用时机暂缓（首发 BYOK）
 
 - `services/arcane-spark-edge/` Worker：key 校验（D1）→ 别名改写 `arcane-spark` →
