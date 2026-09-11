@@ -40,3 +40,8 @@
 3. Update prep skill instructions to prefer UUID and state which Actor fields are system defaults versus spec-required values.
 4. Run the full A1-B3 benchmark five paired times on the same COS world, preserving each manifest and trace.
 5. Publish aggregate pass rate, variance, tool adoption, latency, and failure traces before deciding production rollout.
+
+
+## Five-run execution checkpoint (2026-09-11)
+
+The first five-run batch was started against local COS. Run 1 completed 9/12 audited trials (A1-A3 and B1 both arms, B2 JS). B2 tool produced a settled business report but the provider returned a batch-level failure afterward, so the runner paused before B3. The manifest is preserved at `C:\Users\yangqi\AppData\Local\Temp\deepseek-flash-5x-20260911\run-1b\manifest.json`. This is recorded as an infrastructure/provider interruption, not a model pass/fail; the five-run aggregate is therefore not yet valid.
