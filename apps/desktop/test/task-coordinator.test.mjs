@@ -391,3 +391,70 @@ test("delivery is null when a supplement waits at app level (busy but not stream
   gate.resolve(); await coordinator.run;
   assert.equal(coordinator.task.state, "completed");
 });
+
+test("cancelQueuedInput cancels the target, survivors stay queued in order (spec §7.9)", async () => {
+  const gate = deferred(); const prompts = []; const followUps = []; let clears = 0;
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt(text) { prompts.push(text); return gate.promise; },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    clearQueue() { clears++; },
+    abort: async () => gate.resolve(),
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const third = coordinator.submit({ text: "third" });
+  assert.equal(coordinator.cancelQueuedInput("missing").code, "STALE_INPUT");
+  const clearsBeforeCancel = clears;
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).ok, true);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "cancelled");
+  assert.equal(coordinator.inputs.get(third.inputId).state, "queued");
+  // 全清 + 幸存者按序重排:只有 third 重新入队,目标不重发。
+  assert.equal(clears, clearsBeforeCancel + 1);
+  assert.deepEqual(followUps, ["second", "third", "third"]);
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).code, "STALE_INPUT"); // 已非 queued
+  gate.resolve(); await coordinator.run;
+  // 被取消的 second 不会被 drain 兜底 dispatch;搁浅的 third 按 §6.9 重发一次。
+  assert.deepEqual(prompts, ["first", "third"]);
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("steerQueuedInput reroutes the queued input to steering, survivors stay queued (spec §7.10)", async () => {
+  const gate = deferred(); const followUps = []; const steers = []; const states = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt: () => gate.promise,
+    steer(text) {
+      steers.push(text);
+      coordinator.observe({ type: "queue_update", steering: [text], followUp: [] });
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+    },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    clearQueue() {},
+    abort: async () => gate.resolve(),
+  }, emit: event => { if (event.type === "input_state") states.push(`${event.commandId}:${event.state}`); } });
+  coordinator.submit({ commandId: "first", text: "first" }); await tick();
+  const second = coordinator.submit({ commandId: "second", text: "second" });
+  const third = coordinator.submit({ commandId: "third", text: "third" });
+  assert.equal(coordinator.steerQueuedInput(second.inputId).ok, true);
+  assert.deepEqual(steers, ["second"]);
+  // 目标经 steering 投递 → context → consumed;幸存者仍 queued 且重排不含目标。
+  assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
+  assert.equal(coordinator.inputs.get(third.inputId).state, "queued");
+  assert.deepEqual(followUps, ["second", "third", "third"]);
+  // setInputState 幂等:改道时的 queued→queued 不重复发事件。
+  assert.equal(states.filter(s => s === "second:queued").length, 1);
+  gate.resolve(); await coordinator.run;
+  assert.equal(coordinator.task.state, "completed");
+});
