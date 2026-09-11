@@ -126,12 +126,20 @@ R2 + 自定义域 `dl.arcanedesk.app`：零出口流量费（对比 OSS 国际�
 CI 出未签名 EXE → 本机一次签完两个 flavor → 验签 + 重建校验和 → 双写 OSS/R2。
 恢复 immutable 契约，消除两个存储间的不一致窗口。Certum/SimplySign 证书海外有效，不换。
 
-### D6：遥测同构移植
+### D6：遥测同构移植（2026-09-11 修订：不做实时大盘，分析走本地 DuckDB）
 
-Worker 复刻 arcane-api 的 4 条信封契约 + 违禁 key 扫描 → 写 R2（90 天生命周期）→
-DuckDB + httpfs 直读 R2 分析（与国内 OSS 分析只差 endpoint 配置）；
-Workers Analytics Engine 做实时仪表盘（注意只保留 3 个月，另设月度 rollup Cron）；
-复刻自助删除端点满足 GDPR。
+Worker 复刻 arcane-api 的 4 条信封契约 + 违禁 key 扫描 → 写 R2；分析全部走本地：
+双区对象存储同步/直读进本地 DuckDB，由 agent 按需查询。
+
+- **不做** WAE 实时仪表盘与月度 rollup Cron——与国内设计"不建 ClickHouse/SLS/实时
+  大屏"的哲学一致（国内后端设计文档明确否决实时大屏）；需要实时性时再立项。
+- 拉取路径：R2/OSS 均为 S3 兼容，DuckDB httpfs 直读或 `aws s3 sync` 落本地后查询；
+  凭证用只读权限（R2 token 限 `telemetry/raw/` 前缀，OSS RAM 只读子账号）。
+- 分析语义两边通用：不同 `schema_version` 事件在 DuckDB `union_by_name` 下共存，
+  去重靠查询期 `DISTINCT`（国内后端设计 §12 的既定约定）。
+- 复刻自助删除端点满足 GDPR。
+- 待定：raw 保留期——无 rollup 后 90 天的回溯理由消失，对齐国内 30 天或保留 90 天，
+  隐私政策按最终口径书写。
 
 ---
 
@@ -271,8 +279,10 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 ### M6：遥测海外通道（ops 新服务，M）
 
 - `services/arcane-telemetry-edge/` Worker：复刻信封契约 + 违禁 key 扫描 + 删除端点，写 R2
-- WAE 聚合 + 月度 rollup Cron + R2 lifecycle 90 天；DuckDB 脚本加 R2 endpoint
-- 验收：上报可见、可查、可删；隐私政策文案与设计一致
+- 本地拉取路径：只读凭证 + sync/直读脚本（双区同一路径），agent 在本地 DuckDB 分析；
+  ~~WAE 聚合 + 月度 rollup Cron~~（2026-09-11 砍，见 D6 修订）；R2 lifecycle 天数随 D6 待定项
+- 验收：上报可见、可查、可删；本地 DuckDB 一条命令拉到双区数据并跑通一次分析；
+  隐私政策文案与设计一致
 
 ### M7：网站与合规（arcanedesk-web，S-M）
 
