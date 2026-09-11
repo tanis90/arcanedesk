@@ -145,9 +145,13 @@
       .md-doc { padding: 18px 16px 56px; }
       .reader-notice { padding: 10px 16px 0; }
     }
-    /* 文档里的标题需要比气泡里的更分级:arcaneMd 一律输出 h4,这里按位置给层次 */
-    .md-doc h4 { font-size: 17px; line-height: 1.5; margin: 26px 0 8px; }
+    /* 文档里的标题需要比气泡里的更分级:arcaneMd 一律输出 h4,这里按位置给层次。
+       颜色走 accent(暗金/亮墨蓝),不走 --text-strong:亮主题的深棕 #33291a 偏橄榄,
+       细笔画渲染观感发绿;暗主题的米白与正文同色系,只靠明度拉不开层次(验收反馈)。 */
+    .md-doc h4 { color: var(--accent); font-size: 17px; line-height: 1.5; margin: 26px 0 8px; }
     .md-doc h4:first-child { margin-top: 0; }
+    /* 标题里的 **强调** 不弹回 --text-strong,标题色一笔到底 */
+    .md-doc h4 strong { color: inherit; }
     .md-doc .md-img { max-height: none; }
 
     /* ---------- 超限截断提示 / 错误页 ---------- */
