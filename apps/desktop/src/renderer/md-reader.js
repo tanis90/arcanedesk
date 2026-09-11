@@ -51,6 +51,49 @@
   /** 最后一次内容推送:语言热切换时按它重上 chrome 文案,不重渲染正文(review M2)。 */
   let lastPayload = null;
 
+  // ---------- N9:滚动位置回正 ----------
+  // showNote 同步设的 scrollTop 会被异步增长顶歪:mermaid 围栏出图、图片晚到,
+  // 视口上方的内容一长高,同一个 scrollTop 就落在别的段落上。渲染后开一个短窗
+  // (2 秒,或到用户第一次滚动为止——用户滚动永远赢),文档高度一变就把保存的位置按回去。
+  /** @type {{ saved: number, height: number, observer: MutationObserver, timer: ReturnType<typeof setTimeout> } | null} */
+  let scrollGuard = null;
+
+  function cancelScrollGuard() {
+    if (!scrollGuard) return;
+    scrollGuard.observer.disconnect();
+    clearTimeout(scrollGuard.timer);
+    scrollGuard = null;
+  }
+
+  function onGuardScroll() {
+    // 回正只是把 scrollTop 设回 saved(值没变,不触发 scroll);事件来了就是用户滚的
+    if (scrollGuard && scroll.scrollTop !== scrollGuard.saved) cancelScrollGuard();
+  }
+
+  /** @param {number} saved 要守住的 scrollTop;0(回顶)没有可守的,不开窗 */
+  function guardScrollPosition(saved) {
+    cancelScrollGuard();
+    if (!saved) return;
+    const reassert = () => {
+      if (!scrollGuard || scroll.scrollHeight === scrollGuard.height) return;
+      scrollGuard.height = scroll.scrollHeight;
+      scroll.scrollTop = scrollGuard.saved;
+    };
+    const observer = new MutationObserver(() => {
+      // 图片加载不改 DOM,MutationObserver 看不见,给它们补挂一次性 load
+      for (const img of doc.querySelectorAll("img")) {
+        if (img.dataset.scrollGuard) continue;
+        img.dataset.scrollGuard = "1";
+        img.addEventListener("load", reassert, { once: true });
+      }
+      requestAnimationFrame(reassert);
+    });
+    observer.observe(doc, { childList: true, subtree: true });
+    scrollGuard = { saved, height: scroll.scrollHeight, observer, timer: setTimeout(cancelScrollGuard, 2000) };
+  }
+
+  scroll.addEventListener("scroll", onGuardScroll);
+
   /**
    * 渲染一份 payload。arcaneMd.render 只追加不清空,所以整段重建。
    * 滚动位置分两种情况(§2 保活范围):同一份笔记被 ④ 顶掉后又 ② 唤回,
@@ -70,9 +113,11 @@
     document.title = payload.name ? `${payload.name} · ArcaneDesk` : "ArcaneDesk";
     window.arcaneMd.render(doc, payload.text ?? "");
     scroll.scrollTop = keepScroll;
+    guardScrollPosition(keepScroll);
   }
 
   window.arcaneReader.onContent(payload => {
+    cancelScrollGuard(); // 换内容(含错误页)后,旧笔记的回正窗口不再有意义
     lastPayload = payload ?? null;
     applyOrigin(payload?.origin);
     if (payload?.error) {
