@@ -68,7 +68,8 @@ pi 无单条删除 API，`clearQueue()` 两队全清——取消/改道都按"**
 - `TaskCoordinator.cancelQueuedInput(inputId)`：仅接受本任务 `queued` 态输入（否则 `STALE_INPUT`）；`clearQueue()` → 目标置 `cancelled`（走 drain 同款收尾，重启后可按 interrupted 召回）→ 幸存者 `queueInput` 重排；
 - `TaskCoordinator.steerQueuedInput(inputId)`：同款守卫；`clearQueue()` → 目标 `delivery = "steer"` 并 `queueInput`（下个 turn 边界软打断生效；reject 时回退 accepted 由 drain 兜底）→ 幸存者重排；
 - `setInputState` 幂等：同状态重复设置直接返回，不再发事件（改道时的 queued→queued 不再产生噪音事件）；
-- IPC：`chat:queued-input`（`{...modeContext, inputId, action: "cancel" | "steer"}`，isTrustedChatIpc 校验 + validateModeRequest 路由 host）；preload 增加 `updateQueuedInput(context, inputId, action)`；steer 成功记 `turnSteered`（与取消排队的 `turnQueued` 成双成对）。
+- 能力缺失显式失败：adapter 无 `clearQueue` 时取消/改道返回 `{ ok:false, code:"NO_QUEUE_CONTROL" }`（SDK 队列不可控，假装成功 = UI 显示已取消、消息却被 pi 照常投递）；同理，submit 的 delivery 记录即事实——`streamingDelivery()` 声明 `"followUp"` 但缺 `followUp` 方法的 adapter 直接记 `"steer"`（observe 按 delivery 读队列数组、telemetry 按 delivery 记 turnQueued/turnSteered，记录与实际路径必须一致）；
+- IPC：`chat:queued-input`（`{...modeContext, inputId, action: "cancel" | "steer"}`，isTrustedChatIpc 校验 + validateModeRequest 路由 host；**仅备团**，`mode !== "prep"` 返回 `WRONG_MODE`——战斗的 queued 是 steer 瞬时态，无 UI 入口）；preload 增加 `updateQueuedInput(context, inputId, action)`；steer 成功记 `turnSteered`（与取消排队的 `turnQueued` 成双成对）。
 
 ## 4. 明确不改的部分
 

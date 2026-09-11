@@ -1412,6 +1412,8 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const { host, mode } = validated.context;
+    // 队列操作仅备团:战斗的 queued 是 steer 瞬时态,无 UI 入口,只允许防御性拒绝。
+    if (mode !== "prep") return { ok: false, code: "WRONG_MODE" };
     const inputId = typeof request?.inputId === "string" ? request.inputId : null;
     const action = request?.action;
     if (!inputId || !["cancel", "steer"].includes(action)) return { ok: false, code: "INVALID_REQUEST" };

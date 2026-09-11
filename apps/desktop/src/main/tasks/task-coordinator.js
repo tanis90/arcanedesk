@@ -137,7 +137,9 @@ export class TaskCoordinator {
     const supplement = this.busy;
     // 投递方式只在"补充且 SDK 正在流式"时存在;busy 但非流式(如等调度)时 input 停留 app 层,delivery=null。
     const streaming = supplement && Boolean(this.adapter.isStreaming?.());
-    const delivery = streaming ? this.adapter.streamingDelivery?.() ?? "steer" : null;
+    // 记录即事实:声明 followUp 但缺该方法的 adapter 实际走 steer,delivery 也记 steer。
+    const declared = streaming ? this.adapter.streamingDelivery?.() ?? "steer" : null;
+    const delivery = declared === "followUp" && !this.adapter.followUp ? "steer" : declared;
     const task = supplement ? this.task : { id: randomUUID(), state: this.scheduler ? "queued" : "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
     const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null, delivery };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
@@ -202,7 +204,9 @@ export class TaskCoordinator {
   cancelQueuedInput(inputId) {
     const input = this.inputs.get(inputId);
     if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
-    this.adapter.clearQueue?.();
+    // adapter 无队列控制时,SDK 队列里的目标会被照常投递;假装取消成功会让 UI 与现实矛盾。
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
     this.setInputState(input, "cancelled");
     this.requeueSurvivors(input.id);
     return { ok: true, commandId: input.commandId };
@@ -212,7 +216,8 @@ export class TaskCoordinator {
   steerQueuedInput(inputId) {
     const input = this.inputs.get(inputId);
     if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
-    this.adapter.clearQueue?.();
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
     input.delivery = "steer";
     this.queueInput(input);
     this.requeueSurvivors(input.id);

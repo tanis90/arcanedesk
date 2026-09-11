@@ -458,3 +458,54 @@ test("steerQueuedInput reroutes the queued input to steering, survivors stay que
   gate.resolve(); await coordinator.run;
   assert.equal(coordinator.task.state, "completed");
 });
+
+test("adapter declaring followUp without the method is recorded and delivered as steer", async () => {
+  const gate = deferred(); const steers = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt: () => gate.promise,
+    steer(text) {
+      steers.push(text);
+      coordinator.observe({ type: "queue_update", steering: [text] });
+    },
+    clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  // 记录即事实:ack 与 input.delivery 都是实际要走的 steer,不是声明的 followUp。
+  assert.equal(second.delivery, "steer");
+  assert.equal(coordinator.inputs.get(second.inputId).delivery, "steer");
+  assert.deepEqual(steers, ["second"]);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "queued");
+  gate.resolve(); await coordinator.run;
+});
+
+test("cancel and steer fail explicitly when the adapter has no queue control", async () => {
+  const gate = deferred(); const followUps = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt(text) {
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      return gate.promise;
+    },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    // 无 clearQueue:SDK 队列不可控,取消/改道必须显式失败而不是假装成功。
+    abort: async () => gate.resolve(),
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const input = coordinator.inputs.get(second.inputId);
+  assert.equal(input.state, "queued");
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).code, "NO_QUEUE_CONTROL");
+  assert.equal(coordinator.steerQueuedInput(second.inputId).code, "NO_QUEUE_CONTROL");
+  assert.equal(input.state, "queued"); // 不动 SDK 队列就不动状态
+  gate.resolve(); await coordinator.run;
+});
