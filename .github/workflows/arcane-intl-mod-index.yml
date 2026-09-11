@@ -1,0 +1,53 @@
+name: Arcane intl mod index
+
+# 国际版 mod 索引周更（国际化方案 D2/M3）：
+# 按 distribution/intl-mod-curation.json 策展清单实测上游 manifest+ZIP，
+# 与线上 index-en.json 比对做哈希漂移报警后发布到 R2 mods/index-en.json。
+# 同版本哈希/URL 漂移会直接失败——那是供应链报警，需要人工介入而不是自动放行。
+
+on:
+  schedule:
+    # 每周一 03:23 UTC（避开整点/半点拥塞）
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arcane-intl-mod-index
+  cancel-in-progress: false
+
+jobs:
+  publish-index:
+    name: Measure upstreams and publish index-en.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: desktop-release
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # prepare-intl-index.mjs 只依赖 node 内置模块（ali-oss 在 publish-release.mjs
+      # 里是动态 import，R2 路径不触及），无需 npm ci。
+
+      - name: Measure curated upstreams and publish index
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: node apps/desktop/scripts/prepare-intl-index.mjs --output intl-index-out --publish
+
+      - name: Upload publish plan for audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: intl-mod-index-publish-plan
+          path: intl-index-out/publish-plan.json
+          if-no-files-found: error
+          retention-days: 90
