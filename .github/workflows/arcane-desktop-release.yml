@@ -230,11 +230,15 @@ jobs:
           mkdir -p "staging/${{ matrix.platform }}"
           cd apps/desktop/dist
           shopt -s nullglob
+          # 国际化方案 D5（评审 P4 修复）：intl 产物文件名是 -<arch>-intl.<ext>，
+          # 后缀插在 arch 与扩展名之间；按 region 拼精确模式，错 flavor 宁可 0 件报错。
+          suffix=""
+          if [[ "${{ matrix.region }}" == "intl" ]]; then suffix="-intl"; fi
           copied=0
           for ext in dmg zip exe; do
             for file in *.${ext}; do
               case "$file" in
-                *-${{ matrix.arch }}.*)
+                *-${{ matrix.arch }}${suffix}.*)
                   cp "$file" "$GITHUB_WORKSPACE/staging/${{ matrix.platform }}/"
                   copied=$((copied + 1))
                   ;;
