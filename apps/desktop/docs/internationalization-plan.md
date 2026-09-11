@@ -197,9 +197,11 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   region.json（`--expected-region`），publish 拆 cn/intl 两路、GitHub Release 分 tag
 - ✅ ops 签名 runbook 改先签后发（覆盖补签降级为应急，`b3547a3`）；
   ✅ R2 `dl.arcanedesk.app` CORS 已配（GET/HEAD、Origin `*`）
-- ⏳ 验收待触发：一次完整发版，两 flavor 各落其位，`dl.arcanedesk.app/.../latest.json`
-  公开可读（需用户 dispatch 一次 release workflow；评审 P3 后 `skip_oss` 默认 true
-  即 build-only，正式验收须显式 `skip_oss=false` 且 staged 签名件按先签后发就位）
+- ✅ 验收（2026-09-11，合并 main `db02825` 后 dispatch run `34591438963`）：8 腿全绿，
+  双 flavor 各落其位——cn 入 OSS、intl 入 R2（`releases/0.4.3-db02825f-intl/release.json`
+  与安装包公网 200，private-beta 通道）。⏳ 仅剩 latest 指针：intl `--promote-release`
+  未做（首发指针）、cn 指针切换影响线上用户更新，均需显式拍板；Windows 签名版
+  发版走 ops 先签后发流程
 
 ### M3：Mod 链路（本仓库 + mods 仓库，M）— ✅ 代码完成（2026-09-11）
 
@@ -222,8 +224,10 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   world/profile **暂缓**——cn profile 26 个模块含 5 个中文本地化模块（intl 剔除）、
   2 个 arcane 自有模块（依赖 mods 仓库 release workflow，人工任务 #8）、十余个待扩充
   策展的上游模块；世界包工件也需镜像到 R2。待自有 mod GitHub 发布线就绪后一并做
-- ⏳ 验收待触发：push 后 dispatch `arcane-intl-mod-index.yml` 完成首次发布，
-  再在 intl 构建里由 agent 装 midi-qol（上游下载 + 索引哈希校验）
+- ✅ 首次索引发布（2026-09-11，`arcane-intl-mod-index.yml` @ main）：`mods/index-en.json`
+  （5 策展条目）+ dnd5e 5.3.3 镜像包公网 200；首发撞上 P5 负缓存事故（见评审记录
+  第 9 条），修复后重跑成功，周更 cron 生效。⏳ 仅剩：intl 构建里由 agent 装
+  midi-qol（上游下载 + 索引哈希校验，随 M8 端到端）
 
 ### M4：技能包区域化（本仓库，M，依赖 M3 的 CLI 定稿）— ✅ 代码完成（2026-09-11，`6aa588f`，分支 feat/intl-m4-skill-packs）
 
@@ -244,10 +248,9 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - ✅ `check-skills-revision.mjs` 双树：prep 与 prep-intl 各自强制 bump 单调 revision；
   skills/AGENTS.md 补充覆盖树约定；verify-source 注册组合器；全量测试 431/431，
   tsc 干净，intl 构建冒烟通过（`0.4.3-8b6ef79a-intl`）
-- ⏳ 验收待触发：push 后 dispatch release workflow 出 intl 包 + 首次
-  `publish-skills --region intl`（远端无指针按 r0 放行；评审 P2 后可直接 dispatch
-  `skills-publish.yml` 带 `region=intl`，无需本机持凭证），验证 intl 构建自更新到
-  英文技能包、英文 agent 全流程无中文渗漏
+- ✅ 首次 intl 技能包发布（2026-09-11，`skills-publish.yml` 带 `region=intl`，run
+  `34591446591`）：`desktop/arcane-desk-intl/skills/latest.json` 指针公网 200。
+  ⏳ 仅剩：intl 构建自更新到英文技能包、英文 agent 全流程无中文渗漏（随 M8 端到端）
 
 **外部评审与修复记录（2026-09-11，P1–P3 全部修复于 `1725116`，feat/intl-m4-skill-packs）：**
 
@@ -304,6 +307,20 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
    两件。P1–P4 修复在真实 CI 全部成立。下一步：合并 main 后做正式发版验收
    （M2 双 flavor 落位 + latest.json 公开可读）、dispatch `arcane-intl-mod-index.yml`
    首发（M3）、`skills-publish.yml` 带 `region=intl` 首发（M4）。
+9. **P5（首发事故）公网 HEAD 负缓存击穿**：M3 索引首发时，`publishMirrors` 上传前
+   先 HEAD 公网 URL 做「已存在且一致」预检，把对象的 404 种进了 Cloudflare 边缘
+   缓存（.zip 是默认缓存扩展名），上传后 6 秒的校验 HEAD 读到陈旧 404，重试 4 次
+   （共 6 秒）仍等不到数分钟的负缓存过期而失败。修复（`8c902ec`）：`verifyUrl` 与
+   `headContentLength` 每次尝试带独立 cache-buster 强制回源；测试 fake 对查询串
+   归一化。对象本身无损（107MB zip  multipart 11 分片完整），修复合 main
+   （`d8537f8`）后重跑 27 秒成功（zip 幂等跳过，只补 manifest + 索引）。
+10. **合并 main + 验收日（2026-09-11）**：`feat/intl-m4-skill-packs` 经 `--no-ff` 合入
+    main（`db02825`，冲突仅 main.js 一处 import 叠加；合并树全量 530/530），main
+    携 13 个既有提交（streaming-input-queue、fork-session 两线）一并推送。三个
+    workflow 从 main 首发：正式发版（run `34591438963`，build 8/8 + publish cn/intl
+    双路全绿）、M3 索引（P5 修复后 run `34592587642` 成功）、M4 intl 技能包（run
+    `34591446591` 成功）。latest 指针与 GitHub Release 未动（显式参数关闭），cn 线上
+    用户不受影响。
 
 ### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 已部署并验收（2026-09-11）；启用时机暂缓（首发 BYOK）
 
