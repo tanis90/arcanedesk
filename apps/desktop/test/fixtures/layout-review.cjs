@@ -14,7 +14,7 @@ module.exports = async ({ window, evaluate }) => {
   const report = [];
   for (const sample of cases) {
     window.setContentSize(sample.width, sample.height);
-    await evaluate(`Object.assign(panelLayout, {open:${Boolean(sample.chat)},chatWidth:${sample.chat ?? sample.width},gutter:6}); applyPanelLayout(); document.getElementById('conversation-title').textContent = '多任务验收 · 正在整理剧本与地图'; input.value = '保留我的草稿，先核对资料再继续。'; autosize(); scrollToEnd(true);`);
+    await evaluate(`Object.assign(panelLayout, {open:${Boolean(sample.chat)},chatWidth:${sample.chat ?? sample.width},gutter:6}); applyPanelLayout(); input.value = '保留我的草稿，先核对资料再继续。'; autosize(); scrollToEnd(true);`);
     await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     await evaluate(`input.focus(); for (const id of ['B','C']) activityView.receive({type:'activity_notice',notice:{sessionId:id,taskId:'task-'+id,key:'completed',kind:'completed',name:'后台素材 '+id}});`);
     // Unpinning starts a real CSS transition; capture the settled drawer, not a frame covering the chat.

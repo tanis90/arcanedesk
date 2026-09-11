@@ -1,29 +1,5 @@
 /* Quiet brass index for a DM's concurrent prep and combat work. */
 #activity-error { color: var(--warn) !important; }
-/* 会话标题 = 主页盖章式墨块:浅色铁胆墨水 / 深色黄铜压印,硬投影 + 微倾斜 */
-#conversation-title {
-  flex: none;
-  align-self: flex-start;
-  max-width: calc(100% - 32px);
-  margin: 10px 16px 2px;
-  padding: 5px 14px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: 3px 3px 0 var(--shadow);
-  transform: rotate(-0.6deg);
-  font: 700 14px/1.5 var(--font-display);
-  letter-spacing: .03em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-:root[data-theme="light"] #conversation-title {
-  /* 与营销主页同一块色板:--ink / --paper / --stamp-shadow */
-  background: #16130f;
-  color: #f2ede1;
-  box-shadow: 3px 3px 0 #16130f24;
-}
-#conversation-title:empty { display: none; }
 #conversation-task-status, #conversation-model-pending, #conversation-sync { text-align: left; padding: 2px 16px; }
 .card.attention .body { padding: 10px 12px; }
 .card.attention textarea { display: block; width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
@@ -38,7 +14,7 @@ body:has(#activity-jump:not([hidden])) #scroll-bottom { display: none; }
 .session-item:focus-within .s-del { opacity: 1; }
 body.sidebar-pinned #session-drawer { transform: none; box-shadow: none; }
 body.sidebar-pinned #drawer-backdrop { display: none; }
-body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
+body.sidebar-pinned > :is(#activity-bar, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
 #session-drawer { max-width: calc(100% - var(--panel-w, 0px)); }
 body.sidebar-pinned #panel-command { margin-left: 264px; }
 .history-page-button { display: block; flex: none; align-self: center; margin: 12px auto; padding: 7px 16px; border: 1px solid var(--border); border-radius: 16px; color: var(--text); background: var(--panel); font: var(--fs-meta)/1.5 var(--font-ui); cursor: pointer; }

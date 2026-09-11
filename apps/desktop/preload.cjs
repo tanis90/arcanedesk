@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("arcane", {
   closePanel: () => ipcRenderer.invoke("panel:close"),
   /** F5: reload the right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
+  /** Switch the right pane between the existing Foundry page and the open note. */
+  switchPanelSurface: (target) => ipcRenderer.invoke("panel:switch", target),
   /** Open a Markdown note in the right-pane reader. Path validation happens in main. */
   openMdReader: (path) => ipcRenderer.invoke("md-reader:open", path),
   sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),

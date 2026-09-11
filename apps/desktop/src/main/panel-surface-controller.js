@@ -46,7 +46,7 @@ export class PanelSurfaceController {
    * @param {object} hooks
    * @param {() => any} hooks.getWindow 当前 BrowserWindow(可能为 null)
    * @param {() => { bounds: object, chatWidth: number, gutter: number } | null} hooks.computeLayout
-   * @param {(event: object) => void} hooks.emit 向 chat renderer 发 arcane:event
+   * @param {(event: { type: string } & Record<string, any>) => void} hooks.emit 向 chat renderer 发 arcane:event
    * @param {() => any} hooks.createFoundryView 建 foundryView 并挂全部 Foundry 专属监听
    * @param {(view: any, reason: string) => void} hooks.destroyFoundryView
    * @param {() => any} hooks.createReaderView 建 readerView(loadFile + preload-reader)
@@ -77,10 +77,6 @@ export class PanelSurfaceController {
       它们绝不能拿到 readerView(spec §8 收编表最后一行),所以这里只暴露 foundry 那一个。 */
   get foundryView() { return this.#foundryView; }
 
-  /** 仅供 main 校验 `md-reader:back` 的 sender 身份(isTrustedReaderIpc)。
-      页面访问一律走 foundryView / activeView(),不要拿它去 evaluate 或截图。 */
-  get readerView() { return this.#readerView; }
-
   /** 当前可见的 view:bounds 分发、分栏拖拽穿透、指针转发都消费它(spec §8 收编表)。 */
   activeView() { return this.#open ? (this.#surface === SURFACE_READER ? this.#readerView : this.#foundryView) : null; }
 
@@ -109,6 +105,7 @@ export class PanelSurfaceController {
     this.#origin = null; // 阅读周期结束;下次 ② 重新快照现场
     this.#setOpen(true);
     this.#applyVisibility();
+    this.#emitStatus(); // 先于 layout:panel_layout 保持收尾,renderer 协议零改动
     this.layout();
     return { ok: true, state: this.state };
   }
@@ -128,28 +125,6 @@ export class PanelSurfaceController {
       ? { absolute: payload.absolute, baseDir: payload.baseDir }
       : null;
     return this.#enterReader(rawPath, payload, snapshot);
-  }
-
-  // ---------- ③ 阅读器内返回/关闭 ----------
-
-  /**
-   * ③:退出阅读,落点一律是 Foundry(2026-09-11 验收修订:③ 不再有"关面板"语义,
-   * 收起整个右屏走 ① 顶栏开关)。
-   * origin=foundry 且现场活着 → 显隐切换,永不加载 FVTT(§3.5 不变量 2);
-   * 否则(origin=closed,或阅读期间 foundryView 崩毁)→ ④ 同款:阅读器隐藏保活,
-   * 拉起一次 FVTT 加载——笔记留在保活里,从 chat 路径唤回时滚动位置原样(§2)。
-   */
-  leaveReader() {
-    if (!this.#open || this.#surface !== SURFACE_READER) return { ok: true, state: this.state };
-    if (this.#origin === SURFACE_FOUNDRY && isUsable(this.#foundryView)) {
-      this.#origin = null;
-      this.#surface = SURFACE_FOUNDRY;
-      this.#applyVisibility();
-      this.layout();
-      return { ok: true, state: this.state };
-    }
-    this.showFoundry(); // 内部清 origin、置 surface、保证 foundryView 存在(崩毁则重建)
-    return this.#hooks.loadFoundry();
   }
 
   // ---------- ① 顶栏「面板」按钮 ----------
@@ -202,8 +177,42 @@ export class PanelSurfaceController {
     this.#readerAbsolute = null;
     this.#readerBaseDir = null;
     this.#readerPayload = null;
-    this.#hooks.emit({ type: "panel_status", open: false });
+    this.#emitStatus(); // open:false + surface:null
     this.#hooks.emit({ type: "panel_layout", open: false });
+    return { ok: true, state: this.state };
+  }
+
+  // ---------- 顶栏 FVTT/文档切换 ----------
+
+  /**
+   * 只切换两个已存在的内容:不主动拉起 FVTT 加载、不读新文件。
+   * 目标从未打开(或已随关面板/崩溃销毁)时返回 { ok:false, empty },提示交给 chat。
+   */
+  switchSurface(target) {
+    if (target !== SURFACE_FOUNDRY && target !== SURFACE_READER) {
+      return { ok: false, error: `unknown surface: ${target}` };
+    }
+    if (this.#open && this.#surface === target) return { ok: true, state: this.state };
+    if (target === SURFACE_FOUNDRY) {
+      // 只有 READER_F 下 foundryView 活着(压在阅读器底下);CLOSED 时两 view 已销毁
+      if (!isUsable(this.#foundryView)) return { ok: false, empty: "foundry", state: this.state };
+      this.showFoundry();
+      return { ok: true, state: this.state };
+    }
+    // reader:离开后阅读器保活在 Foundry 之下(readerPath 仍在);崩毁则重建并按快照重读(N4/N5)
+    if (!this.#readerPath) return { ok: false, empty: "reader", state: this.state };
+    if (!isUsable(this.#readerView)) {
+      this.#ensureReaderView();
+      this.#readerPayload = this.#rereadNotePayload();
+    }
+    // 从 Foundry 表面切回:origin 重记为 foundry(§3.1)
+    this.#origin = SURFACE_FOUNDRY;
+    this.#surface = SURFACE_READER;
+    this.#applyVisibility();
+    this.#emitStatus();
+    this.layout();
+    // path 未变 → 页面保滚动(§2)
+    this.#pushReaderContent();
     return { ok: true, state: this.state };
   }
 
@@ -332,6 +341,7 @@ export class PanelSurfaceController {
     this.#setOpen(true);
     this.#ensureReaderView();
     this.#applyVisibility();
+    this.#emitStatus();
     this.layout();
     this.#pushReaderContent();
     return { ok: true, state: this.state };
@@ -348,7 +358,12 @@ export class PanelSurfaceController {
   #setOpen(next) {
     if (this.#open === next) return;
     this.#open = next;
-    if (next) this.#hooks.emit({ type: "panel_status", open: true });
+    if (next) this.#emitStatus();
+  }
+
+  /** panel_status 的唯一出口:open + surface(“foundry”/“reader”/null)一起发,渲染层据此点亮切换控件。 */
+  #emitStatus() {
+    this.#hooks.emit({ type: "panel_status", open: this.#open, surface: this.surface });
   }
 
   /** 不变量 1 的唯一执行者。 */
@@ -380,13 +395,11 @@ export class PanelSurfaceController {
 
   #pushReaderContent() {
     if (!this.#readerPayload) return;
-    // origin 随内容一起下发:返回按钮的文案("← 返回 Foundry" / "→ 打开 Foundry")由它决定,
-    // 而 origin 在一个阅读周期内不变,所以不需要第二条状态通道(§7)。
-    // path 也一并下发:页面靠它分辨"同一份笔记被唤回"与"换了一份",
+    // path 一并下发:页面靠它分辨"同一份笔记被唤回"与"换了一份",
     // 前者保留滚动位置,后者回顶(§2 保活范围)。
-    // absolute/baseDir 是 main 侧的快照字段(N4),不下发给页面。
+    // absolute/baseDir 与 origin 是 main 侧的快照字段(N4/§3.1),不下发给页面。
     const { absolute, baseDir, ...pagePayload } = this.#readerPayload;
-    this.#sendToReader(READER_CONTENT_CHANNEL, { ...pagePayload, origin: this.#origin, path: this.#readerPath });
+    this.#sendToReader(READER_CONTENT_CHANNEL, { ...pagePayload, path: this.#readerPath });
   }
 
   #sendToReader(channel, payload) {
@@ -398,7 +411,7 @@ export class PanelSurfaceController {
 /**
  * view 是否还能用:close() 之后 webContents 会变 undefined,直接 isDestroyed() 会抛 TypeError。
  * renderer 崩溃(render-process-gone)后 isDestroyed() 仍是 false,必须另查 isCrashed()——
- * 否则 leaveReader 的守卫会把一块死黑屏重新摆出来,ensureFoundryView 的重建兜底也进不去(review BUG-4)。
+ * 否则 switchSurface 的守卫会把一块死黑屏重新摆出来,ensureFoundryView 的重建兜底也进不去(review BUG-4)。
  */
 function isUsable(view) {
   return Boolean(view?.webContents) && !view.webContents.isDestroyed() && !view.webContents.isCrashed();

@@ -94,13 +94,6 @@ async function connect(wsUrl) {
       writeFileSync(path.join(evidence, name), Buffer.from(shot.data, "base64"));
       return name;
     },
-    /** Esc 走真的输入栈,不是 dispatchEvent 造的合成事件。 */
-    async pressEscape() {
-      const key = { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 };
-      for (const type of ["rawKeyDown", "keyUp"]) {
-        await call("Input.dispatchKeyEvent", { type, ...key });
-      }
-    },
     close() { try { socket.close(); } catch { /* already gone */ } },
   };
 }
@@ -133,10 +126,10 @@ try {
   const word = (key) => chat.evaluate(`t(${JSON.stringify(key)})`);
   const panelOpen = () => chat.evaluate("panelOpen");
 
-  // ③ 的等待条件必须是"保证会发生的可观测变化"。Foundry 的 URL 在 Esc 前后一模一样
-  // (§3.5 不变量 2:③ 绝不重载 Foundry),panelOpen 也一直是 true——拿它们当条件是恒真,
-  // 等于没等,后面读到的可能还是 Esc 之前的状态。leaveReader() 的 foundry 分支必调
-  // layout(),而 layout() 必发一次 panel_layout,所以在 chat 页数这个事件就是可靠的往返信号。
+  // 顶栏切换的等待条件必须是"保证会发生的可观测变化"。Foundry 的 URL 在切换前后一模一样
+  // (§3.5 不变量 2:切换绝不重载 Foundry),panelOpen 也一直是 true——拿它们当条件是恒真,
+  // 等于没等,后面读到的可能还是切换之前的状态。switchSurface() 必调 layout(),
+  // 而 layout() 必发一次 panel_layout,所以在 chat 页数这个事件就是可靠的往返信号。
   await chat.evaluate('window.__cdpEvents = []; window.arcane.onEvent(event => __cdpEvents.push(event.type)); void 0');
   const eventCount = () => chat.evaluate("window.__cdpEvents.length");
   /** 等到下一次布局广播落地:面板的显隐切换只有走完 layout() 才算真的完成。 */
@@ -177,9 +170,6 @@ try {
     const doc = document.getElementById("reader-doc");
     const pane = document.getElementById("reader-scroll");
     return {
-      name: document.getElementById("reader-name").textContent,
-      back: document.getElementById("reader-back").textContent,
-      ariaBack: document.getElementById("reader-back").getAttribute("aria-label"),
       headings: [...doc.querySelectorAll("h1, h4")].map(node => node.textContent),
       text: doc.textContent,
       anchors: document.querySelectorAll("a.md-path").length,
@@ -192,11 +182,12 @@ try {
       columnWidth: Math.round(doc.getBoundingClientRect().width),
       paneWidth: Math.round(pane.getBoundingClientRect().width),
       columnPadding: Math.round(parseFloat(getComputedStyle(doc).paddingLeft)),
-      headFont: getComputedStyle(document.getElementById("reader-name")).fontFamily,
+      headFont: getComputedStyle(doc.querySelector("h4") ?? doc).fontFamily,
     };
   })()`);
+  // 页内没有文件名栏了:渲染完成的可观测信号是 document.title 变成「<name> · ArcaneDesk」。
   const waitNote = async (name) => {
-    await until(async () => { try { return (await readerState()).name === name; } catch { return false; } }, `the reader renders ${name}`);
+    await until(async () => { try { return (await readerState()).title === `${name} · ArcaneDesk`; } catch { return false; } }, `the reader renders ${name}`);
     return readerState();
   };
 
@@ -233,14 +224,12 @@ try {
   assert.match(state.text, /石门后面站着一个不说话的人/);
   assert.equal(state.errorHidden, true);
   assert.equal(state.anchors, 0, "笔记正文里的两个 md 路径不产锚点:阅读器页兑现不了它们(R5)");
-  assert.equal(state.back, await word("reader.back"), "origin=foundry 时按钮自称返回");
-  assert.equal(state.ariaBack, state.back, "按钮的 aria-label 与可见文案一致");
   assert.equal(state.title, "gatekeeper.md · ArcaneDesk");
-  assert.match(state.headFont, /Georgia|Palatino|Songti|STSong|serif/, "页眉文件名用衬线(§5.2 signature)");
+  assert.match(state.headFont, /Georgia|Palatino|Songti|STSong|serif/, "文档标题用衬线(§5.2 signature)");
   assert.equal(state.columnWidth, state.paneWidth, "正文栏满铺右屏(§5.2:68ch 居中栏在窄面板下重心失衡,已改满铺)");
   assert.ok(state.columnPadding >= 16 && state.columnPadding <= 72, `正文横向 padding ${state.columnPadding}px 落在 clamp 区间`);
   assert.ok((await foundryTarget()).id === report.targets.foundry.id, "READER_F 底下压着活的 Foundry(§3.5 不变量 2)");
-  note("② READER_F:正文渲染、返回按钮自称返回、满铺衬线排版、Foundry 隐藏保活");
+  note("② READER_F:正文渲染、满铺衬线排版、Foundry 隐藏保活");
   await shoot(readerSession, "03-reader-over-foundry.png");
   await readerSession.evaluate('window.__cdpProbe = "alive"');
 
@@ -250,13 +239,12 @@ try {
   assert.match(state.text, /换一份笔记/);
   assert.equal(state.probe, "alive", "换笔记不重建文档:挂在 window 上的探针还在");
   assert.equal((await readerTarget()).id, report.targets.reader.id, "还是同一个 target,页面没有重载");
-  assert.equal(state.back, await word("reader.back"), "origin 在一个阅读周期内不变(§3.1)");
   note("② 阅读中换笔记:同一个 target、同一个文档,只换内容");
 
   // ---------- 主题广播:真点顶栏按钮,不直接调 IPC ----------
   await chat.evaluate('document.getElementById("theme-toggle").click()');
   await until(async () => (await readerState()).theme === "dark", "the theme broadcast reaches the reader page");
-  assert.equal((await readerState()).name, "second.md", "切主题不重读文件、不重渲染(§7)");
+  assert.equal((await readerState()).title, "second.md · ArcaneDesk", "切主题不重读文件、不重渲染(§7)");
   note("① 顶栏切主题 → 阅读器页 dataset.theme 跟着变,内容不动");
   await shoot(readerSession, "04-reader-dark.png");
   await chat.evaluate('document.getElementById("theme-toggle").click()');
@@ -266,7 +254,7 @@ try {
   // 单测里的 mermaid 是注进去的假全局,只能证明注册表分发;真库能不能在
   // md-reader.html 的 CSP 下加载、能不能画出图,只有真页面能回答(§9)。
   await sayAndClick("图在 notes/diagram.md。");
-  await until(async () => { try { return (await readerState()).name === "diagram.md"; } catch { return false; } }, "the reader renders diagram.md");
+  await until(async () => { try { return (await readerState()).title === "diagram.md · ArcaneDesk"; } catch { return false; } }, "the reader renders diagram.md");
   await until(async () => {
     try { return await readerSession.evaluate('Boolean(document.querySelector("div.md-mermaid svg"))'); } catch { return false; }
   }, "the vendored mermaid library draws an SVG inside the reader page");
@@ -281,28 +269,28 @@ try {
   state = await readerState();
   assert.equal(state.errorText, await word("reader.error.outside"));
   assert.equal(state.scrollHidden, true, "错误页顶掉正文");
-  assert.equal(state.name, "");
+  assert.equal(state.title, "ArcaneDesk", "错误页清掉文档标题");
   assert.equal((await readerTarget()).id, report.targets.reader.id, "错误也渲染在阅读器里,不在 chat 弹任何东西");
   assert.equal((await foundryTarget()).url, foundryUrlBefore, "② 绝不碰 Foundry 页(§3.5 不变量 2)");
   note("② 越界路径 → 阅读器里的错误页,chat 侧零打扰,Foundry 不受影响");
   await shoot(readerSession, "05-reader-error.png");
 
-  // ---------- ③ Esc 走真的输入栈:origin=foundry → 回 FOUNDRY ----------
-  const seenBeforeEscape = await eventCount();
-  await readerSession.pressEscape();
-  await waitRelayout(seenBeforeEscape, "③ hands the pane back to Foundry");
+  // ---------- ③ 切 FVTT:阅读器 → FOUNDRY(显隐切换,不重载) ----------
+  const seenBeforeSwitch = await eventCount();
+  await chat.evaluate('window.arcane.switchPanelSurface("foundry")');
+  await waitRelayout(seenBeforeSwitch, "the surface switch hands the pane back to Foundry");
   assert.equal((await readerTarget()).id, report.targets.reader.id, "阅读器隐藏保活,没被销毁");
   assert.equal((await readerState()).probe, "alive", "保活的页面文档没重建");
-  assert.equal((await foundryTarget()).url, foundryUrlBefore, "③ 绝不导航 Foundry 页(§3.5 不变量 2)");
-  assert.equal(await foundrySession.evaluate("window.__cdpFoundryProbe"), "loaded", "③ 绝不重载 Foundry 页:步骤 A 埋的探针还在(§3.5 不变量 2)");
-  note("③ origin=foundry 时 Esc 回 FOUNDRY:Foundry 页没重载(探针存活),阅读器隐藏保活");
+  assert.equal((await foundryTarget()).url, foundryUrlBefore, "切换绝不导航 Foundry 页(§3.5 不变量 2)");
+  assert.equal(await foundrySession.evaluate("window.__cdpFoundryProbe"), "loaded", "切换绝不重载 Foundry 页:步骤 A 埋的探针还在(§3.5 不变量 2)");
+  note("③ 切到 FVTT:Foundry 页没重载(探针存活),阅读器隐藏保活");
 
   // 为什么不用 document.visibilityState 当"只有一个 view 可见"的证据?实测过,两头都不成立:
   //   窗口隐藏时(普通 smoke)两张页都报 hidden,分不出谁可见;
   //   而 CDP 客户端 Page.enable 过的 target 会把 setVisible(false) 盖掉,一律报 visible。
   // 所以不变量 1 的权威证据只能是 main 里的 view.getVisible(),由 test/fixtures/md-reader-panel.cjs 把守。
   // 这里只如实记下读数,不当门禁。
-  report.visibilityStateAfterEscape = {
+  report.visibilityStateAfterSwitch = {
     foundry: await foundrySession.evaluate("document.visibilityState"),
     reader: await readerSession.evaluate("document.visibilityState"),
   };
@@ -325,7 +313,6 @@ try {
   await sayAndClick("回到 notes/gatekeeper.md。");
   const reopened = await attachReader();
   state = await waitNote("gatekeeper.md");
-  assert.equal(state.back, await word("reader.back"), "新的阅读周期重新快照 origin=foundry(§3.1)");
   assert.notEqual(reopened.id, report.targets.reader.id, "上一张页面被 ① 销毁过,这是一张新的");
   report.targets.readerRestored = reopened.id;
   await chat.evaluate('window.arcane.closePanel()');
@@ -341,7 +328,6 @@ try {
   await sayAndClick("回到 notes/gatekeeper.md。");
   await attachReader();
   state = await waitNote("gatekeeper.md");
-  assert.equal(state.back, await word("reader.toFoundry"), "从 CLOSED 进入的周期 origin=closed(§3.1)");
   await chat.evaluate('window.arcane.closePanel()');
   await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "① destroys the reader view");
   await chat.evaluate('window.arcane.openPanel()');
@@ -352,17 +338,17 @@ try {
   assert.notEqual(restored.id, report.targets.readerRestored, "① 销毁过的那张页面不会原地复活,这是一张新的");
   report.targets.readerReopened = restored.id;
   state = await waitNote("gatekeeper.md");
-  assert.equal(state.back, await word("reader.toFoundry"), "重开后 foundryView 已不存在,origin 重新快照成 closed(§3.1)");
   note("① 关闭前是 origin=closed 的笔记 → 重开落 READER_C,并且不静默拉起一次 FVTT 加载");
   await shoot(readerSession, "06-reader-restored.png");
 
-  // ---------- ③ origin=closed 时 Esc 落 Foundry:拉起加载,阅读器保活(2026-09-11 修订) ----------
-  await readerSession.pressEscape();
-  await until(async () => Boolean(await foundryTarget()), "③ from READER_C brings up the Foundry surface");
-  assert.equal(await panelOpen(), true, "③ 不再关面板;收起整个右屏是 ① 的事");
-  assert.equal((await readerTarget()).id, restored.id, "阅读器隐藏保活,没被销毁");
-  assert.equal((await readerState()).name, "gatekeeper.md", "保活的笔记内容原样");
-  note("③ origin=closed 时 Esc 落 FOUNDRY:阅读器保活,Foundry 拉起加载(本地无 FVTT 落连接失败页)");
+  // ---------- ③ 切 FVTT:READER_C 底下没有现场,如实报空,绝不拉起加载 ----------
+  const emptySwitch = await chat.evaluate('window.arcane.switchPanelSurface("foundry")');
+  assert.equal(emptySwitch?.ok, false, "READER_C 下没有可切换的 Foundry 现场");
+  assert.equal(emptySwitch?.empty, "foundry");
+  assert.equal(await foundryTarget(), null, "报空不创建 Foundry view(切换绝不拉起 FVTT 加载)");
+  assert.equal((await readerTarget()).id, restored.id, "阅读器原样保留,没被销毁");
+  assert.equal((await readerState()).title, "gatekeeper.md · ArcaneDesk", "笔记内容原样");
+  note("③ 切 FVTT(底下没有现场)→ 如实报空,阅读器原样保留,不拉起 FVTT 加载");
 
   writeFileSync(doneFile, "done");
   writeFileSync(path.join(evidence, "review.json"), `${JSON.stringify(report, null, 2)}\n`);
@@ -372,7 +358,7 @@ try {
   control.send(JSON.stringify({ id: 1, method: "Browser.close" }));
   await until(() => exited, "the app exits", 30000);
   control.close();
-  console.log("PASS md reader review: CDP drove a real window through ①②③, the reader is its own page target, and the rendered pages are on disk");
+  console.log("PASS md reader review: CDP drove a real window through ①②与顶栏切换, the reader is its own page target, and the rendered pages are on disk");
 } catch (error) {
   console.error(appLog.slice(-6000));
   try { writeFileSync(doneFile, "failed"); } catch { /* scratch may be gone */ }

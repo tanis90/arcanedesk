@@ -21,8 +21,11 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
   writeNote("tall.md", `# 很长的一份\n\n${Array.from({ length: 400 }, (_unused, index) => `第 ${index} 行。`).join("\n")}\n`);
   writeNote("huge.md", `${"# 超大\n\n"}${"x".repeat(2 * 1024 * 1024 + 4096)}\n`);
 
-  // 右屏那两个 view:按 URL 认,不靠生产代码开测试口子(spec §8 只暴露 foundryView)。
-  const views = () => window.contentView.children.filter((view) => !view.webContents?.isDestroyed());
+  // 右屏的 surface view:按 URL 认,不靠生产代码开测试口子(spec §8 只暴露 foundryView)。
+  // 悬浮切换器(panel-switch.html)是常驻 chrome,不是 surface,不算进来——否则 foundry()
+  // 会把它认错(URL 非空且不含 md-reader.html),assertOneVisible 也会数出第二个可见 view。
+  const views = () => window.contentView.children.filter((view) =>
+    !view.webContents?.isDestroyed() && !urlOf(view).includes("panel-switch.html"));
   const urlOf = (view) => (view.webContents?.isDestroyed() ? "" : view.webContents.getURL());
   const dumpViews = () => window.contentView.children.map((view) => ({
     destroyed: view.webContents?.isDestroyed() ?? true,
@@ -60,8 +63,7 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     assert.ok(shown.length <= 1, `${label}: ${shown.length} views visible at once`);
     return shown.length;
   };
-  const backLabel = () => readerEval('document.getElementById("reader-back").textContent');
-  const noteName = () => readerEval('document.getElementById("reader-name").textContent');
+  const noteTitle = () => readerEval("document.title");
   const docText = () => readerEval('document.getElementById("reader-doc").textContent');
   const errorText = () => readerEval('document.getElementById("reader-error").hidden ? null : document.querySelector("#reader-error p").textContent');
   const noticeText = () => readerEval('document.getElementById("reader-notice").hidden ? null : document.getElementById("reader-notice").textContent');
@@ -109,19 +111,18 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     await ui('panelOpen === true');
     await waitReader();
     assert.equal(foundry(), null, "READER_C must not have a Foundry view underneath (§3.5 invariant 3)");
-    await readerSettled('document.getElementById("reader-name").textContent === "gatekeeper.md"');
+    await readerSettled('document.title === "gatekeeper.md · ArcaneDesk"');
     assert.match(await docText(), /守门人/);
     assert.equal(await errorText(), null);
-    assert.equal(await backLabel(), await evaluate('t("reader.toFoundry")'), "origin=closed words the button as 打开 Foundry");
     assert.equal(assertOneVisible("READER_C"), 1);
 
-    // ---------- ③ origin=closed:落 Foundry(拉起加载),阅读器隐藏保活(2026-09-11 修订) ----------
-    await readerEval('document.getElementById("reader-back").click()');
-    await until(async () => Boolean(foundry()) && foundry().getVisible() === true, "③ from READER_C lands on Foundry");
-    await ui('panelOpen === true');
-    assert.ok(reader(), "③ keeps the reader alive, not destroyed");
-    assert.equal(reader().getVisible(), false, "the reader hides underneath, ④ 同款保活");
-    assert.equal(assertOneVisible("FOUNDRY after ③"), 1);
+    // ---------- ③ 切 FVTT:READER_C 底下没有现场,如实报空,绝不拉起加载 ----------
+    const emptySwitch = await evaluate('window.arcane.switchPanelSurface("foundry")');
+    assert.equal(emptySwitch?.ok, false, "READER_C 下没有可切换的 Foundry 现场");
+    assert.equal(emptySwitch?.empty, "foundry");
+    assert.equal(foundry(), null, "报空绝不拉起 FVTT 加载(§3.5 不变量 3)");
+    assert.equal(reader().getVisible(), true, "阅读器原样保留");
+    assert.equal(assertOneVisible("READER_C after empty switch"), 1);
 
     // ---------- ④ FVTT 打开:导航到目标地址 ----------
     assert.equal((await host.openFoundry(target)).ok, true);
@@ -132,17 +133,16 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     // ---------- ② 从 FOUNDRY 打开:落 READER_F,Foundry 隐藏保活 ----------
     const clickTall = await say("长的那份在 notes/tall.md。");
     await clickTall();
-    await readerSettled('document.getElementById("reader-name").textContent === "tall.md"');
-    assert.equal(await backLabel(), await evaluate('t("reader.back")'), "origin=foundry words the button as 返回");
+    await readerSettled('document.title === "tall.md · ArcaneDesk"');
     assert.ok(foundry(), "READER_F keeps the Foundry view alive (§3.5 invariant 2)");
     assert.equal(foundry().getVisible(), false, "the hidden Foundry view must not stay visible");
     assert.equal(assertOneVisible("READER_F"), 1);
 
-    // ---------- ③ origin=foundry:只做显隐,绝不重载 FVTT ----------
-    await readerEval('document.getElementById("reader-back").click()');
-    await until(async () => foundry()?.getVisible() === true, "③ hands the pane back to Foundry");
+    // ---------- ③ 切 FVTT:只做显隐,绝不重载 FVTT ----------
+    await evaluate('window.arcane.switchPanelSurface("foundry")');
+    await until(async () => foundry()?.getVisible() === true, "the surface switch hands the pane back to Foundry");
     assert.equal(reader().getVisible(), false, "the reader stays alive under Foundry (§2)");
-    assert.equal(foundryLoads(), target, "③ never reloads the Foundry page (§3.5 invariant 2)");
+    assert.equal(foundryLoads(), target, "切换绝不重载 Foundry 页(§3.5 不变量 2)");
     assert.equal(await foundry().webContents.executeJavaScript('document.querySelector("h1").textContent'), "Foundry test page");
     assert.equal(assertOneVisible("FOUNDRY"), 1);
 
@@ -163,10 +163,9 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     // ---------- ② 阅读中换笔记:原地换内容,滚动回顶,origin 不重置 ----------
     const clickSecond = await say("另一份是 notes/second.md。");
     await clickSecond();
-    await readerSettled('document.getElementById("reader-name").textContent === "second.md"');
+    await readerSettled('document.title === "second.md · ArcaneDesk"');
     assert.match(await docText(), /第二份/);
     assert.equal(Number(await readerEval('document.getElementById("reader-scroll").scrollTop')), 0, "a different note starts at the top");
-    assert.equal(await backLabel(), await evaluate('t("reader.back")'), "origin survives a note change within one reading cycle (§3.1)");
 
     // ---------- F5 是 surface 感知的:重读当前文件(§4.3) ----------
     writeNote("second.md", "# 第二份\n\n改过之后的正文。\n");
@@ -184,7 +183,7 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     await readerSettled(`document.querySelector("#reader-error p").textContent === ${JSON.stringify(outsideWord)}`);
     assert.equal(await errorText(), outsideWord);
     assert.equal(await readerEval('document.getElementById("reader-scroll").hidden'), true, "the error page replaces the body");
-    assert.equal(await noteName(), "");
+    assert.equal(await noteTitle(), "ArcaneDesk", "the error page clears the document title");
 
     // ---------- 错误页:文件不存在 ----------
     const missingWord = await evaluate('t("reader.error.missing")');
@@ -220,16 +219,15 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     const clickHugeAgain = await say("再看一次 notes/huge.md。");
     await clickHugeAgain();
     await waitReader();
-    await readerSettled('document.getElementById("reader-name").textContent === "huge.md"');
+    await readerSettled('document.title === "huge.md · ArcaneDesk"');
     await evaluate('window.arcane.closePanel()');
     await ui('panelOpen === false');
     await until(async () => views().length === 0, "① closing destroys the reader view");
     await evaluate('window.arcane.openPanel()');
     await ui('panelOpen === true');
     await waitReader();
-    await readerSettled('document.getElementById("reader-name").textContent === "huge.md"');
+    await readerSettled('document.title === "huge.md · ArcaneDesk"');
     assert.equal(foundry(), null, "restoring a note never silently pulls up FVTT (§3.4)");
-    assert.equal(await backLabel(), await evaluate('t("reader.toFoundry")'), "the restored cycle re-snapshots origin=closed (§3.1)");
 
     // ---------- 回到 READER_F 现场:Foundry 在位,再蒙上笔记 ----------
     assert.equal((await host.openFoundry(target)).ok, true);
@@ -238,13 +236,13 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     // ---------- 阅读器页里没有它兑现不了的锚点(R5) ----------
     const clickGatekeeperAgain = await say("回到 notes/gatekeeper.md。");
     await clickGatekeeperAgain();
-    await readerSettled('document.getElementById("reader-name").textContent === "gatekeeper.md"');
+    await readerSettled('document.title === "gatekeeper.md · ArcaneDesk"');
     assert.equal(await readerEval('document.querySelectorAll("a.md-path").length'), 0, "the reader page offers no anchors it cannot honour");
     assert.match(await docText(), /守门人/);
 
-    // ---------- Esc 等价于顶栏那个按钮(§4.3) ----------
-    await readerEval('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
-    await until(async () => foundry()?.getVisible() === true, "Esc from READER_F returns to Foundry");
+    // ---------- ③ 切 FVTT:阅读器 → Foundry(显隐切换,不重载) ----------
+    await evaluate('window.arcane.switchPanelSurface("foundry")');
+    await until(async () => foundry()?.getVisible() === true, "the surface switch returns to Foundry");
     assert.equal(reader().getVisible(), false);
     assert.equal(foundryLoads(), target);
 

@@ -68,6 +68,9 @@ globalThis.ARCANE_MESSAGES = {
     "header.settings.title": "设置(模型与 provider)",
     "header.panel.toggle": "打开/关闭 Foundry 面板",
     "header.panel.label": "面板",
+    "header.surface.switchTitle": "切换右侧面板:FVTT / 文档",
+    "header.surface.fvtt": "FVTT",
+    "header.surface.doc": "文档",
 
     // ---------- 欢迎页 ----------
     "welcome.logoAlt": "ArcaneDesk 法杖星芒 logo",
@@ -321,6 +324,8 @@ globalThis.ARCANE_MESSAGES = {
     "chat.status.abortRequested": "· 已请求中止 ·",
     "chat.status.panelOpenFailed": "打开面板失败:{error}",
     "chat.status.panelReloaded": "· 面板已刷新 ·",
+    "panel.switch.noFoundry": "· 还没有打开的 FVTT:点右侧「面板」开关或让 agent 打开一个 Foundry 地址 ·",
+    "panel.switch.noDoc": "· 还没有打开的文档:点聊天里的笔记路径即可在右侧阅读 ·",
     "chat.status.prepDirFailed": "选择备团目录失败:{error}",
     "chat.status.imageLimit": "⚠ 一次最多 {count} 张图片",
     "chat.status.imageNoVision": "⚠ 当前模型声明不支持图片输入,发送可能失败",
@@ -375,8 +380,6 @@ globalThis.ARCANE_MESSAGES = {
 
     // ---------- 右屏 Markdown 阅读器(md-reader-spec §5.5) ----------
     // 错误不道歉、不含糊、给下一步(design-rules R3/R5);内部 reason 枚举不上屏。
-    "reader.back": "← 返回 Foundry",
-    "reader.toFoundry": "→ 打开 Foundry",
     "reader.error.missing": "找不到这份笔记：文件不存在或已被移动。可以让 agent 重新生成它。",
     "reader.error.outside": "这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。",
     "reader.error.encoding": "这个文件不是 UTF-8 文本，无法阅读。",
@@ -518,6 +521,9 @@ globalThis.ARCANE_MESSAGES = {
     "header.settings.title": "Settings (models & providers)",
     "header.panel.toggle": "Open/close the Foundry panel",
     "header.panel.label": "Panel",
+    "header.surface.switchTitle": "Switch the right panel: FVTT / Document",
+    "header.surface.fvtt": "FVTT",
+    "header.surface.doc": "Docs",
 
     // ---------- welcome ----------
     "welcome.logoAlt": "ArcaneDesk wand-spark logo",
@@ -771,6 +777,8 @@ globalThis.ARCANE_MESSAGES = {
     "chat.status.abortRequested": "· Abort requested ·",
     "chat.status.panelOpenFailed": "Failed to open the panel: {error}",
     "chat.status.panelReloaded": "· Panel reloaded ·",
+    "panel.switch.noFoundry": "· No Foundry panel yet — toggle “Panel” or ask the agent to open a Foundry URL ·",
+    "panel.switch.noDoc": "· No document yet — click a note path in chat to read it on the right ·",
     "chat.status.prepDirFailed": "Failed to choose prep folder: {error}",
     "chat.status.imageLimit": "⚠ At most {count} images per message",
     "chat.status.imageNoVision": "⚠ The current model does not declare image input; sending may fail",
@@ -824,8 +832,6 @@ globalThis.ARCANE_MESSAGES = {
     "md.mermaidFailed": "Chart render failed: {error}",
 
     // ---------- Right-pane Markdown reader (md-reader-spec §5.5) ----------
-    "reader.back": "← Back to Foundry",
-    "reader.toFoundry": "→ Open Foundry",
     "reader.error.missing": "This note is missing: the file no longer exists or has been moved. Ask the agent to generate it again.",
     "reader.error.outside": "This note is outside the current working directory. The reader only reads files inside it.",
     "reader.error.encoding": "This file is not UTF-8 text, so it cannot be read.",
