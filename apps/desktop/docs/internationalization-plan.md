@@ -138,8 +138,8 @@ Worker 复刻 arcane-api 的 4 条信封契约 + 违禁 key 扫描 → 写 R2；
 - 分析语义两边通用：不同 `schema_version` 事件在 DuckDB `union_by_name` 下共存，
   去重靠查询期 `DISTINCT`（国内后端设计 §12 的既定约定）。
 - 复刻自助删除端点满足 GDPR。
-- 待定：raw 保留期——无 rollup 后 90 天的回溯理由消失，对齐国内 30 天或保留 90 天，
-  隐私政策按最终口径书写。
+- raw 保留期 **30 天**（2026-09-11 拍板，对齐国内：无 rollup 后 90 天无回溯理由，
+  按数据最小化口径）；拉进本地 DuckDB 的副本不受云端保留期影响。
 
 ---
 
@@ -280,7 +280,8 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 
 - `services/arcane-telemetry-edge/` Worker：复刻信封契约 + 违禁 key 扫描 + 删除端点，写 R2
 - 本地拉取路径：只读凭证 + sync/直读脚本（双区同一路径），agent 在本地 DuckDB 分析；
-  ~~WAE 聚合 + 月度 rollup Cron~~（2026-09-11 砍，见 D6 修订）；R2 lifecycle 天数随 D6 待定项
+  ~~WAE 聚合 + 月度 rollup Cron~~（2026-09-11 砍，见 D6 修订）；R2 lifecycle **30 天**
+  （D6 已拍板，对齐国内）
 - 验收：上报可见、可查、可删；本地 DuckDB 一条命令拉到双区数据并跑通一次分析；
   隐私政策文案与设计一致
 
