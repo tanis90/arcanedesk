@@ -1,6 +1,6 @@
 # ArcaneDesk 国际化技术方案
 
-状态：M0 / M1 / M2 已完成 · M3 / M4 代码完成（本地提交，未 push）· M5 / M6 已部署并验收（2026-09-11）· 日期：2026-09-11 · 分支：docs/internationalization-plan
+状态：M0 / M1 / M2 / M3 / M4 已完成（2026-09-11 合并 main `db02825`，intl 首发全绿：发版 / 索引 / 技能包 / latest 指针）· M5 / M6 已部署并验收（2026-09-11）· 日期：2026-09-11 · 分支：docs/internationalization-plan
 
 **2026-09-10 决策记录（拍板）：**
 
@@ -186,7 +186,7 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - renderer 经 IPC 拿 websiteUrl/社区链接；`test/` 加 region 快照测试
 - 验收：`ARCANE_REGION=intl npm start` 全部默认值指向 `.app` 域名；`verify:source` 通过
 
-### M2：发布双轨（本仓库 + ops，M）— ✅ 代码与配置完成（2026-09-10，`fad803a`）
+### M2：发布双轨（本仓库 + ops，M）— ✅ intl 线验收完成（2026-09-11）；仅剩 cn 指针拍板
 
 - ✅ `publish-release.mjs`：`--region cn|intl`（默认读 `generated/region.json`，冲突即报错）；
   intl 走 R2 `arcane-desk-intl`（内置最小 SigV4 S3 客户端，零新依赖），`--signed-dir`
@@ -199,9 +199,14 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   ✅ R2 `dl.arcanedesk.app` CORS 已配（GET/HEAD、Origin `*`）
 - ✅ 验收（2026-09-11，合并 main `db02825` 后 dispatch run `34591438963`）：8 腿全绿，
   双 flavor 各落其位——cn 入 OSS、intl 入 R2（`releases/0.4.3-db02825f-intl/release.json`
-  与安装包公网 200，private-beta 通道）。⏳ 仅剩 latest 指针：intl `--promote-release`
-  未做（首发指针）、cn 指针切换影响线上用户更新，均需显式拍板；Windows 签名版
-  发版走 ops 先签后发流程
+  与安装包公网 200，private-beta 通道）
+- ✅ intl latest 指针首发（2026-09-11）：本地 `--promote-release 0.4.3-db02825f-intl
+  --region intl` 成功，12 个 R2 产物逐一校验后 `desktop/arcane-desk-intl/latest.json`
+  公网 200（`dl.arcanedesk.app`），元数据镜像 `distribution/desktop-latest-intl.json`
+  回写 main（`fa94f6b`）。凭证为控制台新开的 scoped token `arcane-desk-intl-local`
+  （Object R/W、仅限 `arcane-desk-intl` 桶，R2 → API tokens 可轮换/吊销）
+- ⏳ 仅剩 cn 指针：切换影响线上用户更新，需显式拍板；Windows 签名版发版走 ops
+  先签后发流程
 
 ### M3：Mod 链路（本仓库 + mods 仓库，M）— ✅ 代码完成（2026-09-11）
 
