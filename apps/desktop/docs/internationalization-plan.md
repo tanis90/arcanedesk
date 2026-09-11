@@ -1,6 +1,6 @@
 # ArcaneDesk 国际化技术方案
 
-状态：M0 / M1 / M2 已完成 · 日期：2026-09-10 · 分支：docs/internationalization-plan
+状态：M0 / M1 / M2 已完成 · M3 / M4 代码完成（本地提交，未 push）· 日期：2026-09-11 · 分支：docs/internationalization-plan
 
 **2026-09-10 决策记录（拍板）：**
 
@@ -208,12 +208,28 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - ⏳ 验收待触发：push 后 dispatch `arcane-intl-mod-index.yml` 完成首次发布，
   再在 intl 构建里由 agent 装 midi-qol（上游下载 + 索引哈希校验）
 
-### M4：技能包区域化（本仓库，M，依赖 M3 的 CLI 定稿）
+### M4：技能包区域化（本仓库，M，依赖 M3 的 CLI 定稿）— ✅ 代码完成（2026-09-11，`6aa588f`，分支 feat/intl-m4-skill-packs）
 
-- `publish-skills.mjs --region`，intl 发 R2 独立前缀 `desktop/arcane-desk-intl/skills/`
-- `skills/prep/**/SKILL.md` + `references/*.md` 英文版
-- `system-prompts/prep.md`、`combat.md` 原生英文版
-- 验收：intl 构建自更新到英文技能包；英文 agent 全流程无中文渗漏
+- ✅ 设计定稿：**脚本单源 + 散文覆盖**。cn 树 `skills/prep` 不动；intl 覆盖树
+  `skills/prep-intl` 只放翻译散文 + 自己的 `bundle.json`（独立 revision 计数）。
+  intl 基线由 `scripts/compose-intl-skills.mjs` 组合产出，四道 fail-closed 门禁：
+  ①intl 不得有游离文件 ②intl 散文零 CJK ③cn 原创散文 100% 有译文 ④合法 bundle.json
+- ✅ 翻译完成：12 个 cn 原创散文（5 个 SKILL.md + 7 个 references）原生英文版 +
+  `system-prompts-intl/prep.md`、`combat.md`（vendored node_modules README 豁免；
+  combat 的中文小队称呼表按 intl 场景改写为通用昵称映射规则）
+- ✅ `publish-skills.mjs --region cn|intl`：intl 先组合再发 R2 独立前缀
+  `desktop/arcane-desk-intl/skills/`（publish-release TARGETS 增加 `skillsRoot`）；
+  cn 行为不变
+- ✅ 运行期接线：region.mjs 默认值表新增 `bundledSkillsDir` / `systemPromptsDir`，
+  main.js / agent-host.js 改读 region 配置；intl 构建由 prepare-desktop-release.mjs
+  组合 `generated/skills-intl/prep` 并复制 `generated/system-prompts-intl`（过 CJK 门禁），
+  cn 构建清理陈旧 intl 基线；双树随包（接受约 3.4MB 冗余）
+- ✅ `check-skills-revision.mjs` 双树：prep 与 prep-intl 各自强制 bump 单调 revision；
+  skills/AGENTS.md 补充覆盖树约定；verify-source 注册组合器；全量测试 431/431，
+  tsc 干净，intl 构建冒烟通过（`0.4.3-8b6ef79a-intl`）
+- ⏳ 验收待触发：push 后 dispatch release workflow 出 intl 包 + 首次
+  `publish-skills --region intl`（远端无指针按 r0 放行），验证 intl 构建自更新到
+  英文技能包、英文 agent 全流程无中文渗漏
 
 ### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— **暂缓**
 
