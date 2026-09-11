@@ -123,6 +123,7 @@ stateDiagram-v2
 - assistant 消息经 `markdown.js` 渲染后做 post-process：遍历文本节点，匹配 `.md` / `.markdown` 结尾的路径，包成 `<a class="md-path">`；
 - 覆盖形态：相对路径、绝对路径（含 Windows 盘符）、反引号/引号包裹、`路径:行号`（行号 v1 仅剥除不跳转）；Markdown 链接（`[文字]` 紧跟 `(笔记.md)`）在 link 渲染处直接产出可点锚点（`safeUrl` 的非 http 剥除逻辑对 `.md` 结尾的 href 放行并转为此锚点）；
 - 匹配不到/解析失败 = 保持纯文本，无回归面；
+- 代码容器分级：hljs 高亮的代码块（真源码）不 linkify；**纯文本围栏**（```text 等无高亮块，agent 列文件清单的常客）与行内 `code` 都 linkify；
 - 相对路径的 resolve 基准 = **当前活动会话的工作目录**（`host.cwd()`）；取不到时退回备团工作目录（`prepUiCwd()`）。战斗模式下同样按此规则：一律用 prep cwd 会让战斗会话里的相对路径静默解析到别的目录、落"文件不存在"错误页，而用户看不出原因。绝对路径不受基准影响，只过 §7 的围栏。
 
 ### 4.3 阅读器页内 chrome（③）

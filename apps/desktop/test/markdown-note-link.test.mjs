@@ -157,15 +157,28 @@ test("http links are untouched by the note pass", () => {
   assert.equal(links[1].dataset.mdPath, "notes/a.md");
 });
 
-test("paths inside a code fence stay source, paths inside inline code link", () => {
+test("plain-text fences linkify file listings; highlighted code stays source", () => {
+  // 无语言/未知语言围栏(hljs 不高亮)是 agent 列文件清单的常客:里面的路径要可点
   const { container, arcaneMd } = loadMarkdownPipeline();
-  arcaneMd.render(container, "```\ncat notes/secret.md\n```\n\n用 `notes/inline.md` 这个文件。");
+  arcaneMd.render(container, "```text\nchapters/00-简介.md\n```\n\n用 `notes/inline.md` 这个文件。");
   const pre = container.querySelector("pre.md-code");
-  assert.equal(pre.querySelectorAll("a.md-path").length, 0, "fence content is source, not an entry point");
-  assert.match(pre.textContent, /notes\/secret\.md/);
+  const links = pre.querySelectorAll("a.md-path");
+  assert.equal(links.length, 1, "plain-text fence paths are entry points");
+  assert.equal(links[0].dataset.mdPath, "chapters/00-简介.md");
   const inline = [...descendants(container)].filter((node) => node.tagName === "CODE" && node.parentElement?.tagName !== "PRE");
   assert.equal(inline.length, 1);
   assert.equal(inline[0].querySelector("a.md-path")?.dataset.mdPath, "notes/inline.md");
+});
+
+test("highlighted code fences keep paths as source", () => {
+  // hljs 认识的语言会产出 code.hljs:里面的"路径"是源码字符串,不是入口。
+  // mini-dom 不解析 innerHTML,这里钉的是分类判据(hljs class)而不是 span 级遍历。
+  const hljs = { getLanguage: (lang) => lang === "js", highlight: (code) => ({ value: code }) };
+  const { container, arcaneMd } = loadMarkdownPipeline({ globals: { hljs } });
+  arcaneMd.render(container, "```js\ncat notes/secret.md\n```");
+  const code = container.querySelector("code.hljs");
+  assert.ok(code, "known language renders through hljs");
+  assert.equal(code.querySelectorAll("a.md-path").length, 0, "highlighted source is not linkified");
 });
 
 test("rendered math is display, not an entry point: no anchors inside KaTeX output", () => {

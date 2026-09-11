@@ -374,7 +374,8 @@ function noteAnchor(rawPath, tokens, math) {
 
 /**
  * 渲染完的容器里遍历文本节点,把裸路径包成锚点。
- * 围栏代码块里的路径是源码不是入口,跳过;已包好的锚点不重复处理。
+ * 高亮代码块(hljs)里的路径是源码不是入口,跳过;纯文本围栏(```text 文件清单)放行。
+ * 已包好的锚点不重复处理。
  * KaTeX 产物(.md-katex)里的"路径"是公式文本,包上链接会把公式视觉破坏,同样跳过。
  * 行内 <code> 里的路径要处理——反引号包裹是 spec §4.2 明列的形态。
  */
@@ -383,7 +384,11 @@ function linkifyNotePaths(root) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
-      if (node.parentElement?.closest("pre, a, .md-katex")) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("a, .md-katex")) return NodeFilter.FILTER_REJECT;
+      // 高亮代码块(hljs)里的路径是源码不是入口,跳过;纯文本围栏(```text 等无高亮)
+      // 是 agent 列文件清单的常客,里面的路径要可点。行内 <code> 不在 pre 里,不受影响。
+      const code = node.parentElement?.closest("code");
+      if (code?.classList?.contains("hljs")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });

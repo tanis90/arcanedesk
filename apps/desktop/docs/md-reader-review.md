@@ -149,3 +149,11 @@
 已知限制（spec §1 归档）：mermaid 图不随主题热切换换配色（chat 同款）；英文句末 `summary.md.` 保守不 linkify。
 
 验收：`npm test` **466/466**、`tsc --noEmit`、`verify:source`、`smoke-md-reader`（PASS）、`review-md-reader`（CDP 14 项 OK）全绿。
+
+## 8. 验收反馈：纯文本围栏不 linkify（2026-09-11）
+
+**现象**：agent 用 ```text 围栏列文件清单（目录树式输出），清单里的路径全部不可点。
+
+**根因**：linkify walker 原设计把 `pre` 整体排除（"围栏里的路径是源码不是入口"）。但真实使用中，agent 列文件最爱用无语言/```text 围栏——路径密度最高的地方恰好被排除了。
+
+**修法**：按代码容器分级——hljs 高亮代码块（`code.hljs`，真源码）仍排除；无高亮的纯文本围栏放行（`markdown.js` `acceptNode` 改查 `code.hljs` class 而非 `pre` 标签）。行内 `code` 行为不变。测试重写为两条：纯文本围栏可点、高亮围栏保持源码；spec §4.2 已回写。
