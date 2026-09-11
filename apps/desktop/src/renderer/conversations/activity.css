@@ -1,6 +1,23 @@
 /* Quiet brass index for a DM's concurrent prep and combat work. */
 #activity-error { color: var(--warn) !important; }
-#conversation-title { padding: 8px 16px 0; font: 600 14px/1.5 var(--font-display); color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+/* 会话标题 = 主页盖章式墨块:浅色铁胆墨水 / 深色黄铜压印,硬投影 + 微倾斜 */
+#conversation-title {
+  flex: none;
+  align-self: flex-start;
+  max-width: calc(100% - 32px);
+  margin: 10px 16px 2px;
+  padding: 5px 14px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 3px 3px 0 var(--shadow);
+  transform: rotate(-0.6deg);
+  font: 700 14px/1.5 var(--font-display);
+  letter-spacing: .03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme="light"] #conversation-title { background: var(--text-strong); color: var(--bg); }
 #conversation-title:empty { display: none; }
 #conversation-task-status, #conversation-model-pending, #conversation-sync { text-align: left; padding: 2px 16px; }
 .card.attention .body { padding: 10px 12px; }
