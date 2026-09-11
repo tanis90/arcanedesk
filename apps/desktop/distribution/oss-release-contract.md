@@ -24,3 +24,25 @@
   `desktop/arcane-desk/*`, limited bucket metadata/list access, and no Delete.
 - Rollback never deletes or overwrites a versioned release. It revalidates an
   existing manifest and changes only `latest.json`.
+
+# Intl flavor release contract (R2)
+
+The intl build flavor (国际化方案 D5) publishes to Cloudflare R2 instead of OSS,
+selected by `publish-release.mjs --region intl` (default: the
+`generated/region.json` written by the matching build).
+
+- Bucket: `arcane-desk-intl`, served publicly through the custom domain
+  `https://dl.arcanedesk.app`; public read, anonymous write disabled.
+- Immutable objects:
+  `desktop/arcane-desk-intl/releases/<releaseId>/<platform>/<artifact>` and
+  `desktop/arcane-desk-intl/releases/<releaseId>/release.json`.
+  Intl artifact file names and default release ids carry an `-intl` suffix.
+- Mutable object: `desktop/arcane-desk-intl/latest.json` only.
+- Same platform directories and the same HEAD-verification discipline as OSS.
+- R2 has no `x-oss-forbid-overwrite`; immutability is enforced by the
+  pre-upload absence check alone. A rebuild must use a new release id.
+- Credentials: `CF_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+  (S3-compatible SigV4, region `auto`), scoped to this bucket with no Delete.
+- Signed artifacts are overlaid before hashing and upload via `--signed-dir`
+  (sign-first-then-publish); overwriting an already published object to inject
+  a signature is forbidden.

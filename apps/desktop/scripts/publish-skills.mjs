@@ -2,14 +2,19 @@
 // publish-skills.mjs — 内置 skills 的独立发布入口:改 skill 文本不再发 app 版。
 //
 // 职责(顺序固定,镜像 publish-release 的不可变+指针纪律):
-//   1. 读 skills/prep/bundle.json 的单调 revision(改 skill 的 PR 必须把它 +1)
+//   1. 读 bundle.json 的单调 revision(cn = skills/prep/bundle.json,
+//      intl = skills/prep-intl/bundle.json,两棵树的计数器与远端指针各自独立)
 //   2. 拉远端 skills/latest.json,要求新 revision 严格更大(防回滚、防重传)
-//   3. 把 skills/prep 全量打成 bundle.tar.gz,生成逐文件 SHA256 的 manifest.json
-//   4. 上传不可变对象 skills/<revision>/{bundle.tar.gz,manifest.json}
-//   5. HEAD 全量验收通过后才切换可变指针 skills/latest.json
+//   3. 把技能树全量打成 bundle.tar.gz,生成逐文件 SHA256 的 manifest.json
+//      (intl 先经 compose-intl-skills.mjs 组合:cn 树脚本单源 + intl 翻译覆盖)
+//   4. 上传不可变对象 <skillsRoot>/<revision>/{bundle.tar.gz,manifest.json}
+//   5. HEAD 全量验收通过后才切换可变指针 <skillsRoot>/latest.json
 //
-// 凭证与 publish-release 相同:OSS_RELEASE_KEY_ID / OSS_RELEASE_KEY_SECRET
-// 环境变量,或 ~/.ossutil/arcane-release.conf 的 [ArcaneDeskRelease] 段。
+// region 路由(--region cn|intl,默认 cn)与 publish-release 同一 TARGETS 表:
+// cn 发 OSS 北京 desktop/arcane-desk/skills/,intl 发 R2 desktop/arcane-desk-intl/skills/。
+// 凭证与 publish-release 相同:cn 用 OSS_RELEASE_KEY_ID / OSS_RELEASE_KEY_SECRET
+// 环境变量(或 ~/.ossutil/arcane-release.conf 的 [ArcaneDeskRelease] 段),
+// intl 用 CF_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY。
 
 import fs from "node:fs";
 import { checkModuleBuilderVendor } from "./vendor-module-builder.mjs";
@@ -21,21 +26,27 @@ import crypto from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import * as tar from "tar";
 
-import { BASE_URL, createOssClient, uploadObject, verifyUrl } from "./publish-release.mjs";
+import { createStorageClient, resolveTarget, uploadObject, verifyUrl } from "./publish-release.mjs";
+import { composeIntlSkills } from "./compose-intl-skills.mjs";
+import { REGION_IDS } from "../src/main/region.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SKILLS_DIR = path.join(desktopRoot, "skills", "prep");
-const SKILLS_ROOT = "desktop/arcane-desk/skills";
-const LATEST_KEY = `${SKILLS_ROOT}/latest.json`;
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 
 function parseArgs(argv) {
   const args = {};
-  for (const a of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const a = argv[index];
     if (a === "--dry-run") args.dryRun = true;
     else if (a === "--skip-latest") args.skipLatest = true;
-    else throw new Error(`unknown option: ${a}`);
+    else if (a === "--region") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--region requires a value");
+      args.region = value;
+      index += 1;
+    } else throw new Error(`unknown option: ${a}`);
   }
   return args;
 }
@@ -160,9 +171,9 @@ async function buildSkillsManifest({ skillsDir, revision, minAppVersion, bundleF
 }
 
 /** 远端当前指针 revision;首次发布(404)视为 0。dry-run 时网络失败降级为告警。 */
-async function remoteRevision({ tolerateFailure }) {
+async function remoteRevision({ baseUrl, latestKey, tolerateFailure }) {
   try {
-    const response = await fetch(`${BASE_URL}/${LATEST_KEY}`, {
+    const response = await fetch(`${baseUrl}/${latestKey}`, {
       cache: "no-store",
       redirect: "error",
       headers: { "accept-encoding": "identity" },
@@ -183,33 +194,49 @@ async function remoteRevision({ tolerateFailure }) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const bundleMeta = JSON.parse(await fsp.readFile(path.join(SKILLS_DIR, "bundle.json"), "utf8"));
-  const revision = bundleMeta?.schemaVersion === 1 && Number.isSafeInteger(bundleMeta?.revision) && bundleMeta.revision >= 1
-    ? bundleMeta.revision
-    : null;
-  if (!revision) throw new Error("skills/prep/bundle.json is missing a valid monotonic revision");
-  const minAppVersion = bundleMeta.minAppVersion ?? null;
-  if (minAppVersion != null && !/^\d+\.\d+\.\d+$/.test(minAppVersion)) {
-    throw new Error(`skills/prep/bundle.json minAppVersion is not a three-part version: ${minAppVersion}`);
+  const region = args.region ?? "cn";
+  if (!REGION_IDS.includes(region)) {
+    throw new Error(`--region must be one of ${REGION_IDS.join("/")}; got: ${region}`);
   }
-
-  // 本地静态门禁先行:bundle 必须自包含(可脱离 app 树运行),再谈网络与上传。
-  const entries = await collectSkillFiles(SKILLS_DIR);
-  await checkModuleBuilderVendor();
-  await assertSkillsSelfContained(SKILLS_DIR, entries);
-
-  const current = await remoteRevision({ tolerateFailure: args.dryRun });
-  if (current != null && revision <= current) {
-    throw new Error(`skills revision ${revision} is not newer than the published r${current}; bump skills/prep/bundle.json`);
-  }
+  const target = resolveTarget(region);
+  const skillsRoot = target.skillsRoot;
+  const latestKey = `${skillsRoot}/latest.json`;
 
   const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "arcane-skills-publish-"));
   try {
+    // intl 技能树 = cn 树脚本单源 + skills/prep-intl 翻译覆盖（含独立 bundle.json
+    // 计数器），组合器自带 CJK 渗漏与翻译覆盖率门禁。
+    let skillsDir = SKILLS_DIR;
+    if (region === "intl") {
+      skillsDir = path.join(workDir, "composed");
+      await composeIntlSkills({ outDir: skillsDir });
+    }
+
+    const bundleMeta = JSON.parse(await fsp.readFile(path.join(skillsDir, "bundle.json"), "utf8"));
+    const revision = bundleMeta?.schemaVersion === 1 && Number.isSafeInteger(bundleMeta?.revision) && bundleMeta.revision >= 1
+      ? bundleMeta.revision
+      : null;
+    if (!revision) throw new Error(`bundle.json in ${skillsDir} is missing a valid monotonic revision`);
+    const minAppVersion = bundleMeta.minAppVersion ?? null;
+    if (minAppVersion != null && !/^\d+\.\d+\.\d+$/.test(minAppVersion)) {
+      throw new Error(`bundle.json minAppVersion is not a three-part version: ${minAppVersion}`);
+    }
+
+    // 本地静态门禁先行:bundle 必须自包含(可脱离 app 树运行),再谈网络与上传。
+    const entries = await collectSkillFiles(skillsDir);
+    await checkModuleBuilderVendor();
+    await assertSkillsSelfContained(skillsDir, entries);
+
+    const current = await remoteRevision({ baseUrl: target.baseUrl, latestKey, tolerateFailure: args.dryRun });
+    if (current != null && revision <= current) {
+      throw new Error(`skills revision ${revision} is not newer than the published r${current}; bump the intl/cn bundle.json`);
+    }
+
     const bundleFile = path.join(workDir, "bundle.tar.gz");
-    await tar.c({ file: bundleFile, cwd: SKILLS_DIR, gzip: true, portable: true }, entries);
+    await tar.c({ file: bundleFile, cwd: skillsDir, gzip: true, portable: true }, entries);
     const publishedAt = new Date().toISOString().replace(/\.\d+Z$/, "Z");
     const manifest = await buildSkillsManifest({
-      skillsDir: SKILLS_DIR,
+      skillsDir,
       revision,
       minAppVersion,
       bundleFile,
@@ -220,7 +247,7 @@ async function main() {
     const latestBody = `${JSON.stringify({ schemaVersion: 1, revision, publishedAt }, null, 2)}\n`;
     const immutableObjects = [
       {
-        key: `${SKILLS_ROOT}/${revision}/bundle.tar.gz`,
+        key: `${skillsRoot}/${revision}/bundle.tar.gz`,
         file: bundleFile,
         bytes: manifest.bundle.bytes,
         cache: IMMUTABLE_CACHE,
@@ -228,7 +255,7 @@ async function main() {
         immutable: true,
       },
       {
-        key: `${SKILLS_ROOT}/${revision}/manifest.json`,
+        key: `${skillsRoot}/${revision}/manifest.json`,
         body: manifestBody,
         bytes: Buffer.byteLength(manifestBody),
         cache: IMMUTABLE_CACHE,
@@ -237,7 +264,7 @@ async function main() {
       },
     ];
     const latestObject = {
-      key: LATEST_KEY,
+      key: latestKey,
       body: latestBody,
       bytes: Buffer.byteLength(latestBody),
       cache: "no-cache",
@@ -245,7 +272,7 @@ async function main() {
     };
 
     console.log(
-      `Skills bundle r${revision} — ${Object.keys(manifest.files).length} files, `
+      `Skills bundle r${revision} (${region}) — ${Object.keys(manifest.files).length} files, `
       + `${manifest.bundle.bytes} bytes, sha256 ${manifest.bundle.sha256.slice(0, 12)}…`
       + (minAppVersion ? `, requires app >= ${minAppVersion}` : ""),
     );
@@ -255,7 +282,7 @@ async function main() {
       return;
     }
 
-    const client = await createOssClient();
+    const client = await createStorageClient(target);
     // 已存在的 revision 目录拒绝重传(不可变纪律);latest 指针除外。
     for (const obj of immutableObjects) {
       let exists = false;
@@ -265,13 +292,13 @@ async function main() {
       } catch (error) {
         if (Number(error?.status) !== 404) throw error;
       }
-      if (exists) throw new Error(`immutable object already exists: ${obj.key} (bump skills/prep/bundle.json)`);
+      if (exists) throw new Error(`immutable object already exists: ${obj.key} (bump the intl/cn bundle.json)`);
     }
     for (const obj of immutableObjects) await uploadObject(client, obj);
 
     // verify 纪律:不可变对象全部通过后,才允许切换 latest 指针。
     for (const obj of immutableObjects) {
-      if (!(await verifyUrl(`${BASE_URL}/${obj.key}`, obj.bytes, obj.key))) {
+      if (!(await verifyUrl(`${target.baseUrl}/${obj.key}`, obj.bytes, obj.key))) {
         throw new Error(`${obj.key} failed verification; skills latest remains unchanged`);
       }
     }
@@ -280,10 +307,10 @@ async function main() {
       return;
     }
     await uploadObject(client, latestObject);
-    if (!(await verifyUrl(`${BASE_URL}/${latestObject.key}`, latestObject.bytes, latestObject.key))) {
+    if (!(await verifyUrl(`${target.baseUrl}/${latestObject.key}`, latestObject.bytes, latestObject.key))) {
       throw new Error("skills latest.json failed verification; do NOT announce this publish");
     }
-    console.log(`skills latest now points to verified bundle r${revision}`);
+    console.log(`skills latest now points to verified bundle r${revision} (${region})`);
   } finally {
     await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }

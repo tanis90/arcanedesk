@@ -41,6 +41,7 @@ export const requiredFiles = [
   "scripts/archive.mjs",
   "distribution/community-distribution.json",
   "generated/desktop-release.json",
+  "generated/region.json",
   "generated/renderer-assets/marked/lib/marked.umd.js",
   "generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js",
   "generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css",
@@ -76,8 +77,31 @@ export const exactDirectories = new Map([
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
-  ["generated", ["desktop-release.json", "renderer-assets"]],
+  ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
 ]);
+
+// generated/ 的精确清单随 region flavor 变化（国际化方案 M4，评审 P1 修复）：
+// intl 包必须携带组合产出的英文基线（generated/skills-intl/prep 与
+// generated/system-prompts-intl，由 prepare-desktop-release 组合并过 CJK 门禁），
+// cn 包则必须没有它们（cn 构建会清除残留）。组合产出与 skills/prep 同构
+// （cn 全文事实源 + intl 散文覆盖），顶层清单直接复用，新增技能时只需改一处。
+export function packagedLayout(region) {
+  if (region !== "intl") return { required: requiredFiles, exact: exactDirectories };
+  const skillTopLevel = exactDirectories.get("skills/prep");
+  const exact = new Map(exactDirectories);
+  exact.set("generated", [...exactDirectories.get("generated"), "skills-intl", "system-prompts-intl"]);
+  exact.set("generated/skills-intl", ["prep"]);
+  exact.set("generated/skills-intl/prep", skillTopLevel);
+  exact.set("generated/system-prompts-intl", ["combat.md", "prep.md"]);
+  const required = [
+    ...requiredFiles,
+    "generated/skills-intl/prep/bundle.json",
+    ...skillTopLevel.filter((entry) => entry !== "bundle.json").map((id) => `generated/skills-intl/prep/${id}/SKILL.md`),
+    "generated/system-prompts-intl/combat.md",
+    "generated/system-prompts-intl/prep.md",
+  ];
+  return { required, exact };
+}
 
 function packagedElectronPath(appRoot, productName) {
   const resources = path.dirname(appRoot);
@@ -174,14 +198,25 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     return { ok: false, appRoot, errors: [`packaged app resource directory does not exist: ${appRoot}`] };
   }
 
-  for (const relative of requiredFiles) {
+  // 布局期望随包内 region flavor 走：region.json 是包的自声明（--expected-region
+  // 在下方元数据检查中另行交叉校验）。region.json 缺失/损坏时退回 cn 基线，
+  // 缺失/非法本身由 requiredFiles 与元数据检查分别报告。
+  let packagedRegion = null;
+  try {
+    packagedRegion = readJson(path.join(appRoot, "generated", "region.json"))?.region ?? null;
+  } catch {
+    packagedRegion = null;
+  }
+  const layout = packagedLayout(packagedRegion);
+
+  for (const relative of layout.required) {
     const target = path.join(appRoot, relative);
     if (!fs.existsSync(target) || !fs.statSync(target).isFile()) errors.push(`missing required file: ${relative}`);
   }
   for (const relative of forbiddenPaths) {
     if (fs.existsSync(path.join(appRoot, relative))) errors.push(`forbidden maintainer/deprecated resource is packaged: ${relative}`);
   }
-  for (const [relative, expected] of exactDirectories) {
+  for (const [relative, expected] of layout.exact) {
     const target = path.join(appRoot, relative);
     if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) continue;
     const actual = fs.readdirSync(target).sort();
@@ -207,6 +242,15 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     const appPackage = readJson(path.join(appRoot, "package.json"));
     const releaseManifest = readJson(path.join(appRoot, "generated", "desktop-release.json"));
     const distribution = readJson(path.join(appRoot, "distribution", "community-distribution.json"));
+    // 包内 region flavor 冒烟（国际化方案 D1/D5）：region.json 必须合法，
+    // 传了 --expected-region 时还必须与构建目标一致。
+    const regionManifest = readJson(path.join(appRoot, "generated", "region.json"));
+    if (!["cn", "intl"].includes(regionManifest.region)) {
+      errors.push(`packaged generated/region.json has unknown region: ${String(regionManifest.region)}`);
+    }
+    if (options.expectedRegion && regionManifest.region !== options.expectedRegion) {
+      errors.push(`packaged region: expected ${options.expectedRegion}; got ${regionManifest.region}`);
+    }
     const directPackages = directDependencyPackages(appRoot, appPackage);
     const electronRuntime = options.electronRuntime ?? inspectElectronRuntime(
       packagedElectronPath(appRoot, appPackage.productName),
@@ -231,7 +275,7 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     ok: errors.length === 0,
     appRoot,
     errors,
-    requiredFiles: requiredFiles.length,
+    requiredFiles: layout.required.length,
     userSkills: exactDirectories.get("skills/prep"),
   };
 }
@@ -242,10 +286,12 @@ if (invokedPath === import.meta.url) {
   let appRootArg = null;
   let runtimeFromManifest = false;
   let expectedNodePlatform = null;
+  let expectedRegion = null;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--runtime-from-manifest") runtimeFromManifest = true;
     else if (value === "--expected-node-platform") expectedNodePlatform = argv[++index] ?? null;
+    else if (value === "--expected-region") expectedRegion = argv[++index] ?? null;
     else if (value.startsWith("--")) {
       console.error(`unknown option: ${value}`);
       process.exit(2);
@@ -255,8 +301,12 @@ if (invokedPath === import.meta.url) {
       process.exit(2);
     }
   }
+  if (expectedRegion && !["cn", "intl"].includes(expectedRegion)) {
+    console.error(`--expected-region must be one of cn/intl; got: ${expectedRegion}`);
+    process.exit(2);
+  }
   if (!appRootArg) {
-    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>]");
+    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>]");
     process.exit(2);
   }
   // 交叉构建（x64 runner 打 arm64 包）无法执行目标 exe：改用包内 manifest 的
@@ -270,6 +320,7 @@ if (invokedPath === import.meta.url) {
       }
     : {};
   options.expectedNodePlatform = expectedNodePlatform;
+  options.expectedRegion = expectedRegion;
   const result = verifyPackagedApp(appRootArg, options);
   const stream = result.ok ? process.stdout : process.stderr;
   stream.write(`${JSON.stringify(result, null, 2)}\n`);

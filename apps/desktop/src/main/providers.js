@@ -7,6 +7,7 @@ import { decodeBoundCredential, encodeBoundCredential } from "./bound-credential
 import { err } from "./i18n-error.mjs";
 import { providerCredentialTarget } from "./provider-endpoint.js";
 import { createUnavailableSecretStorage } from "./secret-storage.js";
+import { regionConfig } from "./region.mjs";
 
 // Keep the default product budget aligned with the 256K context exposed by
 // current coding-plan models such as Kimi K2.7 (`262144` in provider configs).
@@ -16,9 +17,10 @@ const DEFAULT_MAX_TOKENS = 8192;
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const ARCANE_SPARK_PROVIDER_ID = "arcane-spark";
 const ARCANE_SPARK_PROVIDER_NAME = "Arcane Spark";
-// 语音中转(arcane-relay)复用同一个网关地址,导出给 voice-store 做默认值
+// 语音中转(arcane-relay)复用同一个网关地址,导出给 voice-store 做默认值。
+// 缺省走 region 默认值(D1);ARCANE_SPARK_BASE_URL 仍是最高优先级覆盖层。
 export const DEFAULT_NEW_API_BASE_URL =
-  cleanEnvValue(process.env.ARCANE_SPARK_BASE_URL) || "https://llm.arcanedesk.bitterbebop.cn/v1";
+  cleanEnvValue(process.env.ARCANE_SPARK_BASE_URL) || regionConfig().sparkBaseUrl;
 // 客户端只发送稳定的产品模型 ID；真实供应商模型由 NewAPI model_mapping 决定。
 // 这样以后切换上游模型无需发布新的 Desktop，也不会把供应商型号暴露给用户。
 const ARCANE_SPARK_MODEL_ID = "arcane-spark";

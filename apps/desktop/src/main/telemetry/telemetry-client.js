@@ -21,10 +21,11 @@ import { TelemetryStore } from "./telemetry-store.js";
 import { TelemetryUploader } from "./telemetry-uploader.js";
 import { TurnSummarizer } from "./turn-summarizer.js";
 import { TelemetryWriter } from "./telemetry-writer.js";
+import { regionConfig } from "../region.mjs";
 
-// 官方发行版的可选默认端点。自托管构建可用
+// 官方发行版的可选默认端点,缺省走 region 默认值(D1)。自托管构建可用
 // ARCANE_TELEMETRY_ENDPOINT 覆盖，或用 ARCANE_TELEMETRY_DISABLED=1 完全关闭。
-const DEFAULT_TELEMETRY_ENDPOINT = "https://api.arcanedesk.bitterbebop.cn";
+const DEFAULT_TELEMETRY_ENDPOINT = regionConfig().telemetryEndpoint;
 
 function shortId(prefix) {
   return `${prefix}_${randomBytes(4).toString("hex")}`;

@@ -14,6 +14,16 @@ import { writeModuleBundle, writeModuleArchive } from "@arcanedesk/foundry-pack-
 
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
 
+// 索引地址解析（国际化方案 D2/M3，名字与语义在 M1 规格钉死）：
+// --index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。
+// intl 构建由 main.js 把 region 默认值写进 ARCANE_MOD_INDEX_URL，子进程自然继承。
+export function resolveIndexUrl(flagValue, env = process.env) {
+  const flag = typeof flagValue === "string" && flagValue.trim() ? flagValue.trim() : null;
+  const fromEnv = String(env.ARCANE_MOD_INDEX_URL ?? "").trim() || null;
+  const value = flag ?? fromEnv;
+  return value ? httpsUrl(value, "mirror index URL") : MIRROR_INDEX_URL;
+}
+
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 8 * 1024 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -532,7 +542,7 @@ function versionStatus(localVersion, remoteVersion) {
   return "current";
 }
 
-export function buildCatalog(indexValue, installedValue) {
+export function buildCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.modules) ? installedValue.modules : [];
   const mirrorModules = index.packages.filter(isModuleIndexEntry);
@@ -561,7 +571,7 @@ export function buildCatalog(indexValue, installedValue) {
   rows.sort((a, b) => a.id.localeCompare(b.id));
   notInMirror.sort((a, b) => a.id.localeCompare(b.id));
   return {
-    indexUrl: MIRROR_INDEX_URL,
+    indexUrl,
     generated: index.generated,
     foundry: index.foundry ?? null,
     dnd5e: index.dnd5e ?? null,
@@ -578,7 +588,7 @@ export async function catalogModules({ dataDir, fetchImpl = fetch, indexUrl = MI
     loadIndex(fetchImpl, indexUrl),
     listInstalledModules(dataDir, { allowMissingDataDir }),
   ]);
-  return buildCatalog(index, installed);
+  return buildCatalog(index, installed, indexUrl);
 }
 
 function exactWorldIndexEntry(index, worldId) {
@@ -796,7 +806,7 @@ function worldResolutionSha256({ generated, profile, world, system, modules }) {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-export function buildWorldCatalog(indexValue, installedValue) {
+export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.worlds) ? installedValue.worlds : [];
   const rows = index.worlds.map((entry) => {
@@ -825,7 +835,7 @@ export function buildWorldCatalog(indexValue, installedValue) {
     .map((entry) => ({ id: entry.id, title: entry.title, version: entry.version, directory: entry.directory }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return {
-    indexUrl: MIRROR_INDEX_URL,
+    indexUrl,
     generated: index.generated,
     dataDirExists: installedValue?.dataDirExists ?? null,
     rows,
@@ -840,7 +850,7 @@ export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIR
     loadIndex(fetchImpl, indexUrl),
     listInstalledWorlds(dataDir, { allowMissingDataDir }),
   ]);
-  return buildWorldCatalog(index, installed);
+  return buildWorldCatalog(index, installed, indexUrl);
 }
 
 export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
@@ -2085,14 +2095,16 @@ function usage() {
     "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
     "  mod-manager local-inspect --archive <zip> --data-dir <dir>",
     "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
-    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url>",
+    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>]",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
-    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256>",
+    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
+    "",
+    "镜像索引地址解析顺序：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。",
   ].join("\n");
 }
 
@@ -2114,11 +2126,13 @@ export async function runCli(argv = process.argv.slice(2)) {
       return inspectModule({
         manifestUrl: options["manifest-url"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "catalog":
       return catalogModules({
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "stage":
@@ -2127,6 +2141,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         expectedId: options["expected-id"],
         expectedVersion: options["expected-version"],
         expectedDownloadUrl: options["expected-download-url"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
       });
     case "commit":
       return commitStage({
@@ -2139,17 +2154,20 @@ export async function runCli(argv = process.argv.slice(2)) {
       return inspectWorldEnvironment({
         worldId: options["world-id"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-catalog":
       return catalogWorlds({
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-stage":
       return stageWorldEnvironment({
         worldId: options["world-id"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         expectedWorldVersion: options["expected-world-version"],
         expectedWorldSha256: options["expected-world-sha256"],
         expectedProfileId: options["expected-profile-id"],

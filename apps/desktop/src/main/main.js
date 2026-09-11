@@ -32,10 +32,19 @@ import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 import { PanelSurfaceController } from "./panel-surface-controller.js";
 import { loadNotePayload, reloadNotePayload } from "./md-reader-note.js";
+import { regionConfig } from "./region.mjs";
 
 // Pi shell tools and other Arcane-owned child processes inherit process.env.
 // Establish the Windows UTF-8 contract before creating any of them.
 applyArcaneSubprocessEnvironment();
+
+// Region 默认值表（D1）：环境变量 > region 默认值。intl 构建默认值即指向 .app 域名。
+const REGION = regionConfig();
+// M3 接线点：mod-manager 以子进程方式运行，经环境变量接收索引地址；
+// 运维/联调可用 ARCANE_MOD_INDEX_URL 显式覆盖。
+if (!String(process.env.ARCANE_MOD_INDEX_URL ?? "").trim()) {
+  process.env.ARCANE_MOD_INDEX_URL = REGION.modIndexUrl;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARCANE_APP_ID = "cn.bitterbebop.arcanedesk";
@@ -50,7 +59,7 @@ const ARCANE_APP_ICON = path.join(
 const isDev = process.argv.includes("--dev");
 
 const DEFAULT_FOUNDRY_URL = process.env.ARCANE_FOUNDRY_URL || "http://localhost:30000";
-const ARCANE_WEBSITE_URL = process.env.ARCANE_WEBSITE_URL || "https://arcanedesk.bitterbebop.cn";
+const ARCANE_WEBSITE_URL = REGION.websiteUrl;
 const CHAT_WIDTH_RATIO = 0.3;
 const CHAT_MIN_WIDTH = 320;
 const CHAT_MAX_RATIO = 0.65;
@@ -811,11 +820,12 @@ app.whenReady().then(async () => {
   // 校验的激活副本优先于包内基线(见 skills-updater.mjs)。解析发生在每次
   // session 创建时,所以启动后刷新成功即对后续新 session 生效,无需重启。
   const skillsUpdater = new SkillsUpdater({
-    bundledSkillsDir: path.join(__dirname, "..", "..", "skills", "prep"),
+    bundledSkillsDir: path.join(__dirname, "..", "..", REGION.bundledSkillsDir),
     stateDir: path.join(app.getPath("userData"), "skills"),
     appVersion: app.getVersion(),
-    // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback)。
-    baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL,
+    // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback);
+    // 缺省走 region 默认值(D1,见 src/main/region.mjs)。
+    baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL || REGION.skillsUpdateBaseUrl,
     onActivated: (dir) => applyModManagerEnv(dir),
     // 通道自身的运维遥测:各 revision 分布/失败率/minAppVersion 拦截全靠这条。
     onRefreshResult: (report) => telemetry?.skillsUpdateCompleted(report),
@@ -966,6 +976,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("notifications:get", event => isTrustedChatIpc(event) ? { ok: true, ...desktopNotifications.status() } : { ok: false });
   ipcMain.handle("notifications:set", (event, enabled) => isTrustedChatIpc(event) ? desktopNotifications.setEnabled(enabled) : { ok: false });
   ipcMain.handle("notifications:take-target", event => isTrustedChatIpc(event) ? desktopNotifications.takeTarget() : null);
+  // Region 派生的对外链接（官网/社区支持）：renderer 不持有任何硬编码域名。
+  ipcMain.handle("app:links", event => isTrustedChatIpc(event)
+    ? { ok: true, region: REGION.region, websiteUrl: REGION.websiteUrl, supportLinks: REGION.supportLinks }
+    : { ok: false });
   ipcMain.handle("activity:snapshot", event => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     return { ok: true, ...activityCenter.snapshot() };
