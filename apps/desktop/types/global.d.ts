@@ -16,6 +16,8 @@ interface ArcaneBridge {
   closePanel(): Promise<any>;
   /** F5: reload the current right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel(): Promise<any>;
+  /** Switch the right pane between the existing Foundry page and the open note. */
+  switchPanelSurface(target: "foundry" | "reader"): Promise<{ ok: boolean; empty?: string; error?: string; state?: string }>;
   /** ② 打开右屏 Markdown 阅读器(md-reader-spec §7 信任边界 ①)。
       失败也在阅读器里出错误页,chat 侧不弹任何东西,所以返回值仅供调用方忽略。 */
   openMdReader(path: string): Promise<{ ok: boolean; error?: string }>;
@@ -172,13 +174,12 @@ interface ArcaneMdApi {
 }
 
 /** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)。
-    origin 决定 ③ 的文案与语义,path 让页面分辨"同一份被唤回"与"换了一份"(§2)。 */
+    path 让页面分辨"同一份被唤回"与"换了一份"(§2)。 */
 type ArcaneReaderPayload = {
-  origin?: "foundry" | "closed" | null;
   path?: string | null;
 } & ({ name: string; text: string; truncated: boolean; error?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined });
 
-/** preload-reader.cjs 暴露给 md-reader.html 的方法桥:全是单向,页面拿不到任何文件系统能力。 */
+/** preload-reader.cjs 暴露给 md-reader.html 的方法桥:全是单向订阅,页面拿不到任何文件系统能力。 */
 interface ArcaneReaderApi {
   /** 订阅笔记内容。换笔记与 F5 重读走同一条推送(§3.5 不变量 5)。 @returns 退订函数 */
   onContent(callback: (payload: ArcaneReaderPayload) => void): () => void;
@@ -186,8 +187,6 @@ interface ArcaneReaderApi {
   onTheme(callback: (theme: string) => void): () => void;
   /** 订阅语言广播:与主题同路,热切换不重读文件。 @returns 退订函数 */
   onLocale(callback: (locale: string) => void): () => void;
-  /** ③ 顶栏返回/关闭与 Esc。origin=foundry → 回 FOUNDRY;origin=closed → 关面板。 */
-  back(): Promise<{ ok: boolean; state?: string }>;
 }
 
 interface Window {

@@ -202,7 +202,6 @@ function forgetSession(id) {
     historyPage = null; historyRetry = null; historyPageRequest++;
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
-    document.getElementById("conversation-title").textContent = "";
   }
   return cleanup;
 }
@@ -287,7 +286,6 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     lastContactAt = Date.now();
 
     selectedTaskId = payload.task?.id ?? null;
-    document.getElementById("conversation-title").textContent = payload.session.name || "";
     showTaskState(payload.task);
     showRetry(payload.inFlight?.retry);
     showPendingModel(payload.pendingModel);
@@ -1916,6 +1914,7 @@ togglePanelBtn.addEventListener("click", async () => {
   const result = await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel());
   if (result?.ok === false && result.error) addStatus(result.error);
 });
+
 input.addEventListener("input", () => {
   autosize();
   renderSlash();
@@ -2195,7 +2194,6 @@ function updateArchivedView() {
   if (row) selectedArchived = row.archivedAt != null;
   document.getElementById("archive-readonly").hidden = !selectedArchived;
   document.body.classList.toggle("archived-session", selectedArchived);
-  if (row) document.getElementById("conversation-title").textContent = navigationView.title(row);
   updateComposerAction();
 }
 function showEmptyConversation() {
@@ -2204,7 +2202,6 @@ function showEmptyConversation() {
   historyPage = null;
   resetConversation(); input.value = ""; pendingImages = []; renderAttachStrip();
   showTaskState(null); showPendingModel(null); updateArchivedView();
-  document.getElementById("conversation-title").textContent = "";
   messages.append(el("p", "nav-empty-selection", t("navigation.emptySelection")));
 }
 async function createProjectSession(cwd = undefined) {

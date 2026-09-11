@@ -1,7 +1,5 @@
 /* Quiet brass index for a DM's concurrent prep and combat work. */
 #activity-error { color: var(--warn) !important; }
-#conversation-title { padding: 8px 16px 0; font: 600 14px/1.5 var(--font-display); color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
-#conversation-title:empty { display: none; }
 #conversation-task-status, #conversation-model-pending, #conversation-sync { text-align: left; padding: 2px 16px; }
 .card.attention .body { padding: 10px 12px; }
 .card.attention textarea { display: block; width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
@@ -16,7 +14,7 @@ body:has(#activity-jump:not([hidden])) #scroll-bottom { display: none; }
 .session-item:focus-within .s-del { opacity: 1; }
 body.sidebar-pinned #session-drawer { transform: none; box-shadow: none; }
 body.sidebar-pinned #drawer-backdrop { display: none; }
-body.sidebar-pinned > :is(#activity-bar, #conversation-title, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
+body.sidebar-pinned > :is(#activity-bar, #conversation-sync, #conversation-task-status, #conversation-model-pending, #messages, #composer-wrap) { margin-left: 264px; }
 #session-drawer { max-width: calc(100% - var(--panel-w, 0px)); }
 body.sidebar-pinned #panel-command { margin-left: 264px; }
 .history-page-button { display: block; flex: none; align-self: center; margin: 12px auto; padding: 7px 16px; border: 1px solid var(--border); border-radius: 16px; color: var(--text); background: var(--panel); font: var(--fs-meta)/1.5 var(--font-ui); cursor: pointer; }

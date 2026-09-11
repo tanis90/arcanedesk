@@ -95,6 +95,11 @@ let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
 // 右屏两个 view(foundry / md 阅读器)的生命周期归 panel-surface 控制器(spec §8),
 // main.js 只留只读访问,不再持有可变引用——否则 readerView 可见时下面这些直摸点会静默失效。
 let panelSurfaces = null; // whenReady 里建;建好之前没有任何面板可排
+// 右屏悬浮 surface 切换器(FVTT/文档药丸):独立小 WebContentsView,
+// 与 foundry/reader 同级叠放且始终在最上——右屏原生 view 压在渲染层之上,HTML 浮层盖不住它。
+let panelSwitchView = null;
+let panelSwitchStatus = { open: false, surface: null }; // 最近一次 panel_status 的快照
+const PANEL_SWITCH_SIZE = { width: 156, height: 30 };
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
 let chatWidthPx = null; // 用户可拖;null = 按比例初始化
@@ -154,15 +159,6 @@ function isTrustedChatIpc(event) {
   return senderFrameId != null && senderFrameId === chat.mainFrame?.frameTreeNodeId;
 }
 
-/** readerView 发来的 IPC 是否可信(md-reader:back 的唯一门禁)。
-    形状对齐 isTrustedChatIpc:同一个 webContents + 同一个主 frame。 */
-function isTrustedReaderIpc(event) {
-  const reader = panelSurfaces?.readerView?.webContents;
-  if (!reader || reader.isDestroyed() || event?.sender !== reader) return false;
-  const senderFrameId = event.senderFrame?.frameTreeNodeId;
-  return senderFrameId != null && senderFrameId === reader.mainFrame?.frameTreeNodeId;
-}
-
 function clearFoundryPermissionState(reason, { keepSessionGrants = false } = {}) {
   if (keepSessionGrants) webPermissionPolicy?.cancelPending(reason);
   else webPermissionPolicy?.clearSessionGrants(reason);
@@ -217,6 +213,7 @@ function computePanelLayout() {
     并由控制器发一次 panel_layout 让 chat 页面 margin-right 让出右屏——事件协议不变。 */
 function layoutViews() {
   panelSurfaces?.layout();
+  layoutPanelSwitch();
 }
 
 function sameOrigin(a, b) {
@@ -388,6 +385,7 @@ function createFoundryView() {
     clearFoundryPermissionState("foundry-view-destroyed");
   });
   if (isDev) panelWebContents.openDevTools({ mode: "detach" });
+  keepPanelSwitchOnTop(); // foundryView 追加到了最上层,切换器要重新压回来
   return view;
 }
 
@@ -430,12 +428,84 @@ function createReaderView() {
     panelSurfaces?.onReaderReady();
   });
   if (isDev) contents.openDevTools({ mode: "detach" });
+  keepPanelSwitchOnTop(); // readerView 追加到了最上层,切换器要重新压回来
   void contents.loadFile(path.join(__dirname, "..", "renderer", "md-reader.html"), {
     // 只传 theme / lang:阅读器页没有可拖拽 chrome(win 下 view 已从标题栏带下沿开始),
     // 所以不需要 frameless。
     query: { theme: resolveTheme(), lang: resolveLocale() },
   }).catch(error => console.error("[reader] page load failed", error?.message ?? error));
   return view;
+}
+
+// ---------- 右屏悬浮 surface 切换器(FVTT / 文档药丸) ----------
+// 右屏是原生 WebContentsView 直接盖在 chat 渲染层之上(chat.js 注释:任何 z-index 都盖不住它),
+// 所以"悬浮在面板上的切换器"只能是同级再叠一个小 view。它只遮药丸自身大小,
+// 透明区域之外的鼠标事件照常落到下层 Foundry / 阅读器。
+
+function sendToPanelSwitch(channel, payload) {
+  const contents = panelSwitchView?.webContents;
+  if (!contents || contents.isDestroyed()) return;
+  try { contents.send(channel, payload); } catch { /* view 正在销毁 */ }
+}
+
+/** 建切换器 view:透明底小窗 + 专用小 preload;位置由 layoutPanelSwitch 管。 */
+function createPanelSwitchView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload-panel-switch.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  view.setBackgroundColor("#00000000");
+  mainWindow.contentView.addChildView(view);
+  const contents = view.webContents;
+  contents.on("did-finish-load", () => {
+    if (contents.isDestroyed()) return;
+    // 首屏补齐状态(面板可能在页面加载前就开了),之后走 emit 包装器推送
+    sendToPanelSwitch("arcane-panel-switch:status", panelSwitchStatus);
+    layoutPanelSwitch();
+  });
+  void contents.loadFile(path.join(__dirname, "..", "renderer", "panel-switch.html"), {
+    query: { theme: resolveTheme(), lang: resolveLocale() },
+  }).catch(error => console.error("[panel-switch] page load failed", error?.message ?? error));
+  return view;
+}
+
+/** foundry/reader view 是懒建的,addChildView 永远追加到最上层;
+    切换器要始终压在这两个 view 之上,每次新建后把它重新置顶。 */
+function keepPanelSwitchOnTop() {
+  if (!panelSwitchView || panelSwitchView.webContents.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.contentView.removeChildView(panelSwitchView);
+    mainWindow.contentView.addChildView(panelSwitchView);
+  } catch { /* view 正在销毁 */ }
+}
+
+/** 切换器跟随右屏 bounds:水平居中;垂直对齐 chat 天头的中线,与天头里的模式开关
+    站在同一水平线上(天头高 --titlebar-h = TITLEBAR_HEIGHT,两边约定同步;win 下
+    药丸浮在标题栏延伸带上,mac 下 bounds.y 本就是 0)。面板关着时藏起。 */
+function layoutPanelSwitch() {
+  if (!panelSwitchView || panelSwitchView.webContents.isDestroyed()) return;
+  if (!panelSwitchStatus.open) {
+    try { panelSwitchView.setVisible(false); } catch { /* gone */ }
+    return;
+  }
+  const computed = computePanelLayout();
+  if (!computed) return;
+  const { bounds } = computed;
+  const width = Math.min(PANEL_SWITCH_SIZE.width, bounds.width);
+  const height = Math.min(PANEL_SWITCH_SIZE.height, bounds.height);
+  try {
+    panelSwitchView.setBounds({
+      x: bounds.x + Math.round((bounds.width - width) / 2),
+      y: Math.max(0, Math.round((TITLEBAR_HEIGHT - height) / 2)),
+      width,
+      height,
+    });
+    panelSwitchView.setVisible(true);
+  } catch { /* gone */ }
 }
 
 /**
@@ -686,6 +756,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"), {
     query: { theme, frameless: process.platform === "win32" ? "1" : "0", lang: resolveLocale() },
   });
+  panelSwitchView = createPanelSwitchView();
   if (isDev) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (process.platform === "win32") bindFullScreenHotkey(mainWindow.webContents);
   // chat 气泡里的 target="_blank" 链接(markdown.js 渲染)交系统浏览器打开(N14)
@@ -709,6 +780,7 @@ function createWindow() {
     mainWindow = null;
     // 窗口没了,两个 view 随之而去:只丢引用,不发任何事件(renderer 已经不在了)。
     panelSurfaces?.dispose();
+    panelSwitchView = null;
   });
   mainWindow.on("close", event => {
     if (quitAllowed) return;
@@ -758,7 +830,14 @@ app.whenReady().then(async () => {
   panelSurfaces = new PanelSurfaceController({
     getWindow: () => mainWindow,
     computeLayout: computePanelLayout,
-    emit: sendToRenderer,
+    // panel_status 除广播给 chat 外,同步给悬浮切换器并触发它的显隐/归位
+    emit: (event) => {
+      sendToRenderer(event);
+      if (event?.type !== "panel_status") return;
+      panelSwitchStatus = { open: Boolean(event.open), surface: event.surface ?? null };
+      sendToPanelSwitch("arcane-panel-switch:status", panelSwitchStatus);
+      layoutPanelSwitch();
+    },
     createFoundryView,
     destroyFoundryView,
     createReaderView,
@@ -1630,6 +1709,7 @@ app.whenReady().then(async () => {
     }
     // 阅读器页不重读文件,只收一条主题广播(spec §7 arcaneReader.onTheme)。
     panelSurfaces?.setTheme(next);
+    sendToPanelSwitch("arcane-panel-switch:theme", next);
     return { ok: true };
   });
 
@@ -1641,6 +1721,7 @@ app.whenReady().then(async () => {
     // 与 ui:theme 对称:阅读器页也热切换语言,不必销毁重建(review M2)。
     // auto 推解析后的值:阅读器页拿不到 ui.json,无法自己跟随系统。
     panelSurfaces?.setLocale(next === "auto" ? resolveLocale() : next);
+    sendToPanelSwitch("arcane-panel-switch:locale", next === "auto" ? resolveLocale() : next);
     return { ok: true, pref: next };
   });
   ipcMain.handle("ui:get-locale", () => {
@@ -1664,6 +1745,18 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
+  // 顶栏 FVTT/文档切换:只切已存在的内容,目标从未打开时返回 empty,提示在 chat 侧显示。
+  ipcMain.handle("panel:switch", (event, target) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    try { return panelSurfaces.switchSurface(target); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  // 右屏悬浮切换器的同款通道:调用方是切换器小 view 自己,不是 chat frame。
+  ipcMain.handle("panel-switch:switch", (event, target) => {
+    if (event.sender !== panelSwitchView?.webContents) return { ok: false };
+    try { return panelSurfaces.switchSurface(target); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
 
   // ---- Markdown 阅读器(spec §7) ----
   // ② chat 里点 md 路径。信任边界 ①:只认 chat 主 frame;路径规范化与围栏在
@@ -1676,14 +1769,6 @@ app.whenReady().then(async () => {
     try { return panelSurfaces.showReader(rawPath); }
     catch (error) { return { ok: false, error: error.message }; }
   });
-  // ③ 阅读器顶栏返回/关闭与 Esc。来源校验对齐 isTrustedChatIpc 的形状:
-  // 只认阅读器自己的主 frame,chat 页面与 Foundry 页面都调不到它。
-  ipcMain.handle("md-reader:back", event => {
-    if (!isTrustedReaderIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
-    try { return panelSurfaces.leaveReader(); }
-    catch (error) { return { ok: false, error: error.message }; }
-  });
-
 
   // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整右屏 view 宽度。
   ipcMain.handle("panel:set-chat-width", (_event, px) => {

@@ -41,13 +41,12 @@
       --scroll-hover: #3a445a;
       --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
       --font-ui: "Segoe UI", "Microsoft YaHei", system-ui, "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-      /* signature(§5.3,2026-09-11 修订):衬线从页眉延伸到文档标题,层次靠字体不靠颜色。
+      /* signature(§5.3,2026-09-11 修订):文档标题用衬线,层次靠字体不靠颜色。
          CJK 渐进增强:装了思源宋体的用好字体,没装的落系统宋体,大字号避开小字 hinting 短板 */
       --font-head: Georgia, "Palatino Linotype", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", SimSun, serif;
-      /* 字阶:正文 15px 即舒适阅读下限,代码与页眉随之上抬一档 */
+      /* 字阶:正文 15px 即舒适阅读下限,截断提示/错误页等辅助文案用 meta 档 */
       --fs-micro: 11.5px;
       --fs-meta: 13px;
-      --fs-head: 13px;
     }
     :root[data-theme="light"] {
       color-scheme: light;
@@ -95,44 +94,6 @@
     ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); }
     ::-webkit-scrollbar-track { background: transparent; }
-
-    /* ---------- 窄顶栏:按钮(左) + 文件名(右,衬线),下沿一条发丝线(§5.2) ----------
-       底色与 chat 顶栏同一张 --bg:左右连成一条,不再单独一块表面(§5.1 的精神) */
-    .reader-bar {
-      flex: none;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      height: 40px;
-      padding: 0 14px;
-      background: var(--bg);
-      /* 丝线用 currentColor + 低透明度,明暗主题自适应(§5.1) */
-      border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    }
-    .reader-back {
-      flex: none;
-      border: 1px solid transparent;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--muted);
-      font: inherit;
-      font-size: var(--fs-meta);
-      padding: 3px 10px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .reader-back:hover { color: var(--text-strong); border-color: var(--border); }
-    .reader-name {
-      margin-left: auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-family: var(--font-head);
-      font-size: var(--fs-head);
-      letter-spacing: 0.04em;
-      color: var(--muted);
-    }
 
     /* ---------- 正文栏 ----------
        满铺:右屏常被分栏挤窄,再套 68ch 居中栏会让重心偏右(§5.2);
@@ -183,12 +144,6 @@
   </style>
 </head>
 <body>
-  <header class="reader-bar">
-    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「→ 打开 Foundry」(§4.3)。
-         起步 hidden:第一次内容推送的 applyOrigin 才亮相,免得先画一个文案再闪成另一个(N12) -->
-    <button id="reader-back" class="reader-back" type="button" hidden></button>
-    <span id="reader-name" class="reader-name"></span>
-  </header>
   <p id="reader-notice" class="reader-notice" role="status" hidden></p>
   <main id="reader-scroll" class="reader-scroll">
     <article id="reader-doc" class="md-doc"></article>

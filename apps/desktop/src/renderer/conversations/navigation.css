@@ -37,7 +37,7 @@ body.with-panel #navigation-toast { left: calc((100% - var(--panel-w, 0px)) / 2)
 #archive-readonly span, #navigation-toast span { flex: 1; }
 #navigation-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 85; max-width: min(560px, calc(100vw - 24px)); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 20px var(--shadow); }
 body.sidebar-pinned :is(#archive-page, #archive-readonly) { margin-left: 264px; }
-body.show-archives > :is(#messages, #composer-wrap, #conversation-title, #conversation-task-status, #conversation-retry, #conversation-sync, #conversation-model-pending, #archive-readonly, #activity-jump, #scroll-bottom) { display: none !important; }
+body.show-archives > :is(#messages, #composer-wrap, #conversation-task-status, #conversation-retry, #conversation-sync, #conversation-model-pending, #archive-readonly, #activity-jump, #scroll-bottom) { display: none !important; }
 body.archived-session #composer-wrap { display: none; }
 #archive-page[hidden], #archive-readonly[hidden], #navigation-toast[hidden], #navigation-retry[hidden], .nav-project-sessions[hidden], .nav-empty[hidden], #archive-empty[hidden] { display: none; }
 .session-menu { position: fixed; z-index: 100; min-width: 180px; max-width: calc(100vw - 16px); padding: 5px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 6px 24px var(--shadow); border-radius: 8px; }

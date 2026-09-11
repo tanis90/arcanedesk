@@ -11,8 +11,6 @@
 
 (function () {
   const t = window.ArcaneI18n.t;
-  const back = /** @type {HTMLButtonElement} */ (document.getElementById("reader-back"));
-  const nameEl = document.getElementById("reader-name");
   const notice = document.getElementById("reader-notice");
   const scroll = document.getElementById("reader-scroll");
   const doc = document.getElementById("reader-doc");
@@ -27,21 +25,6 @@
     missing: "reader.error.missing",
     encoding: "reader.error.encoding",
   };
-
-  /** origin 决定 ③ 的文案:foundry → 返回(底下有活现场,显隐切换);
-      closed → 打开(底下没有,拉起一次加载)。落点都是 Foundry(§4.3"文案即语义")。
-      按钮首屏是 hidden 的,第一次内容推送(含错误页)走到这里才亮相(N12)。 */
-  function applyOrigin(origin) {
-    const returning = origin === "foundry";
-    back.textContent = t(returning ? "reader.back" : "reader.toFoundry");
-    back.setAttribute("aria-label", back.textContent);
-    back.title = back.textContent;
-    back.hidden = false;
-  }
-
-  function leave() {
-    void window.arcaneReader.back();
-  }
 
   function showError(key) {
     errorText.textContent = t(key);
@@ -112,8 +95,6 @@
     doc.textContent = "";
     notice.textContent = payload.truncated ? t("reader.truncated") : "";
     notice.hidden = !payload.truncated;
-    nameEl.textContent = payload.name ?? "";
-    nameEl.title = payload.name ?? "";
     document.title = payload.name ? `${payload.name} · ArcaneDesk` : "ArcaneDesk";
     window.arcaneMd.render(doc, payload.text ?? "");
     scroll.scrollTop = keepScroll;
@@ -123,10 +104,8 @@
   window.arcaneReader.onContent(payload => {
     cancelScrollGuard(); // 换内容(含错误页)后,旧笔记的回正窗口不再有意义
     lastPayload = payload ?? null;
-    applyOrigin(payload?.origin);
     if (payload?.error) {
       shownPath = null; // 错误页不是任何一份笔记:下次真读到东西时不该当成"同一份"
-      nameEl.textContent = "";
       document.title = "ArcaneDesk";
       showError(ERROR_KEYS[payload.error] ?? ERROR_KEYS.missing);
       return;
@@ -140,11 +119,10 @@
   });
 
   // 语言热切换(review M2):ArcaneI18n.setLocale 会更新 <html lang> 并回填 data-i18n;
-  // 本页没有 data-i18n 节点,chrome 文案(返回按钮/截断提示/错误页)全是 JS 按状态
+  // 本页没有 data-i18n 节点,chrome 文案(截断提示/错误页)全是 JS 按状态
   // 派生的,按最后一次 payload 重上一遍即可,正文不碰(重渲染会丢滚动位置)。
   window.arcaneReader.onLocale(locale => {
     window.ArcaneI18n.setLocale(locale);
-    applyOrigin(lastPayload?.origin ?? null);
     if (lastPayload?.error) {
       errorText.textContent = t(ERROR_KEYS[lastPayload.error] ?? ERROR_KEYS.missing);
     } else if (lastPayload) {
@@ -152,15 +130,4 @@
     }
   });
 
-  back.addEventListener("click", leave);
-  // Esc 等价于顶栏那个按钮(§4.3)。焦点在阅读器里才生效——chat 侧的 Esc 有自己的语义。
-  document.addEventListener("keydown", event => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    leave();
-  });
-
-  // 首屏:内容与主题都在 did-finish-load 之后才推得来。返回按钮保持 HTML 里的 hidden,
-  // 第一次 onContent(含错误页)的 applyOrigin 才让它亮相——先亮一个文案再翻成
-  // 另一个是一次肉眼可见的闪动(N12)。
 })();

@@ -69,7 +69,7 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 
 1. **① 顶栏「面板」按钮**：右屏唯一的 chrome 开关。开/关右屏；重新打开时恢复关闭前的当前内容（reader 侧 = 重读文件重渲染，见 §2 保活范围）。
 2. **② 点 chat 里的 md 路径**：内容寻址。当前内容 = 该笔记；面板关着则顺带打开；快照 origin；阅读中再点 = 原地换内容。
-3. **③ 阅读器内返回按钮**：退出阅读，落点一律是 Foundry。origin=foundry → 回 FOUNDRY（显隐切换，永不触发 FVTT 加载）；origin=closed → ④ 同款（阅读器隐藏保活，拉起一次 FVTT 加载）。收起整个右屏走 ①，③ 不再有"关面板"语义（2026-09-11 验收修订：READER_C 下「✕ 关闭」没有回归 Foundry 的动线）。
+3. **③ 顶栏 FVTT/文档切换**：chat 页顶栏的两段开关（bridge `arcane.switchPanelSurface(target)`，target 为 `"foundry"`/`"reader"`）。只切两个已打开的内容：显隐切换，永不触发 FVTT 加载、不读新文件。目标从未打开过时如实报空（`{ ok:false, empty, state }`，提示显示在 chat）：READER_C 下切 FVTT 必然报空（底下没有 Foundry 现场），Foundry 上切文档报空。收起整个右屏仍走 ①（2026-09-11 修订：页内返回栏已拆，返回 FVTT 由顶栏切换接管，不再承担"拉起一次 FVTT 加载"）。
 4. **④ FVTT 打开**（agent `foundry_open`，以及任何使 foundryView 变为可见的路径）：当前内容 = foundry，面板开；阅读器若在场则隐藏保活，不销毁、不通知。切模式本身不改变 surface（§4.4），不在此处列举。
 
 ### 3.3 状态图
@@ -82,11 +82,11 @@ stateDiagram-v2
     CLOSED --> READER_C : ①顶栏(关闭前是READER_C)
     FOUNDRY --> CLOSED : ①顶栏(记住当前内容)
     FOUNDRY --> READER_F : ②点md路径
-    READER_F --> FOUNDRY : ③返回
+    FOUNDRY --> READER_F : ③切换(笔记保活时)
+    READER_F --> FOUNDRY : ③切换(显隐)
     READER_F --> FOUNDRY : ④FVTT打开(阅读器隐藏保活)
     READER_F --> CLOSED : ①顶栏(记foundry,重开落FOUNDRY)
     READER_F --> READER_F : ②点md路径(换内容)
-    READER_C --> FOUNDRY : ③打开Foundry(阅读器隐藏保活,拉起加载)
     READER_C --> CLOSED : ①顶栏(记reader,重开落READER_C)
     READER_C --> FOUNDRY : ④FVTT打开(阅读器隐藏保活)
     READER_C --> READER_C : ②点md路径(换内容)
@@ -94,12 +94,12 @@ stateDiagram-v2
 
 ### 3.4 转移表
 
-| 当前 | ①顶栏 | ②点 md 路径 | ③返回 | ④FVTT 打开 |
+| 当前 | ①顶栏 | ②点 md 路径 | ③顶栏切换 | ④FVTT 打开 |
 |---|---|---|---|---|
-| CLOSED | 恢复关闭前内容：foundry（含 READER_F 关闭）→ FOUNDRY；READER_C 关闭的笔记 → READER_C | READER_C | — | FOUNDRY |
-| FOUNDRY | CLOSED | READER_F | — | （已在） |
-| READER_F | CLOSED（记 foundry，重开落 FOUNDRY） | READER_F（换内容） | FOUNDRY | FOUNDRY（阅读器隐藏保活） |
-| READER_C | CLOSED（记 reader，重开落 READER_C） | READER_C（换内容） | FOUNDRY（阅读器隐藏保活，拉起加载） | FOUNDRY（阅读器隐藏保活） |
+| CLOSED | 恢复关闭前内容：foundry（含 READER_F 关闭）→ FOUNDRY；READER_C 关闭的笔记 → READER_C | READER_C | 无操作/报空 | FOUNDRY |
+| FOUNDRY | CLOSED | READER_F | READER_F（笔记保活时）；否则报空 | （已在） |
+| READER_F | CLOSED（记 foundry，重开落 FOUNDRY） | READER_F（换内容） | FOUNDRY（显隐切换） | FOUNDRY（阅读器隐藏保活） |
+| READER_C | CLOSED（记 reader，重开落 READER_C） | READER_C（换内容） | 报空，停留 READER_C | FOUNDRY（阅读器隐藏保活） |
 
 表中 CLOSED 行的 ① 是实现时定下的：① 关面板销毁两个 view（§8），重开时按关闭前记下的 `lastContent` 恢复——记的是 reader 时，恢复 = 重读文件重渲染、origin 重快照为 closed，落 READER_C。
 
@@ -108,10 +108,10 @@ stateDiagram-v2
 ### 3.5 不变量（实现即断言）
 
 1. 任一时刻右屏最多一个 view 可见；该不变量的唯一执行者是新增的 panel-surface 控制模块（R2），main.js 其余代码只调它的公开动词。
-2. `READER_F` ⟹ foundryView 活着；③返回只做显隐切换，永不加载 FVTT。
-3. `READER_C` ⟹ 打开时 foundryView 不存在；③ 先经 `showFoundry()` 归位（阅读器隐藏保活，foundryView 由控制器保证存在）再拉起一次 FVTT 加载——"离开阅读"的落点一律是 Foundry，收右屏只属于 ①。
+2. `READER_F` ⟹ foundryView 活着；顶栏切换只做显隐切换，永不加载 FVTT。
+3. `READER_C` ⟹ 打开时 foundryView 不存在；此状态下经顶栏切 FVTT 如实报空，绝不静默拉起加载——拉起 FVTT 是 ④/agent 路径的事，收右屏只属于 ①。
 4. 阅读器状态全在内存，不落盘；崩溃/重启后回到 CLOSED，无需对账（R1）。
-5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。payload = `{ name, text, truncated, origin, path }` 或 `{ error, origin, path }`。
+5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。payload = `{ name, text, truncated, path }` 或 `{ error, path }`。
 
 ## 4. 交互语义
 
@@ -129,7 +129,7 @@ stateDiagram-v2
 
 ### 4.3 阅读器页内 chrome（③）
 
-页面顶部一条窄栏：左侧返回按钮（origin=foundry 显示「← 返回 Foundry」，origin=closed 显示「→ 打开 Foundry」——落点都是 Foundry，区别只是显隐切换还是拉起加载，文案即语义），同行右侧文件名。Esc 等价于该按钮。此外页内无任何控件。
+页面无任何控件：返回 FVTT 由 chat 页顶栏的 FVTT/文档两段开关接管（③），Esc 不再绑定；文件名只体现在 `document.title`（形态「<name> · ArcaneDesk」，错误页清回默认标题）。
 
 刷新不是新控件：既有 F5 快捷键（chat.js 绑 `panel:reload`）改为 **surface 感知**——surface=foundry 走原 `loadFoundryPage`；surface=reader 重读当前文件并重新推送，正是 §1 非目标里"重复点击 = 重新读取，即手动刷新"的同一个动作。焦点在 readerView 内时 F5 由 Chromium 默认重载接管，内容按 §3.5 不变量 5 自动回来。这样 `panel:reload` 在 `READER_C` 下不再返回 `{ ok: false }` 静默哑掉（现状 main.js:1454 的 `if (!foundryView) return { ok: false }` 会撞 R5）。
 
@@ -152,7 +152,6 @@ stateDiagram-v2
 
 ```
 ┌────────────────────────────────────────────┐
-│ ← 返回 Foundry            npc-张三.md      │  ← 窄顶栏：按钮(左) + 文件名(右,衬线)
 ├────────────────────────────────────────────┤  ← 发丝线
 │                                            │
 │   （正文栏满铺，横向 padding 随面板宽 clamp）  │
@@ -177,8 +176,6 @@ stateDiagram-v2
 
 | 场景 | 文案（zh） |
 |---|---|
-| 返回（origin=foundry） | ← 返回 Foundry |
-| 打开（origin=closed） | → 打开 Foundry |
 | 文件不存在 | 找不到这份笔记：文件不存在或已被移动。可以让 agent 重新生成它。 |
 | 路径越界 | 这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。 |
 | 超限截断 | 文件超过 2 MB，只显示开头部分。 |
@@ -209,7 +206,6 @@ openMdReader(path: string): Promise<{ ok: boolean; error?: string }>
 // readerView 专用小 preload（新文件 preload-reader.cjs，contextIsolation）
 arcaneReader.onContent(cb: (payload: { name, text, truncated, error? }) => void)
 arcaneReader.onTheme(cb: (theme: string) => void)   // 主题切换广播时一并下发
-arcaneReader.back(): void                            // ③ 按钮
 ```
 
 main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页，不静默）：
@@ -220,8 +216,6 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 4. 读文件：UTF-8，上限 2 MB，超限截断并置 `truncated`；
 5. panel-surface 控制器执行 ② 转移，readerView 加载/复用后 `send` 内容。
 
-`md-reader:back`（来自 readerView 的 preload）：按 origin 执行 ③。
-
 `panel:reload`（既有 F5，chat.js:3045）改为 surface 感知：foundry → `loadFoundryPage`；reader → 重读当前文件 + `pushReaderContent()`，见 §4.3。
 
 ## 8. 实现结构
@@ -229,7 +223,7 @@ main 侧 `md-reader:open` 处理链（每步失败都落入 §5.5 的错误页�
 新增 `src/main/panel-surface-controller.js`（状态机唯一 owner，R2）：
 
 - 持有 `surface: "foundry" | "reader"`、`origin`、`lastContent`（含关闭前的恢复信息）、`readerPayload`（当前笔记内容，§3.5 不变量 5）；
-- 公开动词：`openPanel()`（①开）、`closePanel()`（①关）、`showReader(path)`（②）、`leaveReader()`（③）、`showFoundry()`（④，供 `openFoundryView` 等所有 foundry 显示路径调用）、`reloadSurface()`（F5，surface 感知）、`activeView()`（供 bounds 分发、分栏拖拽、指针转发消费"当前可见 view"）；
+- 公开动词：`openPanel()`（①开）、`closePanel()`（①关）、`showReader(path)`（②）、`switchSurface(target)`（③ 顶栏切换）、`showFoundry()`（④，供 `openFoundryView` 等所有 foundry 显示路径调用）、`reloadSurface()`（F5，surface 感知）、`activeView()`（供 bounds 分发、分栏拖拽、指针转发消费"当前可见 view"）；
 - 内部负责两个 view 的创建/显隐/销毁与 `layoutViews()` 的 bounds 分发；
 - `layoutViews()` 改为向"当前可见 view"发 bounds，双 view 同步更新避免切换闪烁；
 - `panel:close` 语义保持"整个右屏收起"（两个 view 都销毁，与现状对齐），重开按 `lastContent` 恢复；`lastContent` 的记录规则见 §3.4（READER_F 关闭时记 foundry，READER_C 关闭时记 reader）。
@@ -248,9 +242,9 @@ main.js 里现存四处直接摸 `foundryView` 的代码必须一并收进控制
 | 文件 | 变更 | 量级 |
 |---|---|---|
 | `src/main/panel-surface-controller.js` | 新建：状态机 + 双 view 生命周期 | ~200 行 |
-| `src/main/main.js` | 接线：`md-reader:open/back` IPC、`layoutViews` 走控制器、`panel:open/close/reload` 与 `openFoundryView` 委托控制器、上表四处 `foundryView` 直摸点收编 | ~110 行改 |
+| `src/main/main.js` | 接线：`md-reader:open` IPC、`layoutViews` 走控制器、`panel:open/close/reload/switch` 与 `openFoundryView` 委托控制器、上表四处 `foundryView` 直摸点收编 | ~110 行改 |
 | `src/main/preload-reader.cjs` | 新建：readerView 的三方法桥 | ~20 行 |
-| `src/renderer/md-reader.html` / `md-reader.js` | 新建：阅读器页（**CSP 对齐 index.html 的 `default-src 'self'` 并补 `font-src 'self'`**，不得抄 foundry-unavailable 的 `default-src 'none'`——那会掐掉 KaTeX 字体使公式渲染成方块；引 marked/katex/hljs/mermaid 本地资源 + `markdown.js`，顶栏 + 正文栏） | ~180 行 |
+| `src/renderer/md-reader.html` / `md-reader.js` | 新建：阅读器页（**CSP 对齐 index.html 的 `default-src 'self'` 并补 `font-src 'self'`**，不得抄 foundry-unavailable 的 `default-src 'none'`——那会掐掉 KaTeX 字体使公式渲染成方块；引 marked/katex/hljs/mermaid 本地资源 + `markdown.js`，正文栏满铺无页内控件） | ~180 行 |
 | `src/renderer/markdown.js` | `.md` 链接锚点 + 裸路径 post-process + fence 渲染器注册表（mermaid 迁入） | ~110 行 |
 | `src/renderer/chat.js` | 消息体点击委托 → `openMdReader` | ~20 行 |
 | `preload.cjs` | `openMdReader` | ~5 行 |
@@ -262,7 +256,7 @@ renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件
 ## 9. 测试与验收
 
 - 单测（`node --test`）：路径匹配正则全形态；围栏 resolve（目录内/越界/盘符/行号）；状态机四态 × 四事件全转移表；fence 注册表分发与未知语言保持源码块；
-- smoke：仿 `smoke-panel-ui.mjs`，起真实窗口验证 ② 打开、③ 两分支、④ 顶掉与瞬时唤回；
+- smoke：仿 `smoke-panel-ui.mjs`，起真实窗口验证 ② 打开、③ 顶栏切换（含报空）、④ 顶掉与瞬时唤回；
 - 门禁：`npm run verify:source && npm test` 全绿；
 - 手测清单：三种主题/语言组合下的阅读器页；含 mermaid 围栏的笔记渲染；2MB+ 文件截断提示；删除中的文件点击报错页；分栏拖拽/resize/F11 全屏下双 view 切换无闪烁。
 
@@ -277,7 +271,7 @@ renderer chat 侧对 `panel_layout` / `panel_status` 的处理零改动（事件
 | 删除中的文件报错页 | 同上，断言 `reader.error.missing` 文案渲染在阅读器内 |
 | 拖拽/resize/F11 无闪烁 | 留人工：闪烁是感知项，自动化只能证明 bounds 与可见性正确 |
 
-进程内不变量（同一时刻最多一个 view 可见、③④ 绝不重载 Foundry 页）由 `smoke-md-reader.mjs` 把守；
+进程内不变量（同一时刻最多一个 view 可见、③ 切换与 ④ 绝不重载 Foundry 页）由 `smoke-md-reader.mjs` 把守；
 进程外的点击/按键/截图证据由 `review-md-reader.mjs` 产出，两者分工见各自文件头注释。
 
 ## 10. 被否决方案存档

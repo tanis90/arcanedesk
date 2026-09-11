@@ -90,7 +90,7 @@ function assertSingleVisible(h, message) {
 
 // ---------- §3.4 转移表:CLOSED 行 ----------
 
-test("CLOSED: ① opens Foundry, ② opens the reader without Foundry, ③ is a no-op, ④ opens Foundry", async () => {
+test("CLOSED: ① opens Foundry, ② opens the reader without Foundry, ④ opens Foundry", async () => {
   const h = harness();
   assert.equal(h.controller.state, STATE.CLOSED);
 
@@ -103,7 +103,7 @@ test("CLOSED: ① opens Foundry, ② opens the reader without Foundry, ③ is a 
   assert.equal(h.controller.state, STATE.CLOSED);
   assert.equal(h.visible().length, 0);
   assert.deepEqual(h.events.slice(-2), [
-    { type: "panel_status", open: false },
+    { type: "panel_status", open: false, surface: null },
     { type: "panel_layout", open: false },
   ]);
 
@@ -114,8 +114,6 @@ test("CLOSED: ① opens Foundry, ② opens the reader without Foundry, ③ is a 
   assert.equal(assertSingleVisible(h, "CLOSED --②").label, "reader");
 
   h.controller.closePanel();
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED, "③ from CLOSED has nothing to leave");
 
   h.controller.showFoundry();
   assert.equal(h.controller.state, STATE.FOUNDRY);
@@ -148,22 +146,9 @@ test("FOUNDRY: ① closes, ② covers with the reader, ④ is idempotent", async
   assert.equal(h.calls.loadFoundry, 2);
 });
 
-test("FOUNDRY: ③ is an explicit no-op — no state change, no events, no view side effects", async () => {
-  const h = harness();
-  await h.controller.openPanel();
-  assert.equal(h.controller.state, STATE.FOUNDRY);
-
-  const before = h.events.length;
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.FOUNDRY, "③ only applies to an open reader");
-  assert.equal(h.events.length, before, "no panel_status/panel_layout noise");
-  assert.equal(h.live("reader").length, 0, "③ must not create a reader view");
-  assert.equal(assertSingleVisible(h, "FOUNDRY --③").label, "foundry");
-});
-
 // ---------- §3.4 转移表:READER_F 行 ----------
 
-test("READER_F: ② swaps content without resetting origin, ③ returns without loading FVTT", async () => {
+test("READER_F: ② swaps content without resetting origin, switching back to Foundry only flips visibility", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
@@ -176,11 +161,11 @@ test("READER_F: ② swaps content without resetting origin, ③ returns without 
   assert.deepEqual(h.calls.readNote, ["notes/a.md", "notes/b.md"]);
   assert.equal(h.live("reader").length, 1, "the reader view is reused, not rebuilt");
 
-  h.controller.leaveReader();
+  h.controller.switchSurface("foundry");
   assert.equal(h.controller.state, STATE.FOUNDRY);
-  assert.equal(h.calls.loadFoundry, 1, "不变量 2:③ 只做显隐切换,永不加载 FVTT");
-  assert.equal(h.live("reader").length, 1, "③ 之后阅读器保活");
-  assert.equal(assertSingleVisible(h, "READER_F --③").label, "foundry");
+  assert.equal(h.calls.loadFoundry, 1, "不变量 2:切换只做显隐切换,永不加载 FVTT");
+  assert.equal(h.live("reader").length, 1, "切走之后阅读器保活");
+  assert.equal(assertSingleVisible(h, "READER_F --switch").label, "foundry");
   assert.equal(h.controller.origin, null);
 });
 
@@ -231,15 +216,16 @@ test("① restores Foundry when closed from READER_F, the reader when closed fro
   assert.equal(h.live("foundry").length, 0);
   assert.equal(h.controller.readerPath, "notes/b.md");
 
-  await h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.FOUNDRY, "origin=closed 的 ③ 也落 Foundry(2026-09-11 修订,不变量 3)");
-  assert.equal(h.calls.loadFoundry, 3, "底下没有现场,拉起一次 FVTT 加载");
-  assert.equal(h.live("reader").length, 1, "阅读器隐藏保活,笔记不丢");
+  const switched = h.controller.switchSurface("foundry");
+  assert.equal(switched.empty, "foundry", "底下没有可切换的 Foundry 现场(不变量 3)");
+  assert.equal(h.controller.state, STATE.READER_C, "空切换不改变状态");
+  assert.equal(h.calls.loadFoundry, 2, "切换绝不主动拉起 FVTT 加载");
+  assert.equal(h.live("reader").length, 1, "阅读器原样保留,笔记不丢");
 });
 
 // ---------- §3.4 转移表:READER_C 行 ----------
 
-test("READER_C: ② swaps content, ③ opens Foundry, ④ takes over", async () => {
+test("READER_C: ② swaps content, ④ takes over", async () => {
   const h = harness();
   h.controller.showReader("notes/a.md");
   assert.equal(h.controller.state, STATE.READER_C);
@@ -255,15 +241,16 @@ test("READER_C: ② swaps content, ③ opens Foundry, ④ takes over", async () 
 
   h.controller.showReader("notes/c.md");
   assert.equal(h.controller.state, STATE.READER_F, "底下现在压着活的 Foundry");
-  h.controller.leaveReader();
+  h.controller.switchSurface("foundry");
   assert.equal(h.controller.state, STATE.FOUNDRY);
 
   h.controller.closePanel();
   h.controller.showReader("notes/d.md");
   assert.equal(h.controller.state, STATE.READER_C);
-  await h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.FOUNDRY, "③ 落点一律是 Foundry");
-  assert.equal(h.live("reader").length, 1, "③ 之后阅读器隐藏保活");
+  const switched = h.controller.switchSurface("foundry");
+  assert.equal(switched.empty, "foundry", "READER_C 底下没有 Foundry,切换如实报空");
+  assert.equal(h.controller.state, STATE.READER_C, "空切换不改变状态");
+  assert.equal(h.live("reader").length, 1, "阅读器原样保留");
 });
 
 // ---------- 不变量与围栏 ----------
@@ -274,17 +261,17 @@ test("invariants hold across a long mixed event sequence", async () => {
     () => h.controller.showReader("a.md"),
     () => h.controller.showFoundry(),
     () => h.controller.showReader("b.md"),
-    () => h.controller.leaveReader(),
+    () => h.controller.switchSurface("foundry"),
     () => h.controller.showReader("c.md"),
     () => h.controller.closePanel(),
     () => h.controller.openPanel(),
     () => h.controller.showFoundry(),
     () => h.controller.closePanel(),
     () => h.controller.openPanel(),
-    () => h.controller.leaveReader(),
+    () => h.controller.switchSurface("foundry"),
     () => h.controller.showReader("d.md"),
     () => h.controller.showFoundry(),
-    () => h.controller.leaveReader(),
+    () => h.controller.switchSurface("foundry"),
     () => h.controller.closePanel(),
   ];
   for (const [index, step] of steps.entries()) {
@@ -305,19 +292,7 @@ test("a fence failure still opens the reader and shows the error page (R5)", () 
   const h = harness({ notes: { "../escape.md": { error: "outside" } } });
   h.controller.showReader("../escape.md");
   assert.equal(h.controller.state, STATE.READER_C, "点击意图必须得到响应,不能无声拒绝");
-  assert.deepEqual(h.content(), { error: "outside", origin: "closed", path: "../escape.md" });
-});
-
-test("content push carries origin so the back button can name its own action", async () => {
-  const h = harness();
-  await h.controller.openPanel();
-  h.controller.showReader("notes/a.md");
-  assert.deepEqual(h.content(), { name: "npc.md", text: "# notes/a.md", truncated: false, origin: "foundry", path: "notes/a.md" });
-
-  h.controller.leaveReader();
-  h.controller.closePanel();
-  h.controller.showReader("notes/b.md");
-  assert.equal(h.content().origin, "closed");
+  assert.deepEqual(h.content(), { error: "outside", path: "../escape.md" });
 });
 
 test("content push carries the path so the page can tell a recall from a new note (§2)", () => {
@@ -365,8 +340,8 @@ test("reloadSurface re-reads for the reader and defers to Foundry otherwise", as
   assert.equal(h.content().text, "v2", "F5 就是手动刷新");
   assert.equal(h.calls.reloadFoundry, 0);
 
-  await h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.FOUNDRY, "③ 落点一律是 Foundry(2026-09-11 修订)");
+  h.controller.showFoundry();
+  assert.equal(h.controller.state, STATE.FOUNDRY);
   await h.controller.reloadSurface();
   assert.equal(h.calls.reloadFoundry, 1);
 
@@ -385,9 +360,10 @@ test("F5 re-reads via the open-time snapshot, not the current cwd (N4)", async (
   } });
   h.controller.showReader("notes/a.md");
   assert.equal(h.content().text, "projA v1");
-  // absolute/baseDir 是 main 侧快照,不下发给页面
+  // absolute/baseDir 与 origin 都是 main 侧快照,不下发给页面
   assert.equal("absolute" in h.content(), false);
   assert.equal("baseDir" in h.content(), false);
+  assert.equal("origin" in h.content(), false);
 
   await h.controller.reloadSurface();
   assert.deepEqual(h.calls.rereadNote, [["/projA/notes/a.md", "/projA"]]);
@@ -542,7 +518,7 @@ test("ensureFoundryView rebuilds a crashed renderer instead of showing a blank v
   assert.notEqual(second, third);
 });
 
-test("③ rebuilds the Foundry view when its renderer crashed while reading", async () => {
+test("a crashed Foundry reads as empty to switchSurface and is rebuilt on the agent path", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
@@ -552,9 +528,13 @@ test("③ rebuilds the Foundry view when its renderer crashed while reading", as
   foundry.crashed = true;
   assert.equal(foundry.destroyed, false, "render-process-gone 后 isDestroyed() 仍是 false");
 
-  await h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.FOUNDRY, "没有可返回的 Foundry 就重建再加载,不摆死黑屏");
-  assert.equal(h.calls.loadFoundry, 2, "拉起一次加载");
+  const switched = h.controller.switchSurface("foundry");
+  assert.equal(switched.ok, false, "崩掉的 Foundry 不算可切换的现场,不摆死黑屏");
+  assert.equal(switched.empty, "foundry");
+  assert.equal(h.calls.loadFoundry, 1, "切换绝不主动拉起 FVTT 加载");
+
+  h.controller.showFoundry();
+  assert.equal(h.controller.state, STATE.FOUNDRY);
   assert.equal(h.live("foundry")[0].crashed, false, "崩掉的 view 已被重建");
   assert.deepEqual(h.calls.destroyed.at(-1), { label: "foundry", reason: "foundry-renderer-gone" });
   assert.equal(h.live("reader").length, 1, "阅读器隐藏保活");
@@ -596,4 +576,117 @@ test("openPanel and closePanel are idempotent", async () => {
   assert.equal(h.controller.state, STATE.CLOSED);
   assert.equal(h.calls.destroyed.filter((entry) => entry.label === "reader").length, 1);
   assert.equal(h.events.filter((event) => event.type === "panel_status" && event.open === false).length, 1);
+});
+
+// ---------- 顶栏 FVTT/文档切换(switchSurface) ----------
+
+test("switchSurface from CLOSED reports empty for both targets and creates nothing", async () => {
+  const h = harness();
+  assert.deepEqual(h.controller.switchSurface("foundry"), { ok: false, empty: "foundry", state: STATE.CLOSED });
+  assert.deepEqual(h.controller.switchSurface("reader"), { ok: false, empty: "reader", state: STATE.CLOSED });
+  assert.equal(h.calls.loadFoundry, 0, "切换绝不主动拉起 FVTT 加载");
+  assert.equal(h.views.length, 0, "切换不创建任何 view");
+});
+
+test("switchSurface rejects an unknown target", async () => {
+  const h = harness();
+  assert.equal(h.controller.switchSurface("settings").ok, false);
+  assert.equal(h.controller.switchSurface("settings").empty, undefined);
+});
+
+test("FOUNDRY without a note: reader target is empty, foundry target is a no-op", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  const before = h.events.length;
+
+  assert.equal(h.controller.switchSurface("reader").empty, "reader");
+  assert.equal(h.controller.state, STATE.FOUNDRY, "空切换不改变状态");
+
+  const result = h.controller.switchSurface("foundry");
+  assert.equal(result.ok, true, "已在目标表面:幂等");
+  assert.equal(h.events.length, before, "空切换与幂等切换都不发事件");
+});
+
+test("READER_F round-trips through switchSurface without loads or rereads", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  h.controller.showReader("notes/a.md");
+  assert.equal(h.controller.state, STATE.READER_F);
+  const loadsBefore = h.calls.loadFoundry;
+  const readsBefore = h.calls.readNote.length;
+
+  const toFoundry = h.controller.switchSurface("foundry");
+  assert.equal(toFoundry.ok, true);
+  assert.equal(h.controller.state, STATE.FOUNDRY);
+  assert.equal(h.calls.loadFoundry, loadsBefore, "切回 Foundry 走显隐,永不加载(§3.5 不变量 2)");
+  const reader = h.live("reader")[0];
+  assert.equal(reader.destroyed, false);
+  assert.equal(reader.visible, false);
+
+  const toReader = h.controller.switchSurface("reader");
+  assert.equal(toReader.ok, true);
+  assert.equal(h.controller.state, STATE.READER_F, "切回阅读器,origin 重记为 foundry");
+  assert.equal(h.controller.origin, "foundry");
+  assert.equal(h.calls.readNote.length, readsBefore, "唤回同一份不重读(§2)");
+  assert.equal(assertSingleVisible(h, "switchSurface round-trip").label, "reader");
+  assert.equal(h.content().path, "notes/a.md");
+});
+
+test("READER_C: foundry target is empty and never triggers a load", async () => {
+  const h = harness();
+  h.controller.showReader("notes/a.md");
+  assert.equal(h.controller.state, STATE.READER_C);
+
+  const result = h.controller.switchSurface("foundry");
+  assert.equal(result.ok, false);
+  assert.equal(result.empty, "foundry");
+  assert.equal(h.controller.state, STATE.READER_C);
+  assert.equal(h.calls.loadFoundry, 0);
+  assert.equal(h.live("foundry").length, 0);
+});
+
+test("switchSurface rebuilds a crashed hidden reader and rereads by snapshot (N4/N5)", async () => {
+  const h = harness({
+    notes: { "notes/a.md": { name: "a.md", text: "# A", absolute: "/ws/a.md", baseDir: "/ws" } },
+  });
+  await h.controller.openPanel();
+  h.controller.showReader("notes/a.md");
+  h.controller.showFoundry();
+  const reader = h.live("reader")[0];
+  reader.crashed = true; // render-process-gone:isDestroyed=false,isCrashed=true
+
+  const result = h.controller.switchSurface("reader");
+  assert.equal(result.ok, true);
+  assert.equal(h.controller.state, STATE.READER_F);
+  assert.deepEqual(h.calls.rereadNote, [["/ws/a.md", "/ws"]], "重建后按打开时的快照重读");
+  assert.equal(assertSingleVisible(h, "crashed reader switch").destroyed, false);
+});
+
+test("switchSurface after closePanel finds nothing (views are destroyed on close)", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  h.controller.showReader("notes/a.md");
+  h.controller.closePanel();
+
+  assert.equal(h.controller.switchSurface("foundry").empty, "foundry");
+  assert.equal(h.controller.switchSurface("reader").empty, "reader");
+  assert.equal(h.controller.state, STATE.CLOSED);
+});
+
+test("panel_status carries the current surface for the renderer switch", async () => {
+  const h = harness();
+  await h.controller.openPanel();
+  assert.deepEqual(h.events.at(-2), { type: "panel_status", open: true, surface: "foundry" });
+
+  h.controller.showReader("notes/a.md");
+  assert.deepEqual(
+    h.events.filter((event) => event.type === "panel_status").at(-1),
+    { type: "panel_status", open: true, surface: "reader" },
+  );
+
+  h.controller.showFoundry();
+  assert.deepEqual(
+    h.events.filter((event) => event.type === "panel_status").at(-1),
+    { type: "panel_status", open: true, surface: "foundry" },
+  );
 });

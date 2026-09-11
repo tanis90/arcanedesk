@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>ArcaneDesk panel switch</title>
+<script src="theme-init.js"></script>
+<style>
+  /* 右屏悬浮 surface 切换器:与顶栏 .seg-switch 同款药丸。
+     右屏是原生 WebContentsView 压在渲染层之上,这个页面是它旁边同级叠放的小 view,
+     只遮药丸自身大小,透明区域之外的鼠标事件落到下层 Foundry/阅读器。 */
+  :root {
+    color-scheme: dark;
+    /* 与应用深色主题同源:夜空底 / 黄铜烛台 */
+    --pill-bg: #10141d;
+    --pill-border: #283042;
+    --pill-thumb: #d6a94c;
+    --pill-active: #181207;
+    --pill-idle: #98a0b3;
+    --pill-hover: #e9ecf3;
+    --pill-shadow: rgba(0, 0, 0, 0.4);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    /* 与营销主页 mode-toggle 同一块色板:--ink / --paper / --stamp-shadow */
+    --pill-bg: #f2ede1;
+    --pill-border: #16130f;
+    --pill-thumb: #16130f;
+    --pill-active: #f2ede1;
+    --pill-idle: #57503f;
+    --pill-hover: #16130f;
+    --pill-shadow: #16130f24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    font: 11.5px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-app-region: no-drag;
+  }
+  .seg-switch {
+    position: relative;
+    display: inline-flex;
+    padding: 2px;
+    border: 2px solid var(--pill-border);
+    border-radius: 999px;
+    /* 实心底:底下是任意 FVTT 地图/笔记内容,透明底的对比度全看运气 */
+    background: var(--pill-bg);
+    box-shadow: 3px 3px 0 var(--pill-shadow);
+  }
+  .seg {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 56px;
+    border: 0;
+    background: transparent;
+    color: var(--pill-idle);
+    font: inherit;
+    font-weight: 600;
+    padding: 1px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.18s;
+  }
+  .seg:hover { color: var(--pill-hover); }
+  .seg.active { color: var(--pill-active); cursor: default; }
+  .seg:focus-visible { outline: 2px solid var(--pill-idle); outline-offset: 1px; }
+  .seg-thumb {
+    position: absolute;
+    display: block;
+    top: 2px;
+    left: 2px;
+    bottom: 2px;
+    width: calc(50% - 2px);
+    border-radius: 999px;
+    background: var(--pill-thumb);
+    transition: transform 0.18s ease;
+  }
+  body[data-surface="reader"] .seg-thumb { transform: translateX(100%); }
+  /* 目标从未打开过的瞬间提示:文字替换 + 摇晃,不遮挡面板 */
+  @keyframes deny {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
+  }
+  .seg.deny { animation: deny 0.18s ease 2; }
+</style>
+</head>
+<body data-surface="foundry">
+  <div class="seg-switch" role="group" id="surface-switch">
+    <i class="seg-thumb" aria-hidden="true"></i>
+    <button class="seg active" id="seg-foundry" type="button">FVTT</button>
+    <button class="seg" id="seg-reader" type="button">文档</button>
+  </div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var lang = params.get("lang") === "en-US" ? "en-US" : "zh-CN";
+      var MESSAGES = {
+        "zh-CN": { doc: "文档", denyFoundry: "未加载", denyReader: "先打开文档" },
+        "en-US": { doc: "Docs", denyFoundry: "Not loaded", denyReader: "Open a doc first" },
+      };
+      var t = MESSAGES[lang];
+      var segs = {
+        foundry: document.getElementById("seg-foundry"),
+        reader: document.getElementById("seg-reader"),
+      };
+      segs.reader.textContent = t.doc;
+
+      window.arcanePanelSwitch.onTheme(function (theme) {
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      });
+      window.arcanePanelSwitch.onLocale(function (locale) {
+        lang = locale === "en-US" ? "en-US" : "zh-CN";
+        t = MESSAGES[lang];
+        document.documentElement.lang = lang;
+        segs.reader.textContent = t.doc;
+      });
+
+      var flashTimer = null;
+      function deny(target) {
+        var seg = segs[target];
+        if (!seg) return;
+        var original = target === "reader" ? t.doc : "FVTT";
+        var hint = target === "reader" ? t.denyReader : t.denyFoundry;
+        clearTimeout(flashTimer);
+        seg.textContent = hint;
+        seg.classList.remove("deny");
+        void seg.offsetWidth; /* 重启动画 */
+        seg.classList.add("deny");
+        flashTimer = setTimeout(function () {
+          seg.textContent = original;
+          seg.classList.remove("deny");
+        }, 1600);
+      }
+
+      window.arcanePanelSwitch.onStatus(function (status) {
+        var surface = status && status.surface === "reader" ? "reader" : "foundry";
+        document.body.dataset.surface = surface;
+        segs.foundry.classList.toggle("active", surface === "foundry");
+        segs.reader.classList.toggle("active", surface === "reader");
+      });
+
+      segs.foundry.addEventListener("click", function () { clickSeg("foundry"); });
+      segs.reader.addEventListener("click", function () { clickSeg("reader"); });
+      async function clickSeg(target) {
+        var result = await window.arcanePanelSwitch.switch(target);
+        if (result && result.ok) return; /* 新 surface 由 status 推送带回 */
+        if (result && result.empty) deny(target);
+      }
+    })();
+  </script>
+</body>
+</html>
