@@ -195,9 +195,9 @@ D07 将此前缓存调查 TODO 落成删减方向：删除可重取数据的缓�
 
 ## 11. 试用交接与必须实际操作的验收
 
-试用入口：[启动独立试用版](../dist/start-trial.cmd)。双击后使用已配置好的百炼 Token Plan / qwen3.7-plus。启动脚本和程序在本机构建目录中，未作为发布版本推送。
+试用入口：启动独立试用版（本机构建目录 `../dist/start-trial.cmd`，非仓库内链接目标）。双击后使用已配置好的百炼 Token Plan / qwen3.7-plus。启动脚本和程序在本机构建目录中，未作为发布版本推送。
 
-程序：[ArcaneDesk.exe](../dist/win-unpacked/ArcaneDesk.exe)。推荐通过上面的脚本启动：它显式使用 `%LOCALAPPDATA%\ArcaneDesk\simplification-trial-3c428e9`，与正在使用的开发版/正式版会话分开。该目录只预置了本机加密模型凭据及匹配的 Local State，没有复制历史对话；凭据未放入程序包。直接运行 exe 会使用正式版默认数据目录。旧数据迁移的人工验收另在备份后的旧数据副本中做，不把空试用目录当作迁移验证。
+程序：`../dist/win-unpacked/ArcaneDesk.exe`（本机构建产物）。推荐通过上面的脚本启动：它显式使用 `%LOCALAPPDATA%\ArcaneDesk\simplification-trial-3c428e9`，与正在使用的开发版/正式版会话分开。该目录只预置了本机加密模型凭据及匹配的 Local State，没有复制历史对话；凭据未放入程序包。直接运行 exe 会使用正式版默认数据目录。旧数据迁移的人工验收另在备份后的旧数据副本中做，不把空试用目录当作迁移验证。
 
 产物版本 `0.4.3-3c428e91`，Windows x64。`dist:dir` 和 package verifier 均通过；包内 69 个生产源文件与工作区逐文件 SHA-256 一致。已实际启动 exe，验证跨模式导航、独立配置目录、qwen3.7-plus 模型及凭据可用，然后正常退出。见 [产物核验](simplification-package.json) 和 [实际启动截图](trial-startup.png)。P8 的后续提交只包含测试、文档和证据，因此程序版本标识仍指向最后产品代码提交 P7。
 
