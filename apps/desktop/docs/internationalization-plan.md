@@ -198,7 +198,8 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - ✅ ops 签名 runbook 改先签后发（覆盖补签降级为应急，`b3547a3`）；
   ✅ R2 `dl.arcanedesk.app` CORS 已配（GET/HEAD、Origin `*`）
 - ⏳ 验收待触发：一次完整发版，两 flavor 各落其位，`dl.arcanedesk.app/.../latest.json`
-  公开可读（需用户 dispatch 一次 release workflow）
+  公开可读（需用户 dispatch 一次 release workflow；评审 P3 后 `skip_oss` 默认 true
+  即 build-only，正式验收须显式 `skip_oss=false` 且 staged 签名件按先签后发就位）
 
 ### M3：Mod 链路（本仓库 + mods 仓库，M）— ✅ 代码完成（2026-09-11）
 
@@ -244,8 +245,36 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   skills/AGENTS.md 补充覆盖树约定；verify-source 注册组合器；全量测试 431/431，
   tsc 干净，intl 构建冒烟通过（`0.4.3-8b6ef79a-intl`）
 - ⏳ 验收待触发：push 后 dispatch release workflow 出 intl 包 + 首次
-  `publish-skills --region intl`（远端无指针按 r0 放行），验证 intl 构建自更新到
+  `publish-skills --region intl`（远端无指针按 r0 放行；评审 P2 后可直接 dispatch
+  `skills-publish.yml` 带 `region=intl`，无需本机持凭证），验证 intl 构建自更新到
   英文技能包、英文 agent 全流程无中文渗漏
+
+**外部评审与修复记录（2026-09-11，P1–P3 全部修复于 `1725116`，feat/intl-m4-skill-packs）：**
+
+1. **P1（阻断）intl 构建会被 verify-package 打挂**：`exactDirectories` 把
+   `generated/` 白名单写死为 `[desktop-release.json, region.json, renderer-assets]`，
+   而 M4 给 intl 包新增 `generated/skills-intl/`、`generated/system-prompts-intl/`
+   ——4 条 intl 腿（含 build-only）会全部 fail（此前「intl 构建冒烟通过」未跑
+   packaged verify，cn 腿因 prepare 会删残留而不受影响）。修复：新增
+   `packagedLayout(region)` 按包内 region.json 取期望——intl 必须携带且只允许多出
+   这两个目录（`generated/skills-intl/prep` 顶层清单复用 `skills/prep`，基线文件进
+   requiredFiles），cn 必须没有；7 个回归测试用合成包覆盖双 flavor 的接受/拒绝路径
+   （`package-verifier.test.mjs`）。
+2. **P2 intl 技能包没有 CI 发布路径**：`skills-publish.yml` 无 region 输入、无 R2
+   secret，intl 只能本机持凭证手工跑。修复：加 cn/intl choice 输入（默认 cn）+
+   `--region` 透传 + R2 三件套 env（desktop-release environment 已持有），并发组
+   按 region 拆分。
+3. **P3 workflow 默认值与 D5「先签后发」自相矛盾**：`skip_oss` 默认 false，随手
+   dispatch 会把未签名 EXE 发双区、切 latest、建 GitHub Release。修复：默认翻
+   true（build-only），release-runbook 补注；显式 `skip_oss=false` 才进发布链路。
+4. **次要观察（记录不改）**：intl 策展当前 5 条（§3 的 31 包目标待扩充，与 M3
+   「待扩充策展」记录一致）；镜像幂等只比 content-length 不比哈希（同长度损坏会
+   漏过，接受残余风险）；region.mjs 的 cn supportLinks 只有官网（Discord 暂缓已
+   明示，cn 侧维持现状）。
+5. 评审已逐条核对无问题：M1 接线、M3 漂移报警/依赖闭包、M4 四道 fail-closed
+   门禁、R2 SigV4 实现、ops M5/M6 路由与桶绑定。
+   修复后全量 438/438 + verify:source 干净；三条落掉，解冻 push + dispatch 验收
+   才是一次能过的状态。
 
 ### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 已部署并验收（2026-09-11）；启用时机暂缓（首发 BYOK）
 
