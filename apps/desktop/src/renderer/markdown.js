@@ -24,16 +24,23 @@ function el(tag, className, text) {
 // ---------- KaTeX 公式:$...$ / $$...$$ 先替换成占位符,DOM 构建时还原 ----------
 
 /**
- * 抽出数学片段换成 %%ARCKATEX_n%% 占位符;代码围栏与行内代码里的 $ 不动。
+ * 抽出数学片段换成 %%ARCKATEX_{nonce}_{n}%% 占位符;代码围栏与行内代码里的 $ 不动。
  * 顺带把中文编号 "1、" 归一成 "1. "(旧 markdown-lite 支持,marked 不认)。
  * @param {string} text
  * @returns {{ text: string, math: Array<{ tex: string, display: boolean }> }}
  */
 function extractMath(text) {
-  const math = [];
+  // 每次渲染换一个 nonce 并随 math 数组走:正文里字面的 %%ARCKATEX_0%% 是用户文本,
+  // 还原时只认本次渲染产出的占位符,不把用户文本错当公式
+  const math = /** @type {Array<{ tex: string, display: boolean }> & { nonce: string }} */ ([]);
+  math.nonce = Math.random().toString(36).slice(2, 10);
   const lines = String(text ?? "").split("\n");
   const out = [];
-  let inFence = false;
+  // 围栏追踪与 marked 对齐:~~~ 也是合法围栏;闭合必须与开符同字符、长度 ≥ 开符
+  // (```` 围栏里的一行 ``` 是内容)。追踪错了会把代码块里的 $...$ 抽成占位符,
+  // 而占位符在代码块里不会被还原,用户就看到 %%ARCKATEX%% 残渣
+  let fenceChar = "";
+  let fenceLen = 0;
   let seg = [];
   const flushSeg = () => {
     if (seg.length) {
@@ -42,13 +49,22 @@ function extractMath(text) {
     }
   };
   for (const line of lines) {
-    if (line.trimStart().startsWith("```")) {
-      if (!inFence) flushSeg();
-      inFence = !inFence;
+    const fence = /^(`{3,}|~{3,})/.exec(line.trimStart());
+    if (fenceChar) {
+      // 闭合行上只允许围栏符本身(marked 同样不认 ```js 这种带信息的闭合)
+      const closing = fence && fence[1][0] === fenceChar && fence[1].length >= fenceLen
+        && !line.trimStart().slice(fence[1].length).trim();
+      if (closing) {
+        fenceChar = "";
+        fenceLen = 0;
+      }
       out.push(line);
       continue;
     }
-    if (inFence) {
+    if (fence) {
+      flushSeg();
+      fenceChar = fence[1][0];
+      fenceLen = fence[1].length;
       out.push(line);
       continue;
     }
@@ -67,7 +83,7 @@ function scanMathSegment(seg, math) {
   let j = 0;
   const pushMath = (tex, display) => {
     math.push({ tex, display });
-    return `%%ARCKATEX_${math.length - 1}%%`;
+    return `%%ARCKATEX_${math.nonce}_${math.length - 1}%%`;
   };
   while (j < seg.length) {
     if (seg.startsWith("\\$", j)) {
@@ -129,12 +145,14 @@ function scanMathSegment(seg, math) {
   return out;
 }
 
-/** 文本节点按占位符切开,命中处插入 KaTeX 渲染结果。 */
+/** 文本节点按占位符切开,命中处插入 KaTeX 渲染结果;只认本次渲染 nonce 的占位符。 */
 function appendTextWithMath(container, text, math) {
-  for (const part of String(text ?? "").split(/(%%ARCKATEX_\d+%%)/)) {
+  const nonce = String(math?.nonce ?? "");
+  const pattern = new RegExp(`(%%ARCKATEX_${nonce}_\\d+%%)`);
+  for (const part of String(text ?? "").split(pattern)) {
     if (!part) continue;
-    const m = /^%%ARCKATEX_(\d+)%%$/.exec(part);
-    if (m && math[Number(m[1])]) container.appendChild(renderKatex(math[Number(m[1])]));
+    const m = new RegExp(`^%%ARCKATEX_${nonce}_(\\d+)%%$`).exec(part);
+    if (m && math?.[Number(m[1])]) container.appendChild(renderKatex(math[Number(m[1])]));
     else container.appendChild(document.createTextNode(part));
   }
 }

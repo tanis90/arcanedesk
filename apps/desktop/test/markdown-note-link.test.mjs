@@ -223,6 +223,42 @@ test("a plain language fence still gets the default block", () => {
   assert.equal(container.querySelector(".md-codeblock-lang").textContent, "json");
 });
 
+// ---------- extractMath 的围栏追踪必须与 marked 同规则(N11) ----------
+// 追踪错一拍,代码块里的 $...$ 就被抽成占位符,而占位符在代码块里不会被还原——
+// 用户看到的就是 %%ARCKATEX%% 残渣。
+
+test("a tilde fence keeps its dollar signs as source, not math placeholders", () => {
+  const { container, arcaneMd } = loadMarkdownPipeline();
+  arcaneMd.render(container, "~~~js\nconst price = $x$;\n~~~");
+  const pre = container.querySelector("pre.md-code");
+  assert.ok(pre, "tilde fence renders as a code block");
+  assert.match(pre.textContent, /\$x\$/);
+  assert.equal(container.textContent.includes("%%ARCKATEX"), false, "no placeholder leaks into code");
+});
+
+test("a shorter backtick line inside a longer fence stays content", () => {
+  // ```` 围栏里的一行 ``` 是内容,不是闭合:追踪器与 marked 都必须这么想
+  const { container, arcaneMd } = loadMarkdownPipeline();
+  arcaneMd.render(container, "````\n```js\nlet a = $x$;\n```\n````");
+  const pre = container.querySelector("pre.md-code");
+  assert.ok(pre, "the whole nested block is one code block");
+  assert.match(pre.textContent, /```js/);
+  assert.match(pre.textContent, /\$x\$/);
+  assert.equal(container.textContent.includes("%%ARCKATEX"), false);
+});
+
+test("a literal %%ARCKATEX_0%% in the source survives as text", () => {
+  // 占位符带每次渲染的 nonce:用户写下的字面占位符不得撞上本次渲染的公式编号
+  const katex = { render: (tex, node) => { node.textContent = tex; } };
+  const { container, arcaneMd } = loadMarkdownPipeline({ globals: { katex } });
+  arcaneMd.render(container, "占位符 %%ARCKATEX_0%% 与公式 $x$ 同段。");
+  assert.match(container.textContent, /%%ARCKATEX_0%%/, "literal placeholder text is untouched");
+  const math = container.querySelector(".md-katex");
+  assert.ok(math, "the real formula still renders");
+  assert.equal(math.textContent, "x");
+});
+
+
 // ---------- §5.5 文案键:阅读器页的错误分支全靠它们 ----------
 
 test("the reader strings exist in both locales", async () => {
