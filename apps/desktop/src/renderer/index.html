@@ -864,18 +864,25 @@
     }
     .composer:focus-within { border-color: var(--accent-dim); box-shadow: 0 0 0 2px var(--ring); }
     /* 备团队列列表(排队消息不进对话流,在此可操作) */
-    #queue-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+    #queue-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
     .queue-row {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-      padding: 4px 6px 4px 10px; font-size: var(--fs-micro); color: var(--text);
+      display: flex; align-items: center; gap: 10px;
+      background: transparent; border: 1px dashed var(--faint); border-radius: 8px;
+      padding: 8px 8px 8px 12px; font-size: var(--fs-ui); color: var(--text);
+    }
+    .queue-row:hover { border-color: var(--accent-dim); }
+    /* 衬线斜体序号:队列是 FIFO 真序列,序号即投递顺序 */
+    .queue-row .queue-ord {
+      flex: none; min-width: 16px; text-align: right;
+      font-family: var(--font-display); font-size: 13px; font-style: italic;
+      color: var(--accent-dim);
     }
     .queue-row .queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .queue-row button {
       flex: none; border: 1px solid var(--border); background: transparent; color: var(--faint);
-      border-radius: 6px; padding: 1px 7px; cursor: pointer; font-size: var(--fs-micro);
+      border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: var(--fs-meta);
     }
-    .queue-row button:hover { color: var(--text); border-color: var(--accent-dim); }
+    .queue-row button:hover { color: var(--accent-dim); border-color: var(--accent-dim); }
     /* kimi web 式两行布局:textarea 独占一行,底行左 + 右 🎙■↑ */
     .composer textarea {
       width: 100%;

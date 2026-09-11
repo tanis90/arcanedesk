@@ -508,9 +508,12 @@ function syncQueueList() {
   input.placeholder = show ? t("chat.input.queuePlaceholder") : t("composer.placeholder");
   if (!show) return;
   queueList.textContent = "";
+  let ord = 0;
   for (const [commandId] of queued) {
+    ord += 1;
     const meta = inputMetaByCommand.get(commandId);
     const row = el("div", "queue-row");
+    row.appendChild(el("span", "queue-ord", `${ord}.`));
     row.appendChild(el("span", "queue-text", meta?.text ?? ""));
     for (const [action, label, titleKey] of /** @type {const} */ ([
       ["steer", "↑", "chat.input.queueNow"],
