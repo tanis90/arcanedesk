@@ -232,8 +232,9 @@ test("intl index: curation validation enforces kind/group/URL shape", async (t) 
 
 function makeHeadFetch(responses) {
   // HEAD 专用 fake：按 URL 返回 status 与 content-length。
+  // 查询串归一化：生产代码对公网 HEAD 加 cache-buster 防负缓存，测试仍按干净 URL 断言。
   return async (url) => {
-    const hit = responses.get(String(url)) ?? { status: 404, length: 0 };
+    const hit = responses.get(String(url).split("?")[0]) ?? { status: 404, length: 0 };
     return {
       status: hit.status,
       headers: {

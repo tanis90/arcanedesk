@@ -380,7 +380,12 @@ export async function prepareIntlIndex({
 }
 
 async function headContentLength(fetchImpl, url) {
-  const response = await fetchImpl(httpsUrl(url, "mirror object URL"), {
+  // 与 verifyUrl 相同的负缓存规避：存在性预检也必须回源——否则预检的 404
+  // 会被边缘按 URL 缓存数分钟，既污染紧随其后的上传后校验，也会让周更的
+  // 「已存在且一致」幂等跳过读到陈旧 404 而失效（2026-09-11 M3 首发事故）。
+  const validated = httpsUrl(url, "mirror object URL");
+  const bust = `_cb=${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const response = await fetchImpl(`${validated}${validated.includes("?") ? "&" : "?"}${bust}`, {
     method: "HEAD",
     cache: "no-store",
     headers: { "accept-encoding": "identity" },

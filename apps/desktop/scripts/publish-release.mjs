@@ -436,7 +436,11 @@ async function verifyUrl(url, expectedBytes, label = url) {
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     // OSS may gzip text objects for Node's default Accept-Encoding. Its HEAD
     // response then omits the original Content-Length, so require identity.
-    const res = await fetch(url, {
+    // 负缓存规避（2026-09-11 M3 首发事故）：Cloudflare 边缘会按 URL 把对象
+    // 上传前的 404 缓存数分钟，上传后立刻 HEAD 同一 URL 读到的是陈旧 404。
+    // 每次尝试带独立 cache-buster，强制回源取真值。
+    const bust = `_cb=${Date.now().toString(36)}-${attempt}`;
+    const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}${bust}`, {
       method: "HEAD",
       cache: "no-store",
       headers: { "accept-encoding": "identity" },
