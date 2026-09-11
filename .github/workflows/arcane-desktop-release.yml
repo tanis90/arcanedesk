@@ -1,11 +1,14 @@
 name: Release Arcane Desktop
 
-# Official four-platform Desktop build and release entrypoint. Dispatch with
-# skip_oss=true for a build-only validation. Immutable OSS objects are uploaded
-# and fully verified before latest.json may be changed.
+# Official four-platform Desktop build and release entrypoint. Dispatches as a
+# build-only validation by default (skip_oss=true); turn skip_oss off only for a
+# real signed release. Immutable OSS objects are uploaded and fully verified
+# before latest.json may be changed.
 # 国际化方案 D5 发布双轨：每个平台构建 cn（OSS arcane-package）与 intl
 # （Cloudflare R2 arcane-desk-intl / dl.arcanedesk.app）两个 flavor，intl 包名
 # 带 -intl 后缀、默认 releaseId 带 -intl 后缀，两侧 latest 指针互不影响。
+# D5「先签后发」纪律（评审 P3）：skip_oss 默认 true，随手 dispatch 不会把未签名
+# 构件发到任何区域；只有显式关闭 skip_oss 才进入发布链路。
 on:
   workflow_dispatch:
     inputs:
@@ -29,9 +32,9 @@ on:
         default: true
         type: boolean
       skip_oss:
-        description: "Build-only validation (no OSS upload)"
+        description: "Build-only validation (no upload, no latest switch, no GitHub Release). Default ON per D5 sign-first; turn OFF only for a real signed release."
         required: true
-        default: false
+        default: true
         type: boolean
 
 permissions:
