@@ -22,6 +22,13 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 3. 授予：`await actor.createEmbeddedDocuments("Item", [doc.toObject()])`；一次给多个条目就把多个 `toObject()` 放进同一个数组一次调用。
 4. 回读 `actor.items` 确认条目已在该人物身上，报告条目名和来源包 id。
 
+### 技能属性由系统默认处理
+
+创建或更新 Actor 时，默认不要写入 `system.skills.<key>.ability`。dnd5e 会根据
+`CONFIG.DND5E.skills` 初始化技能的默认属性；模型不得根据角色的主属性或名称猜测映射。
+只有用户明确要求替代属性，或来源文档明确带有合法覆盖时，才写入 `ability`。写入后回读
+每个被选择技能的最终 `ability`；空值或不符合来源/明确覆盖的值必须修复后才能完成任务。
+
 ## 人物头像与 Token 图像同步
 
 Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是互不联动的字段：只设头像，token 会显示默认的神秘人剪影。凡是创建人物或修改人物图像，两个位置必须一起设置、一起回读验证，不允许只改其一。
