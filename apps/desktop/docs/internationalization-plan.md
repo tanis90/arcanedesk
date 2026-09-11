@@ -184,15 +184,29 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - ⏳ 验收待触发：一次完整发版，两 flavor 各落其位，`dl.arcanedesk.app/.../latest.json`
   公开可读（需用户 dispatch 一次 release workflow）
 
-### M3：Mod 链路（本仓库 + mods 仓库，M）
+### M3：Mod 链路（本仓库 + mods 仓库，M）— ✅ 代码完成（2026-09-11）
 
-- `mod-manager.mjs`：`--index-url` 参数 + `ARCANE_MOD_INDEX_URL` 环境变量
-  （参数名与语义在 M1 规格中钉死）
-- 新增 `scripts/prepare-intl-index.mjs`：策展清单 → 上游实测哈希 → `index-en.json`，
-  哈希漂移报警；周更 cron workflow 发 R2
-- mods 仓库：release workflow（module.json 稳定 manifest URL）；~~开源 arcane-agent-bridge~~（已拍板弃用）
-- arcane-demo 世界审计 + intl 版 profile
-- 验收：intl 构建里 agent 装 midi-qol 从上游下载且索引哈希校验通过；自有 mod 从 GitHub 装通
+- ✅ `mod-manager.mjs`：`--index-url` 参数 + `ARCANE_MOD_INDEX_URL` 环境变量
+  （参数名与语义在 M1 规格中钉死），六个索引消费命令全部接线；14/14 测试
+- ✅ `scripts/prepare-intl-index.mjs`：策展清单（`distribution/intl-mod-curation.json`）→
+  上游实测哈希 → `index-en.json`，哈希漂移报警（同版本 URL/哈希变化即失败，版本升级放行）
+  + 依赖闭包强制校验（缺谁报谁，不自动追加）；10/10 测试
+- ✅ 周更 cron workflow `arcane-intl-mod-index.yml`（每周一 03:23 UTC + dispatch，
+  `desktop-release` environment，publish-plan 留 artifact 审计 90 天）
+- **重要发现（F13/F14 断层）**：上游 latest 已全部转向 Foundry V14（dnd5e 6.0.0 要求
+  ≥14.367、midi-qol 14.x、dae 14.x），与 Arcane 钉的 13.351 不兼容。策展按 F13 兼容线钉版：
+  - midi-qol / dae 走 tposney `v13` 大版本分支（自指 URL 稳定，实测 13.0.65 / 13.0.29）
+  - socketlib / lib-wrapper 的 latest 仍兼容 F13，保持跟踪（v1.1.4 / 1.13.5.1）
+  - dnd5e 5.3.3（F13 末版）自指 URL 指向 master 可变分支，直连不可能 → 新增**镜像模式**
+    （策展条目 `mirror: true`）：改写 manifest/download 为 R2 版本化 URL
+    （`mods/packages/<id>/<version>/`）随索引发布；周更幂等（已存在且一致跳过，
+    不一致即不可变漂移报警）
+- arcane-demo 世界审计结论：世界内容 **0 中文字符**，英文可直接复用；但 intl 版
+  world/profile **暂缓**——cn profile 26 个模块含 5 个中文本地化模块（intl 剔除）、
+  2 个 arcane 自有模块（依赖 mods 仓库 release workflow，人工任务 #8）、十余个待扩充
+  策展的上游模块；世界包工件也需镜像到 R2。待自有 mod GitHub 发布线就绪后一并做
+- ⏳ 验收待触发：push 后 dispatch `arcane-intl-mod-index.yml` 完成首次发布，
+  再在 intl 构建里由 agent 装 midi-qol（上游下载 + 索引哈希校验）
 
 ### M4：技能包区域化（本仓库，M，依赖 M3 的 CLI 定稿）
 
