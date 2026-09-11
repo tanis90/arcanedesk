@@ -48,6 +48,12 @@ test("a dangling colon after the extension rejects the whole match", () => {
   assert.deepEqual(pathsOf("a.md"), ["a.md"]);
 });
 
+test("a column suffix followed by junk does not half-linkify either", () => {
+  // 行号分支自己的 lookahead 同样要拒绝 ":":a.md:12:34x 回溯后不能留下 "a.md:12" + 悬空 ":34x"
+  assert.deepEqual(pathsOf("a.md:12:34x"), []);
+  assert.deepEqual(pathsOf("a.md:12:34"), ["a.md:12:34"]); // 完整行:列号照常全量命中
+});
+
 test("wrappers and trailing punctuation stay outside the match", () => {
   assert.deepEqual(pathsOf("`notes/npc.md`"), ["notes/npc.md"]);
   assert.deepEqual(pathsOf('"notes/npc.md"'), ["notes/npc.md"]);
