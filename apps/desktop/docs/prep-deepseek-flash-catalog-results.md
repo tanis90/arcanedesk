@@ -45,3 +45,8 @@
 ## Five-run execution checkpoint (2026-09-11)
 
 The first five-run batch was started against local COS. Run 1 completed 9/12 audited trials (A1-A3 and B1 both arms, B2 JS). B2 tool produced a settled business report but the provider returned a batch-level failure afterward, so the runner paused before B3. The manifest is preserved at `C:\Users\yangqi\AppData\Local\Temp\deepseek-flash-5x-20260911\run-1b\manifest.json`. This is recorded as an infrastructure/provider interruption, not a model pass/fail; the five-run aggregate is therefore not yet valid.
+
+
+### Continuation result
+
+The isolated B3 continuation completed both arms successfully: `resume-b3-2/manifest.json`, 2/2 audited. The original run remains paused at B2 tool provider interruption with 9/10 settled/audited entries (B2 tool report exists but runner classified the batch as provider failure). No aggregate 5-run score is claimed because the first run is incomplete and the remaining four runs have not been executed.
