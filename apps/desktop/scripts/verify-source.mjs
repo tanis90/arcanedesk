@@ -53,7 +53,11 @@ const exactDirectories = new Map([
     "verify-source.mjs",
     "write-sha256sums.mjs",
   ]],
-  ["distribution", ["community-distribution.json", "intl-mod-curation.json", "oss-release-contract.md"]],
+  ["distribution", {
+    required: ["community-distribution.json", "intl-mod-curation.json", "oss-release-contract.md"],
+    // promote-release 回写的 latest 指针镜像：cn/intl 各自可选，随拍板先后出现
+    optional: [/^desktop-latest(?:-intl)?\.json$/],
+  }],
 ]);
 
 function walk(directory, files = []) {
@@ -76,9 +80,22 @@ for (const relative of forbiddenEntries) {
 for (const [relative, expected] of exactDirectories) {
   const directory = path.join(desktopRoot, relative);
   const actual = fs.readdirSync(directory).sort();
-  const wanted = [...expected].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
-    errors.push(`${relative} contents differ: expected ${wanted.join(", ")}; got ${actual.join(", ")}`);
+  if (Array.isArray(expected)) {
+    const wanted = [...expected].sort();
+    if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
+      errors.push(`${relative} contents differ: expected ${wanted.join(", ")}; got ${actual.join(", ")}`);
+    }
+    continue;
+  }
+  const required = [...expected.required].sort();
+  const missing = required.filter((name) => !actual.includes(name));
+  const unexpected = actual.filter(
+    (name) => !required.includes(name) && !expected.optional.some((pattern) => pattern.test(name)),
+  );
+  if (missing.length || unexpected.length) {
+    errors.push(
+      `${relative} contents differ: missing ${missing.join(", ") || "none"}; unexpected ${unexpected.join(", ") || "none"}`,
+    );
   }
 }
 
