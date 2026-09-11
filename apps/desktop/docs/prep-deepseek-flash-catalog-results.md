@@ -25,3 +25,18 @@
 - Catalog calls occurred in 4/6 tool trials and 0/6 JS trials. Tool arm call counts were A1 0, A2 19 catalog calls, A3 1, B1 0, B2 2, B3 0.
 - Mean elapsed time: JS 205.3s; tool 189.6s. This is one paired batch, so it is directional rather than a stable performance estimate.
 - Interpretation: exposing catalog tools does not automatically improve every task. It helped A2/B2 where the model actively searched for exact content, but did not improve A1/A3 and sometimes caused extra exploration or incorrect grants. Keep the tools, tighten the skill around when to search, exact source/UUID verification, and stop conditions; do not expand the catalog surface without another controlled batch.
+
+## Iteration checkpoint (2026-09-11)
+
+- Catalog `classFeature` list now returns a compact `progression` projection (class, subclass, race, grants, spell access/tables, unresolved references). Full progression remains available only with `includeProgressionDetail:true` or via `detail`.
+- This keeps the benchmark-relevant progression signal while avoiding a default 35 KB payload dominated by raw document/system/effect/uses fields.
+- Verification: content-catalog, trace capture, skill-content, publisher, and self-contained bundle tests: **25 passed**.
+- UUID grant/import remains the next implementation gate: the public contract must accept either a verified UUID or legacy `packId+entryId`; the runtime must resolve with `fromUuid`, verify Document type/name, then clone native `toObject()` data. No benchmark claim is made for that gate until its runtime test passes.
+
+### Next release sequence
+
+1. Add UUID-or-pack reference validation to the existing grant tool, preserving legacy callers.
+2. Add runtime tests for UUID resolution, mismatch rejection, native source flags, and idempotent read-back.
+3. Update prep skill instructions to prefer UUID and state which Actor fields are system defaults versus spec-required values.
+4. Run the full A1-B3 benchmark five paired times on the same COS world, preserving each manifest and trace.
+5. Publish aggregate pass rate, variance, tool adoption, latency, and failure traces before deciding production rollout.
