@@ -458,3 +458,12 @@
 用户重新授权实现唯一方案，并将必须进行操作系统交互的验收交由人工表单。新增 SessionNavigation 和 NavigationView，接入跨模式项目、置顶、用户标题、归档／恢复及确认永久删除；保留原执行／同步／通知事实来源，移除旧活动导航。
 
 418 项单测、源码边界／类型、生产集成、CDP 交互、第二进程持久化和新性能基准通过。修复 SDK cwd 过滤导致的跨项目重启遗漏，以及迟到归档回执覆盖新导航。全部证据与人工范围以 [当前审计](acceptance-audit.md) 为准，不沿用上方历史待办状态。
+
+
+## 右屏 Markdown 阅读器（2026-09-10，分支 codex/md-reader-impl）
+
+按 [md-reader-spec](md-reader-spec.md) 实现：chat 里 agent 产出的 `.md` 路径可点击，点击后在右屏 Foundry 面板位置打开独立 `WebContentsView` 阅读器，与 Foundry 页互斥共存、切换瞬时、双方状态不丢。M0 先补 spec 漏项（CSP、cwd 解析、变更清单、`panel:reload` 语义），M1–M6 按状态机／接线／preload／阅读器页／渲染管线／chat 委托逐段落地，M7 补单测与进程内 smoke，M8 用 CDP 从进程外驱动真窗口验收。
+
+验收：445 项单测、`verify:source`、`typecheck` 全绿；`smoke-md-reader.mjs` 把守进程内不变量；`review-md-reader.mjs` 从进程外走 ①②③，证明阅读器是独立 page target、真点顶栏切主题、真按 Esc，七张截图与断言清单见 [md-reader-evidence](md-reader-evidence/README.md)。顺手修掉一个既有缺陷：关面板再开会从远端 world 掉回 `localhost:30000`。
+
+仍留人工（spec §9）：en-US 观感、分栏拖拽/resize/F11 下双 view 切换无闪烁。

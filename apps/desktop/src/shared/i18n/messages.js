@@ -370,6 +370,15 @@ globalThis.ARCANE_MESSAGES = {
     "md.mermaidSource": "源码",
     "md.mermaidFailed": "图表渲染失败:{error}",
 
+    // ---------- 右屏 Markdown 阅读器(md-reader-spec §5.5) ----------
+    // 错误不道歉、不含糊、给下一步(design-rules R3/R5);内部 reason 枚举不上屏。
+    "reader.back": "← 返回 Foundry",
+    "reader.toFoundry": "→ 打开 Foundry",
+    "reader.error.missing": "找不到这份笔记：文件不存在或已被移动。可以让 agent 重新生成它。",
+    "reader.error.outside": "这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。",
+    "reader.error.encoding": "这个文件不是 UTF-8 文本，无法阅读。",
+    "reader.truncated": "文件超过 2 MB，只显示开头部分。",
+
     // ---------- 设置:语音 ----------
     "sv.title": "语音识别",
     "sv.note": "语音识别使用 GLM-ASR-2512。可使用 Arcane Spark 现有接入,也可填写自己的智谱 API Key(智谱直连当前 ¥0.06/分钟);单句最长 30 秒。识别结果会插入输入框,检查后按 Enter 发送。",
@@ -434,6 +443,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "无法打开 {url}:{error}",
     "err.panel.inspectFailed": "页面已打开,但无法检查:{error}",
     "err.panel.notFoundry": "{url} 不是 Foundry Virtual Tabletop 页面",
+    "err.panel.viewGone": "面板视图已销毁,{url} 未能加载",
     "err.permission.systemDenied": "{media} 的系统权限被拒绝",
     "err.prep.invalidDir": "备团目录不存在或不是目录:{dir}",
 
@@ -807,6 +817,14 @@ globalThis.ARCANE_MESSAGES = {
     "md.mermaidSource": "Source",
     "md.mermaidFailed": "Chart render failed: {error}",
 
+    // ---------- Right-pane Markdown reader (md-reader-spec §5.5) ----------
+    "reader.back": "← Back to Foundry",
+    "reader.toFoundry": "→ Open Foundry",
+    "reader.error.missing": "This note is missing: the file no longer exists or has been moved. Ask the agent to generate it again.",
+    "reader.error.outside": "This note is outside the current working directory. The reader only reads files inside it.",
+    "reader.error.encoding": "This file is not UTF-8 text, so it cannot be read.",
+    "reader.truncated": "The file is larger than 2 MB; only the beginning is shown.",
+
     // ---------- settings: voice ----------
     "sv.title": "Voice Recognition",
     "sv.note": "Voice recognition uses GLM-ASR-2512. Use your existing Arcane Spark connection or enter your own Zhipu API key (Zhipu direct is currently ¥0.06/min). Each recording can be up to 30 seconds; transcripts are inserted into the composer for review before sending.",
@@ -871,6 +889,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "Could not open {url}: {error}",
     "err.panel.inspectFailed": "The page opened but could not be inspected: {error}",
     "err.panel.notFoundry": "{url} is not a Foundry Virtual Tabletop page",
+    "err.panel.viewGone": "The panel view is gone; {url} was not loaded",
     "err.permission.systemDenied": "System permission for {media} was denied",
     "err.prep.invalidDir": "The prep path does not exist or is not a directory: {dir}",
 

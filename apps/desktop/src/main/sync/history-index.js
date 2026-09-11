@@ -72,10 +72,13 @@ export class HistoryIndex {
       else if (kind === "after") { start = position + 1; end = Math.min(this.records.length, start + limit); }
     }
     const records = this.records.slice(start, end);
+    // 空页没有任何可当游标的 key:hasOlder/hasNewer 都得是 false,
+    // 否则渲染层会拿 null key 画出一个点下去必抛 INVALID_HISTORY_QUERY 的按钮
+    const empty = records.length === 0;
     return { history: structuredClone(records.map(record => this.render(record))), historyPage: {
-      total: this.records.length, firstKey: records.length ? identity(records[0]) : null,
-      lastKey: records.length ? identity(records.at(-1)) : null,
-      hasOlder: start > 0, hasNewer: end < this.records.length,
+      total: this.records.length, firstKey: empty ? null : identity(records[0]),
+      lastKey: empty ? null : identity(records.at(-1)),
+      hasOlder: !empty && start > 0, hasNewer: !empty && end < this.records.length,
     } };
   }
 }

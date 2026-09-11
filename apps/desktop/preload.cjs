@@ -29,8 +29,10 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel: () => ipcRenderer.invoke("panel:open"),
   closePanel: () => ipcRenderer.invoke("panel:close"),
-  /** F5: reload the Foundry panel page (no-op when the panel is closed). */
+  /** F5: reload the right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
+  /** Open a Markdown note in the right-pane reader. Path validation happens in main. */
+  openMdReader: (path) => ipcRenderer.invoke("md-reader:open", path),
   sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth: (px) => ipcRenderer.invoke("panel:set-chat-width", px),

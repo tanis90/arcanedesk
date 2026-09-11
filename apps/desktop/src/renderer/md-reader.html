@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!-- CSP 对齐 index.html:default-src 'self' 让 KaTeX 字体与本地 vendor 资源照常加载
+       (foundry-unavailable.html 的 default-src 'none' 会把公式渲染成方块,不能抄)。
+       style-src 'unsafe-inline' 是 mermaid/KaTeX 注入 <style> 与内联样式的既有需要。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https: http:" />
+  <title>ArcaneDesk</title>
+  <script src="theme-init.js"></script>
+  <script src="i18n-init.js"></script>
+  <script src="../shared/i18n/messages.js"></script>
+  <script src="i18n.js"></script>
+  <link rel="stylesheet" href="../../generated/renderer-assets/katex/dist/katex.min.css" />
+  <link rel="stylesheet" href="../../generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css" id="hljs-theme-dark" />
+  <link rel="stylesheet" href="../../generated/renderer-assets/highlightjs/cdn-assets/styles/stackoverflow-light.min.css" id="hljs-theme-light" disabled />
+  <link rel="stylesheet" href="markdown.css" />
+  <style>
+    /* ---------- tokens:与 chat 同一套命名,值按"读文档"重新定 ----------
+       底色不另起表面色:右屏本来就是"一块地方",再叠卡片会显得像弹窗(§5.1)。 */
+    :root {
+      color-scheme: dark;
+      --bg: #171c26;
+      --bg-soft: #1c2230;
+      --panel-2: #212837;
+      --border: #2c3446;
+      --border-soft: #232a39;
+      --text: #b9b4a7;
+      --text-strong: #e8e4d8;
+      --muted: #8d8879;
+      --faint: #6a6f7d;
+      --accent: #d6a94c;
+      --accent-dim: #a8843b;
+      --ring: rgba(214, 169, 76, 0.22);
+      --err: #f07070;
+      --warn: #f59e4b;
+      --info: #4fb3e8;
+      --code-bg: #121721;
+      --code-fg: #c9d1e0;
+      --scroll: #2a3244;
+      --scroll-hover: #3a445a;
+      --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+      --font-ui: "Segoe UI", "Microsoft YaHei", system-ui, "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+      /* signature(§5.3,2026-09-11 修订):衬线从页眉延伸到文档标题,层次靠字体不靠颜色。
+         CJK 渐进增强:装了思源宋体的用好字体,没装的落系统宋体,大字号避开小字 hinting 短板 */
+      --font-head: Georgia, "Palatino Linotype", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", SimSun, serif;
+      /* 字阶:正文 15px 即舒适阅读下限,代码与页眉随之上抬一档 */
+      --fs-micro: 11.5px;
+      --fs-meta: 13px;
+      --fs-head: 13px;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f5f1e2;
+      --bg-soft: #efe9d5;
+      --panel-2: #eae3cf;
+      --border: #d8cdb0;
+      --border-soft: #e3dbc4;
+      --text: #71664f;
+      --text-strong: #2f2318; /* 原 #33291a 偏橄榄(G>B),大字细笔画观感发绿(评审 §9) */
+      --muted: #857a63;
+      --faint: #a2977d;
+      --accent: #2e4170;
+      --accent-dim: #6b7ba3;
+      --ring: rgba(46, 65, 112, 0.18);
+      --err: #c13b32;
+      --warn: #b4690e;
+      --info: #0e7490;
+      --code-bg: #ece5cf;
+      --code-fg: #4a4033;
+      --scroll: #cbc0a4;
+      --scroll-hover: #a89b7c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.8 var(--font-ui);
+      overflow: hidden;
+    }
+    button:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 1px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .reader-scroll { scroll-behavior: auto; }
+    }
+    ::selection { background: var(--accent); color: var(--bg); }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* ---------- 窄顶栏:按钮(左) + 文件名(右,衬线),下沿一条发丝线(§5.2) ----------
+       底色与 chat 顶栏同一张 --bg:左右连成一条,不再单独一块表面(§5.1 的精神) */
+    .reader-bar {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 40px;
+      padding: 0 14px;
+      background: var(--bg);
+      /* 丝线用 currentColor + 低透明度,明暗主题自适应(§5.1) */
+      border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    }
+    .reader-back {
+      flex: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: var(--fs-meta);
+      padding: 3px 10px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .reader-back:hover { color: var(--text-strong); border-color: var(--border); }
+    .reader-name {
+      margin-left: auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--font-head);
+      font-size: var(--fs-head);
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    /* ---------- 正文栏 ----------
+       满铺:右屏常被分栏挤窄,再套 68ch 居中栏会让重心偏右(§5.2);
+       横向 padding 随面板宽度 clamp,宽面板仍有适度留白 */
+    .reader-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    .md-doc {
+      padding: 26px clamp(24px, 6%, 72px) 72px;
+      overflow-wrap: break-word;
+    }
+    /* 窄栏时 padding 收得比 clamp 下限更紧,不出现横向滚动(§5.4) */
+    @media (max-width: 720px) {
+      .md-doc { padding: 18px 16px 56px; }
+      .reader-notice { padding: 10px 16px 0; }
+    }
+    /* 文档里的标题需要比气泡里的更分级:arcaneMd 一律输出 h4,这里按位置给层次。
+       安静化(评审 §10):标题回墨色(--text-strong 由 markdown.css 供给),层次交给衬线+字号;
+       彩色只留 accent 一种且语义="可点"——此前标题蓝+链接青+code 胶囊三色并立被验收判为花哨。 */
+    .md-doc h4 { font-family: var(--font-head); font-weight: 600; font-size: 18px; line-height: 1.5; letter-spacing: 0.01em; margin: 26px 0 8px; }
+    .md-doc h4:first-child { margin-top: 0; }
+    /* 标题里的 **强调** 颜色跟随标题,不被 strong 规则弹走 */
+    .md-doc h4 strong { color: inherit; }
+    /* 阅读器里唯一的彩色 = accent = 可点;--info 青退出阅读器(它仍是 chat 的链接色) */
+    .md-doc a { color: var(--accent); }
+    /* 行内 code 拆胶囊:DM 笔记里 `区域Z8` 式片段密度极高,底色+描边一屏几十个小色块。
+       只留等宽字体作区分,颜色并入正文;pre.md-code > code 特异性更高,围栏内不受影响。 */
+    .md-doc code { background: none; border: none; border-radius: 0; padding: 0 1px; color: inherit; font-size: 0.93em; }
+    .md-doc .md-img { max-height: none; }
+
+    /* ---------- 超限截断提示 / 错误页 ---------- */
+    .reader-notice {
+      padding: 10px clamp(24px, 6%, 72px) 0; /* 与 .md-doc 同一套 padding 方案 */
+      color: var(--muted);
+      font-size: var(--fs-meta);
+    }
+    .reader-error {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+    .reader-error p {
+      max-width: 46ch;
+      color: var(--muted);
+      font-size: var(--fs-meta);
+      line-height: 1.9;
+    }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="reader-bar">
+    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「→ 打开 Foundry」(§4.3)。
+         起步 hidden:第一次内容推送的 applyOrigin 才亮相,免得先画一个文案再闪成另一个(N12) -->
+    <button id="reader-back" class="reader-back" type="button" hidden></button>
+    <span id="reader-name" class="reader-name"></span>
+  </header>
+  <p id="reader-notice" class="reader-notice" role="status" hidden></p>
+  <main id="reader-scroll" class="reader-scroll">
+    <article id="reader-doc" class="md-doc"></article>
+  </main>
+  <div id="reader-error" class="reader-error" role="alert" hidden><p></p></div>
+  <script src="../../generated/renderer-assets/marked/lib/marked.umd.js"></script>
+  <script src="../../generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js"></script>
+  <script src="../../generated/renderer-assets/katex/dist/katex.min.js"></script>
+  <script src="../../generated/renderer-assets/mermaid/dist/mermaid.min.js"></script>
+  <script src="markdown.js"></script>
+  <script src="md-reader.js"></script>
+</body>
+</html>

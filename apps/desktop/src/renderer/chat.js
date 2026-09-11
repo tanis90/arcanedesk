@@ -251,8 +251,8 @@ function renderHistoryNavigation() {
     node.addEventListener("click", () => { void showHistoryPage(query, intent); });
     return node;
   };
-  if (historyPage.hasOlder) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
-  if (historyPage.hasNewer) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
+  if (historyPage.hasOlder && historyPage.firstKey != null) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
+  if (historyPage.hasNewer && historyPage.lastKey != null) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
 }
 
 function scheduleWorkspaceSave() {
@@ -303,7 +303,9 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     try { saved = await workspaceStore.load(id); } catch { saved = {}; }
     if (token !== snapshotRequest || selectedSessionId !== id) return;
     if (!keepReading) historyPage = payload.historyPage ?? null;
-    else if (historyPage) historyPage = { ...historyPage, hasNewer: true };
+    // keepReading 是"翻旧页不要被拽走",不是无中生有:只有之前已经 hasNewer 才保留,
+    // 否则按 payload 的实际值——无差别置 true 会造出点进去是空页的「查看后续消息」
+    else if (historyPage) historyPage = { ...historyPage, hasNewer: historyPage.hasNewer || Boolean(payload.historyPage?.hasNewer) };
     selectedTaskId = payload.task?.id ?? null;
     showTaskState(payload.task); showPendingModel(payload.pendingModel);
     viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
@@ -710,6 +712,31 @@ function renderMarkdown(container, text) {
   } else {
     container.textContent = text;
   }
+}
+
+// ---------- ② 消息体里的 .md 路径 → 右屏阅读器(md-reader-spec §4.2/§8) ----------
+
+// 委托挂在消息列表上而不是每个锚点:历史回显、流式定稿、翻页都会重建消息体,
+// 逐个绑定既漏又贵。锚点没有 href(file:// 下会把整个页面导航走),所以键盘激活也在这里。
+messages.addEventListener("click", event => {
+  if (event.button !== 0) return; // 中键/右键不打开阅读器,留给浏览器默认行为
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (anchor) openNote(/** @type {HTMLElement} */ (anchor));
+});
+messages.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (!anchor) return;
+  event.preventDefault();
+  openNote(/** @type {HTMLElement} */ (anchor));
+});
+
+/** 把锚点上的原始路径交给 main:规范化、resolve、围栏、读取都在那边一次做完(§7)。
+    结果不消费:读链失败也在阅读器里出错误页,chat 侧不弹任何东西(design-rules R5)。 */
+function openNote(anchor) {
+  const path = anchor.dataset.mdPath;
+  if (!path) return;
+  window.arcane.openMdReader(path).catch(() => { /* main 不可用时聊天本身也已经不可用 */ });
 }
 
 // ---------- messages ----------
