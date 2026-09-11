@@ -214,6 +214,12 @@
       background: var(--accent);
       transition: transform 0.18s ease;
     }
+    /* 浅色主题:与营销主页 mode-toggle 同款 —— 2px 墨线框 + 盖章硬投影,墨块滑块,纸色选中字 */
+    :root[data-theme="light"] .seg-switch { border: 2px solid #16130f; background: transparent; box-shadow: 3px 3px 0 #16130f24; }
+    :root[data-theme="light"] .seg-switch .seg-thumb { background: #16130f; }
+    :root[data-theme="light"] .seg-switch .seg { color: #57503f; }
+    :root[data-theme="light"] .seg-switch .seg:hover { color: #16130f; }
+    :root[data-theme="light"] .seg-switch .seg.active { color: #f2ede1; }
     body[data-mode="combat"] .seg-switch .seg-thumb { transform: translateX(100%); }
     /* 面板展开时 chat 侧被 margin-right 压窄(media query 只看整窗宽度,帮不上忙):
        main 把 chatWidth 告给 JS,窄于阈值就加 header-tight,收掉品牌文字和指示灯文案 */
