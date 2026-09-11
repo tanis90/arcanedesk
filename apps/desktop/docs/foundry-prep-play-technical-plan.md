@@ -1706,3 +1706,20 @@ Arcane 的 `auto2014-catalogue/src/spell-content.mjs` 是兼容层：它把调�
 5. 如果查询已返回唯一规则关系和唯一可执行 UUID，而失败只剩包中没有实现或模型对结果的选择错误，则记录为边界并停止扩张输出。
 
 首个实现尚未宣称完成：当前生产 `foundry_content_search` 仍只是名称/identifier 搜索，`foundry_build_query` 也没有职业法术列表；本节记录的是已验证的数据源和实施顺序，旧 benchmark 分数不覆盖。
+
+
+## 36. DeepSeek Flash 内容目录对照（2026-09-10，进行中）
+
+用户指定本轮测试使用本机 COS：<http://127.0.0.1:30002/game>，worldId=COS，CDP=9230。Gamemaster 登录密码为空；当前已有 GM2 会话 ready/isGM 验证通过，复用该会话。不得沿用旧 30000 地址或把 cos-a/30101 当成本轮目标。
+
+新模型 deepseek-flash 在官方 https://api.deepseek.com/v1 通过认证和最小聊天预检（HTTP 200）。密钥只由私有 QA profile 的生产 safeStorage 加密保存，不写入仓库或报告。本轮不使用已到期名称的历史灰度模型。
+
+前两次启动均在模型请求前因旧 fixture 的 sceneId 与当前画布不一致停止，不计模型失败或性能样本；CDP 实际已有游戏页面，先前“没有页面”的说明错误。新建隔离 fixture 后重新开始。保留暂停 manifest，禁止覆盖历史成绩。
+
+代码复核纠正先前交付说明：当前 catalog 的 search/list/detail 位于 test/fixtures/prep-content-catalog.cjs，是测试入口；并未完成生产 SDK 的 list/detail 接线。对照必须使用 comparison=catalog，而非旧 foundry_build_query 对照。修复实验 adapter 缺少 sourceBefore/importedSources、控制臂提示不存在工具、两臂写工具不一致和重复注册 search 的问题。两臂共用 native/pack/build/character 指南、独立 source 快照、v4 验收；只改变目录查询入口是否可用。输入版本 character-v8-catalog-controlled，每题300秒，thinking high，六题×两臂=12次探索试验。每组合一次不证明稳定收益。
+
+目标：先比较独立正确率，再比较双方成功时的耗时与查询/返工往返；逐项读 trace，区分缺来源、工具合同缺陷、模型漏做与包侧缺失。冻结试验中不修工具；发现工具可修的问题后另起新输入版本复测。auto pack 不修改。最终结论与原始证据待本轮结束后补充。
+
+### 36.1 整批已结束（2026-09-11核对）
+
+12/12完成独立审计，JS与catalog均4/6通过，A2工具臂300秒超时。初审发现工具采用率不足，B2/B3未调用目录工具，不能将其耗时变化归因于工具。详见[结果与轨迹初审](prep-deepseek-flash-catalog-results.md)。逐条归因及修复后复测仍待完成，不能宣称改进闭环已完成。
