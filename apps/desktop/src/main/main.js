@@ -672,7 +672,7 @@ app.whenReady().then(async () => {
   // 校验的激活副本优先于包内基线(见 skills-updater.mjs)。解析发生在每次
   // session 创建时,所以启动后刷新成功即对后续新 session 生效,无需重启。
   const skillsUpdater = new SkillsUpdater({
-    bundledSkillsDir: path.join(__dirname, "..", "..", "skills", "prep"),
+    bundledSkillsDir: path.join(__dirname, "..", "..", REGION.bundledSkillsDir),
     stateDir: path.join(app.getPath("userData"), "skills"),
     appVersion: app.getVersion(),
     // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback);

@@ -24,6 +24,8 @@ test("region defaults snapshot: cn", () => {
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
+    bundledSkillsDir: "skills/prep",
+    systemPromptsDir: "system-prompts",
     supportLinks: [{ id: "website", label: "官网", url: "https://arcanedesk.bitterbebop.cn" }],
   });
 });
@@ -35,6 +37,8 @@ test("region defaults snapshot: intl 默认值全部指向 .app / 海外存储",
     sparkBaseUrl: "https://llm.arcanedesk.app/v1",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
+    bundledSkillsDir: "generated/skills-intl/prep",
+    systemPromptsDir: "generated/system-prompts-intl",
     supportLinks: [
       {
         id: "github-issues",

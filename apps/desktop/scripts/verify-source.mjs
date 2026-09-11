@@ -36,6 +36,7 @@ const exactDirectories = new Map([
     "archive.mjs",
     "audit-package-mirror.mjs",
     "check-skills-revision.mjs",
+    "compose-intl-skills.mjs",
     "desktop-release-metadata.mjs",
     "dist.mjs",
     "mac-adhoc-sign.mjs",

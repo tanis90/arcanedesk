@@ -22,8 +22,13 @@ import { HistoryIndex } from "./sync/history-index.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { PendingInputs } from "./tasks/pending-inputs.js";
 import { replaceFile } from "./atomic-file.js";
+import { regionConfig } from "./region.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 系统提示词目录按 region 默认值表取（D1）：intl 构建指向构建期生成的英文目录
+// generated/system-prompts-intl，cn 指向 system-prompts。
+const SYSTEM_PROMPTS_DIR = regionConfig().systemPromptsDir;
 
 /**
  * 战斗模式的系统提示 = system-prompts/combat.md。
@@ -31,10 +36,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 function loadCombatSystemPrompt(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "combat.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "combat.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("combat prompt is empty");
-    log(`[agent] system prompt: system-prompts/combat.md (${body.length} chars)`);
+    log(`[agent] system prompt: ${SYSTEM_PROMPTS_DIR}/combat.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] combat prompt unavailable, fallback to SDK default prompt: ${error.message}`);
@@ -53,10 +58,10 @@ const APPROVAL_TIMEOUT_MS = 120_000;
  */
 function loadPrepPreamble(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "prep.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "prep.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("prep preamble is empty");
-    log(`[agent] prep preamble: system-prompts/prep.md (${body.length} chars)`);
+    log(`[agent] prep preamble: ${SYSTEM_PROMPTS_DIR}/prep.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] prep preamble unavailable, fallback to bare SDK default prompt: ${error.message}`);

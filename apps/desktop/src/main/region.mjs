@@ -24,6 +24,10 @@ const REGION_DEFAULTS = Object.freeze({
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
+    // 包内基线目录（相对 app 根的 POSIX 路径）：intl 为构建期组合产物
+    // （compose-intl-skills.mjs：cn 脚本单源 + prep-intl 翻译覆盖）。
+    bundledSkillsDir: "skills/prep",
+    systemPromptsDir: "system-prompts",
     supportLinks: Object.freeze([
       Object.freeze({ id: "website", label: "官网", url: "https://arcanedesk.bitterbebop.cn" }),
     ]),
@@ -34,6 +38,8 @@ const REGION_DEFAULTS = Object.freeze({
     sparkBaseUrl: "https://llm.arcanedesk.app/v1",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
+    bundledSkillsDir: "generated/skills-intl/prep",
+    systemPromptsDir: "generated/system-prompts-intl",
     supportLinks: Object.freeze([
       Object.freeze({
         id: "github-issues",
@@ -97,12 +103,18 @@ export function regionDefaults(region) {
 
 /**
  * 运行期 region 配置：region 默认值 + 环境变量覆盖层。
- * supportLinks 无对应环境变量（链接集合不是运维覆盖面）。
+ * supportLinks 无对应环境变量（链接集合不是运维覆盖面）；
+ * bundledSkillsDir / systemPromptsDir 是包内基线路径，同样不做环境覆盖。
  */
 export function regionConfig(env = process.env, regionFile) {
   const region = resolveRegion(env, regionFile);
   const defaults = REGION_DEFAULTS[region];
-  const config = { region, supportLinks: defaults.supportLinks };
+  const config = {
+    region,
+    supportLinks: defaults.supportLinks,
+    bundledSkillsDir: defaults.bundledSkillsDir,
+    systemPromptsDir: defaults.systemPromptsDir,
+  };
   for (const [key, envKey] of Object.entries(REGION_ENV_KEYS)) {
     const override = String(env[envKey] ?? "").trim();
     config[key] = override || defaults[key];
