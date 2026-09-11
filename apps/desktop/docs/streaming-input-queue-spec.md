@@ -1,6 +1,6 @@
 # 流式期间输入双通道规范（冻结版）：备团排队 / 战斗打断
 
-日期：2026-09-10 调研，2026-09-11 评审修订并冻结。状态：**已冻结**，实施与验收以本文档为准。
+日期：2026-09-10 调研，2026-09-11 评审修订并冻结，2026-09-11 二次修订（§3⑤⑥：队列列表与排队操作，对齐 Kimi Code Web 的排队展示）。状态：**已冻结**，实施与验收以本文档为准。
 调研底稿见 `streaming-input-queue-plan.md`（保留作决策记录，含 pi/Kimi Code 调研全文）；本文档取代其 §4–§7 成为实施契约。
 行号以 `main@4ffade5` 为准；app 侧路径相对 `apps/desktop/src`，pi 侧相对 `node_modules/@earendil-works`（pi-coding-agent 与 pi-agent-core 均为 0.84.3，语义已对照本机安装源码核实）。
 
@@ -51,11 +51,24 @@ streamingDelivery: () => this.profile.streamingInput ?? "steer",
 
 `main/main.js:1366` 目前对所有非 new_task 一律 `turnSteered(mode)`。改为：ack `delivery === "followUp"` → `turnQueued(mode)`，其余非 new_task → `turnSteered(mode)`（保持现状计数口径连续）。telemetry 增加 `turnQueued` 方法。
 
-### ⑤ 备团输入区排队计数
+### ⑤ 备团队列列表（对齐 Kimi Code Web）
 
-- renderer 监听 `input_state` 事件（现有通道，无新 IPC），按会话维护 `queued` 状态计数，在 composer 提示区（`.hint-left`，index.html:1683-1686）显示角标"已排队 N"，N=0 时隐藏；会话切换/恢复快照时按 inputs 快照重算；
-- 仅备团模式显示（战斗模式的 queued 是 steer 软打断的瞬时态，计数无意义）；
-- i18n：`chat.input.queuedCount`（zh-CN / en-US 各一条）。
+排队消息必须有"是哪几条"的可辨识度：**不进对话流**，而是在 composer 上方挂队列列表。
+
+- renderer 按 commandId 跟踪 `input_state` 迁移（现有事件通道），`queued` 态输入在 `.composer` 上方（index.html composer-wrap 内）渲染队列列表，每行：消息文本（单行省略）+ 三个操作——**立即**（改道 steer）、**编辑**（取消并回填 composer 重新编辑，仅文本不还原图片）、**删除**（取消排队）；仅备团模式显示（战斗的 queued 是 steer 瞬时态）；
+- **气泡迁移**：输入进入 `queued` 时移除对话流中的乐观气泡（main 本就不转发 user 消息事件，agent-host.js:882，气泡是 renderer 唯一的本地回显）；离开 `queued`（context/cancelled/failed/accepted 兜底）时在对话流底部重建气泡并应用回执——投递后的位置在时间上更真实；恢复快照时 `queued` 输入只建行不建气泡；
+- composer placeholder：列表非空时改为"继续输入，消息将排队发送"（i18n `chat.input.queuePlaceholder`），恢复默认 `composer.placeholder`；
+- 行数据：文本/图片来自提交时本地记录 + `input_state.inputId` 合并；恢复快照取自 inputs 快照（含 text）；
+- i18n：`chat.input.queueNow` / `queueEdit` / `queueRemove` / `queuePlaceholder`（zh-CN / en-US）。
+
+### ⑥ main 排队操作 API
+
+pi 无单条删除 API，`clearQueue()` 两队全清——取消/改道都按"**全清 + 幸存者按序重排**"实现（重排走 `queueInput`，SDK 重跑展开结果确定，`setInputState` 幂等不重复发事件）：
+
+- `TaskCoordinator.cancelQueuedInput(inputId)`：仅接受本任务 `queued` 态输入（否则 `STALE_INPUT`）；`clearQueue()` → 目标置 `cancelled`（走 drain 同款收尾，重启后可按 interrupted 召回）→ 幸存者 `queueInput` 重排；
+- `TaskCoordinator.steerQueuedInput(inputId)`：同款守卫；`clearQueue()` → 目标 `delivery = "steer"` 并 `queueInput`（下个 turn 边界软打断生效；reject 时回退 accepted 由 drain 兜底）→ 幸存者重排；
+- `setInputState` 幂等：同状态重复设置直接返回，不再发事件（改道时的 queued→queued 不再产生噪音事件）；
+- IPC：`chat:queued-input`（`{...modeContext, inputId, action: "cancel" | "steer"}`，isTrustedChatIpc 校验 + validateModeRequest 路由 host）；preload 增加 `updateQueuedInput(context, inputId, action)`；steer 成功记 `turnSteered`（与取消排队的 `turnQueued` 成双成对）。
 
 ## 4. 明确不改的部分
 
@@ -63,17 +76,16 @@ streamingDelivery: () => this.profile.streamingInput ?? "steer",
 - **停止链路**：`stop()` 的 `clearQueue()` 本就同时清两条队列（pi 返回 `{ steering, followUp }`），排队输入按 `cancelled` 收尾；
 - **输入状态机与持久化**：followUp 投递同样产生 `message_start(user)` → context → consumed；`PendingInputs` 落盘与重启置 interrupted 不变；
 - **失败回退**：extension 命令在 push 前 reject（见 §2），`queue_update` 未发出，input **始终停留 accepted**（不存在"由 queued 回退"），run 结束后由 drain 兜底 dispatch——复用现有 catch 逻辑；
-- **renderer 主流程**：输入回执状态集合已含 `queued`（renderer/chat.js:329），除 §3⑤ 角标外无改动。
+- **renderer 主流程**：输入回执状态集合已含 `queued`（renderer/chat.js:329），除 §3⑤⑥ 外无改动。
 
 ## 5. 后续可选（本期不做）
 
-- 空输入框 `↑` 召回最后一条排队消息重新编辑。约束：pi 无单条删除 API，`clearQueue()` 两队全清；"召回末条、保留其余"只能全清后重新入队幸存者，且重新入队会重跑 skill/template 展开（对已展开文本二次展开通常无害，设计时需知晓）；
-- 备团"立即发送"修饰键（Ctrl+Enter 走 steer）；
-- 战斗模式硬打断（abort 在途请求后重发）：pi 0.84.3 无原生 API，如需"立刻停下手上的活"单独立项。
+- 战斗模式硬打断（abort 在途请求后重发）：pi 0.84.3 无原生 API，如需"立刻停下手上的活"单独立项；
+- 编辑召回不还原图片附件（仅文本回填，与 Kimi CLI `↑` 召回一致），如需还原图片另行评估。
 
 ## 6. 语义边界与风险
 
-1. **followUp 的投递点 = 整个 run 结束**（无工具调用且 steering 清空）。备团长工具链期间消息一直停留"排队中"，是预期语义；§3⑤ 排队计数用于缓解焦虑。
+1. **followUp 的投递点 = 整个 run 结束**（无工具调用且 steering 清空）。备团长工具链期间消息一直停留"排队中"，是预期语义；§3⑤ 队列列表让等待可见可操作。
 2. **prep 的 waiting_user（agent 提问中）发消息 → 排队**，不打断提问；attention 应答仍走 `tasks:respond`，不变。
 3. **战斗模式的"打断"是 pi 的软打断**：在途 LLM 流与在途工具调用执行完，消息在下一次 LLM 调用前生效——现状，本期保持。
 4. **战斗审批卡 pending 时发消息**：steer 要等审批解决、工具批结束后才生效——现状，不变。
@@ -82,6 +94,7 @@ streamingDelivery: () => this.profile.streamingInput ?? "steer",
 7. **模式 = host 构造期静态值**：切模式 = 换 host（renderer/chat.js:168），`streamingInput` 无运行期切换问题。
 8. **pi 升级回归风险**：followUp 语义依赖 0.84.3 源码核实的行为（agent-loop.js 投递点、agent_end 时机、queue_update 同步 emit），升级 pi 时以 §7 单测为门禁。
 9. **搁浅竞态（评审新增，缓解已存在）**：pi 只在固定点抽取队列——followUp 在末次 `getFollowUpMessages` drain（agent-loop.js:163）之后、`finishRun`（agent.js:366）之前入队时，消息搁浅在 SDK 队列无人投递，且 `followUp()` 非 streaming 时不抛错（agent.js:177-179 无 activeRun 检查）；steer 存在同款竞态（现状即有）。app 侧兜底：input 停在 `queued`（属 pendingStates），drain 的 while 循环重新捡到 → `clearQueue()` 丢掉 SDK 副本 → 作为新 prompt 重发，消息不丢、不重复；代价是该罕见情形下多一轮 agent_start/agent_end 生命周期。§7 增加对应用例固化该兜底。
+10. **取消/立即的竞态**：操作只接受 `queued` 态；若 SDK 已把消息 drain 进 loop 但 `message_start` 尚未到达（仍显示 queued），取消/改道不会生效——消息已被 pi 抽走，将照常进入上下文（Kimi 同款竞态，窗口极小）；此时 input 不再匹配 queued 态跟踪，按未跟踪消息处理。
 
 ## 7. 测试计划
 
@@ -94,15 +107,17 @@ streamingDelivery: () => this.profile.streamingInput ?? "steer",
 5. stop() → clearQueue 调用且排队输入 cancelled；
 6. combat 回归：busy+streaming 时 steer 被调、followUp 未被调，现有用例全绿；
 7. 连排两条 followUp：两次 `queue_update` 各自取末位，两条 input 的 expandedText 各自正确、按序投递（评审新增）；
-8. 搁浅竞态：followUp 入队成功但 run 直接结束（无投递）→ drain 循环将其作为新 prompt 重发，文本只发一次、clearQueue 被调（评审新增）。
+8. 搁浅竞态：followUp 入队成功但 run 直接结束（无投递）→ drain 循环将其作为新 prompt 重发，文本只发一次、clearQueue 被调（评审新增）；
+9. cancelQueuedInput：目标置 cancelled 且不再重发（run 结束后 drain 不 dispatch）；幸存者按序重新入队（followUp 重放仅含幸存者）、clearQueue 被调；非 queued 态 → STALE_INPUT；
+10. steerQueuedInput：目标改道后 steer 被调、followUp 不再含目标；幸存者重排；目标经 steering 投递 → context → consumed；重复 queued 事件不重复 emit（setInputState 幂等）。
 
-遥测单测（如已有 telemetry 测试文件则随其约定）：非 new_task 且 delivery="followUp" → turnQueued；delivery=null/​"steer" → turnSteered。
+遥测单测（如已有 telemetry 测试文件则随其约定）：非 new_task 且 delivery="followUp" → turnQueued；delivery=null/​"steer" → turnSteered；turnQueued 不影响 summary 的 user_intervention。
 
 ## 8. 验收标准
 
 - `node --test test/task-coordinator.test.mjs` 全绿（含 §7 新用例）；
 - `npm test`（apps/desktop）全量通过，与 main@4ffade5 基线（392 通过 / 0 失败）一致，无新增失败；
-- 手动冒烟（真实模型，需人工执行，不阻塞合并）：备团模式跑长任务（如生成模组）期间连发两条消息 → 当前任务不被打断、输入区显示排队计数、两条消息按序各跑一轮；战斗模式发消息 → 维持打断现状。
+- 手动冒烟（真实模型，需人工执行，不阻塞合并）：备团模式跑长任务（如生成模组）期间连发两条消息 → 当前任务不被打断、composer 上方出现队列列表（两条消息可见，对话流中无对应气泡）、按序各跑一轮（投递时气泡落回对话流）；列表行的 立即/编辑/删除 三操作各验一次；战斗模式发消息 → 维持打断现状。
 
 ## 9. 降级储备
 
