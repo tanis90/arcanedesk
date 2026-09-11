@@ -1,6 +1,6 @@
 # ArcaneDesk 国际化技术方案
 
-状态：M0 / M1 / M2 已完成 · M3 / M4 代码完成（本地提交，未 push）· M5 / M6 后端代码完成（ops 本地，未部署）· 日期：2026-09-11 · 分支：docs/internationalization-plan
+状态：M0 / M1 / M2 已完成 · M3 / M4 代码完成（本地提交，未 push）· M5 / M6 已部署并验收（2026-09-11）· 日期：2026-09-11 · 分支：docs/internationalization-plan
 
 **2026-09-10 决策记录（拍板）：**
 
@@ -8,8 +8,8 @@
   `arcane-desk-intl`、Workers Paid、R2 S3 密钥对、CF API Token，GitHub Secrets
   （仓库级 + `desktop-release` environment）均已就位。
 - LLM 上游改 **DeepSeek 海外站**（不再用 OpenRouter，见 D3 修订）；海外 LLM 启用时机
-  暂缓、首发 BYOK（策略不变）；M5/M6 后端代码 2026-09-11 已写完（ops 本地，未部署，
-  见 M5/M6 段），届时启用 = 仅部署 + 控制台手工项。
+  暂缓、首发 BYOK（策略不变）；M5/M6 后端 **2026-09-11 已部署并端到端验收**
+  （见 M5/M6 段部署日记录），启用 = 只发 key + 主仓库目录项。
 - arcane-agent-bridge **弃用不开源**：桌面端已切换 DirectFoundryRuntime
   （main.js 直注 Foundry 页，测试断言不再引用该模块），旧 loopback 桥为残留架构。
 - intl 自动化内容口径**已拍板接受降级**：国际版 = arcane-spells-2014（SRD 5.1，
@@ -114,8 +114,8 @@ R2 + 自定义域 `dl.arcanedesk.app`：零出口流量费（对比 OSS 国际�
 - **2026-09-11 拍板：自建确认**。M5 走 Worker + D1，不搬 NewAPI 出海；选型答辩记录
   （arcane-key 功能对照、冷启动、安全红线、实施待定项）见 M5 段。
 - **M5 启用时机暂缓（策略不变）**：首发 BYOK（零后端），Spark-intl 在需要发试用 key
-  验证付费意愿时再启用；后端代码 2026-09-11 已完成（ops 本地，未部署），启用 = 仅部署
-  + 控制台手工项（见 M5 段实现状态）。
+  验证付费意愿时再启用；后端 **2026-09-11 已部署并验收**，启用 = 只发 key +
+  主仓库 provider-catalog / voice 默认项（见 M5 段部署日记录）。
 
 ### D4：订阅三段式，首发不做订阅
 
@@ -247,7 +247,7 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   `publish-skills --region intl`（远端无指针按 r0 放行），验证 intl 构建自更新到
   英文技能包、英文 agent 全流程无中文渗漏
 
-### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 后端代码完成（2026-09-11，本地未部署）；启用时机暂缓（首发 BYOK）
+### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 已部署并验收（2026-09-11）；启用时机暂缓（首发 BYOK）
 
 - `services/arcane-spark-edge/` Worker：key 校验（D1）→ 别名改写 `arcane-spark` →
   `deepseek-flash` → 转发 DeepSeek 海外站 → 按 usage 扣 D1 额度；流式透传
@@ -256,18 +256,21 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - 主仓库 `provider-catalog.json` intl 排序；`voice/asr.js`/`preset.js` intl 默认
 - 验收：intl 构建填 Spark-intl key 跑通 prep 会话；BYOK 目录前三位海外厂商
 
-**实现状态（2026-09-11，ops 仓库 feat/intl-backend 分支，本地提交未 push）：**
+**部署日记录（2026-09-11，全部验收通过，ops feat/intl-backend 提交至 `48a1ba0`，本地未 push）：**
 
-- `services/arcane-spark-edge/`：Worker + D1 schema 已实现（`74f51aa`），node:sqlite
-  真库测试 19/19 过（上游 fetch 打桩、SSE usage 记账、原子扣减守卫、双闸门）
-- `tools/arcane-key-intl/`：六命令 CLI 已实现（`7e94546`），测试 19/19 过
-  （幂等签发、双闸充值、--usd 换算、额度中性轮换、审计事件流）
-- **未部署**，部署日手工项：wrangler 认证 → D1 建表（schema.sql）→
-  `DEEPSEEK_API_KEY` secret → `llm.arcanedesk.app` 路由 → CLI 传输层冒烟
-  （`wrangler d1 execute --json` 输出结构按文档假设，未对真实 D1 验证，先跑只读
-  `usage` 再真发）；流式记账依赖 DeepSeek `stream_options.include_usage`
-  （OpenAI 兼容口径，假设成立），真机验证后再放量
-- 主仓库侧（provider-catalog / voice 默认值）随启用时机再做，不在本次后端实现范围
+- Worker 已上线：`llm.arcanedesk.app`（healthz 200；无 Bearer → 401 `unauthorized`；
+  假 key → 401 `key_invalid`）；`DEEPSEEK_API_KEY` 已 wrangler secret 注入；D1 三表已建
+- 端到端真机验收：非流式调用扣减**精确**（上游 68 token = 双闸各扣 68）；流式
+  `stream_options.include_usage` 假设**成立**（尾帧带 usage，68→164 分毫不差）；
+  suspend → 403 / resume → 200 / rotate → 旧 key 立即失效、剩余额度 9493 全结转、
+  新 key 可用；审计流 cli:issue | worker:consume×N | cli:suspend/resume/rotate 完整
+- CLI 传输层对真实 D1 验证通过（`wrangler d1 execute --json` 结构 + `meta.changes`
+  均与假设一致）；冒烟数据（internal/smoke-test 全家）已清库
+- **部署日教训两条**：① wrangler 部署 route **不会自动建 DNS 记录**（OAuth token 无
+  dns:write），`api`/`llm` 两条 AAAA `100::` 占位记录是控制台手工补的——以后加 Worker
+  路由都要记得这一步；② Windows 上 CLI 不能 execFile `npx.cmd`，传输层改为
+  `node services/arcane-spark-edge/node_modules/wrangler/bin/wrangler.js`
+- 主仓库侧（provider-catalog / voice 默认值）随启用时机再做；启用 = 发 key + 这两个目录项
 
 **选型答辩记录（2026-09-11，NewAPI 出海 vs Worker+D1 自建）：**
 
@@ -293,7 +296,7 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 4. 额度语义 → **按 token 数**（prompt/completion 分列记账；CLI 的 --usd 仅按
    $1 ≈ 50 万 token 便捷换算，精确对账归分析侧）
 
-### M6：遥测海外通道（ops 新服务，M）— 后端代码完成（2026-09-11，本地未部署）
+### M6：遥测海外通道（ops 新服务，M）— 已部署并验收（2026-09-11）
 
 - `services/arcane-telemetry-edge/` Worker：复刻信封契约 + 违禁 key 扫描 + 删除端点，写 R2
 - 本地拉取路径：只读凭证 + sync/直读脚本（双区同一路径），agent 在本地 DuckDB 分析；
@@ -302,17 +305,19 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
 - 验收：上报可见、可查、可删；本地 DuckDB 一条命令拉到双区数据并跑通一次分析；
   隐私政策文案与设计一致
 
-**实现状态（2026-09-11，ops 仓库 feat/intl-backend 分支，本地提交未 push）：**
+**部署日记录（2026-09-11，全部验收通过）：**
 
-- `services/arcane-telemetry-edge/`：Worker 已实现（`d191cf0`），契约逐条移植国内
-  Go 版（信封/违禁 21 key 与客户端 `telemetry-privacy.js` 逐字一致；单行超 64KiB →
-  413 `payload_too_large`；gzip + ndjson 落 R2），测试 17/17 过（node --test，
-  R2 绑定 mock）
-- **未部署**，部署日手工项：wrangler 认证 → R2 lifecycle 30 天（控制台设置）→
-  CF Rate Limiting 规则（Worker 内限流为 isolate 级尽力而为，强制层在 CF 规则）→
-  `api.arcanedesk.app` 路由；真 R2 list/delete 分页行为按文档实现，部署日冒烟
-- 拉取脚本不在本次范围：需求已写死在 ops `spec.md`（`tools/telemetry-pull/`，
-  sync 命令 + DuckDB 入口 + 只读前缀限定凭证），另行安排实现
+- Worker 已上线：`api.arcanedesk.app`（healthz 200；无凭证 → 401 `unauthorized`；
+  合法批次 → `accepted:true` 且 R2 实际落对象；含禁列 `prompt` → 400 `forbidden_key`
+  带行号；DELETE 精确删 1 个对象、再删为 0）
+- R2 lifecycle **已启用**：规则 `telemetry-raw-30d`（前缀 `telemetry/raw`，30 天删除）
+- **CF Rate Limiting 已上线并实测触发**：规则 `telemetry-ingest-guard`
+  （`api.arcanedesk.app` + `/v1/telemetry/` 前缀，每 IP 每 10 秒 10 请求，超出阻止 10 秒）
+  ——连发 15 请求实测：前 10 个 401（到达 Worker），第 11 起 429（边缘拦截）。
+  注意 Free 计划只给 **1 条规则 + 10 秒期间一档**，已用满；以后要加第二条需升计划
+  （届时 llm.arcanedesk.app 的防刷也应补一条，目前靠 Worker 内 D1 预检兜底）
+- 拉取脚本仍待实现：需求已写死在 ops `spec.md`（`tools/telemetry-pull/`，
+  sync 命令 + DuckDB 入口 + 只读前缀限定凭证），另行安排
 
 ### M7：网站与合规（arcanedesk-web，S-M）
 
