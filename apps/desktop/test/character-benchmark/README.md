@@ -39,3 +39,9 @@ node apps/desktop/test/character-benchmark/verify-v3-preservation.test.mjs
 [任务合同](../../docs/prep-character-benchmark-cases-v1.md) · [验收修订](../../docs/prep-character-benchmark-audit.md) · [唯一技术方案](../../docs/foundry-prep-play-technical-plan.md)
 
 最新输入版本：character-v4-source-query-defaults，共用skill已统一完成标准，foundry_build_query v2返回实际导入来源并支持选定子职；验收器仍为v3。旧首轮结果不能代表这一版的模型表现，详见技术方案第28节。
+
+### Per-trial reasoning trace
+
+Each new trial writes `agent-trace.jsonl` in its private trial directory. The report's `trace` field records the path, SHA256, event count, and number of SDK `thinking` blocks. Records contain completed assistant/tool messages and tool start/end events with arguments, results, call IDs and elapsed milliseconds. This is SDK-visible provider output, not raw HTTP traffic; headers and provider credentials are not collected. `not_observed` means no reasoning text was received, not that the model did no reasoning. Interrupted in-flight messages may be incomplete; already completed events remain on disk. Trace files contain local world data and remain outside the repository.
+
+Existing A3 session `01a08efc-dc05-7024-bec6-b762b6f0cd39` already contains 19 thinking blocks and 23 tool calls in the benchmark-agent sessions directory. The previous claim that thinking was not saved came from inspecting the task-state journal instead of the Agent session log.

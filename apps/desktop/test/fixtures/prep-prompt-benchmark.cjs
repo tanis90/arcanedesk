@@ -189,8 +189,10 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     trial.systemPromptHash=crypto.createHash("sha256").update(prompt).digest("hex");trial.systemPromptChars=prompt.length;
     trial.normalizedSystemPromptHash=crypto.createHash("sha256").update(prompt.split(cwd).join("<TASK_CWD>").split(cwd.split(path.sep).join("/")).join("<TASK_CWD>")).digest("hex");
     trial.promptNormalizationVersion=2;
+    const trace=require('./prep-trace.cjs')(path.join(cwd,'agent-trace.jsonl'));
     const start=performance.now();let firstEvent=false;
     const unsubscribe=host.session.subscribe(e=>{
+      trace.record(e);
       if(!firstEvent&&["message_update","tool_execution_start"].includes(e.type)){trial.firstEventMs=performance.now()-start;firstEvent=true;}
       if(e.type==="tool_execution_start")trial.tools.push({name:e.toolName,id:e.toolCallId,start:performance.now(),argumentBytes:Buffer.byteLength(JSON.stringify(e.args??null)),javascriptChars:e.toolName==="browser_evaluate"?(e.args?.code?.length??0):0});
       if(e.type==="tool_execution_end"){const t=trial.tools.find(t=>t.id===e.toolCallId);if(t)Object.assign(t,{ms:performance.now()-t.start,isError:e.isError,status:e.result?.details?.status,bytes:Buffer.byteLength(JSON.stringify(e.result??null))});}
@@ -198,7 +200,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     });
     const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},report.experiment.taskTimeoutMs);
     trial.state="submitted";save();
-    try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.taskError=host.task?.error??host.task?.failure??null;trial.agentError=host.session?.lastError??null;trial.state="returned";save();}
+    try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.trace=trace.summary();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.taskError=host.task?.error??host.task?.failure??null;trial.agentError=host.session?.lastError??null;trial.state="returned";save();}
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;
