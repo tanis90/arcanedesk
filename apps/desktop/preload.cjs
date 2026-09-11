@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld("arcane", {
   archiveSession: sessionId => ipcRenderer.invoke("sessions:archive", { sessionId }),
   restoreSession: sessionId => ipcRenderer.invoke("sessions:restore", { sessionId }),
   deleteArchivedSession: sessionId => ipcRenderer.invoke("sessions:deleteArchived", { sessionId }),
+  forkSession: (sessionId, title) => ipcRenderer.invoke("sessions:fork", { sessionId, title }),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
   sessionSnapshot: (sessionId, historyQuery) => ipcRenderer.invoke("sessions:snapshot", sessionId, historyQuery),
   activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),

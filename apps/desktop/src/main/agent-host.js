@@ -19,6 +19,7 @@ import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
+import { forkStoredSession } from "./conversations/session-fork.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { PendingInputs } from "./tasks/pending-inputs.js";
 import { replaceFile } from "./atomic-file.js";
@@ -814,6 +815,16 @@ export class AgentHost {
     if (!this.canEvict()) throw new Error("Session still owns active or unsaved state");
     const file = this.sessionManager.getSessionFile();
     replaceFile(file, [this.sessionManager.getHeader(), ...this.sessionManager.getEntries()].map(entry => JSON.stringify(entry) + "\n").join(""));
+  }
+
+  /** 分叉当前会话：整段复制由 Pi 原生 forkFrom 完成；忙碌即拒绝（与归档同规则），不等待在途操作。 */
+  async fork() {
+    if (this.deleting) throw Object.assign(new Error("Session is being deleted"), { code: "SESSION_DELETING" });
+    if (this.busy || this.operations) throw Object.assign(new Error("Finish the task before forking"), { code: "SESSION_BUSY" });
+    if (this.canEvict()) this.persistForEviction();
+    const current = this.describeCurrent();
+    if (!current?.path) throw Object.assign(new Error("Session is not persisted"), { code: "SESSION_NOT_FOUND" });
+    return forkStoredSession({ sourcePath: current.path, cwd: this.cwd(), sessionDir: this.sessionDir() });
   }
 
   // ---- approval gate(opt-in,默认关闭) ----

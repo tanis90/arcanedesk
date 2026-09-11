@@ -1105,6 +1105,19 @@ app.whenReady().then(async () => {
       return result;
     } catch (error) { return { ok: false, code: error.code ?? "SESSION_DELETE_FAILED", error: error.message }; }
   });
+  ipcMain.handle("sessions:fork", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try {
+      const title = typeof request?.title === "string" ? request.title.trim() : "";
+      if (title.length > 200) throw Object.assign(new Error("Use a title between 1 and 200 characters"), { code: "INVALID_TITLE" });
+      const { row, host } = await navigationTarget(request?.sessionId);
+      if (row.archivedAt != null) throw Object.assign(new Error("Restore the session before forking it"), { code: "SESSION_ARCHIVED" });
+      const forked = await host.fork();
+      const metadata = { ...(title ? { customTitle: title } : {}), ...(row.selectedModel ? { selectedModel: row.selectedModel } : {}) };
+      if (Object.keys(metadata).length) navigation.patch(forked.id, metadata);
+      return { ok: true, sessionId: forked.id, path: forked.path };
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_FORK_FAILED", error: error.message }; }
+  });
 
   // ---- 会话管理(按活动模式路由；模式由 Pi sessionDir + JSONL marker 固有隔离) ----
   ipcMain.handle("sessions:list", async (_event, request) => {
