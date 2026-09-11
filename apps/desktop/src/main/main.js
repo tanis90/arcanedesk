@@ -921,6 +921,7 @@ app.whenReady().then(async () => {
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate", "request_user_input"],
         fence: true,
+        streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },
     }); } }),
   };
@@ -1537,7 +1538,11 @@ app.whenReady().then(async () => {
       };
       const result = host.submitInput(message, images, payload?.commandId, prepare, payload?.replacesInputId);
       if (result.ok && !result.duplicate) {
-        if (result.disposition !== "new_task") host.telemetry?.turnSteered(mode);
+        if (result.disposition !== "new_task") {
+          // delivery="followUp" 是排队(备团);null/"steer" 维持原 turnSteered 口径(见 spec §3④)。
+          if (result.delivery === "followUp") host.telemetry?.turnQueued(mode);
+          else host.telemetry?.turnSteered(mode);
+        }
         host.telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
       }
       return { ...result, ...modeController.publicSnapshot(context) };
@@ -1575,6 +1580,22 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     return validated.context.host.taskCoordinator().respond(request);
+  });
+  ipcMain.handle("chat:queued-input", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    const validated = await validateModeRequest(request);
+    if (!validated.ok) return validated;
+    const { host, mode } = validated.context;
+    // 队列操作仅备团:战斗的 queued 是 steer 瞬时态,无 UI 入口,只允许防御性拒绝。
+    if (mode !== "prep") return { ok: false, code: "WRONG_MODE" };
+    const inputId = typeof request?.inputId === "string" ? request.inputId : null;
+    const action = request?.action;
+    if (!inputId || !["cancel", "steer"].includes(action)) return { ok: false, code: "INVALID_REQUEST" };
+    const coordinator = host.taskCoordinator();
+    const result = action === "cancel" ? coordinator.cancelQueuedInput(inputId) : coordinator.steerQueuedInput(inputId);
+    // 排队已记 turnQueued;改道立即发送与取消排队成双,记 turnSteered。
+    if (result.ok && action === "steer") host.telemetry?.turnSteered(mode);
+    return { ...result, ...modeController.publicSnapshot(validated.context) };
   });
 
   // 主题持久化:renderer 切换主题时写 userData/config/ui.json,

@@ -120,6 +120,7 @@ const COMBAT_PROFILE = {
   getSkillPaths: null,
   customToolNames: null, // null = 全部 desktop custom tools;prep 只启用界面/eval
   fence: false, // prep: true 挂 cwd 围栏
+  streamingInput: "steer", // 流式期间输入投递:"steer" 软打断(战斗默认);"followUp" 排队(prep)
 };
 
 /** Pi 默认仍启用 Bash；Windows 必须显式选择一等公民的 PowerShell 工具。 */
@@ -765,6 +766,8 @@ export class AgentHost {
         },
         prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
+        followUp: (text, images) => this.session.followUp(text, images?.length ? images : undefined),
+        streamingDelivery: () => this.profile.streamingInput ?? "steer",
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
         abort: async () => {

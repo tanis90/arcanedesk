@@ -504,6 +504,17 @@ export class TelemetryClient {
     });
   }
 
+  /** 忙碌时排队输入(备团 followUp):等回合结束才投递,不算介入,不进 summary 的 intervention。 */
+  turnQueued(mode) {
+    return this.#safe("turnQueued", () => {
+      const turn = this.activeTurns.get(mode);
+      if (!turn) return;
+      this.#record("turn.queued", mode, turn.turnId, {
+        elapsedBucket: elapsedBucket(this.monotonicNow() - turn.startedMonotonicMs),
+      });
+    });
+  }
+
   /** chat:abort。 */
   turnAborted(mode) {
     return this.#safe("turnAborted", () => {

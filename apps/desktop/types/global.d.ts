@@ -9,6 +9,8 @@ interface ArcaneBridge {
   listSlash(context?: ArcaneModeContext): Promise<any>;
   /** Abort the currently running agent turn. */
   abort(context?: ArcaneModeContext): Promise<any>;
+  /** 排队输入操作(备团):action = "cancel"(删除/编辑召回) | "steer"(立即发送)。 */
+  updateQueuedInput(context: ArcaneModeContext, inputId: string, action: "cancel" | "steer"): Promise<any>;
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel(): Promise<any>;
   closePanel(): Promise<any>;
