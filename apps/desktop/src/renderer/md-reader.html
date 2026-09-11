@@ -41,8 +41,9 @@
       --scroll-hover: #3a445a;
       --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
       --font-ui: "Segoe UI", "Microsoft YaHei", system-ui, "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-      /* signature:书页天头 running head 用衬线(§5.3),正文仍走无衬线栈 */
-      --font-head: Georgia, "Palatino Linotype", "Songti SC", "STSong", serif;
+      /* signature(§5.3,2026-09-11 修订):衬线从页眉延伸到文档标题,层次靠字体不靠颜色。
+         CJK 渐进增强:装了思源宋体的用好字体,没装的落系统宋体,大字号避开小字 hinting 短板 */
+      --font-head: Georgia, "Palatino Linotype", "Noto Serif CJK SC", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", SimSun, serif;
       /* 字阶:正文 15px 即舒适阅读下限,代码与页眉随之上抬一档 */
       --fs-micro: 11.5px;
       --fs-meta: 13px;
@@ -56,7 +57,7 @@
       --border: #d8cdb0;
       --border-soft: #e3dbc4;
       --text: #71664f;
-      --text-strong: #33291a;
+      --text-strong: #2f2318; /* 原 #33291a 偏橄榄(G>B),大字细笔画观感发绿(评审 §9) */
       --muted: #857a63;
       --faint: #a2977d;
       --accent: #2e4170;
@@ -146,12 +147,17 @@
       .reader-notice { padding: 10px 16px 0; }
     }
     /* 文档里的标题需要比气泡里的更分级:arcaneMd 一律输出 h4,这里按位置给层次。
-       颜色走 accent(暗金/亮墨蓝),不走 --text-strong:亮主题的深棕 #33291a 偏橄榄,
-       细笔画渲染观感发绿;暗主题的米白与正文同色系,只靠明度拉不开层次(验收反馈)。 */
-    .md-doc h4 { color: var(--accent); font-size: 17px; line-height: 1.5; margin: 26px 0 8px; }
+       安静化(评审 §10):标题回墨色(--text-strong 由 markdown.css 供给),层次交给衬线+字号;
+       彩色只留 accent 一种且语义="可点"——此前标题蓝+链接青+code 胶囊三色并立被验收判为花哨。 */
+    .md-doc h4 { font-family: var(--font-head); font-weight: 600; font-size: 18px; line-height: 1.5; letter-spacing: 0.01em; margin: 26px 0 8px; }
     .md-doc h4:first-child { margin-top: 0; }
-    /* 标题里的 **强调** 不弹回 --text-strong,标题色一笔到底 */
+    /* 标题里的 **强调** 颜色跟随标题,不被 strong 规则弹走 */
     .md-doc h4 strong { color: inherit; }
+    /* 阅读器里唯一的彩色 = accent = 可点;--info 青退出阅读器(它仍是 chat 的链接色) */
+    .md-doc a { color: var(--accent); }
+    /* 行内 code 拆胶囊:DM 笔记里 `区域Z8` 式片段密度极高,底色+描边一屏几十个小色块。
+       只留等宽字体作区分,颜色并入正文;pre.md-code > code 特异性更高,围栏内不受影响。 */
+    .md-doc code { background: none; border: none; border-radius: 0; padding: 0 1px; color: inherit; font-size: 0.93em; }
     .md-doc .md-img { max-height: none; }
 
     /* ---------- 超限截断提示 / 错误页 ---------- */

@@ -165,3 +165,11 @@
 **根因**：不是 CSS 写错——CDP 实测规则命中无误（`markdown.css` `:is(.msg, .md-doc) h4 { color: var(--text-strong) }`），亮色 computed `rgb(51,41,26)`、暗色 `rgb(232,228,216)`。是 token 值本身的观感问题：亮主题 `--text-strong: #33291a` 是橄榄调深棕（G 通道 > B 通道），细笔画大字渲染出来发绿；暗主题 `--text-strong: #e8e4d8` 与正文 `#b9b4a7` 同色系，只有明度差没有色相差，"一个颜色"。
 
 **修法**：阅读器文档标题改走 `--accent`（`md-reader.html` `.md-doc h4`，暗金 `#d6a94c` / 亮墨蓝 `#2e4170`），两主题语义一致（标题=强调色），一次解决两个症状；标题内的 `strong` 继承标题色不弹回。只动 `.md-doc` 作用域，chat 气泡里的标题色不变（共享 `markdown.css` 未改）。CDP 探针复验：light computed `rgb(46,65,112)`、dark computed `rgb(214,169,76)`，门禁全绿。
+
+## 10. 验收反馈：整体色块多、眼花缭乱（2026-09-11）
+
+**现象**：§9 的 accent 标题落地后，亮主题整屏仍显"花"——标题墨蓝、链接 `--info` 青、行内 code 底色胶囊三种强调手段并立，DM 笔记里 `区域Z8` 式行内 code 密度极高，一屏几十个小色块。
+
+**根因**：颜色纪律丢失。§9 把标题从墨色改 accent 是修单点症状却加重整体噪声：页面上同时有三种"喊法"（标题喊结构、链接喊可点、胶囊喊代码），读者不知道先看哪。
+
+**修法**：安静化，阅读器收敛到"一本书只有一种墨水"——①标题回墨色 `--text-strong`（亮主题值顺势从 `#33291a` 红移为 `#2f2318`，除掉 §9 的橄榄根因），层次交给衬线字体（signature 从页眉延伸到文档标题）+ 18px/600；②行内 code 拆胶囊（去底色去描边，颜色并入正文，只留等宽字体 0.93em；围栏内 code 因 `pre.md-code > code` 特异性更高不受影响）；③链接统一 `--accent`，`--info` 退出阅读器——全页唯一彩色 = 可点；④`--font-head` 渐进增强栈（Georgia → Noto Serif CJK SC / Source Han Serif / Songti SC → SimSun），装了思源宋体的用户用好字体，没装的落系统宋体，标题大字号避开宋体小字 hinting 短板；不打包字体文件（体积与 subset 缺字风险不值）。仍只动 `.md-doc` 作用域，chat 不变。spec §5.3 已修订。CDP 探针复验：light 标题 `rgb(47,35,24)` 衬线 600/18px、链接 `rgb(46,65,112)`、行内 code 透明底零边框并入正文色；dark 标题 `rgb(232,228,216)`、链接 `rgb(214,169,76)`。门禁全绿（467 单测、typecheck、verify:source、smoke、CDP review 14 项）。遗留观察项：Windows 裸宋体档的 600 是合成粗，验收若嫌糊可退 regular+20px。

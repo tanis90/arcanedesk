@@ -1,23 +1,23 @@
 {
-  "port": 61193,
-  "scratch": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-md-reader-review-mKK5l1",
+  "port": 54664,
+  "scratch": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-md-reader-review-XK92bK",
   "targets": {
-    "chat": "21B7A76CD10070310BFF50E0583C0F38",
+    "chat": "9EA88E81962F66D6B626E79D1024CF59",
     "foundry": {
-      "id": "0728EB9F474649DA34EA150BDB43D5A6",
-      "url": "file:///C:/Users/yangqi/code/arcane-family/arcanedesk-md-reader-impl/apps/desktop/src/renderer/foundry-unavailable.html?message=%E6%97%A0%E6%B3%95%E8%BF%9E%E6%8E%A5%20Foundry&theme=light"
+      "id": "75DD75F441CFAF775F52BC9F2CE93AA9",
+      "url": "http://localhost:30000/join"
     },
     "reader": {
-      "id": "F51AF1A61809578571DCCC79045944CF",
+      "id": "6ECEF4655940B299579278D32B2211AF",
       "url": "file:///C:/Users/yangqi/code/arcane-family/arcanedesk-md-reader-impl/apps/desktop/src/renderer/md-reader.html?theme=light&lang=zh-CN"
     },
-    "readerRestored": "1EACF66615DAECC1C707B8991B8216B1",
-    "readerReopened": "E57E66531DD747FAED14603E38308726"
+    "readerRestored": "62FE69FE5794A23FE0B48B8E8DD06D4B",
+    "readerReopened": "7261265EC098B2C5294733B80ADFE11E"
   },
   "assertions": [
     "① 开面板 → Foundry surface 是独立 page target(本地没有 FVTT,落到既有的连接失败页)",
     "② 生产渲染管线把 notes/gatekeeper.md 变成一个无 href、可聚焦、role=link 的锚点",
-    "② 点击后多出一个独立 page target(F51AF1A61809578571DCCC79045944CF)——阅读器是 WebContentsView,不是 chat 页里的 DOM",
+    "② 点击后多出一个独立 page target(6ECEF4655940B299579278D32B2211AF)——阅读器是 WebContentsView,不是 chat 页里的 DOM",
     "② READER_F:正文渲染、返回按钮自称返回、满铺衬线排版、Foundry 隐藏保活",
     "② 阅读中换笔记:同一个 target、同一个文档,只换内容",
     "① 顶栏切主题 → 阅读器页 dataset.theme 跟着变,内容不动",
