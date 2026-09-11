@@ -1407,6 +1407,20 @@ app.whenReady().then(async () => {
     if (!validated.ok) return validated;
     return validated.context.host.taskCoordinator().respond(request);
   });
+  ipcMain.handle("chat:queued-input", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    const validated = await validateModeRequest(request);
+    if (!validated.ok) return validated;
+    const { host, mode } = validated.context;
+    const inputId = typeof request?.inputId === "string" ? request.inputId : null;
+    const action = request?.action;
+    if (!inputId || !["cancel", "steer"].includes(action)) return { ok: false, code: "INVALID_REQUEST" };
+    const coordinator = host.taskCoordinator();
+    const result = action === "cancel" ? coordinator.cancelQueuedInput(inputId) : coordinator.steerQueuedInput(inputId);
+    // 排队已记 turnQueued;改道立即发送与取消排队成双,记 turnSteered。
+    if (result.ok && action === "steer") host.telemetry?.turnSteered(mode);
+    return { ...result, ...modeController.publicSnapshot(validated.context) };
+  });
 
   // 主题持久化:renderer 切换主题时写 userData/config/ui.json,
   // 下次启动 createWindow 用它决定 backgroundColor + 首屏 query。

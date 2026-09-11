@@ -17,6 +17,15 @@ contextBridge.exposeInMainWorld("arcane", {
   listSlash: (context) => ipcRenderer.invoke("slash:list", context),
   /** Abort the currently running agent turn. */
   abort: (context) => ipcRenderer.invoke("chat:abort", context),
+  /** 排队输入操作(备团):action = "cancel"(删除/编辑召回) | "steer"(立即发送)。 */
+  updateQueuedInput: (context, inputId, action) => ipcRenderer.invoke("chat:queued-input", {
+    inputId,
+    action,
+    mode: context?.mode,
+    generation: context?.generation,
+    sessionId: context?.sessionId,
+    taskId: context?.taskId,
+  }),
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel: () => ipcRenderer.invoke("panel:open"),
   closePanel: () => ipcRenderer.invoke("panel:close"),

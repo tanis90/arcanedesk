@@ -115,6 +115,7 @@ export class TaskCoordinator {
     this.emit({ type: "task_state", task: { ...this.task } });
   }
   setInputState(input, state) {
+    if (input.state === state) return; // 幂等:重复迁移(如改道时的 queued→queued)不再发事件
     if (["consumed", "handled"].includes(state)) {
       this.pending.save([...this.inputs.values()].filter(item => item.id !== input.id));
       delete input.images; delete input.executionText; delete input.expandedText;
@@ -188,6 +189,34 @@ export class TaskCoordinator {
       if (input.state === "queued") this.setInputState(input, "accepted");
     }).finally(() => this.queueWrites.delete(write));
     this.queueWrites.add(write);
+  }
+
+  /** pi 无单条删除:clearQueue 全清后幸存者按序重排(走 queueInput,展开结果确定)。 */
+  requeueSurvivors(exceptId) {
+    for (const survivor of this.inputs.values()) {
+      if (survivor.id !== exceptId && survivor.taskId === this.task?.id && survivor.state === "queued") this.queueInput(survivor);
+    }
+  }
+
+  /** 取消一条 SDK 排队的输入;目标按 drain 同款 cancelled 收尾(重启后可召回)。 */
+  cancelQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    this.adapter.clearQueue?.();
+    this.setInputState(input, "cancelled");
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
+  }
+
+  /** 排队输入改道 steer,下个 turn 边界软打断生效;reject 回退 accepted 由 drain 兜底。 */
+  steerQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    this.adapter.clearQueue?.();
+    input.delivery = "steer";
+    this.queueInput(input);
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
   }
 
   observe(event) {
