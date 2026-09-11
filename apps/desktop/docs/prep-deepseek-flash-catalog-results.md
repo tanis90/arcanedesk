@@ -31,7 +31,7 @@
 - Catalog `classFeature` list now returns a compact `progression` projection (class, subclass, race, grants, spell access/tables, unresolved references). Full progression remains available only with `includeProgressionDetail:true` or via `detail`.
 - This keeps the benchmark-relevant progression signal while avoiding a default 35 KB payload dominated by raw document/system/effect/uses fields.
 - Verification: content-catalog, trace capture, skill-content, publisher, and self-contained bundle tests: **25 passed**.
-- UUID grant/import remains the next implementation gate: the public contract must accept either a verified UUID or legacy `packId+entryId`; the runtime must resolve with `fromUuid`, verify Document type/name, then clone native `toObject()` data. No benchmark claim is made for that gate until its runtime test passes.
+- UUID grant/import is now implemented in the existing grant tool: the public contract accepts either UUID or legacy `packId+entryId`; the runtime resolves UUIDs with `fromUuid`, rejects missing sources, and retains native `toObject()` cloning. SDK actor-content regression: **19/19 passed** after rebuild.
 
 ### Next release sequence
 
