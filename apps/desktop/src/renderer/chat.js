@@ -146,6 +146,7 @@ const modeSegs = {
   combat: document.getElementById("mode-seg-combat"),
 };
 const dirChip = document.getElementById("dir-chip");
+const queueChip = document.getElementById("queue-chip");
 const scrollBottomBtn = document.getElementById("scroll-bottom");
 const togglePanelBtn = document.getElementById("toggle-panel");
 const welcome = document.getElementById("welcome");
@@ -315,7 +316,9 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     for (const attention of payload.attentions ?? []) renderAttention(attention);
     for (const approval of payload.approvals ?? []) addApprovalCard(approval);
     if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
+    resetInputStates();
     for (const item of payload.inputs ?? []) {
+      noteInputState(item.commandId, item.state);
       if (item.state === "interrupted") {
         renderRecoveredInput(item);
         continue;
@@ -476,12 +479,37 @@ function syncDirChip() {
   dirChip.style.display = currentMode === "prep" && conversationEmpty ? "" : "none";
 }
 
+// 备团排队计数(spec §3⑤):按 commandId 跟踪 input_state 迁移,仅 queued 态计数;
+// 恢复快照时整体重建,事件只在查看该会话时到达,无需跨会话缓存。
+const inputStateByCommand = new Map();
+let queuedInputCount = 0;
+function syncQueueChip() {
+  const show = currentMode === "prep" && queuedInputCount > 0;
+  queueChip.style.display = show ? "" : "none";
+  if (show) queueChip.textContent = t("chat.input.queuedCount", { count: queuedInputCount });
+}
+function noteInputState(commandId, state) {
+  const previous = inputStateByCommand.get(commandId);
+  if (previous === state) return;
+  if (["consumed", "handled", "cancelled", "failed", "interrupted"].includes(state)) inputStateByCommand.delete(commandId);
+  else inputStateByCommand.set(commandId, state);
+  if (previous === "queued") queuedInputCount--;
+  if (state === "queued") queuedInputCount++;
+  syncQueueChip();
+}
+function resetInputStates() {
+  inputStateByCommand.clear();
+  queuedInputCount = 0;
+  syncQueueChip();
+}
+
 function applyModeUi(mode, cwd) {
   currentMode = mode === "prep" ? "prep" : "combat";
   modeSegs.prep.classList.toggle("active", currentMode === "prep");
   modeSegs.combat.classList.toggle("active", currentMode === "combat");
   document.body.dataset.mode = currentMode;
   syncDirChip();
+  syncQueueChip();
   lastPrepCwd = cwd || null;
   if (cwd) {
     dirChip.textContent = `📁 ${cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd} ⌄`;
@@ -1221,6 +1249,7 @@ function onEvent(event) {
       showPendingModel(event.model);
       break;
     case "input_state":
+      noteInputState(event.commandId, event.state);
       updateInputReceipt(event.commandId, event.state);
       break;
     case "task_state":
