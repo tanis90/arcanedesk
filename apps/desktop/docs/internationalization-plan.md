@@ -294,6 +294,16 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
    flavor 成立；`prepare-desktop-release` 的 buildRegion 校验、intl 默认 releaseId
    后缀、`predist:*` → `prepare:dist` 链条均正确；`arcane-intl-mod-index.yml` 的
    R2 env 与发布步骤干净；两个改动过的 workflow 均过 YAML 解析。
+8. **分支推送 + build-only 真机验收通过（2026-09-11）**：主仓库 5 分支
+   （m1–m4 链 + docs）与 ops 2 分支（feat/intl-backend、feat/windows-signing-sign-first）
+   已推送 origin（main 未动，待验收全绿后合并）。从 `feat/intl-m4-skill-packs`
+   dispatch `arcane-desktop-release.yml`（显式 `skip_oss=true`），run `34588121171`
+   **8/8 腿全绿**（cn/intl × macos-arm64/macos-x64/windows-x64/windows-arm64），
+   publish job 按 P3 新默认整体跳过；8 个 artifact 命名全部正确；抽查 intl
+   windows 腿 staging 日志，落位的正是 `Arcane-Desk-0.4.3-win-x64-intl.exe/.zip`
+   两件。P1–P4 修复在真实 CI 全部成立。下一步：合并 main 后做正式发版验收
+   （M2 双 flavor 落位 + latest.json 公开可读）、dispatch `arcane-intl-mod-index.yml`
+   首发（M3）、`skills-publish.yml` 带 `region=intl` 首发（M4）。
 
 ### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— 已部署并验收（2026-09-11）；启用时机暂缓（首发 BYOK）
 
