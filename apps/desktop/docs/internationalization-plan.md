@@ -64,8 +64,9 @@
 
 - 遥测：Go 服务 arcane-api（4 条信封契约 + 违禁 key 递归扫描 + Bearer=installation_id
   鉴权）→ OSS 原始 NDJSON → 离线 DuckDB 分析；30 天生命周期；自助删除端点。
-- LLM：NewAPI 中转站（DeepSeek 官方上游，`model_mapping` 别名 `arcane-spark`，双闸门配额），
-  `arcane-key` CLI 手工发 key（SSH + SQLite 登记 + 全文只显示一次）。
+- LLM：NewAPI 中转站（DeepSeek 官方上游，`model_mapping` 别名 `arcane-spark`，双闸门配额
+  ——指 NewAPI 库内的**用户总额度 + 令牌剩余额度**两层，非上游子 key；DeepSeek 两站均无
+  sub-key provisioning API），`arcane-key` CLI 手工发 key（SSH + SQLite 登记 + 全文只显示一次）。
 - ops 仓库中不存在任何 `arcanedesk.app` / Cloudflare 引用——海外后端是全新绿地。
 
 ---
@@ -103,10 +104,14 @@ R2 + 自定义域 `dl.arcanedesk.app`：零出口流量费（对比 OSS 国际�
 - 原方案选 OpenRouter（ provisioning API 发子 key），已拍板改为 **DeepSeek 海外站**
   （api.deepseek.com，模型 `deepseek-flash` / `deepseek-v4-pro`，已充值并实测连通）。
 - DeepSeek 海外站**没有 sub-key provisioning API**，M5 的配额执行完全落在
-  D1 配额表 + Worker 内记账，不再有两层兜底。
-- 国内 NewAPI 的四项职责在海外版的落点：双闸门配额 → D1 配额表；
+  D1 配额表 + Worker 内记账。"不再有两层兜底"指的是原 OpenRouter 路线下 M5 本可拥有的
+  "D1 记账 + OpenRouter 子 key 余额上限"两层；海内 NewAPI 的"双闸门"是它库内的
+  用户级 + 令牌级两层（见 §1.4），两边都不存在上游子 key 这一层。
+- 国内 NewAPI 的四项职责在海外版的落点：双闸门配额 → D1 配额表（用户/令牌两列平替）；
   模型别名 → Worker 内改写 `arcane-spark` → `deepseek-flash`；定价 → DeepSeek 账单；
   生命周期 → D1 登记 + 禁用/轮换。
+- **2026-09-11 拍板：自建确认**。M5 走 Worker + D1，不搬 NewAPI 出海；选型答辩记录
+  （arcane-key 功能对照、冷启动、安全红线、实施待定项）见 M5 段。
 - **M5 整体暂缓**：首发 BYOK（零后端），Spark-intl 在需要发试用 key 验证付费意愿时再启动。
 
 ### D4：订阅三段式，首发不做订阅
@@ -231,7 +236,7 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   `publish-skills --region intl`（远端无指针按 r0 放行），验证 intl 构建自更新到
   英文技能包、英文 agent 全流程无中文渗漏
 
-### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— **暂缓**
+### M5：LLM 网关 Spark-intl（ops 新服务，L，全新代码）— **暂缓**（2026-09-11 拍板：自建 Worker + D1，不搬 NewAPI 出海）
 
 - `services/arcane-spark-edge/` Worker：key 校验（D1）→ 别名改写 `arcane-spark` →
   `deepseek-flash` → 转发 DeepSeek 海外站 → 按 usage 扣 D1 额度；流式透传
@@ -239,6 +244,29 @@ R2 桶、D1 库、CF API token、DeepSeek 海外站 key、Discord、waitlist 工
   （DeepSeek 无 provisioning API，上游额度不在 key 层兜底）
 - 主仓库 `provider-catalog.json` intl 排序；`voice/asr.js`/`preset.js` intl 默认
 - 验收：intl 构建填 Spark-intl key 跑通 prep 会话；BYOK 目录前三位海外厂商
+
+**选型答辩记录（2026-09-11，NewAPI 出海 vs Worker+D1 自建）：**
+
+1. **功能对照**：arcane-key 六命令（issue/topup/usage/suspend/resume/rotate）+ SQLite
+   登记 + issuance_events 审计 + 模型范围限制，全部是"一张登记表 + 代理时查一次"的
+   CRUD，D1 + wrangler CLI 全平替；海内 NewAPI 运维的真实负担（Caddy 白名单、回环
+   管理面 + SSH 隧道、admin 限流 429、会话上限 409 清库、登记库手工快照）在 Worker
+   方案里全部不存在。海内 NewAPI 实例不能复用（合规基线：intl 流量不碰国内端点），
+   搬出去 = 第二台 VPS + 第二份补丁/备份纪律。
+2. **冷启动**：Workers 基于 V8 isolates，冷启动 < 5ms（官方口径"无需预热"），不存在
+   容器型 serverless 的"保活 1 实例"问题；LLM 首 token 秒级，Worker 开销占比 < 0.5%。
+3. **安全**：窄场景下"小而可审计的自研"优于"只用 1% 功能却暴露 100% 攻击面的
+   NewAPI"（Web 管理面板、注册登录、会话、支付）。五条红线必须写死进测试：
+   ①key 恒定时间比较、库内只存哈希 ②日志/tail 不打 key 与敏感请求体
+   ③流式 usage 解析失败口径显式决策 ④D1 全参数化查询 + 请求体 16MB 上限对齐海内
+   ⑤错误响应不泄露内部结构。若未来长成大流量付费服务，此账重算。
+
+**实施待定项（启动时拍定）：**
+
+1. D1 记账失败时 fail-closed（保护钱包，倾向）还是 fail-open（保护体验）
+2. 并发超扣：试用 key 场景可接受；要严格则用 `UPDATE ... WHERE balance >= cost` 原子扣减
+3. key 存储形态：建议哈希存储、全文仅发放时显示一次（对齐海内纪律）
+4. 额度语义：按 token 数还是折算美元（别名后挂的模型可能换，单价不同）
 
 ### M6：遥测海外通道（ops 新服务，M）
 
