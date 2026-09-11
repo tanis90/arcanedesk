@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -131,6 +131,30 @@ test("mode directory containment rejects traversal and sibling-prefix paths", ()
   assert.equal(isPathInside(combatDir, path.join(combatDir, "..", "arcane-desktop-prep", "session.jsonl")), false);
   assert.equal(isPathInside(combatDir, siblingPrefix), false);
   assert.equal(isPathInside(combatDir, combatDir), false);
+});
+
+test("a not-yet-created child under a symlinked directory still counts as inside", (t) => {
+  // 回归（2026-09-11 CI macOS/Windows）：root 存在时走 realpath、候选不存在时
+  // 曾退回裸 resolve，规范不一致把 "alias/new.jsonl" 误判为目录外（mac /var
+  // symlink、Windows 8.3 短名同机理）。
+  const { root } = tempLayout();
+  const real = path.join(root, "real-prep");
+  mkdirSync(real);
+  const alias = path.join(root, "alias-prep");
+  try {
+    symlinkSync(real, alias, "dir");
+  } catch {
+    // Windows 无 symlink 权限时用 junction（免管理员）达到同样的 reparse 效果。
+    try {
+      symlinkSync(real, alias, "junction");
+    } catch (error) {
+      t.skip(`symlink/junction unavailable on this host: ${error.message}`);
+      return;
+    }
+  }
+  assert.equal(isPathInside(alias, path.join(alias, "new-session.jsonl")), true);
+  assert.equal(isPathInside(alias, path.join(alias, "nested", "deep-session.jsonl")), true);
+  assert.equal(isPathInside(alias, path.join(root, "elsewhere", "x.jsonl")), false);
 });
 
 test("directory containment has the same boundary semantics on Windows and POSIX", () => {

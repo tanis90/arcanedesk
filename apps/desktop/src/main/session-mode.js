@@ -36,7 +36,20 @@ function canonicalPath(input) {
   try {
     return realpathSync.native(resolved);
   } catch {
-    return resolved;
+    // 路径不存在（如待创建的会话文件）：逐级向上找现存祖先 realpath 后拼回，
+    // 保证与「现存目录」比较时双方规范一致——否则 macOS /var symlink、
+    // Windows 8.3 短名会把目录内的新文件误判为目录外（2026-09-11 CI 事故）。
+    const trailing = [];
+    let ancestor = resolved;
+    while (true) {
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) return resolved;
+      trailing.unshift(path.basename(ancestor));
+      ancestor = parent;
+      try {
+        return path.join(realpathSync.native(ancestor), ...trailing);
+      } catch { /* 祖先也不存在，继续向上 */ }
+    }
   }
 }
 
