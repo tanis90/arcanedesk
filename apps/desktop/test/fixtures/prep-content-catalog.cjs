@@ -70,7 +70,7 @@ async function queryCatalog(mode, args, build) {
       sourceUuids:Array.isArray(a.configuration?.items) ? a.configuration.items.map(i=>i.uuid).filter(Boolean) : undefined,
       itemCount:Array.isArray(a.configuration?.items) ? a.configuration.items.length : undefined
     }));
-    return paginate(documents, {progression:undefined, progressionDetail:progression,
+    return paginate(documents, {progression:progressionView(progression), ...(a.includeProgressionDetail ? {progressionDetail:progression} : {}),
       progressionGroups:{granted,choices,unresolved,
         classification:{granted:'derived-from-advancement-type',choices:'derived-from-advancement-type-or-name',unresolved:'source-reported'}},
       progressionSummary:summary,
@@ -166,7 +166,7 @@ function createTools(evaluate) {
     list:{scope,type:{type:'string',enum:['spell','classFeature','feat','monsterAction','weapon','armor','item']},
       rules:{type:'string',enum:['2014','2024']},class:text,subclass:text,
       characterLevel:{type:'integer',minimum:1,maximum:20},levels:{type:'array',items:{type:'integer',minimum:0,maximum:9}},
-      maxLevel:{type:'integer',minimum:0,maximum:9},actorUuid:text,query:text,...paging},
+      maxLevel:{type:'integer',minimum:0,maximum:9},actorUuid:text,query:text,includeProgressionDetail:{type:'boolean'},...paging},
     detail:{scope,uuid:text},
   };
   return ['search','list','detail'].map(mode => ({
