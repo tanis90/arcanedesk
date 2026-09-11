@@ -50,3 +50,12 @@ The first five-run batch was started against local COS. Run 1 completed 9/12 aud
 ### Continuation result
 
 The isolated B3 continuation completed both arms successfully: `resume-b3-2/manifest.json`, 2/2 audited. The original run remains paused at B2 tool provider interruption with 9/10 settled/audited entries (B2 tool report exists but runner classified the batch as provider failure). No aggregate 5-run score is claimed because the first run is incomplete and the remaining four runs have not been executed.
+
+
+## Analysis of available runs (2026-09-11)
+
+The available post-change run cannot establish a tool benefit. The compact projection change had a fixture defect: `progressionView` was referenced but not defined in the benchmark fixture. Traces show repeated `ReferenceError: progressionView is not defined` from `foundry_content_list`. Consequently catalog-tool trials received partial tool failures, and the observed failures (A1 spellbook 10 vs 14; B1 fighting-style missing) are confounded by the broken fixture.
+
+Before this defect is corrected, the paired post-change data is: JS 5/5 business passes among A1-A3/B1/B2 (B3 JS also passed in the continuation), while tool trials include A1 and B1 business failures, B2 provider failure, and B3 timeout. This is evidence that the tool did not improve the model in this run, but it is **not** evidence that the catalog design itself hurts performance: the tool path was partly broken and the model also used it inconsistently. Tool latency was usually higher when exploration occurred (for example A3 tool 261s vs JS 185s; B3 tool timed out at 300s), indicating the current skill/tool surface adds search cost without a reliable correctness gain.
+
+The valid conclusion is: keep the UUID-verified import and compact catalog design, fix and retest the fixture first, then compare at least five clean paired runs. Do not use the current contaminated batch to claim an LLM performance improvement or regression.
