@@ -330,7 +330,14 @@ function noteHref(href) {
   const value = String(href ?? "").trim().replace(/^<(.*)>$/, "$1");
   if (!value) return null;
   if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null;
-  return /\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i.test(value) ? value : null;
+  if (!/\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i.test(value)) return null;
+  // agent 常把 CJK 文件名 percent-encode(CommonMark 合法,如 plans/%E6%88%98%E6%9C%AF.md);
+  // 不解码的话交给 main 的路径查无此文件。% 序列残缺时 decodeURIComponent 抛错,保留原样
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 /**

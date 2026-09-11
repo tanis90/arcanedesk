@@ -129,6 +129,24 @@ test("a markdown link to a note becomes the same anchor, keeping its label", () 
   assert.equal(anchor.textContent, "守门人设定");
 });
 
+test("a percent-encoded note href is decoded before it reaches the opener", () => {
+  // agent 常把 CJK 文件名 percent-encode(CommonMark 合法);不解码 main 侧查无此文件
+  const { container, arcaneMd } = loadMarkdownPipeline();
+  arcaneMd.render(container, "[战术](plans/%E6%88%98%E6%9C%AF.md)");
+  const anchor = container.querySelector("a.md-path");
+  assert.ok(anchor, "encoded href still linkifies");
+  assert.equal(anchor.dataset.mdPath, "plans/战术.md");
+  assert.equal(anchor.textContent, "战术");
+});
+
+test("a malformed percent sequence keeps the href as written", () => {
+  const { container, arcaneMd } = loadMarkdownPipeline();
+  arcaneMd.render(container, "[x](plans/%zz.md)");
+  const anchor = container.querySelector("a.md-path");
+  assert.ok(anchor, "malformed encoding should not drop the link");
+  assert.equal(anchor.dataset.mdPath, "plans/%zz.md");
+});
+
 test("http links are untouched by the note pass", () => {
   const { container, arcaneMd } = loadMarkdownPipeline();
   arcaneMd.render(container, "[规则书](https://example.com/rules) 与 notes/a.md");
