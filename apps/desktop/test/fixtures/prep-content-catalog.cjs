@@ -1,6 +1,13 @@
 // Experimental model tools. No Document writes or package modifications.
 const { queryBuild } = require('./prep-build-query.cjs');
 
+function progressionView(p) {
+  const ref = d => d ? {uuid:d.uuid ?? null, name:d.name ?? null, type:d.type ?? null} : null;
+  return {class:ref(p.class), subclass:ref(p.subclass), race:ref(p.race),
+    grants:(p.documents ?? []).map(ref).filter(Boolean), spellAccess:p.spellAccess ?? null,
+    spellTables:p.spellTables ?? [], unresolved:p.unresolved ?? []};
+}
+
 async function queryCatalog(mode, args, build) {
   const a = args;
   const fail = (code, message) => { throw new Error(`${code}: ${message}`); };
