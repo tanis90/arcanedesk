@@ -40,7 +40,7 @@ const BOUNDS = { x: 486, y: 36, width: 1028, height: 884 };
 function harness({ notes = {} } = {}) {
   const events = [];
   const views = [];
-  const calls = { loadFoundry: 0, reloadFoundry: 0, readNote: [], destroyed: [] };
+  const calls = { loadFoundry: 0, reloadFoundry: 0, readNote: [], rereadNote: [], destroyed: [] };
   const window = { destroyed: false, isDestroyed: () => window.destroyed };
   let controller;
   const hooks = {
@@ -57,6 +57,12 @@ function harness({ notes = {} } = {}) {
     readNote: (rawPath) => {
       calls.readNote.push(rawPath);
       return notes[rawPath] ?? { name: "npc.md", text: `# ${rawPath}`, truncated: false };
+    },
+    // main.js 的 reloadNotePayload:按打开时的 absolute + baseDir 快照复检后重读(N4)。
+    // 这里用 notes 里的 reread 键模拟磁盘现状,默认回一份通用内容。
+    rereadNote: (absolute, baseDir) => {
+      calls.rereadNote.push([absolute, baseDir]);
+      return notes[`reread:${absolute}`] ?? { name: "npc.md", text: `# ${absolute}`, truncated: false };
     },
   };
   controller = new PanelSurfaceController(hooks);
@@ -326,17 +332,23 @@ test("content push carries the path so the page can tell a recall from a new not
   assert.equal(h.content().path, "notes/b.md");
 });
 
-test("onReaderReady re-pushes theme and content without re-reading the file (invariant 5)", () => {
+test("onReaderReady re-reads the note and pushes no theme until setTheme was called (N2/N8)", () => {
   const h = harness();
   h.controller.showReader("notes/a.md");
   const reader = h.live("reader")[0];
   reader.sent.length = 0;
 
   h.controller.onReaderReady();
+  assert.deepEqual(reader.sent.map((message) => message.channel), [READER_CONTENT_CHANNEL],
+    "未热切换过主题:首屏已从 ?theme= 拿到权威值,不能拿默认 light 去盖深色用户(N2)");
+  assert.deepEqual(h.calls.readNote, ["notes/a.md", "notes/a.md"], "页面重载后重读磁盘,不重推缓存(N8)");
+
+  // setTheme 之后,加载完成才顺带重推热切换过的主题
+  h.controller.setTheme("dark");
+  reader.sent.length = 0;
+  h.controller.onReaderReady();
   assert.deepEqual(reader.sent.map((message) => message.channel), [READER_THEME_CHANNEL, READER_CONTENT_CHANNEL]);
-  assert.equal(reader.sent[0].payload, "light");
-  assert.equal(reader.sent.at(-1).payload.text, "# notes/a.md");
-  assert.deepEqual(h.calls.readNote, ["notes/a.md"], "页面重载不该触发第二次读盘");
+  assert.equal(reader.sent[0].payload, "dark");
 });
 
 test("reloadSurface re-reads for the reader and defers to Foundry otherwise", async () => {
@@ -361,6 +373,69 @@ test("reloadSurface re-reads for the reader and defers to Foundry otherwise", as
   await h.controller.reloadSurface();
   assert.equal(h.calls.reloadFoundry, 1, "CLOSED 下没有可刷新的 surface");
   assert.equal(h.calls.readNote.length, 2);
+});
+
+test("F5 re-reads via the open-time snapshot, not the current cwd (N4)", async () => {
+  // 打开时 cwd 是 projA;之后会话切到 projB。若按原始路径对当前 cwd 重解析,
+  // 会静默读到 projB 的同名文件——快照复检保证授权范围仍是"打开时的那个目录"。
+  const h = harness({ notes: {
+    "notes/a.md": { name: "a.md", text: "projA v1", truncated: false, absolute: "/projA/notes/a.md", baseDir: "/projA" },
+    "reread:/projA/notes/a.md": { name: "a.md", text: "projA v2", truncated: false },
+  } });
+  h.controller.showReader("notes/a.md");
+  assert.equal(h.content().text, "projA v1");
+  // absolute/baseDir 是 main 侧快照,不下发给页面
+  assert.equal("absolute" in h.content(), false);
+  assert.equal("baseDir" in h.content(), false);
+
+  await h.controller.reloadSurface();
+  assert.deepEqual(h.calls.rereadNote, [["/projA/notes/a.md", "/projA"]]);
+  assert.deepEqual(h.calls.readNote, ["notes/a.md"], "F5 不再拿原始路径对当前 cwd 重解析");
+  assert.equal(h.content().text, "projA v2");
+
+  // 打开时读链就失败 → 没有快照,F5 退回按原始路径重解析(现状行为)
+  h.setNote("notes/gone.md", { error: "missing" });
+  h.controller.showReader("notes/gone.md");
+  await h.controller.reloadSurface();
+  assert.deepEqual(h.calls.readNote, ["notes/a.md", "notes/gone.md", "notes/gone.md"]);
+  assert.equal(h.calls.rereadNote.length, 1);
+});
+
+test("openPanel restores the note through the stored snapshot after a cwd switch (N4)", async () => {
+  const h = harness({ notes: {
+    "notes/a.md": { name: "a.md", text: "projA", truncated: false, absolute: "/projA/notes/a.md", baseDir: "/projA" },
+  } });
+  h.controller.showReader("notes/a.md");
+  h.controller.closePanel();
+  // 关面板期间会话已切到别的项目;重开不得按新 cwd 重解析
+  await h.controller.openPanel();
+  assert.equal(h.controller.state, STATE.READER_C);
+  assert.deepEqual(h.calls.rereadNote, [["/projA/notes/a.md", "/projA"]]);
+  assert.deepEqual(h.calls.readNote, ["notes/a.md"]);
+  assert.equal(h.content().text, "# /projA/notes/a.md");
+  assert.equal(h.content().path, "notes/a.md", "rawPath 仍下发给页面做唤回比较");
+
+  // 快照复检失败(文件被删)→ 落到正常错误页,而不是静默读错文件
+  h.controller.closePanel();
+  h.setNote("reread:/projA/notes/a.md", { error: "missing" });
+  await h.controller.openPanel();
+  assert.equal(h.content().error, "missing");
+});
+
+test("reloadSurface rebuilds a crashed reader view before pushing (N5)", async () => {
+  const h = harness();
+  h.controller.showReader("notes/a.md");
+  const first = h.live("reader")[0];
+  // 真实崩溃语义:isCrashed() === true 而 isDestroyed() === false
+  first.crashed = true;
+
+  await h.controller.reloadSurface();
+  const second = h.live("reader")[0];
+  assert.notEqual(first, second, "死屏不能复用,先重建");
+  assert.deepEqual(h.calls.destroyed.at(-1), { label: "reader" });
+  assert.equal(second.visible, true, "重建后仍是当前可见 surface");
+  assert.deepEqual(second.bounds, BOUNDS, "重建后立即拿到正确布局");
+  assert.equal(h.content().text, "# notes/a.md", "内容重读并推给新 view");
 });
 
 test("setTheme reaches the reader only; the Foundry page keeps its own theming", async () => {
@@ -396,8 +471,8 @@ test("setLocale reaches the reader only and is re-pushed on reload (M2)", async 
   reader.sent.length = 0;
   h.controller.onReaderReady();
   assert.deepEqual(reader.sent.map((message) => message.channel),
-    [READER_THEME_CHANNEL, READER_LOCALE_CHANNEL, READER_CONTENT_CHANNEL]);
-  assert.equal(reader.sent[1].payload, "en-US");
+    [READER_LOCALE_CHANNEL, READER_CONTENT_CHANNEL]);
+  assert.equal(reader.sent[0].payload, "en-US");
 });
 
 test("onReaderReady skips the locale push when the language was never hot-switched", async () => {
@@ -408,8 +483,8 @@ test("onReaderReady skips the locale push when the language was never hot-switch
   reader.sent.length = 0;
 
   h.controller.onReaderReady();
-  assert.deepEqual(reader.sent.map((message) => message.channel), [READER_THEME_CHANNEL, READER_CONTENT_CHANNEL],
-    "首屏语言已从 ?lang= query 拿到,未热切换过就不多推一条");
+  assert.deepEqual(reader.sent.map((message) => message.channel), [READER_CONTENT_CHANNEL],
+    "首屏语言与主题已从 query 拿到,未热切换过就不多推一条");
 });
 
 test("layout feeds both views the same bounds and emits panel_layout once per transition", async () => {

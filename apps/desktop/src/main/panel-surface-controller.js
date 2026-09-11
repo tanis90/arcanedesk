@@ -24,6 +24,9 @@ export const STATE = Object.freeze({
 const SURFACE_FOUNDRY = "foundry";
 const SURFACE_READER = "reader";
 
+/** §7 读链的返回:笔记内容(readNote 成功时带 absolute/baseDir 快照,N4)或错误页 payload。
+    @typedef {{ name?: string, text?: string, truncated?: boolean, absolute?: string, baseDir?: string, error?: string }} NotePayload */
+
 export class PanelSurfaceController {
   #hooks;
   #foundryView = null;
@@ -32,9 +35,11 @@ export class PanelSurfaceController {
   #surface = null; // SURFACE_FOUNDRY | SURFACE_READER | null(CLOSED)
   #origin = null; // "foundry" | "closed":仅在本次 reader 打开周期内有值(§3.1)
   #lastContent = null; // ① 关面板时记下的现场,重开时恢复
-  #readerPath = null; // 当前笔记的原始路径,F5 重读与 ① 恢复都用它
+  #readerPath = null; // 当前笔记的原始路径:下发给页面分辨"唤回同一份"与"换了一份"(§2)
+  #readerAbsolute = null; // 打开时读链给出的绝对路径快照(N4)
+  #readerBaseDir = null; // 打开时的工作目录快照:重读的授权范围是它,不是当前 cwd(N4)
   #readerPayload = null; // 当前笔记内容;保活期间留在内存(§3.5 不变量 4)
-  #theme = "light";
+  #theme = null; // 未热切换过:readerView 首屏已从 ?theme= query 拿到权威主题,不推(N2)
   #locale = null; // 未热切换过:readerView 首屏已从 ?lang= query 拿到权威语言,无需再推
 
   /**
@@ -48,7 +53,8 @@ export class PanelSurfaceController {
    * @param {(view: any) => void} hooks.destroyReaderView
    * @param {() => Promise<any>} hooks.loadFoundry 真正加载 FVTT 页面(main 的 openFoundryView)
    * @param {() => Promise<any>} hooks.reloadFoundry F5 在 foundry surface 上的重载
-   * @param {(rawPath: string) => object} hooks.readNote §7 读链,返回内容或 { error }
+   * @param {(rawPath: string) => NotePayload} hooks.readNote §7 读链,返回内容(成功时带 absolute/baseDir 快照)或 { error }
+   * @param {(absolute: string, baseDir: string) => NotePayload} hooks.rereadNote F5/① 恢复的重读:按打开时的快照复检后再读(N4)
    */
   constructor(hooks) {
     this.#hooks = hooks;
@@ -116,19 +122,12 @@ export class PanelSurfaceController {
    */
   showReader(rawPath) {
     const payload = this.#hooks.readNote(rawPath);
-    // 只有开启新的阅读周期时才快照 origin;换笔记沿用本周期已有的值
-    if (!this.#open || this.#surface !== SURFACE_READER) {
-      this.#origin = isUsable(this.#foundryView) ? SURFACE_FOUNDRY : "closed";
-    }
-    this.#surface = SURFACE_READER;
-    this.#readerPath = rawPath;
-    this.#readerPayload = payload;
-    this.#setOpen(true);
-    this.#ensureReaderView();
-    this.#applyVisibility();
-    this.layout();
-    this.#pushReaderContent();
-    return { ok: true, state: this.state };
+    // 读链成功时快照 absolute + baseDir(N4):此后 F5 与 ① 恢复的授权范围固定在
+    // "打开时的工作目录",会话切到别的项目也不会把同名文件读串。
+    const snapshot = !payload.error && payload.absolute && payload.baseDir
+      ? { absolute: payload.absolute, baseDir: payload.baseDir }
+      : null;
+    return this.#enterReader(rawPath, payload, snapshot);
   }
 
   // ---------- ③ 阅读器内返回/关闭 ----------
@@ -164,7 +163,14 @@ export class PanelSurfaceController {
     if (this.#open) return { ok: true, state: this.state };
     const restore = this.#lastContent;
     this.#lastContent = null;
-    if (restore?.surface === SURFACE_READER && restore.path) return this.showReader(restore.path);
+    if (restore?.surface === SURFACE_READER && restore.path) {
+      // 有快照就按"打开时的目录"复检重读(N4);没有(打开时读链就失败)退回按原始路径重解析
+      if (restore.absolute && restore.baseDir) {
+        const payload = this.#hooks.rereadNote(restore.absolute, restore.baseDir);
+        return this.#enterReader(restore.path, payload, { absolute: restore.absolute, baseDir: restore.baseDir });
+      }
+      return this.showReader(restore.path);
+    }
     return this.#hooks.loadFoundry();
   }
 
@@ -179,13 +185,21 @@ export class PanelSurfaceController {
     this.#lastContent = !this.#surface ? null
       : this.#surface === SURFACE_READER && this.#origin === SURFACE_FOUNDRY
         ? { surface: SURFACE_FOUNDRY }
-        : { surface: this.#surface, origin: this.#origin, path: this.#readerPath };
+        : {
+          surface: this.#surface,
+          origin: this.#origin,
+          path: this.#readerPath,
+          absolute: this.#readerAbsolute,
+          baseDir: this.#readerBaseDir,
+        };
     this.#destroyReader();
     this.#destroyFoundry("panel-closed");
     this.#open = false;
     this.#surface = null;
     this.#origin = null;
     this.#readerPath = null;
+    this.#readerAbsolute = null;
+    this.#readerBaseDir = null;
     this.#readerPayload = null;
     this.#hooks.emit({ type: "panel_status", open: false });
     this.#hooks.emit({ type: "panel_layout", open: false });
@@ -202,9 +216,22 @@ export class PanelSurfaceController {
     if (!this.#open) return { ok: true, state: this.state };
     if (this.#surface === SURFACE_READER) {
       if (!this.#readerPath) return { ok: true, state: this.state };
-      this.#readerPayload = this.#hooks.readNote(this.#readerPath);
+      // 阅读器 renderer 崩掉时 F5 不能对着一块死屏推 IPC:先重建再重读(N5)
+      if (!isUsable(this.#readerView)) {
+        this.#ensureReaderView();
+        this.#applyVisibility();
+        this.layout();
+      }
+      this.#readerPayload = this.#rereadNotePayload();
       this.#pushReaderContent();
       return { ok: true, state: this.state };
+    }
+    // Foundry 的 renderer 崩掉同理:先重建,否则 loadFoundryPage 守着一块死屏,
+    // F5 在崩溃的 Foundry 上就成了没有回音的死路(N3)
+    if (!isUsable(this.#foundryView)) {
+      this.ensureFoundryView();
+      this.#applyVisibility();
+      this.layout();
     }
     return this.#hooks.reloadFoundry();
   }
@@ -256,13 +283,16 @@ export class PanelSurfaceController {
 
   /**
    * readerView 每次加载完成时由 main 调用(did-finish-load)。
-   * §3.5 不变量 5:内容只由 main 侧这一条推送路径供给,页面自身不读盘,
-   * 所以焦点在阅读器里按 F5(Chromium 默认重载)后内容必然回来。
-   * 主题与热切换过的语言一并重推:重载后页面回到 ?lang= 的启动语言。
+   * §3.5 不变量 5:内容只由 main 侧这一条推送路径供给,页面自身不读盘。
+   * 页面重载(devtools Ctrl+R / 崩溃恢复)后内存里的 payload 可能已过时,
+   * 有活动笔记就重读磁盘再推(N8),而不是重推缓存。
+   * 主题与语言只推热切换过的值:首屏已从 ?theme=/?lang= query 拿到权威值,
+   * 拿 main 侧的默认值去盖会把深色用户闪回浅色(N2)。
    */
   onReaderReady() {
-    this.#sendToReader(READER_THEME_CHANNEL, this.#theme);
+    if (this.#theme) this.#sendToReader(READER_THEME_CHANNEL, this.#theme);
     if (this.#locale) this.#sendToReader(READER_LOCALE_CHANNEL, this.#locale);
+    if (this.#readerPath) this.#readerPayload = this.#rereadNotePayload();
     this.#pushReaderContent();
   }
 
@@ -277,10 +307,42 @@ export class PanelSurfaceController {
     this.#origin = null;
     this.#lastContent = null;
     this.#readerPath = null;
+    this.#readerAbsolute = null;
+    this.#readerBaseDir = null;
     this.#readerPayload = null;
   }
 
   // ---------- 内部 ----------
+
+  /**
+   * ②/①恢复共用的"进入阅读器"归位(R2,不写两份):origin 快照、surface 切换、
+   * view 保证、显隐与布局、内容推送。snapshot 非空时记下 absolute/baseDir(N4)。
+   */
+  #enterReader(rawPath, payload, snapshot) {
+    // 只有开启新的阅读周期时才快照 origin;换笔记沿用本周期已有的值
+    if (!this.#open || this.#surface !== SURFACE_READER) {
+      this.#origin = isUsable(this.#foundryView) ? SURFACE_FOUNDRY : "closed";
+    }
+    this.#surface = SURFACE_READER;
+    this.#readerPath = rawPath;
+    this.#readerPayload = payload;
+    this.#readerAbsolute = snapshot?.absolute ?? null;
+    this.#readerBaseDir = snapshot?.baseDir ?? null;
+    this.#setOpen(true);
+    this.#ensureReaderView();
+    this.#applyVisibility();
+    this.layout();
+    this.#pushReaderContent();
+    return { ok: true, state: this.state };
+  }
+
+  /** F5 与页面重载共用的重读:快照在则按"打开时的目录"复检(N4),不在则按原始路径重解析。 */
+  #rereadNotePayload() {
+    if (this.#readerAbsolute && this.#readerBaseDir) {
+      return this.#hooks.rereadNote(this.#readerAbsolute, this.#readerBaseDir);
+    }
+    return this.#hooks.readNote(this.#readerPath);
+  }
 
   #setOpen(next) {
     if (this.#open === next) return;
@@ -321,7 +383,9 @@ export class PanelSurfaceController {
     // 而 origin 在一个阅读周期内不变,所以不需要第二条状态通道(§7)。
     // path 也一并下发:页面靠它分辨"同一份笔记被唤回"与"换了一份",
     // 前者保留滚动位置,后者回顶(§2 保活范围)。
-    this.#sendToReader(READER_CONTENT_CHANNEL, { ...this.#readerPayload, origin: this.#origin, path: this.#readerPath });
+    // absolute/baseDir 是 main 侧的快照字段(N4),不下发给页面。
+    const { absolute, baseDir, ...pagePayload } = this.#readerPayload;
+    this.#sendToReader(READER_CONTENT_CHANNEL, { ...pagePayload, origin: this.#origin, path: this.#readerPath });
   }
 
   #sendToReader(channel, payload) {
