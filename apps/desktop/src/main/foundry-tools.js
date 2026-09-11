@@ -41,7 +41,7 @@ const activityInput = exact({
   targetSpec: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 });
 const actionFields = { actionRef: ref(), targetTokenUuids: Type.Optional(Type.Array(ref(), { maxItems: 100 })), input: Type.Optional(activityInput) };
-const grant = exact({ packId: ref(), entryId: ref(), expectedName: Type.Optional(ref()), expectedType: Type.Optional(ref()),
+const grant = exact({ uuid: Type.Optional(ref()), packId: Type.Optional(ref()), entryId: Type.Optional(ref()), expectedName: Type.Optional(ref()), expectedType: Type.Optional(ref()),
   quantity: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })), equipped: Type.Optional(Type.Boolean()) });
 const dataImage = Type.Union([exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }) }),
   exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }) })]);

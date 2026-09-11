@@ -404,7 +404,7 @@ export interface ActorReadResult {
   sceneTokens?: RuntimeArguments[]; nextCursor: string | null; readState: ActorReadState;
 }
 export interface CompendiumGrant {
-  packId: string; entryId: string; expectedName?: string; expectedType?: string; quantity?: number; equipped?: boolean;
+  uuid?: string; packId?: string; entryId?: string; expectedName?: string; expectedType?: string; quantity?: number; equipped?: boolean;
 }
 export interface PrepWriteIdentity { world: { origin: string; id: string }; requestId: string }
 /** Internal upload bytes are prepared by the host, never supplied by the model. */
