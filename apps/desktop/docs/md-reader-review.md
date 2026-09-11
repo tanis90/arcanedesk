@@ -125,3 +125,27 @@
 | F1–F6、M1–M4 | 全部修复：KaTeX 排除、行号正则边界、左键限定、TreeWalker 文档序、loadFoundryPage 守卫、临时目录清理、spec §3.2 矛盾删除、FOUNDRY×③ 显式 no-op 测试、非目标补 UNC/空格/#anchor、语言热切换通道 | 对应单测 |
 
 验收：`npm test` 451/451、`verify:source`、`tsc --noEmit`、`node test/smoke-md-reader.mjs`（PASS）、`node test/review-md-reader.mjs`（CDP 14 项 OK）全绿。夹具两处适配了新语义：滚动断言改为自适应中点（满铺版式下 600px 硬编码失效），① 恢复场景拆成 origin=foundry/origin=closed 两条。
+
+## 7. 第二轮对抗审查与修复（2026-09-11）
+
+修复完成后又做了一轮对抗性审查（控制器/集成边界、renderer 管线、测试盲区三条线），新发现 11 项并全部修复；N13/N14 归档为已知限制写入 spec §1。
+
+| # | 问题 | 修法 |
+|---|---|---|
+| N1 | **围栏洞：符号链接/junction 逃逸 cwd**（实锤复现） | `realpathSync.native` 两侧 + 二次 `isInsideBase`；realpath 失败落 missing 流程 |
+| N2 | 深色用户打开阅读器必被翻浅色（`#theme` 硬编码 "light" 并无条件推） | 初始 `null`，只在 `setTheme` 后推频道；首屏靠 `?theme=` query |
+| N3 | 崩溃的 Foundry 上按 F5 静默死路 | reload 走 `ensureFoundryView()` 重建 + 补 `error` 字段 |
+| N4 | 切换会话/cwd 后 F5/重开对新 cwd 重解析旧相对路径（静默错文件） | 打开时快照 absolute+baseDir，重读时对**存储的** baseDir 做 realpath 复验 |
+| N5 | 阅读器 renderer 崩溃无感知（无 `render-process-gone`，F5 哑） | 镜像 Foundry 的监听 + reload 分支 `ensureReaderView` 重建 |
+| N6 | URL 编码的 CJK 链接（`%E6%88%98…`）点不开 | `noteHref` `decodeURIComponent`（try/catch 兜底） |
+| N7 | `a.md:12:34x` 双冒号分支半 linkify | 行号分支 lookahead 补 `:` |
+| N8 | 阅读器聚焦时 F5 是死键；页面真重载推缓存旧内容；三处注释失实 | reader view 绑 `before-input-event` F5 → `reloadSurface()`；`onReaderReady` 改为重读文件；注释修正 |
+| N9 | 滚动恢复被异步 mermaid/图片顶歪 | 2s 守卫窗内 MutationObserver+rAF 重断言，用户滚动立即接管 |
+| N10 | UTF-8 BOM 毁掉笔记第一个块（实锤：标题变散文） | `readNote` 剥 `\uFEFF` |
+| N11 | `extractMath` 围栏追踪器与 marked 失同步（`~~~`、嵌套 ```），KaTeX 占位符泄漏进代码块（实锤） | 按（字符, 长度）追踪闭合；占位符加 per-render nonce |
+| N12 | 返回按钮开屏闪一帧「✕ 关闭」 | 按钮初始 hidden，首个 payload 到达才显示 |
+| N14 | 外链开 Chromium 裸窗（chat 同款遗留） | `setWindowOpenHandler` → deny + `shell.openExternal`，挂 chat 与 readerView，Foundry 不动 |
+
+已知限制（spec §1 归档）：mermaid 图不随主题热切换换配色（chat 同款）；英文句末 `summary.md.` 保守不 linkify。
+
+验收：`npm test` **466/466**、`tsc --noEmit`、`verify:source`、`smoke-md-reader`（PASS）、`review-md-reader`（CDP 14 项 OK）全绿。
