@@ -231,13 +231,15 @@ test("① restores Foundry when closed from READER_F, the reader when closed fro
   assert.equal(h.live("foundry").length, 0);
   assert.equal(h.controller.readerPath, "notes/b.md");
 
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED, "origin=closed 时 ③ 只能关面板(不变量 3)");
+  await h.controller.leaveReader();
+  assert.equal(h.controller.state, STATE.FOUNDRY, "origin=closed 的 ③ 也落 Foundry(2026-09-11 修订,不变量 3)");
+  assert.equal(h.calls.loadFoundry, 3, "底下没有现场,拉起一次 FVTT 加载");
+  assert.equal(h.live("reader").length, 1, "阅读器隐藏保活,笔记不丢");
 });
 
 // ---------- §3.4 转移表:READER_C 行 ----------
 
-test("READER_C: ② swaps content, ③ closes, ④ takes over", () => {
+test("READER_C: ② swaps content, ③ opens Foundry, ④ takes over", async () => {
   const h = harness();
   h.controller.showReader("notes/a.md");
   assert.equal(h.controller.state, STATE.READER_C);
@@ -259,8 +261,9 @@ test("READER_C: ② swaps content, ③ closes, ④ takes over", () => {
   h.controller.closePanel();
   h.controller.showReader("notes/d.md");
   assert.equal(h.controller.state, STATE.READER_C);
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED);
+  await h.controller.leaveReader();
+  assert.equal(h.controller.state, STATE.FOUNDRY, "③ 落点一律是 Foundry");
+  assert.equal(h.live("reader").length, 1, "③ 之后阅读器隐藏保活");
 });
 
 // ---------- 不变量与围栏 ----------
@@ -362,10 +365,8 @@ test("reloadSurface re-reads for the reader and defers to Foundry otherwise", as
   assert.equal(h.content().text, "v2", "F5 就是手动刷新");
   assert.equal(h.calls.reloadFoundry, 0);
 
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED, "origin=closed 的 ③ 就是关面板");
-  h.controller.showFoundry();
-  assert.equal(h.controller.state, STATE.FOUNDRY);
+  await h.controller.leaveReader();
+  assert.equal(h.controller.state, STATE.FOUNDRY, "③ 落点一律是 Foundry(2026-09-11 修订)");
   await h.controller.reloadSurface();
   assert.equal(h.calls.reloadFoundry, 1);
 
@@ -541,7 +542,7 @@ test("ensureFoundryView rebuilds a crashed renderer instead of showing a blank v
   assert.notEqual(second, third);
 });
 
-test("③ falls back to closing the panel when the Foundry renderer crashed while reading", async () => {
+test("③ rebuilds the Foundry view when its renderer crashed while reading", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
@@ -551,9 +552,12 @@ test("③ falls back to closing the panel when the Foundry renderer crashed whil
   foundry.crashed = true;
   assert.equal(foundry.destroyed, false, "render-process-gone 后 isDestroyed() 仍是 false");
 
-  h.controller.leaveReader();
-  assert.equal(h.controller.state, STATE.CLOSED, "没有可返回的 Foundry,就不摆一块死黑屏给用户");
-  assert.equal(assertSingleVisible(h, "READER_F --③ crash"), null);
+  await h.controller.leaveReader();
+  assert.equal(h.controller.state, STATE.FOUNDRY, "没有可返回的 Foundry 就重建再加载,不摆死黑屏");
+  assert.equal(h.calls.loadFoundry, 2, "拉起一次加载");
+  assert.equal(h.live("foundry")[0].crashed, false, "崩掉的 view 已被重建");
+  assert.deepEqual(h.calls.destroyed.at(-1), { label: "foundry", reason: "foundry-renderer-gone" });
+  assert.equal(h.live("reader").length, 1, "阅读器隐藏保活");
 });
 
 test("Foundry consumers never see the reader view", async () => {

@@ -133,22 +133,23 @@ export class PanelSurfaceController {
   // ---------- ③ 阅读器内返回/关闭 ----------
 
   /**
-   * ③:退出阅读。origin=foundry → 回 FOUNDRY(只做显隐切换,永不加载 FVTT,§3.5 不变量 2);
-   * origin=closed → 关面板。
+   * ③:退出阅读,落点一律是 Foundry(2026-09-11 验收修订:③ 不再有"关面板"语义,
+   * 收起整个右屏走 ① 顶栏开关)。
+   * origin=foundry 且现场活着 → 显隐切换,永不加载 FVTT(§3.5 不变量 2);
+   * 否则(origin=closed,或阅读期间 foundryView 崩毁)→ ④ 同款:阅读器隐藏保活,
+   * 拉起一次 FVTT 加载——笔记留在保活里,从 chat 路径唤回时滚动位置原样(§2)。
    */
   leaveReader() {
     if (!this.#open || this.#surface !== SURFACE_READER) return { ok: true, state: this.state };
-    const origin = this.#origin;
-    this.#origin = null;
-    // foundryView 在读笔记期间崩掉是真实场景(R1):此时"返回 Foundry"没有可返回的东西,
-    // 按 origin=closed 的分支关面板,而不是把一块白屏摆到用户面前。
-    if (origin === SURFACE_FOUNDRY && isUsable(this.#foundryView)) {
+    if (this.#origin === SURFACE_FOUNDRY && isUsable(this.#foundryView)) {
+      this.#origin = null;
       this.#surface = SURFACE_FOUNDRY;
       this.#applyVisibility();
       this.layout();
       return { ok: true, state: this.state };
     }
-    return this.closePanel();
+    this.showFoundry(); // 内部清 origin、置 surface、保证 foundryView 存在(崩毁则重建)
+    return this.#hooks.loadFoundry();
   }
 
   // ---------- ① 顶栏「面板」按钮 ----------
@@ -379,7 +380,7 @@ export class PanelSurfaceController {
 
   #pushReaderContent() {
     if (!this.#readerPayload) return;
-    // origin 随内容一起下发:返回按钮的文案("← 返回 Foundry" / "✕ 关闭")由它决定,
+    // origin 随内容一起下发:返回按钮的文案("← 返回 Foundry" / "→ 打开 Foundry")由它决定,
     // 而 origin 在一个阅读周期内不变,所以不需要第二条状态通道(§7)。
     // path 也一并下发:页面靠它分辨"同一份笔记被唤回"与"换了一份",
     // 前者保留滚动位置,后者回顶(§2 保活范围)。

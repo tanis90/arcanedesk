@@ -28,11 +28,12 @@
     encoding: "reader.error.encoding",
   };
 
-  /** origin 决定 ③ 的文案与语义:foundry → 返回,closed → 关闭(§4.3"文案即语义")。
+  /** origin 决定 ③ 的文案:foundry → 返回(底下有活现场,显隐切换);
+      closed → 打开(底下没有,拉起一次加载)。落点都是 Foundry(§4.3"文案即语义")。
       按钮首屏是 hidden 的,第一次内容推送(含错误页)走到这里才亮相(N12)。 */
   function applyOrigin(origin) {
-    const closing = origin !== "foundry";
-    back.textContent = t(closing ? "reader.close" : "reader.back");
+    const returning = origin === "foundry";
+    back.textContent = t(returning ? "reader.back" : "reader.toFoundry");
     back.setAttribute("aria-label", back.textContent);
     back.title = back.textContent;
     back.hidden = false;
@@ -160,6 +161,6 @@
   });
 
   // 首屏:内容与主题都在 did-finish-load 之后才推得来。返回按钮保持 HTML 里的 hidden,
-  // 第一次 onContent(含错误页)的 applyOrigin 才让它亮相——先亮 "✕ 关闭" 再翻成
-  // "← 返回 Foundry" 是一次肉眼可见的闪动(N12)。
+  // 第一次 onContent(含错误页)的 applyOrigin 才让它亮相——先亮一个文案再翻成
+  // 另一个是一次肉眼可见的闪动(N12)。
 })();

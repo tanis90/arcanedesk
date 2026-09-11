@@ -94,14 +94,11 @@ async function connect(wsUrl) {
       writeFileSync(path.join(evidence, name), Buffer.from(shot.data, "base64"));
       return name;
     },
-    /** Esc 走真的输入栈,不是 dispatchEvent 造的合成事件。
-        origin=closed 时这一下会把阅读器 view 连带它自己的 CDP 会话一起销毁,
-        按键的回执就到不了了——那正是"按成了"的表现,所以用 mayDie 放行。 */
-    async pressEscape({ mayDie = false } = {}) {
+    /** Esc 走真的输入栈,不是 dispatchEvent 造的合成事件。 */
+    async pressEscape() {
       const key = { key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 };
       for (const type of ["rawKeyDown", "keyUp"]) {
-        try { await call("Input.dispatchKeyEvent", { type, ...key }); }
-        catch (error) { if (!mayDie) throw error; }
+        await call("Input.dispatchKeyEvent", { type, ...key });
       }
     },
     close() { try { socket.close(); } catch { /* already gone */ } },
@@ -344,7 +341,7 @@ try {
   await sayAndClick("回到 notes/gatekeeper.md。");
   await attachReader();
   state = await waitNote("gatekeeper.md");
-  assert.equal(state.back, await word("reader.close"), "从 CLOSED 进入的周期 origin=closed(§3.1)");
+  assert.equal(state.back, await word("reader.toFoundry"), "从 CLOSED 进入的周期 origin=closed(§3.1)");
   await chat.evaluate('window.arcane.closePanel()');
   await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "① destroys the reader view");
   await chat.evaluate('window.arcane.openPanel()');
@@ -355,18 +352,17 @@ try {
   assert.notEqual(restored.id, report.targets.readerRestored, "① 销毁过的那张页面不会原地复活,这是一张新的");
   report.targets.readerReopened = restored.id;
   state = await waitNote("gatekeeper.md");
-  assert.equal(state.back, await word("reader.close"), "重开后 foundryView 已不存在,origin 重新快照成 closed(§3.1)");
+  assert.equal(state.back, await word("reader.toFoundry"), "重开后 foundryView 已不存在,origin 重新快照成 closed(§3.1)");
   note("① 关闭前是 origin=closed 的笔记 → 重开落 READER_C,并且不静默拉起一次 FVTT 加载");
   await shoot(readerSession, "06-reader-restored.png");
 
-  // ---------- ③ origin=closed 时 Esc 关掉整个右屏 ----------
-  // 这一下会销毁阅读器 view,连带拆掉我们正在用的这个 CDP 会话,所以 mayDie。
-  await readerSession.pressEscape({ mayDie: true });
-  await until(async () => (await panelOpen()) === false, "③ closes the pane when origin=closed");
-  readerSession.close();
-  readerSession = null;
-  await until(async () => (await readerTarget()) === null && (await foundryTarget()) === null, "③ destroyed the reader view");
-  note("③ origin=closed 时 Esc 关掉整个右屏(§3.4)");
+  // ---------- ③ origin=closed 时 Esc 落 Foundry:拉起加载,阅读器保活(2026-09-11 修订) ----------
+  await readerSession.pressEscape();
+  await until(async () => Boolean(await foundryTarget()), "③ from READER_C brings up the Foundry surface");
+  assert.equal(await panelOpen(), true, "③ 不再关面板;收起整个右屏是 ① 的事");
+  assert.equal((await readerTarget()).id, restored.id, "阅读器隐藏保活,没被销毁");
+  assert.equal((await readerState()).name, "gatekeeper.md", "保活的笔记内容原样");
+  note("③ origin=closed 时 Esc 落 FOUNDRY:阅读器保活,Foundry 拉起加载(本地无 FVTT 落连接失败页)");
 
   writeFileSync(doneFile, "done");
   writeFileSync(path.join(evidence, "review.json"), `${JSON.stringify(report, null, 2)}\n`);

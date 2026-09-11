@@ -112,21 +112,22 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     await readerSettled('document.getElementById("reader-name").textContent === "gatekeeper.md"');
     assert.match(await docText(), /守门人/);
     assert.equal(await errorText(), null);
-    assert.equal(await backLabel(), await evaluate('t("reader.close")'), "origin=closed words the button as 关闭");
+    assert.equal(await backLabel(), await evaluate('t("reader.toFoundry")'), "origin=closed words the button as 打开 Foundry");
     assert.equal(assertOneVisible("READER_C"), 1);
 
-    // ---------- ③ origin=closed:关面板,整个右屏收起 ----------
+    // ---------- ③ origin=closed:落 Foundry(拉起加载),阅读器隐藏保活(2026-09-11 修订) ----------
     await readerEval('document.getElementById("reader-back").click()');
-    await ui('panelOpen === false');
-    await until(async () => views().length === 0, `both views are destroyed; views=${JSON.stringify(dumpViews())}`);
-    assert.equal(reader(), null, "①/③ closing the pane destroys both views (§2 keep-alive scope)");
-    assert.equal(assertOneVisible("CLOSED"), 0);
+    await until(async () => Boolean(foundry()) && foundry().getVisible() === true, "③ from READER_C lands on Foundry");
+    await ui('panelOpen === true');
+    assert.ok(reader(), "③ keeps the reader alive, not destroyed");
+    assert.equal(reader().getVisible(), false, "the reader hides underneath, ④ 同款保活");
+    assert.equal(assertOneVisible("FOUNDRY after ③"), 1);
 
-    // ---------- ④ FVTT 打开:FOUNDRY ----------
+    // ---------- ④ FVTT 打开:导航到目标地址 ----------
     assert.equal((await host.openFoundry(target)).ok, true);
     await ui('panelOpen === true');
     await waitFoundryAt();
-    assert.equal(reader(), null);
+    assert.equal(reader().getVisible(), false, "④ keeps the reader hidden and alive");
 
     // ---------- ② 从 FOUNDRY 打开:落 READER_F,Foundry 隐藏保活 ----------
     const clickTall = await say("长的那份在 notes/tall.md。");
@@ -228,7 +229,7 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     await waitReader();
     await readerSettled('document.getElementById("reader-name").textContent === "huge.md"');
     assert.equal(foundry(), null, "restoring a note never silently pulls up FVTT (§3.4)");
-    assert.equal(await backLabel(), await evaluate('t("reader.close")'), "the restored cycle re-snapshots origin=closed (§3.1)");
+    assert.equal(await backLabel(), await evaluate('t("reader.toFoundry")'), "the restored cycle re-snapshots origin=closed (§3.1)");
 
     // ---------- 回到 READER_F 现场:Foundry 在位,再蒙上笔记 ----------
     assert.equal((await host.openFoundry(target)).ok, true);

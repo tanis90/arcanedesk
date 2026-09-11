@@ -369,7 +369,7 @@ globalThis.ARCANE_MESSAGES = {
     // ---------- 右屏 Markdown 阅读器(md-reader-spec §5.5) ----------
     // 错误不道歉、不含糊、给下一步(design-rules R3/R5);内部 reason 枚举不上屏。
     "reader.back": "← 返回 Foundry",
-    "reader.close": "✕ 关闭",
+    "reader.toFoundry": "→ 打开 Foundry",
     "reader.error.missing": "找不到这份笔记：文件不存在或已被移动。可以让 agent 重新生成它。",
     "reader.error.outside": "这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。",
     "reader.error.encoding": "这个文件不是 UTF-8 文本，无法阅读。",
@@ -811,7 +811,7 @@ globalThis.ARCANE_MESSAGES = {
 
     // ---------- Right-pane Markdown reader (md-reader-spec §5.5) ----------
     "reader.back": "← Back to Foundry",
-    "reader.close": "✕ Close",
+    "reader.toFoundry": "→ Open Foundry",
     "reader.error.missing": "This note is missing: the file no longer exists or has been moved. Ask the agent to generate it again.",
     "reader.error.outside": "This note is outside the current working directory. The reader only reads files inside it.",
     "reader.error.encoding": "This file is not UTF-8 text, so it cannot be read.",

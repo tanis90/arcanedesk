@@ -277,7 +277,7 @@ test("a literal %%ARCKATEX_0%% in the source survives as text", () => {
 test("the reader strings exist in both locales", async () => {
   await import("../src/shared/i18n/messages.js");
   const messages = /** @type {any} */ (globalThis).ARCANE_MESSAGES;
-  for (const key of ["reader.back", "reader.close", "reader.error.missing", "reader.error.outside", "reader.error.encoding", "reader.truncated"]) {
+  for (const key of ["reader.back", "reader.toFoundry", "reader.error.missing", "reader.error.outside", "reader.error.encoding", "reader.truncated"]) {
     assert.ok(messages["zh-CN"][key], `zh-CN missing ${key}`);
     assert.ok(messages["en-US"][key], `en-US missing ${key}`);
   }

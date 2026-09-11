@@ -96,7 +96,8 @@
     ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); }
     ::-webkit-scrollbar-track { background: transparent; }
 
-    /* ---------- 窄顶栏:按钮(左) + 文件名(右,衬线),下沿一条发丝线(§5.2) ---------- */
+    /* ---------- 窄顶栏:按钮(左) + 文件名(右,衬线),下沿一条发丝线(§5.2) ----------
+       底色与 chat 顶栏同一张 --bg:左右连成一条,不再单独一块表面(§5.1 的精神) */
     .reader-bar {
       flex: none;
       display: flex;
@@ -104,7 +105,7 @@
       gap: 12px;
       height: 40px;
       padding: 0 14px;
-      background: var(--bg-soft);
+      background: var(--bg);
       /* 丝线用 currentColor + 低透明度,明暗主题自适应(§5.1) */
       border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
     }
@@ -183,8 +184,8 @@
 </head>
 <body>
   <header class="reader-bar">
-    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「✕ 关闭」(§4.3)。
-         起步 hidden:第一次内容推送的 applyOrigin 才亮相,免得先画「✕ 关闭」再闪成「← 返回」(N12) -->
+    <!-- 文案即语义:origin=foundry 显示「← 返回 Foundry」,origin=closed 显示「→ 打开 Foundry」(§4.3)。
+         起步 hidden:第一次内容推送的 applyOrigin 才亮相,免得先画一个文案再闪成另一个(N12) -->
     <button id="reader-back" class="reader-back" type="button" hidden></button>
     <span id="reader-name" class="reader-name"></span>
   </header>

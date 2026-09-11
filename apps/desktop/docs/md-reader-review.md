@@ -173,3 +173,9 @@
 **根因**：颜色纪律丢失。§9 把标题从墨色改 accent 是修单点症状却加重整体噪声：页面上同时有三种"喊法"（标题喊结构、链接喊可点、胶囊喊代码），读者不知道先看哪。
 
 **修法**：安静化，阅读器收敛到"一本书只有一种墨水"——①标题回墨色 `--text-strong`（亮主题值顺势从 `#33291a` 红移为 `#2f2318`，除掉 §9 的橄榄根因），层次交给衬线字体（signature 从页眉延伸到文档标题）+ 18px/600；②行内 code 拆胶囊（去底色去描边，颜色并入正文，只留等宽字体 0.93em；围栏内 code 因 `pre.md-code > code` 特异性更高不受影响）；③链接统一 `--accent`，`--info` 退出阅读器——全页唯一彩色 = 可点；④`--font-head` 渐进增强栈（Georgia → Noto Serif CJK SC / Source Han Serif / Songti SC → SimSun），装了思源宋体的用户用好字体，没装的落系统宋体，标题大字号避开宋体小字 hinting 短板；不打包字体文件（体积与 subset 缺字风险不值）。仍只动 `.md-doc` 作用域，chat 不变。spec §5.3 已修订。CDP 探针复验：light 标题 `rgb(47,35,24)` 衬线 600/18px、链接 `rgb(46,65,112)`、行内 code 透明底零边框并入正文色；dark 标题 `rgb(232,228,216)`、链接 `rgb(214,169,76)`。门禁全绿（467 单测、typecheck、verify:source、smoke、CDP review 14 项）。遗留观察项：Windows 裸宋体档的 600 是合成粗，验收若嫌糊可退 regular+20px。
+
+## 11. 验收反馈：READER_C 没有回归 Foundry 的动线 + 顶栏两块皮（2026-09-11）
+
+**现象**：①阅读器顶栏用 `--bg-soft`，与左侧 chat 顶栏的 `--bg` 不同色，红框跨栏看是两块皮；②origin=closed 的阅读周期里按钮是「✕ 关闭」——用户想从笔记去 Foundry 没有动线（③ 只能关面板，④ 只有 agent 能触发，顶栏 ① 是 toggle 语义会把面板关掉），用户原话"那个 x 的能力不要了，怎么设计回归 Foundry 的动线"。
+
+**修法**：①`.reader-bar` 底色 `--bg-soft` → `--bg`，与 chat 顶栏连成一条（这本就是 §5.1"右屏不另起表面色"的精神，顶栏当初是漏网之鱼），发丝线保留。②③ 的语义全局统一为"离开阅读，落点一律 Foundry"：origin=foundry 照旧显隐切换（不变量 2 不动）；origin=closed 改走 ④ 同款——`showFoundry()` 归位（阅读器**隐藏保活**，笔记和滚动位置都留住）+ `loadFoundry()` 拉起一次加载。「✕ 关闭」这个能力没有消失，移交顶栏 ①（它本来就是"整个右屏收起"的唯一开关），阅读器页内不再有关闭语义。Esc 保持"等价于顶栏按钮"的既有规则。连带收益：原 leaveReader 里"阅读期间 foundryView 崩毁 → ③ 只能关面板"的死角消失——`ensureFoundryView` 重建后照常加载。文案 `reader.close` 删除、`reader.toFoundry`（→ 打开 Foundry / → Open Foundry）新增。spec §3.2/§3.3 状态图/§3.4 表/§3.5 不变量 3/§4.3/§5.5 已同步修订。测试更新：状态机单测 4 处（READER_C ③ 落 FOUNDRY + 保活断言、foundry 崩毁场景从"关面板"改为"重建再加载"）、smoke fixture（③ 段改断言落 Foundry + 阅读器保活）、CDP review（Esc 段改断言 foundryTarget 出现 + 阅读器 target 存活；pressEscape 的 mayDie 机制随"③ 不再销毁 view"删除）。门禁全绿（467 单测、typecheck、verify:source、smoke、CDP review 14 项）。
