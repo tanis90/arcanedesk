@@ -103,6 +103,10 @@ Dispatch `Release Arcane Desktop` with:
 - `update_latest=false`
 - `create_github_release=false`
 
+(`skip_oss` defaults to `true`, so an unmodified dispatch is always build-only;
+the flags are listed explicitly for clarity. Turn `skip_oss` off only for a real
+signed release, per the sign-first rule.)
+
 All four matrix jobs must pass source typechecking, Electron packaging,
 package-resource verification, checksum generation, provenance attestation,
 and artifact upload. The publish job is intentionally skipped and no OSS

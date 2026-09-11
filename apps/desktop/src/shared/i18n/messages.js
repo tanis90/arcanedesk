@@ -18,11 +18,14 @@ globalThis.ARCANE_MESSAGES = {
     "navigation.pin": "置顶",
     "navigation.unpin": "取消置顶",
     "navigation.rename": "重命名",
+    "navigation.fork": "分叉会话",
     "navigation.archive": "归档会话",
     "navigation.restore": "恢复会话",
     "navigation.delete": "永久删除",
     "navigation.deleteConfirm": "永久删除此会话？对话记录无法恢复，项目文件不会删除。",
     "navigation.archiveBusy": "任务结束后可归档",
+    "navigation.forkBusy": "任务结束后可分叉",
+    "navigation.forkTitle": "分叉：{title}",
     "navigation.archived": "已归档",
     "navigation.undo": "撤销",
     "navigation.emptyArchives": "没有已归档会话",
@@ -164,6 +167,10 @@ globalThis.ARCANE_MESSAGES = {
     "chat.input.interrupted": "未处理 · 已中断",
     "chat.input.uncertain": "发送状态未确认",
     "chat.input.retry": "重试发送",
+    "chat.input.queueNow": "立即发送（打断当前任务）",
+    "chat.input.queueEdit": "取消排队并回填编辑",
+    "chat.input.queueRemove": "取消排队",
+    "chat.input.queuePlaceholder": "继续输入，消息将排队发送",
     "chat.modelDeferred": "下一任务使用：{model}",
     "chat.task.running": "任务进行中",
     "chat.task.waitingUser": "等待回复",
@@ -366,6 +373,15 @@ globalThis.ARCANE_MESSAGES = {
     "md.mermaidSource": "源码",
     "md.mermaidFailed": "图表渲染失败:{error}",
 
+    // ---------- 右屏 Markdown 阅读器(md-reader-spec §5.5) ----------
+    // 错误不道歉、不含糊、给下一步(design-rules R3/R5);内部 reason 枚举不上屏。
+    "reader.back": "← 返回 Foundry",
+    "reader.toFoundry": "→ 打开 Foundry",
+    "reader.error.missing": "找不到这份笔记：文件不存在或已被移动。可以让 agent 重新生成它。",
+    "reader.error.outside": "这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。",
+    "reader.error.encoding": "这个文件不是 UTF-8 文本，无法阅读。",
+    "reader.truncated": "文件超过 2 MB，只显示开头部分。",
+
     // ---------- 设置:语音 ----------
     "sv.title": "语音识别",
     "sv.note": "语音识别使用 GLM-ASR-2512。可使用 Arcane Spark 现有接入,也可填写自己的智谱 API Key(智谱直连当前 ¥0.06/分钟);单句最长 30 秒。识别结果会插入输入框,检查后按 Enter 发送。",
@@ -430,6 +446,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "无法打开 {url}:{error}",
     "err.panel.inspectFailed": "页面已打开,但无法检查:{error}",
     "err.panel.notFoundry": "{url} 不是 Foundry Virtual Tabletop 页面",
+    "err.panel.viewGone": "面板视图已销毁,{url} 未能加载",
     "err.permission.systemDenied": "{media} 的系统权限被拒绝",
     "err.prep.invalidDir": "备团目录不存在或不是目录:{dir}",
 
@@ -451,11 +468,14 @@ globalThis.ARCANE_MESSAGES = {
     "navigation.pin": "Pin",
     "navigation.unpin": "Unpin",
     "navigation.rename": "Rename",
+    "navigation.fork": "Fork session",
     "navigation.archive": "Archive session",
     "navigation.restore": "Restore session",
     "navigation.delete": "Delete permanently",
     "navigation.deleteConfirm": "Permanently delete this session? Conversation history cannot be recovered. Project files will not be deleted.",
     "navigation.archiveBusy": "Finish the task before archiving",
+    "navigation.forkBusy": "Finish the task before forking",
+    "navigation.forkTitle": "Fork: {title}",
     "navigation.archived": "Session archived",
     "navigation.undo": "Undo",
     "navigation.emptyArchives": "No archived sessions",
@@ -597,6 +617,10 @@ globalThis.ARCANE_MESSAGES = {
     "chat.input.interrupted": "Not processed · Interrupted",
     "chat.input.uncertain": "Send status unconfirmed",
     "chat.input.retry": "Retry sending",
+    "chat.input.queueNow": "Send now (interrupts current task)",
+    "chat.input.queueEdit": "Cancel queueing and edit",
+    "chat.input.queueRemove": "Cancel queueing",
+    "chat.input.queuePlaceholder": "Keep typing — messages will be queued",
     "chat.modelDeferred": "Next task will use: {model}",
     "chat.task.running": "Task in progress",
     "chat.task.waitingUser": "Needs your input",
@@ -799,6 +823,14 @@ globalThis.ARCANE_MESSAGES = {
     "md.mermaidSource": "Source",
     "md.mermaidFailed": "Chart render failed: {error}",
 
+    // ---------- Right-pane Markdown reader (md-reader-spec §5.5) ----------
+    "reader.back": "← Back to Foundry",
+    "reader.toFoundry": "→ Open Foundry",
+    "reader.error.missing": "This note is missing: the file no longer exists or has been moved. Ask the agent to generate it again.",
+    "reader.error.outside": "This note is outside the current working directory. The reader only reads files inside it.",
+    "reader.error.encoding": "This file is not UTF-8 text, so it cannot be read.",
+    "reader.truncated": "The file is larger than 2 MB; only the beginning is shown.",
+
     // ---------- settings: voice ----------
     "sv.title": "Voice Recognition",
     "sv.note": "Voice recognition uses GLM-ASR-2512. Use your existing Arcane Spark connection or enter your own Zhipu API key (Zhipu direct is currently ¥0.06/min). Each recording can be up to 30 seconds; transcripts are inserted into the composer for review before sending.",
@@ -863,6 +895,7 @@ globalThis.ARCANE_MESSAGES = {
     "err.panel.loadFailed": "Could not open {url}: {error}",
     "err.panel.inspectFailed": "The page opened but could not be inspected: {error}",
     "err.panel.notFoundry": "{url} is not a Foundry Virtual Tabletop page",
+    "err.panel.viewGone": "The panel view is gone; {url} was not loaded",
     "err.permission.systemDenied": "System permission for {media} was denied",
     "err.prep.invalidDir": "The prep path does not exist or is not a directory: {dir}",
 

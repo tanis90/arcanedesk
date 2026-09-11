@@ -17,6 +17,8 @@ import {
   compareVersions,
   inspectWorldEnvironment,
   listInstalledModules,
+  MIRROR_INDEX_URL,
+  resolveIndexUrl,
   runCli,
   stageModule,
   stageWorldEnvironment,
@@ -632,4 +634,46 @@ test("world profiles resolve current stable packages independently from world ar
   const secondReceipt = JSON.parse(await readFile(packageOnlyCommit.receiptPath, "utf8"));
   assert.equal(secondReceipt.world.installedVersion, "0.2.0");
   assert.equal(secondReceipt.packages.find((entry) => entry.id === "demo-module").resolvedVersion, "2.1.0");
+});
+
+test("resolveIndexUrl: --index-url 参数 > ARCANE_MOD_INDEX_URL > 内置默认（M1 钉死的语义）", () => {
+  const intl = "https://dl.arcanedesk.app/mods/index-en.json";
+  assert.equal(resolveIndexUrl(undefined, {}), MIRROR_INDEX_URL);
+  assert.equal(resolveIndexUrl("", {}), MIRROR_INDEX_URL);
+  assert.equal(resolveIndexUrl(undefined, { ARCANE_MOD_INDEX_URL: intl }), intl);
+  assert.equal(resolveIndexUrl("  ", { ARCANE_MOD_INDEX_URL: intl }), intl);
+  assert.equal(
+    resolveIndexUrl("https://mirror.example.test/custom.json", { ARCANE_MOD_INDEX_URL: intl }),
+    "https://mirror.example.test/custom.json",
+  );
+  assert.throws(() => resolveIndexUrl("http://insecure.example.test/index.json", {}), /HTTPS/);
+  assert.throws(() => resolveIndexUrl(undefined, { ARCANE_MOD_INDEX_URL: "not-a-url" }), /absolute URL/);
+});
+
+test("catalog/world catalog report the index URL actually used", async () => {
+  const emptyIndex = { generated: "2026-09-10T00:00:00Z", packages: [], worlds: [], profiles: [] };
+  const fetchImpl = async (url) => {
+    assert.equal(url, indexUrl);
+    return jsonResponse(emptyIndex);
+  };
+  const catalog = await catalogModules({
+    dataDir: path.join(os.tmpdir(), "arcane-definitely-missing-data-dir"),
+    fetchImpl,
+    indexUrl,
+    allowMissingDataDir: true,
+  });
+  assert.equal(catalog.indexUrl, indexUrl);
+  const worldCatalog = buildWorldCatalog(emptyIndex, { worlds: [] }, indexUrl);
+  assert.equal(worldCatalog.indexUrl, indexUrl);
+});
+
+test("CLI rejects an insecure --index-url before any network access", async () => {
+  await assert.rejects(
+    runCli(["catalog", "--data-dir", os.tmpdir(), "--index-url", "http://insecure.example.test/index.json"]),
+    /must be an HTTPS URL/,
+  );
+  await assert.rejects(
+    runCli(["world-catalog", "--data-dir", os.tmpdir(), "--index-url", "not-a-url"]),
+    /must be an absolute URL/,
+  );
 });

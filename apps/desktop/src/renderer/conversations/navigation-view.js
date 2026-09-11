@@ -146,10 +146,10 @@
     openMenu(row, trigger, event = null) {
       this.closeMenu(false); this.menuTrigger = trigger;
       const menu = node("div", "session-menu"); menu.setAttribute("role", "menu"); this.menu = menu;
-      const actions = row.archivedAt != null ? ["restore", "delete"] : [row.pinnedOrder != null ? "unpin" : "pin", "rename", "archive"];
+      const actions = row.archivedAt != null ? ["restore", "delete"] : [row.pinnedOrder != null ? "unpin" : "pin", "rename", "fork", "archive"];
       for (const action of actions) {
         const button = node("button", action === "delete" ? "danger" : "", this.t("navigation." + action)); button.type = "button"; button.setAttribute("role", "menuitem"); button.dataset.action = action;
-        if (action === "archive" && ["running", "attention"].includes(this.status(row).kind)) { button.disabled = true; button.title = this.t("navigation.archiveBusy"); menu.append(node("small", "menu-explanation", button.title)); }
+        if ((action === "archive" || action === "fork") && ["running", "attention"].includes(this.status(row).kind)) { button.disabled = true; button.title = this.t(action === "archive" ? "navigation.archiveBusy" : "navigation.forkBusy"); menu.append(node("small", "menu-explanation", button.title)); }
         button.addEventListener("click", () => { this.closeMenu(); void this.action(row, action); }); menu.append(button);
       }
       document.body.append(menu);
@@ -217,12 +217,14 @@
         let result;
         if (action === "rename") { const title = await this.dialog(row, true); if (title == null) return; result = await this.api.renameSession(row.id, title); }
         else if (action === "delete") { if (!await this.dialog(row, false)) return; result = await this.api.deleteArchivedSession(row.id); }
+        else if (action === "fork") { const source = row.customTitle || row.name || (row.firstMessageI18n ? "" : row.firstMessage) || ""; result = await this.api.forkSession(row.id, source ? this.t("navigation.forkTitle", { title: source }).slice(0, 200) : ""); }
         else if (action === "archive") result = await this.api.archiveSession(row.id);
         else if (action === "restore") result = await this.api.restoreSession(row.id);
         else result = await this.api.setSessionPinned(row.id, action === "pin");
-        if (!result?.ok) throw new Error(result?.code === "SESSION_BUSY" ? this.t("navigation.archiveBusy") : result?.error || this.t("common.unknown"));
+        if (!result?.ok) throw new Error(result?.code === "SESSION_BUSY" ? this.t(action === "fork" ? "navigation.forkBusy" : "navigation.archiveBusy") : result?.error || this.t("common.unknown"));
         if (action === "delete") this.removed(row.id);
         await this.load();
+        if (action === "fork" && this.interaction === interaction) { const forked = this.rows.get(result.sessionId); if (forked) { this.reveal(forked.id); await this.open(forked); } }
         if (action === "archive") {
           this.notify(this.t("navigation.archived"), async () => { if (await this.action(row, "restore")) document.getElementById("navigation-toast").hidden = true; }, row.id);
           if (this.interaction === interaction && this.selected() === row.id) { const next = [...this.rows.values()].find(other => other.id !== row.id && other.projectKey === row.projectKey && other.archivedAt == null); if (next) await this.open(next); else this.empty(); }

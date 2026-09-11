@@ -21,10 +21,11 @@ import { TelemetryStore } from "./telemetry-store.js";
 import { TelemetryUploader } from "./telemetry-uploader.js";
 import { TurnSummarizer } from "./turn-summarizer.js";
 import { TelemetryWriter } from "./telemetry-writer.js";
+import { regionConfig } from "../region.mjs";
 
-// 官方发行版的可选默认端点。自托管构建可用
+// 官方发行版的可选默认端点,缺省走 region 默认值(D1)。自托管构建可用
 // ARCANE_TELEMETRY_ENDPOINT 覆盖，或用 ARCANE_TELEMETRY_DISABLED=1 完全关闭。
-const DEFAULT_TELEMETRY_ENDPOINT = "https://api.arcanedesk.bitterbebop.cn";
+const DEFAULT_TELEMETRY_ENDPOINT = regionConfig().telemetryEndpoint;
 
 function shortId(prefix) {
   return `${prefix}_${randomBytes(4).toString("hex")}`;
@@ -499,6 +500,17 @@ export class TelemetryClient {
       if (!turn) return;
       this.summarizer.noteSteer(mode);
       this.#record("turn.steered", mode, turn.turnId, {
+        elapsedBucket: elapsedBucket(this.monotonicNow() - turn.startedMonotonicMs),
+      });
+    });
+  }
+
+  /** 忙碌时排队输入(备团 followUp):等回合结束才投递,不算介入,不进 summary 的 intervention。 */
+  turnQueued(mode) {
+    return this.#safe("turnQueued", () => {
+      const turn = this.activeTurns.get(mode);
+      if (!turn) return;
+      this.#record("turn.queued", mode, turn.turnId, {
         elapsedBucket: elapsedBucket(this.monotonicNow() - turn.startedMonotonicMs),
       });
     });

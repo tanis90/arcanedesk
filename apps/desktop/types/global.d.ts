@@ -1,5 +1,6 @@
 // 渲染进程全局类型:preload.cjs 暴露的 window.arcane IPC 桥 + keycapture.js 的 window.ArcaneKeyCapture。
 // 与 preload.cjs 保持同步 —— 改了桥接 API 就要改这里,typecheck 闸门靠它对齐两边。
+// preload-reader.cjs 暴露的 window.arcaneReader 与 markdown.js 挂的 window.arcaneMd 同样在此声明。
 
 interface ArcaneBridge {
   /** Send a user message to the agent session. images: [{ data: base64, mimeType }]. */
@@ -8,11 +9,16 @@ interface ArcaneBridge {
   listSlash(context?: ArcaneModeContext): Promise<any>;
   /** Abort the currently running agent turn. */
   abort(context?: ArcaneModeContext): Promise<any>;
+  /** 排队输入操作(备团):action = "cancel"(删除/编辑召回) | "steer"(立即发送)。 */
+  updateQueuedInput(context: ArcaneModeContext, inputId: string, action: "cancel" | "steer"): Promise<any>;
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel(): Promise<any>;
   closePanel(): Promise<any>;
-  /** F5: reload the Foundry panel page (no-op when the panel is closed). */
+  /** F5: reload the current right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel(): Promise<any>;
+  /** ② 打开右屏 Markdown 阅读器(md-reader-spec §7 信任边界 ①)。
+      失败也在阅读器里出错误页,chat 侧不弹任何东西,所以返回值仅供调用方忽略。 */
+  openMdReader(path: string): Promise<{ ok: boolean; error?: string }>;
   sessionIdentities(): Promise<any>;
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth(px: number): Promise<any>;
@@ -157,8 +163,39 @@ interface ArcaneI18nApi {
   onLocaleChange(fn: (locale: string) => void): void;
 }
 
+/** markdown.js 挂在 window 上的渲染管线出口;chat 气泡与右屏阅读器共用。 */
+interface ArcaneMdApi {
+  /** Markdown → DOM(手工建节点,无 innerHTML)。容器只追加不清空,换内容前调用方自行清空。 */
+  render(container: HTMLElement, text: string): void;
+  /** 文本里的笔记路径形态判据(md-reader-spec §4.2);单测按 §9 跑全形态。 */
+  findNotePaths(text: string): Array<{ start: number; end: number; path: string }>;
+}
+
+/** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)。
+    origin 决定 ③ 的文案与语义,path 让页面分辨"同一份被唤回"与"换了一份"(§2)。 */
+type ArcaneReaderPayload = {
+  origin?: "foundry" | "closed" | null;
+  path?: string | null;
+} & ({ name: string; text: string; truncated: boolean; error?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined });
+
+/** preload-reader.cjs 暴露给 md-reader.html 的方法桥:全是单向,页面拿不到任何文件系统能力。 */
+interface ArcaneReaderApi {
+  /** 订阅笔记内容。换笔记与 F5 重读走同一条推送(§3.5 不变量 5)。 @returns 退订函数 */
+  onContent(callback: (payload: ArcaneReaderPayload) => void): () => void;
+  /** 订阅主题广播:切主题不重读文件,所以与内容分开发。 @returns 退订函数 */
+  onTheme(callback: (theme: string) => void): () => void;
+  /** 订阅语言广播:与主题同路,热切换不重读文件。 @returns 退订函数 */
+  onLocale(callback: (locale: string) => void): () => void;
+  /** ③ 顶栏返回/关闭与 Esc。origin=foundry → 回 FOUNDRY;origin=closed → 关面板。 */
+  back(): Promise<{ ok: boolean; state?: string }>;
+}
+
 interface Window {
   arcane: ArcaneBridge;
+  /** 只在 readerView 里存在(preload-reader.cjs);chat 页取不到。 */
+  arcaneReader?: ArcaneReaderApi;
+  /** 只在加载了 markdown.js 的页面存在(index.html 与 md-reader.html)。 */
+  arcaneMd?: ArcaneMdApi;
   ArcaneI18n: ArcaneI18nApi;
   ArcaneKeyCapture: ArcaneKeyCaptureApi;
   ArcaneShortcuts?: ArcaneShortcutsApi;

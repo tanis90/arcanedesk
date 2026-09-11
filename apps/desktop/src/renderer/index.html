@@ -13,6 +13,8 @@
   <link rel="stylesheet" href="../../generated/renderer-assets/katex/dist/katex.min.css" />
   <link rel="stylesheet" href="../../generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css" id="hljs-theme-dark" />
   <link rel="stylesheet" href="../../generated/renderer-assets/highlightjs/cdn-assets/styles/stackoverflow-light.min.css" id="hljs-theme-light" disabled />
+  <!-- arcaneMd 输出的呈现层:chat 气泡与右屏阅读器共用一份(md-reader-spec §5.3) -->
+  <link rel="stylesheet" href="markdown.css" />
   <style>
     /* ---------- 主题:月之暗面(默认)= 烛光下的魔法书;月之亮面 = 羊皮纸内页 ---------- */
     :root {
@@ -345,144 +347,10 @@
     }
     @keyframes blink { 50% { opacity: 0; } }
     .msg.system { color: var(--muted); font-size: var(--fs-ui); align-self: center; }
-    .msg p { margin: 0 0 8px; }
-    .msg p:last-child { margin-bottom: 0; }
-    .msg ul, .msg ol { margin: 4px 0 8px 20px; }
-    .msg li { margin: 2px 0; }
-    .msg code {
-      font-family: var(--mono);
-      font-size: var(--fs-meta);
-      background: var(--code-bg);
-      border: 1px solid var(--border-soft);
-      border-radius: 4px;
-      padding: 1px 5px;
-      color: var(--code-fg);
-    }
+    /* markdown 输出的通用呈现已抽到 markdown.css(:is(.msg, .md-doc) 作用域);
+       这里只留 chat 气泡特有的覆盖——用户气泡是深色底,代码/加粗不能再走 token。 */
     .msg.user code { background: rgba(127, 127, 127, 0.25); border-color: transparent; color: inherit; }
-    .msg pre.md-code {
-      font-family: var(--mono);
-      font-size: var(--fs-meta);
-      background: var(--code-bg);
-      border: 1px solid var(--border-soft);
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin: 6px 0;
-      overflow-x: auto;
-      white-space: pre;
-      color: var(--code-fg);
-    }
-    /* mermaid 图表块:默认显示图,源码折叠;图可能比气泡宽,横向滚动 */
-    .msg .md-mermaid {
-      margin: 6px 0;
-      border: 1px solid var(--border-soft);
-      border-radius: 8px;
-      background: var(--code-bg);
-      overflow: hidden;
-    }
-    .msg .md-mermaid-view {
-      padding: 10px 12px;
-      overflow-x: auto;
-      display: flex;
-      justify-content: center;
-    }
-    .msg .md-mermaid-view svg { max-width: 100%; height: auto; flex: none; }
-    .msg .md-mermaid-src > summary {
-      cursor: pointer;
-      user-select: none;
-      font-size: var(--fs-micro);
-      color: var(--faint);
-      padding: 4px 12px;
-      border-top: 1px solid var(--border-soft);
-      transition: color 0.15s;
-    }
-    .msg .md-mermaid-src > summary:hover { color: var(--text); }
-    .msg .md-mermaid-src pre.md-code { margin: 0; border: none; border-radius: 0; border-top: 1px solid var(--border-soft); }
-    .msg .md-mermaid-error { color: var(--err); font-size: var(--fs-meta); width: 100%; }
-    .msg strong { color: var(--text-strong); font-weight: 600; }
     .msg.user strong { color: inherit; }
-    .msg h4 { color: var(--text-strong); font-size: 13px; margin: 10px 0 4px; }
-    .msg .md-hr { border: none; border-top: 1px solid var(--border-soft); margin: 10px 0; }
-    /* markdown 链接 / 图片 / 引用 / 删除线 / 嵌套列表 */
-    .msg a { color: var(--info); text-decoration: none; }
-    .msg a:hover { text-decoration: underline; }
-    .msg .md-img {
-      max-width: 100%;
-      max-height: 240px;
-      border-radius: 8px;
-      border: 1px solid var(--border-soft);
-      display: block;
-      margin: 6px 0;
-    }
-    .msg blockquote.md-quote {
-      margin: 6px 0;
-      padding: 2px 12px;
-      border-left: 3px solid var(--border);
-      color: var(--muted);
-    }
-    .msg del { color: var(--muted); }
-    .msg ul ul, .msg ul ol, .msg ol ul, .msg ol ol { margin: 2px 0 2px 16px; }
-    .msg li input[type="checkbox"] { margin-right: 4px; vertical-align: -1px; }
-    /* 代码块:头部小条(语言名 + 复制)+ pre.md-code;hljs 主题背景让位给 --code-bg */
-    .msg .md-codeblock {
-      margin: 6px 0;
-      border: 1px solid var(--border-soft);
-      border-radius: 8px;
-      background: var(--code-bg);
-      overflow: hidden;
-    }
-    .msg .md-codeblock-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 10px;
-      border-bottom: 1px solid var(--border-soft);
-      color: var(--faint);
-      font-size: var(--fs-micro);
-      user-select: none;
-    }
-    .msg .md-codeblock-lang { font-family: var(--mono); }
-    .msg .md-codeblock-copy {
-      border: none;
-      background: transparent;
-      color: var(--faint);
-      font: inherit;
-      font-size: var(--fs-micro);
-      cursor: pointer;
-      padding: 0 2px;
-      transition: color 0.15s;
-    }
-    .msg .md-codeblock-copy:hover { color: var(--text); }
-    .msg .md-codeblock pre.md-code { margin: 0; border: none; border-radius: 0; background: transparent; }
-    .msg pre.md-code > code {
-      background: transparent;
-      border: none;
-      padding: 0;
-      font-size: inherit;
-      border-radius: 0;
-      display: block;
-    }
-    /* KaTeX:display 公式块级居中、超宽横向滚动;语法错误时源码用警示色 */
-    .msg .md-katex-display { display: block; overflow-x: auto; overflow-y: hidden; padding: 4px 0; text-align: center; }
-    .msg .md-katex-err { font-family: var(--mono); font-size: var(--fs-meta); color: var(--warn); }
-    /* 宽表格:滚动收到外套容器上,表超宽时内部横向滚动,不撑破气泡 */
-    .msg .md-table-wrap { overflow-x: auto; margin: 6px 0 10px; max-width: 100%; }
-    .msg .md-table {
-      border-collapse: collapse;
-      font-size: var(--fs-meta);
-    }
-    .msg .md-table th, .msg .md-table td {
-      border: 1px solid var(--border);
-      padding: 3px 8px;
-      text-align: left;
-      white-space: nowrap;
-    }
-    .msg .md-table th {
-      background: var(--panel-2);
-      color: var(--code-fg);
-      font-weight: 600;
-    }
-    .msg .md-table td { color: var(--text); }
-    .msg .md-table tr:nth-child(even) td { background: rgba(127, 127, 127, 0.04); }
 
     /* ---------- tool cards ---------- */
     .card {
@@ -863,6 +731,26 @@
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .composer:focus-within { border-color: var(--accent-dim); box-shadow: 0 0 0 2px var(--ring); }
+    /* 备团队列列表(排队消息不进对话流,在此可操作) */
+    #queue-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+    .queue-row {
+      display: flex; align-items: center; gap: 10px;
+      background: transparent; border: 1px dashed var(--faint); border-radius: 8px;
+      padding: 8px 8px 8px 12px; font-size: var(--fs-ui); color: var(--text);
+    }
+    .queue-row:hover { border-color: var(--accent-dim); }
+    /* 衬线斜体序号:队列是 FIFO 真序列,序号即投递顺序 */
+    .queue-row .queue-ord {
+      flex: none; min-width: 16px; text-align: right;
+      font-family: var(--font-display); font-size: 13px; font-style: italic;
+      color: var(--accent-dim);
+    }
+    .queue-row .queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .queue-row button {
+      flex: none; border: 1px solid var(--border); background: transparent; color: var(--faint);
+      border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: var(--fs-meta);
+    }
+    .queue-row button:hover { color: var(--accent-dim); border-color: var(--accent-dim); }
     /* kimi web 式两行布局:textarea 独占一行,底行左 + 右 🎙■↑ */
     .composer textarea {
       width: 100%;
@@ -1664,6 +1552,7 @@
   <div id="splitter" title="拖拽调整左右宽度" data-i18n-title="splitter.title"></div>
   <footer class="composer-wrap" id="composer-wrap">
     <div id="slash-popup"></div>
+    <div id="queue-list" style="display:none"></div>
     <div class="composer">
       <div id="attach-strip"></div>
       <textarea id="chat-input" rows="1" placeholder="和 Agent 对话…(可粘贴/拖入图片)" data-i18n-placeholder="composer.placeholder"></textarea>

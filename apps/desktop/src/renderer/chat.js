@@ -146,6 +146,7 @@ const modeSegs = {
   combat: document.getElementById("mode-seg-combat"),
 };
 const dirChip = document.getElementById("dir-chip");
+const queueList = document.getElementById("queue-list");
 const scrollBottomBtn = document.getElementById("scroll-bottom");
 const togglePanelBtn = document.getElementById("toggle-panel");
 const welcome = document.getElementById("welcome");
@@ -250,8 +251,8 @@ function renderHistoryNavigation() {
     node.addEventListener("click", () => { void showHistoryPage(query, intent); });
     return node;
   };
-  if (historyPage.hasOlder) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
-  if (historyPage.hasNewer) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
+  if (historyPage.hasOlder && historyPage.firstKey != null) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
+  if (historyPage.hasNewer && historyPage.lastKey != null) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
 }
 
 function scheduleWorkspaceSave() {
@@ -302,7 +303,9 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     try { saved = await workspaceStore.load(id); } catch { saved = {}; }
     if (token !== snapshotRequest || selectedSessionId !== id) return;
     if (!keepReading) historyPage = payload.historyPage ?? null;
-    else if (historyPage) historyPage = { ...historyPage, hasNewer: true };
+    // keepReading 是"翻旧页不要被拽走",不是无中生有:只有之前已经 hasNewer 才保留,
+    // 否则按 payload 的实际值——无差别置 true 会造出点进去是空页的「查看后续消息」
+    else if (historyPage) historyPage = { ...historyPage, hasNewer: historyPage.hasNewer || Boolean(payload.historyPage?.hasNewer) };
     selectedTaskId = payload.task?.id ?? null;
     showTaskState(payload.task); showPendingModel(payload.pendingModel);
     viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
@@ -315,9 +318,16 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     for (const attention of payload.attentions ?? []) renderAttention(attention);
     for (const approval of payload.approvals ?? []) addApprovalCard(approval);
     if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
+    resetInputStates();
     for (const item of payload.inputs ?? []) {
+      noteInputState(item.commandId, item.state, { inputId: item.id, text: item.text, images: item.images });
       if (item.state === "interrupted") {
         renderRecoveredInput(item);
+        continue;
+      }
+      if (item.state === "queued") {
+        // 备团排队消息只在队列列表;战斗(steer 瞬时态)维持气泡回显。
+        if (currentMode !== "prep" && ensureInputBubble(item.commandId)) updateInputReceipt(item.commandId, item.state);
         continue;
       }
       const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
@@ -326,10 +336,8 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
         updateInputReceipt(item.commandId, item.state);
         continue;
       }
-      if (["accepted", "queued", "dispatching", "context"].includes(item.state)) {
-        const node = addMessage("user", item.text, undefined, "input:" + item.commandId);
-        node.dataset.commandId = item.commandId;
-        updateInputReceipt(item.commandId, item.state);
+      if (["accepted", "dispatching", "context"].includes(item.state)) {
+        if (ensureInputBubble(item.commandId)) updateInputReceipt(item.commandId, item.state);
       }
     }
     const replay = eventInbox.after([...requestEvents, ...captured], id, viewEpoch, viewSeq);
@@ -476,12 +484,101 @@ function syncDirChip() {
   dirChip.style.display = currentMode === "prep" && conversationEmpty ? "" : "none";
 }
 
+// 备团队列列表(spec §3⑤):排队消息不进对话流,在 composer 上方成行(立即/编辑/删除)。
+// 按 commandId 跟踪 input_state 迁移;恢复快照时整体重建;事件只在查看该会话时到达。
+const inputMetaByCommand = new Map(); // commandId -> { inputId, text, images }
+const inputStateByCommand = new Map(); // commandId -> 非终态 state
+const inputTerminalStates = ["consumed", "handled", "cancelled", "failed", "interrupted"];
+
+function inputBubbleNode(commandId) {
+  return /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(commandId) + '"]'));
+}
+function ensureInputBubble(commandId) {
+  const existing = inputBubbleNode(commandId);
+  if (existing) return existing;
+  const meta = inputMetaByCommand.get(commandId);
+  if (!meta || typeof meta.text !== "string") return null;
+  const node = addMessage("user", meta.text, meta.images, "input:" + commandId);
+  node.dataset.commandId = commandId;
+  return node;
+}
+
+function syncQueueList() {
+  const queued = [...inputStateByCommand.entries()].filter(([, state]) => state === "queued");
+  const show = currentMode === "prep" && queued.length > 0;
+  queueList.style.display = show ? "" : "none";
+  input.placeholder = show ? t("chat.input.queuePlaceholder") : t("composer.placeholder");
+  if (!show) return;
+  queueList.textContent = "";
+  let ord = 0;
+  for (const [commandId] of queued) {
+    ord += 1;
+    const meta = inputMetaByCommand.get(commandId);
+    const row = el("div", "queue-row");
+    row.appendChild(el("span", "queue-ord", `${ord}.`));
+    row.appendChild(el("span", "queue-text", meta?.text ?? ""));
+    for (const [action, label, titleKey] of /** @type {const} */ ([
+      ["steer", "↑", "chat.input.queueNow"],
+      ["edit", "✎", "chat.input.queueEdit"],
+      ["cancel", "×", "chat.input.queueRemove"],
+    ])) {
+      const button = el("button", "", label);
+      button.title = t(titleKey);
+      button.addEventListener("click", () => void queueAction(commandId, action));
+      row.appendChild(button);
+    }
+    queueList.appendChild(row);
+  }
+}
+
+function noteInputState(commandId, state, meta = null) {
+  if (meta) inputMetaByCommand.set(commandId, { ...inputMetaByCommand.get(commandId), ...meta });
+  const previous = inputStateByCommand.get(commandId);
+  if (previous === state) return;
+  if (inputTerminalStates.includes(state)) inputStateByCommand.delete(commandId);
+  else inputStateByCommand.set(commandId, state);
+  // 气泡迁移(仅备团):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
+  if (currentMode === "prep") {
+    if (state === "queued") inputBubbleNode(commandId)?.remove();
+    else ensureInputBubble(commandId);
+  }
+  syncQueueList();
+}
+
+function resetInputStates() {
+  inputMetaByCommand.clear();
+  inputStateByCommand.clear();
+  syncQueueList();
+}
+
+async function queueAction(commandId, action) {
+  const meta = inputMetaByCommand.get(commandId);
+  if (!meta?.inputId) return;
+  if (action === "edit") {
+    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 事件自动把气泡放回对话流。
+    const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, "cancel");
+    if (result?.ok && typeof meta.text === "string") {
+      input.value = meta.text;
+      autosize();
+      input.focus();
+    }
+    return;
+  }
+  const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, action);
+  // 改道后立即离开用户队列;投递时 context 事件把气泡放回对话流。
+  if (result?.ok && action === "steer") {
+    inputStateByCommand.set(commandId, "dispatching");
+    syncQueueList();
+  }
+}
+
 function applyModeUi(mode, cwd) {
   currentMode = mode === "prep" ? "prep" : "combat";
   modeSegs.prep.classList.toggle("active", currentMode === "prep");
   modeSegs.combat.classList.toggle("active", currentMode === "combat");
   document.body.dataset.mode = currentMode;
   syncDirChip();
+  syncQueueList();
   lastPrepCwd = cwd || null;
   if (cwd) {
     dirChip.textContent = `📁 ${cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd} ⌄`;
@@ -615,6 +712,31 @@ function renderMarkdown(container, text) {
   } else {
     container.textContent = text;
   }
+}
+
+// ---------- ② 消息体里的 .md 路径 → 右屏阅读器(md-reader-spec §4.2/§8) ----------
+
+// 委托挂在消息列表上而不是每个锚点:历史回显、流式定稿、翻页都会重建消息体,
+// 逐个绑定既漏又贵。锚点没有 href(file:// 下会把整个页面导航走),所以键盘激活也在这里。
+messages.addEventListener("click", event => {
+  if (event.button !== 0) return; // 中键/右键不打开阅读器,留给浏览器默认行为
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (anchor) openNote(/** @type {HTMLElement} */ (anchor));
+});
+messages.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (!anchor) return;
+  event.preventDefault();
+  openNote(/** @type {HTMLElement} */ (anchor));
+});
+
+/** 把锚点上的原始路径交给 main:规范化、resolve、围栏、读取都在那边一次做完(§7)。
+    结果不消费:读链失败也在阅读器里出错误页,chat 侧不弹任何东西(design-rules R5)。 */
+function openNote(anchor) {
+  const path = anchor.dataset.mdPath;
+  if (!path) return;
+  window.arcane.openMdReader(path).catch(() => { /* main 不可用时聊天本身也已经不可用 */ });
 }
 
 // ---------- messages ----------
@@ -1221,6 +1343,7 @@ function onEvent(event) {
       showPendingModel(event.model);
       break;
     case "input_state":
+      noteInputState(event.commandId, event.state, { inputId: event.inputId });
       updateInputReceipt(event.commandId, event.state);
       break;
     case "task_state":
@@ -1713,6 +1836,11 @@ async function sendSubmission(submission) {
   if ((selectedSessionId === id && composerStopping()) || stopRequests.get(id)?.state === "pending") return;
   if (submission.sending) return;
   submission.sending = true;
+  // 队列列表的行数据源:inputId 由后续 input_state 事件合并进来(spec §3⑤)。
+  inputMetaByCommand.set(submission.context.commandId, {
+    ...inputMetaByCommand.get(submission.context.commandId),
+    text: submission.text, images: submission.images,
+  });
   if (selectedSessionId === id) {
     submissionNode(submission).querySelector(".retry-input")?.remove();
     updateInputReceipt(submission.context.commandId, "sending");

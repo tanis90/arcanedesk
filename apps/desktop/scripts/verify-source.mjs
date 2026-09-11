@@ -36,11 +36,14 @@ const exactDirectories = new Map([
     "archive.mjs",
     "audit-package-mirror.mjs",
     "check-skills-revision.mjs",
+    "compose-intl-skills.mjs",
     "desktop-release-metadata.mjs",
+    "dist.mjs",
     "mac-adhoc-sign.mjs",
     "module-builder-vendor",
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
+    "prepare-intl-index.mjs",
     "prepare-renderer-assets.mjs",
     "prepare-world-profile.mjs",
     "publish-release.mjs",
@@ -50,7 +53,7 @@ const exactDirectories = new Map([
     "verify-source.mjs",
     "write-sha256sums.mjs",
   ]],
-  ["distribution", ["community-distribution.json", "oss-release-contract.md"]],
+  ["distribution", ["community-distribution.json", "intl-mod-curation.json", "oss-release-contract.md"]],
 ]);
 
 function walk(directory, files = []) {

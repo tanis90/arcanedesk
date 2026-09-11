@@ -192,3 +192,320 @@ test("recovery does not restore an unresolved question or answer consumer", asyn
   assert.equal(restored.respond({ commandId: "after-restart", taskId: task.taskId, attentionId: attention.id, response: "yes" }).code, "STALE_ATTENTION");
   await original.stop(task.taskId);
 });
+
+test("prep followUp: queued input rides the same run to consumption (spec §7.1-3)", async () => {
+  const gate = deferred(); const calls = { prompt: [], steer: [], followUp: [] };
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    async prompt(text) {
+      calls.prompt.push(text);
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      await gate.promise;
+    },
+    steer(text) { calls.steer.push(text); },
+    followUp(text) {
+      calls.followUp.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [text] });
+    },
+    clearQueue() {},
+  } });
+  const first = coordinator.submit({ commandId: "first", text: "first" });
+  await tick();
+  const second = coordinator.submit({ commandId: "second", text: "second" });
+  assert.equal(second.taskId, first.taskId);
+  assert.equal(second.delivery, "followUp");
+  assert.deepEqual(calls.steer, []);
+  assert.deepEqual(calls.followUp, ["second"]);
+  const input = coordinator.inputs.get(second.inputId);
+  assert.equal(input.state, "queued");
+  assert.equal(input.expandedText, "second");
+  // SDK 在同一 run 内投递 followUp:message_start(user) 命中 expandedText → context;assistant → consumed。
+  coordinator.observe({ type: "message_start", message: { role: "user", content: "second" } });
+  assert.equal(input.state, "context");
+  coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+  assert.equal(input.state, "consumed");
+  assert.equal(coordinator.busy, true);
+  gate.resolve(); await coordinator.run;
+  assert.deepEqual(calls.prompt, ["first"]); // followUp 续跑不产生第二次 prompt
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("followUp rejection keeps the input accepted and the drain dispatches it after the run (spec §7.4)", async () => {
+  const gate = deferred(); const calls = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    async prompt(text) {
+      calls.push(text);
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      if (text === "first") await gate.promise;
+    },
+    steer() { throw new Error("steer must not be called"); },
+    followUp: async () => { throw new Error("Extension command \"/x\" cannot be queued"); },
+    clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "/x" });
+  assert.equal(second.delivery, "followUp");
+  await tick(); await tick();
+  // extension 命令在 SDK push 前 reject:queue_update 未发出,input 始终 accepted,不经 queued。
+  assert.equal(coordinator.inputs.get(second.inputId).state, "accepted");
+  gate.resolve(); await coordinator.run;
+  assert.deepEqual(calls, ["first", "/x"]);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
+});
+
+test("stop cancels a followUp-queued input and clears the SDK queue (spec §7.5)", async () => {
+  const gate = deferred(); let clears = 0;
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt: () => gate.promise,
+    followUp(text) { coordinator.observe({ type: "queue_update", steering: [], followUp: [text] }); },
+    clearQueue() { clears++; },
+    abort: async () => gate.resolve(),
+  } });
+  const first = coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  assert.equal(coordinator.inputs.get(second.inputId).state, "queued");
+  await coordinator.stop(first.taskId);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "cancelled");
+  assert.ok(clears >= 1);
+});
+
+test("combat keeps steering queued input and never calls followUp (spec §7.6)", async () => {
+  const gate = deferred(); const calls = { followUp: [] };
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "steer",
+    async prompt(text) {
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      await gate.promise;
+    },
+    steer(text) {
+      coordinator.observe({ type: "queue_update", steering: [text], followUp: [] });
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+    },
+    followUp(text) { calls.followUp.push(text); },
+    clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  assert.equal(second.delivery, "steer");
+  assert.deepEqual(calls.followUp, []);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
+  gate.resolve(); await coordinator.run;
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("two queued followUps each take the tail of their queue_update and deliver in order (spec §7.7)", async () => {
+  const gate = deferred(); const prompts = []; const followUps = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    async prompt(text) {
+      prompts.push(text);
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      await gate.promise;
+    },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const third = coordinator.submit({ text: "third" });
+  const secondInput = coordinator.inputs.get(second.inputId);
+  const thirdInput = coordinator.inputs.get(third.inputId);
+  assert.equal(secondInput.expandedText, "second");
+  assert.equal(thirdInput.expandedText, "third");
+  assert.equal(secondInput.state, "queued");
+  assert.equal(thirdInput.state, "queued");
+  // SDK one-at-a-time 逐条投递:先 second 后 third,expandedText 匹配互不串扰。
+  coordinator.observe({ type: "message_start", message: { role: "user", content: "second" } });
+  coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+  assert.equal(secondInput.state, "consumed");
+  assert.equal(thirdInput.state, "queued");
+  coordinator.observe({ type: "message_start", message: { role: "user", content: "third" } });
+  coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+  assert.equal(thirdInput.state, "consumed");
+  gate.resolve(); await coordinator.run;
+  assert.deepEqual(prompts, ["first"]);
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("stranded followUp (run ended before delivery) is redispatched once by the drain (spec §7.8)", async () => {
+  const prompts = []; let clears = 0;
+  let coordinator; let resolveFirst;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt(text) {
+      prompts.push(text);
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      if (prompts.length === 1) return new Promise(resolve => { resolveFirst = resolve; });
+      return Promise.resolve();
+    },
+    followUp(text) {
+      // 入队成功(queue_update 同步发出)但 run 已结束、SDK 不再投递 —— 搁浅(spec §6.9)。
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [text] });
+    },
+    clearQueue() { clears++; },
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const input = coordinator.inputs.get(second.inputId);
+  assert.equal(input.state, "queued");
+  resolveFirst(); await coordinator.run;
+  // drain 重新捡到 queued input:clearQueue 丢掉 SDK 搁浅副本后作为新 prompt 重发,只发一次。
+  assert.deepEqual(prompts, ["first", "second"]);
+  assert.ok(clears >= 1);
+  assert.equal(input.state, "consumed");
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("delivery is null when a supplement waits at app level (busy but not streaming, spec §3③)", async () => {
+  const gate = deferred();
+  const coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => false,
+    prompt: () => gate.promise,
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  assert.equal(second.disposition, "supplement");
+  assert.equal(second.delivery, null);
+  gate.resolve(); await coordinator.run;
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("cancelQueuedInput cancels the target, survivors stay queued in order (spec §7.9)", async () => {
+  const gate = deferred(); const prompts = []; const followUps = []; let clears = 0;
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt(text) { prompts.push(text); return gate.promise; },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    clearQueue() { clears++; },
+    abort: async () => gate.resolve(),
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const third = coordinator.submit({ text: "third" });
+  assert.equal(coordinator.cancelQueuedInput("missing").code, "STALE_INPUT");
+  const clearsBeforeCancel = clears;
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).ok, true);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "cancelled");
+  assert.equal(coordinator.inputs.get(third.inputId).state, "queued");
+  // 全清 + 幸存者按序重排:只有 third 重新入队,目标不重发。
+  assert.equal(clears, clearsBeforeCancel + 1);
+  assert.deepEqual(followUps, ["second", "third", "third"]);
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).code, "STALE_INPUT"); // 已非 queued
+  gate.resolve(); await coordinator.run;
+  // 被取消的 second 不会被 drain 兜底 dispatch;搁浅的 third 按 §6.9 重发一次。
+  assert.deepEqual(prompts, ["first", "third"]);
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("steerQueuedInput reroutes the queued input to steering, survivors stay queued (spec §7.10)", async () => {
+  const gate = deferred(); const followUps = []; const steers = []; const states = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt: () => gate.promise,
+    steer(text) {
+      steers.push(text);
+      coordinator.observe({ type: "queue_update", steering: [text], followUp: [] });
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+    },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    clearQueue() {},
+    abort: async () => gate.resolve(),
+  }, emit: event => { if (event.type === "input_state") states.push(`${event.commandId}:${event.state}`); } });
+  coordinator.submit({ commandId: "first", text: "first" }); await tick();
+  const second = coordinator.submit({ commandId: "second", text: "second" });
+  const third = coordinator.submit({ commandId: "third", text: "third" });
+  assert.equal(coordinator.steerQueuedInput(second.inputId).ok, true);
+  assert.deepEqual(steers, ["second"]);
+  // 目标经 steering 投递 → context → consumed;幸存者仍 queued 且重排不含目标。
+  assert.equal(coordinator.inputs.get(second.inputId).state, "consumed");
+  assert.equal(coordinator.inputs.get(third.inputId).state, "queued");
+  assert.deepEqual(followUps, ["second", "third", "third"]);
+  // setInputState 幂等:改道时的 queued→queued 不重复发事件。
+  assert.equal(states.filter(s => s === "second:queued").length, 1);
+  gate.resolve(); await coordinator.run;
+  assert.equal(coordinator.task.state, "completed");
+});
+
+test("adapter declaring followUp without the method is recorded and delivered as steer", async () => {
+  const gate = deferred(); const steers = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt: () => gate.promise,
+    steer(text) {
+      steers.push(text);
+      coordinator.observe({ type: "queue_update", steering: [text] });
+    },
+    clearQueue() {},
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  // 记录即事实:ack 与 input.delivery 都是实际要走的 steer,不是声明的 followUp。
+  assert.equal(second.delivery, "steer");
+  assert.equal(coordinator.inputs.get(second.inputId).delivery, "steer");
+  assert.deepEqual(steers, ["second"]);
+  assert.equal(coordinator.inputs.get(second.inputId).state, "queued");
+  gate.resolve(); await coordinator.run;
+});
+
+test("cancel and steer fail explicitly when the adapter has no queue control", async () => {
+  const gate = deferred(); const followUps = [];
+  let coordinator;
+  coordinator = new TaskCoordinator({ sessionId: "A", adapter: {
+    isStreaming: () => true,
+    streamingDelivery: () => "followUp",
+    prompt(text) {
+      coordinator.observe({ type: "message_start", message: { role: "user", content: text } });
+      coordinator.observe({ type: "message_start", message: { role: "assistant" } });
+      return gate.promise;
+    },
+    followUp(text) {
+      followUps.push(text);
+      coordinator.observe({ type: "queue_update", steering: [], followUp: [...followUps] });
+    },
+    // 无 clearQueue:SDK 队列不可控,取消/改道必须显式失败而不是假装成功。
+    abort: async () => gate.resolve(),
+  } });
+  coordinator.submit({ text: "first" }); await tick();
+  const second = coordinator.submit({ text: "second" });
+  const input = coordinator.inputs.get(second.inputId);
+  assert.equal(input.state, "queued");
+  assert.equal(coordinator.cancelQueuedInput(second.inputId).code, "NO_QUEUE_CONTROL");
+  assert.equal(coordinator.steerQueuedInput(second.inputId).code, "NO_QUEUE_CONTROL");
+  assert.equal(input.state, "queued"); // 不动 SDK 队列就不动状态
+  gate.resolve(); await coordinator.run;
+});

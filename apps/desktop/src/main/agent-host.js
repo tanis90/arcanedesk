@@ -19,11 +19,17 @@ import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
+import { forkStoredSession } from "./conversations/session-fork.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { PendingInputs } from "./tasks/pending-inputs.js";
 import { replaceFile } from "./atomic-file.js";
+import { regionConfig } from "./region.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 系统提示词目录按 region 默认值表取（D1）：intl 构建指向构建期生成的英文目录
+// generated/system-prompts-intl，cn 指向 system-prompts。
+const SYSTEM_PROMPTS_DIR = regionConfig().systemPromptsDir;
 
 /**
  * 战斗模式的系统提示 = system-prompts/combat.md。
@@ -31,10 +37,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 function loadCombatSystemPrompt(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "combat.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "combat.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("combat prompt is empty");
-    log(`[agent] system prompt: system-prompts/combat.md (${body.length} chars)`);
+    log(`[agent] system prompt: ${SYSTEM_PROMPTS_DIR}/combat.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] combat prompt unavailable, fallback to SDK default prompt: ${error.message}`);
@@ -53,10 +59,10 @@ const APPROVAL_TIMEOUT_MS = 120_000;
  */
 function loadPrepPreamble(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "prep.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "prep.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("prep preamble is empty");
-    log(`[agent] prep preamble: system-prompts/prep.md (${body.length} chars)`);
+    log(`[agent] prep preamble: ${SYSTEM_PROMPTS_DIR}/prep.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] prep preamble unavailable, fallback to bare SDK default prompt: ${error.message}`);
@@ -119,6 +125,7 @@ const COMBAT_PROFILE = {
   getSkillPaths: null,
   customToolNames: null, // null = 全部 desktop custom tools;prep 只启用界面/eval
   fence: false, // prep: true 挂 cwd 围栏
+  streamingInput: "steer", // 流式期间输入投递:"steer" 软打断(战斗默认);"followUp" 排队(prep)
 };
 
 /** Pi 默认仍启用 Bash；Windows 必须显式选择一等公民的 PowerShell 工具。 */
@@ -764,6 +771,8 @@ export class AgentHost {
         },
         prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
+        followUp: (text, images) => this.session.followUp(text, images?.length ? images : undefined),
+        streamingDelivery: () => this.profile.streamingInput ?? "steer",
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
         abort: async () => {
@@ -814,6 +823,16 @@ export class AgentHost {
     if (!this.canEvict()) throw new Error("Session still owns active or unsaved state");
     const file = this.sessionManager.getSessionFile();
     replaceFile(file, [this.sessionManager.getHeader(), ...this.sessionManager.getEntries()].map(entry => JSON.stringify(entry) + "\n").join(""));
+  }
+
+  /** 分叉当前会话：整段复制由 Pi 原生 forkFrom 完成；忙碌即拒绝（与归档同规则），不等待在途操作。 */
+  async fork() {
+    if (this.deleting) throw Object.assign(new Error("Session is being deleted"), { code: "SESSION_DELETING" });
+    if (this.busy || this.operations) throw Object.assign(new Error("Finish the task before forking"), { code: "SESSION_BUSY" });
+    if (this.canEvict()) this.persistForEviction();
+    const current = this.describeCurrent();
+    if (!current?.path) throw Object.assign(new Error("Session is not persisted"), { code: "SESSION_NOT_FOUND" });
+    return forkStoredSession({ sourcePath: current.path, cwd: this.cwd(), sessionDir: this.sessionDir() });
   }
 
   // ---- approval gate(opt-in,默认关闭) ----

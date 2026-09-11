@@ -15,6 +15,10 @@
 - skill 文本变更后把 `prep/bundle.json` 的 `revision` 单调递增（PR 上由 CI 的
   `skills-revision` job 强制检查，见 `../../scripts/check-skills-revision.mjs`），并在
   `apps/desktop` 跑 `npm run verify:source && npm test`。
+- `prep-intl/` 是 intl 构建的英文覆盖树：只放 `prep/` 原创散文（.md）的英文译文和
+  自己的 `bundle.json`（独立 revision 计数，变更同样必须 bump）。不得放置 `prep/`
+  中不存在的游离文件，译文不得含 CJK 字符；`prep/` 散文改动后必须同步译文。构建时由
+  `../../scripts/compose-intl-skills.mjs` 组合两树并强制以上门禁。
 - skill 的 `name` 是稳定标识：欢迎页 chip 以 `/skill:<name>` 形式引用了
   `arcane-fvtt-setup` 和 `arcane-module-reader`（见 `../src/shared/i18n/messages.js` 的
   `welcome.*.prompt`）。改名或删除 skill 必须同步这些引用，否则 chip 的显式加载会落空。

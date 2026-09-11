@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "comment": "国际版 mod 索引策展清单（国际化方案 D2/M3）。基线 Foundry 13.351：上游 latest 已全部转向 Foundry V14（midi-qol 14.x / dae 14.x / dnd5e 6.x），因此直连条目钉 F13 兼容线——tposney 系按 v13 大版本分支（自指 URL 稳定），socketlib/lib-wrapper 的 latest 仍兼容 F13 保持跟踪。dnd5e 的 F13 末版 5.3.3 自指 URL 指向 master 可变分支，只能镜像（mirror: true，改写 manifest/download 为 R2 版本化 URL）。新增包必须由人评估后显式加入；依赖闭包由 prepare-intl-index.mjs 强制校验。",
+  "packages": [
+    {
+      "id": "dnd5e",
+      "kind": "system",
+      "group": "system",
+      "manifestUrl": "https://github.com/foundryvtt/dnd5e/releases/download/release-5.3.3/system.json",
+      "mirror": true
+    },
+    {
+      "id": "midi-qol",
+      "kind": "module",
+      "group": "automation",
+      "manifestUrl": "https://gitlab.com/tposney/midi-qol/raw/v13/package/module.json"
+    },
+    {
+      "id": "dae",
+      "kind": "module",
+      "group": "automation",
+      "manifestUrl": "https://gitlab.com/tposney/dae/raw/v13/package/module.json"
+    },
+    {
+      "id": "socketlib",
+      "kind": "module",
+      "group": "library",
+      "manifestUrl": "https://github.com/farling42/foundryvtt-socketlib/releases/latest/download/module.json"
+    },
+    {
+      "id": "lib-wrapper",
+      "kind": "module",
+      "group": "library",
+      "manifestUrl": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json"
+    }
+  ]
+}

@@ -115,6 +115,7 @@ export class TaskCoordinator {
     this.emit({ type: "task_state", task: { ...this.task } });
   }
   setInputState(input, state) {
+    if (input.state === state) return; // 幂等:重复迁移(如改道时的 queued→queued)不再发事件
     if (["consumed", "handled"].includes(state)) {
       this.pending.save([...this.inputs.values()].filter(item => item.id !== input.id));
       delete input.images; delete input.executionText; delete input.expandedText;
@@ -134,10 +135,15 @@ export class TaskCoordinator {
     if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
     const executionText = prepare ? prepare(text, images) : text;
     const supplement = this.busy;
+    // 投递方式只在"补充且 SDK 正在流式"时存在;busy 但非流式(如等调度)时 input 停留 app 层,delivery=null。
+    const streaming = supplement && Boolean(this.adapter.isStreaming?.());
+    // 记录即事实:声明 followUp 但缺该方法的 adapter 实际走 steer,delivery 也记 steer。
+    const declared = streaming ? this.adapter.streamingDelivery?.() ?? "steer" : null;
+    const delivery = declared === "followUp" && !this.adapter.followUp ? "steer" : declared;
     const task = supplement ? this.task : { id: randomUUID(), state: this.scheduler ? "queued" : "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
-    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
+    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null, delivery };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
-      taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
+      taskId: task.id, disposition: supplement ? "supplement" : "new_task", delivery };
     const record = { type: "accepted", commandId, fingerprint, input, task, ack };
     const replaced = this.inputs.get(replacesInputId);
     const replaceId = replaced?.state === "interrupted" ? replaced.id : null;
@@ -153,8 +159,8 @@ export class TaskCoordinator {
     this.emit({ type: "task_state", task: { ...task } });
     this.emit({ type: "input_state", inputId: input.id, commandId, taskId: task.id, state: "accepted" });
     if (!this.run) this.schedule();
-    else if (supplement && this.adapter.isStreaming?.()) {
-      this.queueSteer(input);
+    else if (streaming) {
+      this.queueInput(input);
     }
     return ack;
   }
@@ -172,10 +178,12 @@ export class TaskCoordinator {
     this.run.catch(() => {});
   }
 
-  queueSteer(input) {
+  queueInput(input) {
     this.queueing = input;
+    // 缺 followUp 能力的 adapter(旧 mock)回退 steer,与 streamingDelivery 的 "steer" 默认值一致。
+    const deliver = input.delivery === "followUp" && this.adapter.followUp ? this.adapter.followUp : this.adapter.steer;
     let pending;
-    try { pending = this.adapter.steer(input.executionText ?? input.text, input.images); }
+    try { pending = deliver.call(this.adapter, input.executionText ?? input.text, input.images); }
     catch { pending = Promise.reject(new Error("Unable to queue input")); }
     this.queueing = null;
     const write = Promise.resolve(pending).catch(() => {
@@ -185,11 +193,46 @@ export class TaskCoordinator {
     this.queueWrites.add(write);
   }
 
+  /** pi 无单条删除:clearQueue 全清后幸存者按序重排(走 queueInput,展开结果确定)。 */
+  requeueSurvivors(exceptId) {
+    for (const survivor of this.inputs.values()) {
+      if (survivor.id !== exceptId && survivor.taskId === this.task?.id && survivor.state === "queued") this.queueInput(survivor);
+    }
+  }
+
+  /** 取消一条 SDK 排队的输入;目标按 drain 同款 cancelled 收尾(重启后可召回)。 */
+  cancelQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    // adapter 无队列控制时,SDK 队列里的目标会被照常投递;假装取消成功会让 UI 与现实矛盾。
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
+    this.setInputState(input, "cancelled");
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
+  }
+
+  /** 排队输入改道 steer,下个 turn 边界软打断生效;reject 回退 accepted 由 drain 兜底。 */
+  steerQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
+    input.delivery = "steer";
+    this.queueInput(input);
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
+  }
+
   observe(event) {
     if (!this.busy) return;
-    if (event.type === "queue_update" && this.queueing && event.steering?.length) {
-      this.queueing.expandedText = event.steering.at(-1);
-      this.setInputState(this.queueing, "queued");
+    if (event.type === "queue_update" && this.queueing) {
+      // 两模式各只写一条队列;按本次投递方式读对应数组,取末位(刚压入的那条)。
+      const queued = this.queueing.delivery === "followUp" ? event.followUp : event.steering;
+      if (queued?.length) {
+        this.queueing.expandedText = queued.at(-1);
+        this.setInputState(this.queueing, "queued");
+      }
     }
     if (event.type === "message_start" && event.message?.role === "user") {
       const text = messageText(event.message);
