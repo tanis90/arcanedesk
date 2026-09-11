@@ -17,7 +17,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-:root[data-theme="light"] #conversation-title { background: var(--text-strong); color: var(--bg); }
+:root[data-theme="light"] #conversation-title {
+  /* 与营销主页同一块色板:--ink / --paper / --stamp-shadow */
+  background: #16130f;
+  color: #f2ede1;
+  box-shadow: 3px 3px 0 #16130f24;
+}
 #conversation-title:empty { display: none; }
 #conversation-task-status, #conversation-model-pending, #conversation-sync { text-align: left; padding: 2px 16px; }
 .card.attention .body { padding: 10px 12px; }
