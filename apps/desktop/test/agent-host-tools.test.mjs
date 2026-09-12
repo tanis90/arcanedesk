@@ -18,6 +18,7 @@ const TOOL_NAMES = [
   "combat_turn_context",
   "combat_execute_turn",
   "request_user_input",
+  "open_document",
 ];
 
 function buildHarness({ call, sendToRenderer = () => {} } = {}) {
@@ -276,6 +277,14 @@ test("combat tool names and input schemas stay stable", () => {
           options: { type: "array", maxItems: 8, items: { type: "string", maxLength: 1000 } },
         },
       },
+      open_document: {
+        type: "object", required: ["path"], properties: {
+          path: {
+            type: "string", minLength: 1, maxLength: 4000,
+            description: "Path to a .md/.markdown file inside the current working directory.",
+          },
+        },
+      },
       combat_battle_context: { type: "object", properties: {} },
       combat_turn_context: { type: "object", properties: {} },
       combat_execute_turn: {
@@ -331,6 +340,37 @@ test("prep mode exposes the Foundry panel, screenshot and page eval custom tools
   assert.match(tools.get("browser_evaluate").description, /MAY read or change the current world/);
   assert.match(tools.get("browser_evaluate").promptGuidelines.join("\n"), /game\.ready && game\.user\.isGM/);
   assert.doesNotMatch(tools.get("browser_evaluate").description, /structured combat tools/);
+});
+
+test("open_document opens a markdown note in the right-side reader panel", async () => {
+  const opened = [];
+  const host = new AgentHost({
+    foundryRuntime: null,
+    getFoundryView: () => null,
+    openFoundry: async () => ({ ok: true, summary: "open" }),
+    openMdReader: (rawPath) => { opened.push(rawPath); return { ok: true, state: "reader", error: null }; },
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+  const tool = host.buildTools().find((candidate) => candidate.name === "open_document");
+  const result = await tool.execute("call-1", { path: "notes/a.md" });
+  assert.deepEqual(opened, ["notes/a.md"]);
+  assert.match(result.content[0].text, /right-side reader panel/);
+  assert.doesNotMatch(result.content[0].text, /WARNING/);
+});
+
+test("open_document surfaces a reader error page as a warning", async () => {
+  const host = new AgentHost({
+    foundryRuntime: null,
+    getFoundryView: () => null,
+    openFoundry: async () => ({ ok: true, summary: "open" }),
+    openMdReader: () => ({ ok: true, state: "reader", error: "missing" }),
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+  const tool = host.buildTools().find((candidate) => candidate.name === "open_document");
+  const result = await tool.execute("call-1", { path: "notes/gone.md" });
+  assert.match(result.content[0].text, /WARNING: the document could not be loaded \(missing\)/);
 });
 
 test("prep screenshot returns bounded image content from the current Foundry WebContents", async () => {

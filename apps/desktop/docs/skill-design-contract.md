@@ -127,6 +127,13 @@
   约束产物——图菜单（总览/骨架/线索/关系/拓扑，每张只回答一个问题）、每条边要有
   原文依据、≤15 节点、跨图同物同名。
 
+### arcane-module-reader（2026-09-12）
+
+- 给 DM 展示库中文档一律走 open_document（右侧阅读器），禁用系统 open/start 甩给
+  Obsidian：Obsidian 是建库/编辑工具，不是展示途径。C 类默认行为，不占交互预算。
+  实测中模型因"Obsidian 资料库"语境惯性优先调系统 open，故在 SKILL.md 与 prep
+  system prompt 双侧写明，并把"文档请求=阅读器、不同步 JournalEntry"作为默认。
+
 ### arcane-fvtt-mods 本地模块包（2026-09-07）
 
 - 本地完整模块 ZIP 是独立安装来源，不要求先发布到 mirror；用户内容留在本机。

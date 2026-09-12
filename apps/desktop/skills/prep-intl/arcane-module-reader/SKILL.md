@@ -130,6 +130,10 @@ At the top of each chapter, place a link back to the contents, plus previous/nex
 
 On import, generate only the contents and chapters. Do not pre-create character, location, quest, encounter, or relationship indexes; generate those from the chapter content when the user asks.
 
+## Showing documents to the DM
+
+When showing the DM any document from the library (contents, chapters, indexes), ALWAYS use open_document to open it in the App's right-side reader; never use the system `open`/`start` to hand the file to Obsidian — Obsidian is the tool for building and editing the library, not the way to present it to the DM. Printing a .md path in your reply gives the user a clickable link that opens the same reader.
+
 Before delivery, confirm:
 
 - every Wikilink in the contents points to an existing file;
