@@ -228,6 +228,7 @@ export class AgentHost {
    *   foundryRuntime?: any,
    *   getFoundryView?: () => any,
    *   openFoundry?: (url?: string) => Promise<any> | any,
+   *   openMdReader?: (rawPath: string) => any,
    *   sendToRenderer?: (payload: any) => void,
    *   providerStore?: any,
    *   telemetry?: import("./telemetry/telemetry-client.js").TelemetryClient | null,
@@ -239,13 +240,14 @@ export class AgentHost {
    *   scheduler?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, scheduler } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
+    this.openMdReader = openMdReader ?? null;
     this.sendToRenderer = sendToRenderer;
     this.providerStore = providerStore ?? null;
     this.telemetry = telemetry ?? null;
@@ -991,6 +993,32 @@ export class AgentHost {
       },
     });
 
+    const openDocument = defineTool({
+      name: "open_document",
+      label: "Open Document",
+      description:
+        "Open a local Markdown document (.md/.markdown) in this window's right-side reader panel; the chat stays on the left. " +
+        "ALWAYS use this when the user asks to open, show or read a note or document — never fall back to a system opener " +
+        "(macOS `open`, Windows `start`) that hands the file to an external app such as Obsidian. " +
+        "The path must stay inside the current working directory; relative paths resolve against it. " +
+        "A missing or out-of-fence file still opens the reader with an error page, so read the file first if you are unsure it exists.",
+      parameters: Type.Object({
+        path: Type.String({ minLength: 1, maxLength: 4000, description: "Path to a .md/.markdown file inside the current working directory." }),
+      }),
+      executionMode: "sequential",
+      execute: async (_id, params) => {
+        if (typeof host.openMdReader !== "function") {
+          return textResult("ERROR: the right-side document reader is unavailable in this session.");
+        }
+        const outcome = host.openMdReader(params.path);
+        if (!outcome?.ok) throw new Error(outcome?.error ?? outcome?.code ?? "Failed to open the document reader");
+        const note = outcome.error
+          ? ` WARNING: the document could not be loaded (${outcome.error}); the reader is showing an error page.`
+          : " The document is now visible next to the chat.";
+        return textResult(`Opened ${params.path} in the right-side reader panel.${note}`, outcome);
+      },
+    });
+
     const foundryOpen = defineTool({
       name: "foundry_open",
       label: "Open Foundry",
@@ -1281,7 +1309,7 @@ export class AgentHost {
       },
     });
 
-    const tools = [foundryOpen, browserEvaluate, worldStatus, combatBattleContext, combatTurnContext, combatExecuteTurn, requestUserInput];
+    const tools = [foundryOpen, browserEvaluate, worldStatus, combatBattleContext, combatTurnContext, combatExecuteTurn, requestUserInput, openDocument];
     if (prepWorldEdit) tools.splice(1, 0, foundryScreenshot);
     if (!Array.isArray(host.profile.customToolNames)) return tools;
     const enabled = new Set(host.profile.customToolNames);

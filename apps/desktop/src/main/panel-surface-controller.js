@@ -344,7 +344,7 @@ export class PanelSurfaceController {
     this.#emitStatus();
     this.layout();
     this.#pushReaderContent();
-    return { ok: true, state: this.state };
+    return { ok: true, state: this.state, error: payload.error ?? null };
   }
 
   /** F5 与页面重载共用的重读:快照在则按"打开时的目录"复检(N4),不在则按原始路径重解析。 */

@@ -318,7 +318,7 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
     if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
     resetInputStates();
     for (const item of payload.inputs ?? []) {
-      noteInputState(item.commandId, item.state, { inputId: item.id, text: item.text, images: item.images });
+      noteInputState(item.commandId, item.state, { inputId: item.id, text: item.text, images: item.images }, true);
       if (item.state === "interrupted") {
         renderRecoveredInput(item);
         continue;
@@ -529,14 +529,16 @@ function syncQueueList() {
   }
 }
 
-function noteInputState(commandId, state, meta = null) {
+function noteInputState(commandId, state, meta = null, fromSnapshot = false) {
   if (meta) inputMetaByCommand.set(commandId, { ...inputMetaByCommand.get(commandId), ...meta });
   const previous = inputStateByCommand.get(commandId);
   if (previous === state) return;
   if (inputTerminalStates.includes(state)) inputStateByCommand.delete(commandId);
   else inputStateByCommand.set(commandId, state);
-  // 气泡迁移(仅备团):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
-  if (currentMode === "prep") {
+  // 气泡迁移(仅备团实时事件):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
+  // 快照恢复不走这里——installSnapshot 的 inputs 循环自己负责落位(给历史节点打
+  // data-command-id / 补回显),抢跑会在去重标记打好之前往底部重复建气泡。
+  if (!fromSnapshot && currentMode === "prep") {
     if (state === "queued") inputBubbleNode(commandId)?.remove();
     else ensureInputBubble(commandId);
   }
