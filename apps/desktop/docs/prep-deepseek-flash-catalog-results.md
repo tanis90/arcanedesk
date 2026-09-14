@@ -69,3 +69,10 @@ After injecting `progressionView` into the browser evaluation scope, A1 complete
 ## Clean tool-only rerun after scope fix
 
 Using separate profiles, A1, A2, B1 and B2 each reached a returned state and passed the business verifier. None emitted a catalog-tool error. A3 timed out with provider error; its catalog calls were clean, while browser/powershell calls failed. This supports treating remaining failures as model/provider execution instability rather than a catalog implementation defect. B3 remains to be rerun in a clean profile.
+
+
+## Final tool-only loop checkpoint (2026-09-14)
+
+With independent profiles and the browser-scope fix, the clean tool-only checks are: A1 pass, A2 pass, A3 provider timeout (no catalog error), B1 pass, B2 pass, B3 pass. The catalog tool emitted no `progressionView` or catalog execution error in the valid returned trials. A3 remains a model/provider timeout and is retained as an infrastructure-confounded result.
+
+This closes the repair loop for the identified catalog defect. A future performance claim still requires a clean paired multi-run comparison; this tool-only smoke run certifies execution stability, not LLM uplift.
