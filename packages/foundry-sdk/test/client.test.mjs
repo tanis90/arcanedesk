@@ -94,7 +94,7 @@ test("public allowlists are complete and the safe default is narrow", () => {
   ]);
   assert.deepEqual(WRITE_DIRECT_ACTIONS, [
     "sceneApply",
-    "actorCreate", "actorEdit", "actorGrantItems", "imageApply",
+    "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "imageApply",
     "conditionsSet",
     "executeAction",
     "actorImport",
@@ -115,9 +115,9 @@ test("public allowlists are complete and the safe default is narrow", () => {
     "startCombat",
     "nextTurn",
   ]);
-  assert.equal(ALL_DIRECT_ACTIONS.length, 40);
+  assert.equal(ALL_DIRECT_ACTIONS.length, 41);
   assert.equal(READ_DIRECT_ACTIONS.length, 16);
-  assert.equal(WRITE_DIRECT_ACTIONS.length, 24);
+  assert.equal(WRITE_DIRECT_ACTIONS.length, 25);
   for (const action of ALL_DIRECT_ACTIONS) {
     assert.equal(isWriteDirectAction(action), DIRECT_ACTION_EFFECTS[action] === "write");
   }

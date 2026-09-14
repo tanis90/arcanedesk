@@ -12,7 +12,7 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
   "worldInfo", "battleContext", "turnContext", "executeTurn",
   "staticContext", "playContext", "executeAction", "conditionsSet",
   "contentSearch",
-  "actorRead", "actorCreate", "actorEdit", "actorGrantItems",
+  "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance",
   "sceneRead", "sceneApply", "imageApply",
 ]);
 

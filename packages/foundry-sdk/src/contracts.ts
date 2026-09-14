@@ -23,7 +23,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  */
 export const ALL_DIRECT_ACTIONS = [
   "sceneRead", "sceneApply",
-  "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "imageApply",
+  "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "imageApply",
   "contentSearch",
   "staticContext",
   "playContext",
@@ -70,7 +70,7 @@ export type DirectActionEffect = "read" | "write";
  */
 export const DIRECT_ACTION_EFFECTS = {
   sceneRead: "read", sceneApply: "write",
-  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write", imageApply: "write",
+  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write", actorAdvance: "write", imageApply: "write",
   contentSearch: "read",
   staticContext: "read",
   playContext: "read",
@@ -338,6 +338,7 @@ export interface FoundryActionMap {
   actorCreate: FoundryActionContract<ActorCreateInput, PlayWriteReceipt>;
   actorEdit: FoundryActionContract<ActorEditInput, PlayWriteReceipt>;
   actorGrantItems: FoundryActionContract<ActorGrantInput, PlayWriteReceipt>;
+  actorAdvance: FoundryActionContract<ActorAdvanceInput, PlayWriteReceipt>;
   contentSearch: FoundryActionContract<ContentSearchInput, ContentSearchResult>;
   executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
   conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
@@ -427,6 +428,8 @@ export interface ActorChanges {
 }
 export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
 export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
+export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number> }
+export interface ActorAdvanceInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number; choices?: ActorAdvanceChoices; additionalItems?: CompendiumGrant[] }
 
 export interface ContentSearchInput {
   scope: "world" | "compendium";

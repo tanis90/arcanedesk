@@ -67,7 +67,7 @@ export class FoundryServices {
 
   async writeContent(action, params, binding, toolCallId, signal) {
     const reject = (code, message) => ({ status: "rejected", code, message });
-    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
+    if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "sceneApply", "imageApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");
     const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action, input: params });
     if (replay) return replay;
     const { readRef, ...values } = params;
