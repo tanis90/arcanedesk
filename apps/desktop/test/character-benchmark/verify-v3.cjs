@@ -16,7 +16,7 @@ function verify(plan,actual,receipt){
   const e=actual.effective,s=actual.raw.system,items=actual.raw.items||[],base=receipt.sourceBefore;
   const alias=i=>{const a=aliases[i._stats?.compendiumSource];return a?.cls===plan.cls?a:null;};
   const find=(id,type)=>items.filter(i=>(i.system?.identifier===id||alias(i)?.identifier===id)&&(!type||i.type===type));
-  check('actor.unique','core',actual.sameNameCount===1&&actual.type==='npc',1,actual.sameNameCount);
+  check('actor.unique','core',actual.sameNameCount===1&&actual.type===(plan.source?'npc':'character'),1,actual.sameNameCount);
   check('actor.name','core',actual.name===receipt.name,receipt.name,actual.name);
   const cls=find(plan.cls,'class'),sub=find(plan.subclass,'subclass');
   check('class.level','core',cls.length===1&&cls[0].system.levels===plan.level&&e.level===plan.level,plan.level,e.level);
