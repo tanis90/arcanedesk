@@ -76,14 +76,15 @@ App/SDK 可推进不依赖包改动的部分和兼容检查；依赖缺失时在
 | foundry_actor_update | write | ✓ | — | 有限字段更新；图片独立交给 foundry_image |
 | foundry_image | write | ✓ | — | 独立上传、可复用 Data 路径及文档图片应用 |
 | foundry_actor_grant_items | write | ✓ | — | 新增从合集授物 |
+| foundry_actor_advance | write | ✓ | — | 通过 dnd5e 原生 AdvancementManager 建立 Character 职业成长 |
 | foundry_scene_get | read | ✓ | — | 新增明确场景读取 |
 | foundry_scene_apply | write | ✓ | — | 新增场景元数据、背景、批量 Token |
 | foundry_static_context | read | — | ✓ | 保留 combat_battle_context 的一次重上下文协议，扩展无战斗场景范围 |
 | foundry_execute_action | write | — | ✓ | 替换 combat_execute_turn，兼容战斗与叙事使用 |
 
-备团保留原三个 Foundry 工具，增加七项核心能力（search、actor get/create/update/grant、
+备团保留原三个 Foundry 工具，增加八项核心能力（search、actor get/create/update/grant/advance、
 scene get/apply）和三个共享入口（world_status、play_context、conditions_set），
-另加独立 foundry_image，共十四个 Foundry 工具。加上 request_user_input 和平台 read/edit/write/powershell 或 bash，当前备团合计 19 个。
+另加独立 foundry_image，共十五个 Foundry 工具。加上 request_user_input 和平台 read/edit/write/powershell 或 bash，当前备团合计 20 个。
 
 跑团固定六个 Foundry 工具：open、world_status、play_context、static_context、
 execute_action、conditions_set。相对原六工具：移除 browser_evaluate，
@@ -307,14 +308,33 @@ interface ActorChanges {
 不默认叠加数量，不自动替换已有物品。读取 projection 必须包含相关嵌入 Item 身份；
 真正需要调整既有数量或重复授予时明确说明首版范围，不能偷偷重复创建。
 
-### 5.6 foundry_scene_get
+### 5.6 foundry_actor_advance
+
+输入 `actorUuid`、`readRef`、`classUuid`、`targetLevel`；可选 `subclassUuid`、`raceUuid`、
+`choices` 和 `additionalItems`。目标必须是已有的 dnd5e `character` Actor；工具不创建
+第二套 Actor schema，也不接受 NPC。所有职业、子职、种族和额外 Item 均通过精确 UUID
+解析，来源必须是当前世界允许的 Compendium。
+
+`choices` 只表达原生 advancement 无法自动决定的选择：`skills`、`tools`、`cantrips`、
+`preparedSpells`、`hp: max|avg` 和 `abilityScore`。HP、法术位、职业特性、ItemGrant、
+ScaleValue 与派生字段由 dnd5e `AdvancementManager.forNewItem` 和公开 advancement
+`apply()` 负责；Runtime 不复制 D&D 规则，也不让模型提交任意 Actor patch。缺少必需选择、
+来源类型不符或出现未支持的手动 advancement 时，在写入前返回
+`ADVANCEMENT_NEEDS_CHOICE` 或 `SOURCE_MISMATCH`。
+
+执行顺序是：读取并校验 Actor → 在 native clone 上逐 step 应用选择 → 用 Foundry 原生
+Actor/embedded Item API 一次提交 → 可选额外物品去重授予 → 回读等级、HP、Item 数量和来源摘要。
+提交后的异常返回 `partial` 且 `retry:false`，不得自动重放。第一版只覆盖 Character progression；
+资源连接状态仍以原生 Item 的实际字段为准，空的 `uses.max` 不由工具臆造数值。
+
+### 5.7 foundry_scene_get
 
 输入 `sceneUuid`；可选 `include: [tokens,walls,lights,tiles,notes,sounds]`、limit/cursor。
 默认元数据、背景、尺寸、网格、active 与 readRef。显式读取目标 Scene，不依赖当前
 canvas。placeables 分类型分页，默认 50、最大 100，不把整张大场景返回。
 读类型可以宽于首版写类型。
 
-### 5.7 foundry_scene_apply
+### 5.8 foundry_scene_apply
 
 create 分支输入 `operation:create` 和 scene；update 分支另要求 sceneUuid/readRef。
 scene 白名单：name、active、background:DataImage、width、height、grid。
@@ -1707,7 +1727,6 @@ Arcane 的 `auto2014-catalogue/src/spell-content.mjs` 是兼容层：它把调�
 
 首个实现尚未宣称完成：当前生产 `foundry_content_search` 仍只是名称/identifier 搜索，`foundry_build_query` 也没有职业法术列表；本节记录的是已验证的数据源和实施顺序，旧 benchmark 分数不覆盖。
 
-
 ## 36. DeepSeek Flash 内容目录对照（2026-09-10，进行中）
 
 用户指定本轮测试使用本机 COS：<http://127.0.0.1:30002/game>，worldId=COS，CDP=9230。Gamemaster 登录密码为空；当前已有 GM2 会话 ready/isGM 验证通过，复用该会话。不得沿用旧 30000 地址或把 cos-a/30101 当成本轮目标。
@@ -1723,3 +1742,29 @@ Arcane 的 `auto2014-catalogue/src/spell-content.mjs` 是兼容层：它把调�
 ### 36.1 整批已结束（2026-09-11核对）
 
 12/12完成独立审计，JS与catalog均4/6通过，A2工具臂300秒超时。初审发现工具采用率不足，B2/B3未调用目录工具，不能将其耗时变化归因于工具。详见[结果与轨迹初审](prep-deepseek-flash-catalog-results.md)。逐条归因及修复后复测仍待完成，不能宣称改进闭环已完成。
+
+## 37. Native Character advancement adapter 第一版（2026-09-14）
+
+### 37.1 已实施
+
+基于本机 Foundry 13.351 / dnd5e 5.3.3 源码和 COS 实测，新增稳定 action `actorAdvance` 与工具 `foundry_actor_advance`。它不是 Actor Studio/Character Builder UI，而是 Agent 到 dnd5e 原生 Advancement 的受限桥接：
+
+- 输入现有 Character Actor 的 UUID、class/subclass/race UUID、目标等级和原生 advancement 所需 choices；
+- Runtime 调用 `AdvancementManager.forNewItem`，在 clone 上逐 step 调用公开 `advancement.apply()`；
+- 用 Foundry 原生 Actor 与 embedded Item API 提交 clone；
+- 额外 Item 复用现有 UUID grant 去重逻辑；
+- 缺少选择、来源类型错误或不支持的手动步骤在提交前拒绝，提交后异常返回 `partial` 且不可重试；
+- 返回等级、HP、Item 数量和来源摘要的 compact verification。
+
+该实现没有复制 HP、法术位、职业特性或 D&D 规则，也没有引入第二套 Actor schema。
+
+### 37.2 证据
+
+- 本地 COS 真实 runtime smoke：临时 Character 成功生成 3 级 Cleric + Hill Dwarf + Life Domain，等级为 3，HP 为 27/30，职业/子职/种族特性和 cleric scale 均存在；测试 Actor 在 finally 中删除。
+- `packages/foundry-sdk`：101/101 tests passed。
+- `apps/desktop`：`verify:source` 与完整 test suite passed。
+- 实现提交：`ee59818 feat: bridge character advancement to native dnd5e`。
+
+### 37.3 尚未关闭的边界
+
+第一版只支持已有 Character，不支持 NPC 自动派生或完整角色创建向导。资源连接不由工具臆造：COS 中 generic Channel Divinity Item 的 `uses.max` 仍为空，虽然 cleric scale 已由原生 advancement 生成；后续应单独验证这是当前 dnd5e Item 的预期动态字段还是需要资源连接 adapter。该边界不能被报告为“资源已全部修复”。
