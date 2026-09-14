@@ -24,7 +24,7 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
 export const ALL_DIRECT_ACTIONS = [
   "sceneRead", "sceneApply",
   "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "imageApply",
-  "contentSearch",
+  "contentSearch", "contentList",
   "staticContext",
   "playContext",
   "conditionsSet",
@@ -71,7 +71,7 @@ export type DirectActionEffect = "read" | "write";
 export const DIRECT_ACTION_EFFECTS = {
   sceneRead: "read", sceneApply: "write",
   actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write", actorAdvance: "write", imageApply: "write",
-  contentSearch: "read",
+  contentSearch: "read", contentList: "read",
   staticContext: "read",
   playContext: "read",
   conditionsSet: "write",
@@ -340,6 +340,7 @@ export interface FoundryActionMap {
   actorGrantItems: FoundryActionContract<ActorGrantInput, PlayWriteReceipt>;
   actorAdvance: FoundryActionContract<ActorAdvanceInput, PlayWriteReceipt>;
   contentSearch: FoundryActionContract<ContentSearchInput, ContentSearchResult>;
+  contentList: FoundryActionContract<ContentListInput, ContentListResult>;
   executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
   conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
   staticContext: FoundryActionContract<Record<string, never>, PlayStaticContext>;
@@ -428,7 +429,7 @@ export interface ActorChanges {
 }
 export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
 export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
-export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number> }
+export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number> }
 export interface ActorAdvanceInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number; choices?: ActorAdvanceChoices; additionalItems?: CompendiumGrant[] }
 
 export interface ContentSearchInput {
@@ -447,6 +448,51 @@ export interface ContentSearchResult {
     entryId?: string; packId?: string; package?: string }>;
   total: number;
   nextCursor: string | null;
+}
+export interface ContentListInput {
+  world?: { origin: string; id: string };
+  scope: "compendium";
+  type: "classFeature" | "spell" | "item" | "weapon";
+  rules?: "2014" | "2024";
+  actorUuid?: string;
+  classUuid?: string;
+  subclassUuid?: string;
+  raceUuid?: string;
+  characterLevel?: number;
+  maxLevel?: number;
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}
+export interface ContentListStepSummary { slot: string; level: number; kind: string; label: string; summary?: string }
+export interface ContentListChoiceRequirement {
+  slot: string; level: number; kind: string; label: string; count: number;
+  valueFormat: string; fill: string[]; candidates?: string[]; candidateNames?: Record<string, string>; cap?: number; required: boolean;
+}
+export interface ContentListCandidate {
+  uuid: string; name: string; type: string | null; level: number | null;
+  packId: string; entryId: string; eligibility: "legal" | "auto-grant" | "name-match";
+}
+/** Advisory spellcasting budget from hardcoded SRD rules tables. Preparation counts/state and
+ *  slot counts are deliberately absent: preparation is a sheet marker we do not manage, and dnd5e
+ *  computes slots. Null for non-spellcasting classes. */
+export interface ContentListSpellBudget {
+  ability: string | null;
+  progression: string;
+  cantrips?: number;
+  known?: number;
+  book?: number;
+}
+export interface ContentListResult {
+  status: "completed" | "rejected"; code?: string; message?: string;
+  actorAdvanceArgs?: { classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number };
+  automaticSteps?: ContentListStepSummary[];
+  choiceRequirements?: ContentListChoiceRequirement[];
+  spellBudget?: ContentListSpellBudget | null;
+  coverage?: { nativeStepCount: number; automaticStepCount: number; choiceStepCount: number; uncoveredRequiredSteps: string[] };
+  candidates?: ContentListCandidate[];
+  total?: number; page?: number; nextPage?: number | null;
+  warnings?: Array<RuntimeArguments>;
 }
 
 /** Resolved from the host's static snapshot, never supplied as a second model source selector. */

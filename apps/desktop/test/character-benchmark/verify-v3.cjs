@@ -57,7 +57,8 @@ function verify(plan,actual,receipt){
   if(plan.cls==='rogue')check('skills.expertise','important',Object.values(e.skills).filter(v=>v.value>=2).length+(s.tools?.thief?.value>=2?1:0)>=2,'two expertise selections',Object.entries(e.skills).filter(([k,v])=>v.value>=2).map(([k])=>k));
 
   if(plan.slots.length){
-    check('spells.caster','core',e.spellcasting===(plan.cls==='cleric'?'wis':'int')&&e.spell.level===plan.level,plan.level,e.spell);
+    const casterAbility=plan.cls==='cleric'?'wis':'int';
+    check('spells.caster','core',e.spellcasting===casterAbility&&e.level===plan.level,{ability:casterAbility,level:plan.level},{ability:e.spellcasting,level:e.level});
     check('spells.slots','core',Array.from({length:9},(_,i)=>i+1).every(n=>Number(e.slots['spell'+n]?.max||0)===(plan.slots[n-1]||0)&&Number(e.slots['spell'+n]?.value||0)===(plan.slots[n-1]||0)),plan.slots,Object.fromEntries(Object.entries(e.slots).filter(([k])=>/^spell[1-9]$/.test(k)).map(([k,v])=>[k,[v.value,v.max]])));
     const spells=items.filter(i=>i.type==='spell'),cantrips=spells.filter(i=>i.system.level===0),book=spells.filter(i=>i.system.level>0),prepared=book.filter(i=>i.system.prepared===1);
     const invalidSpells=spells.filter(i=>{const ref=spellMetadata[i.system.identifier];return ref&&(ref.level!==i.system.level||(!ref.classes.includes(plan.cls)&&!(plan.domain||[]).includes(i.system.identifier)));});check('spells.known-membership','important',invalidSpells.length===0,'known SRD spells match class and level',invalidSpells.map(i=>i.system.identifier));
@@ -66,10 +67,11 @@ function verify(plan,actual,receipt){
     check('spells.book','important',book.length===plan.book.length&&new Set(book.map(i=>i.system.identifier)).size===book.length&&book.every(i=>i.system.level<=plan.slots.length),plan.book.length,book.length);
     if(plan.cls==='wizard'){const limits=Array.from({length:plan.slots.length-1},(_,i)=>i+2).map(r=>({ring:r,max:2*(plan.level-(2*r-1)+1),actual:book.filter(i=>i.system.level>=r).length}));diagnostics.push({id:'spells.acquisition',ok:limits.every(x=>x.actual<=x.max),expected:'normal level-up acquisition; informational, not a task failure',observed:limits});}
     const castingMod=mod(vals[plan.cls==='cleric'?4:3]);check('spells.attack-dc','important',e.spell.attack===castingMod+e.prof&&e.spell.dc===8+castingMod+e.prof,{attack:castingMod+e.prof,dc:8+castingMod+e.prof},{attack:e.spell.attack,dc:e.spell.dc});
-    check('spells.prepared','important',prepared.length===ordinary,ordinary,prepared.length);
-    for(const id of plan.domain||[])check('domain.'+id,'core',find(id,'spell').length===1&&find(id,'spell')[0].system.prepared===2,'always prepared',find(id,'spell')[0]?.system.prepared);
+    // Preparation is a sheet marker, not a casting gate in dnd5e; informational only, never a failure.
+    diagnostics.push({id:'spells.prepared',ok:prepared.length===ordinary,expected:ordinary,observed:prepared.length});
+    for(const id of plan.domain||[])check('domain.'+id,'core',find(id,'spell').length===1,'domain spell granted',find(id,'spell').length);
     if(plan.cls==='wizard'){const f=find('fireball','spell');const acts=Object.values(f[0]?.system.activities||{});
-      check('fireball.ready','core',f.length===1&&f[0].system.prepared>0&&f[0].system.level===3&&acts.some(a=>a.type==='save'&&a.save?.ability?.includes('dex')&&a.damage?.onSave==='half'&&a.consumption?.spellSlot===true&&a.damage?.parts?.some(p=>p.number===8&&p.denomination===6&&p.types?.includes('fire'))),'prepared level3 DEX/8d6fire/half/slot',acts.map(a=>a.type));}
+      check('fireball.ready','core',f.length===1&&f[0].system.level===3&&acts.some(a=>a.type==='save'&&a.save?.ability?.includes('dex')&&a.damage?.onSave==='half'&&a.consumption?.spellSlot===true&&a.damage?.parts?.some(p=>p.number===8&&p.denomination===6&&p.types?.includes('fire'))),'level3 DEX/8d6fire/half/slot',acts.map(a=>a.type));}
   }
   const resources=plan.cls==='fighter'?['second-wind','action-surge']:plan.cls==='cleric'?['channel-divinity']:plan.cls==='wizard'?['arcane-recovery']:[];
   for(const id of resources){const raw=find(id,'feat')[0];const u=e.items.find(i=>i.id===raw?._id)?.uses;check('resource.'+id,'important',Number(u?.max)===1&&Number(u?.value)===1,{max:1,value:1},u);}

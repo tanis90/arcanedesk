@@ -24,3 +24,13 @@ test("step spelling and summaries follow the Desktop contract; uploaded files ar
   assert.deepEqual(result.steps[0].targets,[]);
   assert.deepEqual(result.steps[0].dataPaths,["arcanedesk/assets/hash.png"]);
 });
+
+test("advancement steps keep their slot shape and never produce undefined summaries", () => {
+  const result = normalizeFoundryWriteReceipt({ status: "completed", steps: [
+    { label: "class", level: 1, kind: "HitPointsAdvancement", slot: "class:1:HitPointsAdvancement:0" },
+    { label: "subclass", level: 2, kind: "ItemGrantAdvancement", slot: "subclass:2:ItemGrantAdvancement" },
+  ] },{ action: "actorAdvance", args: {} });
+  assert.equal(result.steps[0].summary,"class:1:HitPointsAdvancement:0 class");
+  assert.equal(result.steps[1].summary,"subclass:2:ItemGrantAdvancement subclass");
+  assert.ok(!JSON.stringify(result.steps).includes("undefined"));
+});

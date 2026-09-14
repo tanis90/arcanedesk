@@ -114,6 +114,43 @@
   发明"会话边界"概念，只让它检查自己上下文里有没有记录。用户只说"导入"不视为同意
   第三方云上传。
 
+### arcane-actor-update（2026-09-14）
+
+- 法术授予不置 `system.prepared`：dnd5e 5.3.3 源码确认 prepared 只是法术书页签标记，
+  无任何 usage/施放闸门；置准备是额外写操作且会把"合集默认值"覆写漂移。保持默认即可，
+  用户明确要求才设置。character benchmark 校验同步移除 prepared 断言（降级为诊断项）。
+
+### foundry_content_list spellBudget（2026-09-14）
+
+- `contentList(type=classFeature)` 新增 advisory 字段 `spellBudget: {ability, progression,
+  cantrips?, known?, book?}`，数值全部来自 SDK runtime 硬编码的 SRD 规则表（2014/2024 两版
+  + TCE 奇械），按 `source.rules` 或 classUuid 含 `classes24` 判版本、按 identifier 查表。
+  非施法职业返回 null；0 值字段省略（如 1 级游侠 known=0 不下发）。
+- 用户裁决：prepared 数量与公式一律不下发——准备只是页签标记，工具不管理准备；法师只发
+  法术书（6+2×(L−1)，两版同公式），不发 2024 Max Prepared；第三施法者（奥法骑士/诡术贼）
+  v1 放弃。法术位不进表：dnd5e 按 progression 自动计算（含兼职混合规则），重复下发只会
+  与系统漂移。
+- full-list 职业（牧/德/圣/奇械）只有 ability/progression/cantrips；known 仅 2014
+  诗/术/契/游；book 仅法师。Actor Studio 的 2024 列照抄 2014 有误，其数值未采用；表数值
+  以 dnd5e 5.3.3 两版职业 advancement 与 TCE 奇械实测为准。
+- 配套引导：`arcane-content-catalog` 重写对齐现行工具（原稿写的是实验 fixture 的旧参数面：
+  小写 class/subclass、classEligible 三字段、不存在的 foundry_content_detail；fixture 侧
+  与自身工具一致，不动）；`arcane-actor-update` 新增工具流与数量契约（budget→候选→对账→
+  回读，环位上限从 advance 后角色的 spellN.max>0 读）。character benchmark 公共 skill
+  不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
+  不与历史报告求可比（用户裁决）。
+
+### subclass-uuid 候选池（2026-09-14）
+
+- `choiceRequirements` 中 `valueFormat:"subclass-uuid"` 的要求现挂 `candidates`（uuid）+
+  `candidateNames`（名称映射）。机制照 Actor Studio：扫合集 index 按 `system.classIdentifier
+  === 职业 identifier` 过滤；但它用配置包列表（默认只有 `dnd5e.subclasses`），我们扫全部
+  Item 包按 `type==="subclass"` 过滤——实测 2024 子职业住在 `dnd5e.classes24` 包内部、
+  2014 全集在模块包（120 条，系统 SRD 包只有 12 条）。条目带显式 `source.rules` 且与职业
+  规则版本冲突才排除，缺失规则字段的保留。
+- skill 配套两段流程：先不带 subclassUuid 拿计划与候选池，定下后带它重调 list——子职业
+  自身的授予/选择步骤（`subclass:` 前缀）才进输出，`actorAdvanceArgs` 才带上它。
+
 ### arcane-actor-update（2026-09-01）
 
 - 由 `arcane-actor-images` 扩scope改名而来：头像/token 规则原样保留，新增人物条目授予。

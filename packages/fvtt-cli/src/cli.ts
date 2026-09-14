@@ -945,6 +945,48 @@ async function main(): Promise<void> {
     });
 
   program
+    .command("content-list")
+    .description("List level-up options read-only: a class's native advancement plan (automatic steps, required choices, actorAdvanceArgs) or paged compendium spell/item/weapon candidates")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("contentList", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "contentList", directCdp: true } });
+    });
+
+  program
+    .command("actor-read")
+    .description("Read one world actor's compact summary and editing projections, returning the readState required by write actions")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorRead", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorRead", directCdp: true } });
+    });
+
+  program
+    .command("actor-advance")
+    .description("Advance a dnd5e Character through native class/race advancement with explicit choices")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "60000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorAdvance", args, { timeoutMs: parseTimeout(opts.timeout, 60000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorAdvance", directCdp: true, write: true } });
+    });
+
+  program
     .command("actor-set-image")
     .description("Set a world actor image, prototype token image, and optional embedded item images")
     .requiredOption("--json <json>", "JSON object args or @file path")

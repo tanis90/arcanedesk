@@ -4,7 +4,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const assert=require("node:assert/strict"), path=require("node:path"), fs=require("node:fs"), crypto=require("node:crypto");
   const productionPrep=fs.readFileSync(path.resolve(__dirname,"../../system-prompts/prep.md"),"utf8").trim();
   const common="你是 ArcaneDesk 备团助手。遵循 DM 的明确要求。测试世界已经连接且 GM 就绪。使用精确世界对象和合集来源，避免重复创建。只用公开 Foundry Document API，等待每次写入完成，返回紧凑结果并确认实际变化。不确定写入不能重放。只操作用户指定的测试对象，不修改模块文件或包。缺少必要信息才提问。成功回复简洁，用中文。";
-  const newTools=new Set(["world_status","foundry_play_context","foundry_conditions_set","foundry_content_search","foundry_actor_get","foundry_actor_create","foundry_actor_update","foundry_actor_grant_items","foundry_scene_get","foundry_scene_apply","foundry_image"]);
+  const newTools=new Set(["world_status","foundry_play_context","foundry_conditions_set","foundry_content_search","foundry_content_list","foundry_actor_get","foundry_actor_create","foundry_actor_update","foundry_actor_grant_items","foundry_actor_advance","foundry_scene_get","foundry_scene_apply","foundry_image"]);
   const imageFile=path.join(__dirname,"prep-benchmark-assets/benchmark20260508180804.jpg");
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
@@ -41,7 +41,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="pack-skill"){report.experiment.kind="native NPC guide versus same guide plus production actor skill";report.experiment.promptPolicy="Same tools and native NPC guide; candidate additionally exposes the unchanged production arcane-actor-update skill and asks the model to read it for source discovery";}
   if(comparison==="rules-ablation"){report.experiment.kind="paired SRD rules skill ablation";report.experiment.promptPolicy="Same native NPC guide, production pack guide and tools; only candidate receives SRD rules skill and read instruction";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
-  if(comparison==="catalog"){report.experiment.kind="catalog query ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same write tools; only search/list/detail availability differs";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-content-catalog.cjs"))).digest("hex");}
+  if(comparison==="catalog"){report.experiment.kind="catalog query and actor advance ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same other tools; only search/list/detail availability and foundry_actor_advance differ";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-content-catalog.cjs"))).digest("hex");}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?characterActors?"character-v9-pc-controlled":"character-v8-catalog-controlled":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??(characterSuite?300000:180000));
@@ -146,7 +146,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
       providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
-    if(arm==="native_skill_catalog_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original().filter(t=>t.name!=="foundry_content_search"),...require("./prep-content-catalog.cjs").createTools(evaluate)];}
+    if(arm==="native_skill_catalog_tool"){const original=host.buildTools.bind(host);host.buildTools=()=>[...original().filter(t=>!["foundry_content_search","foundry_content_list"].includes(t.name)),...require("./prep-content-catalog.cjs").createTools(evaluate)];}
     setHost(host);await host.start({fresh:true});
     if(arm==="native_skill_catalog_tool"){for(const n of ["foundry_content_search","foundry_content_list","foundry_content_detail"])host.session._allowedToolNames.add(n);host.session._refreshToolRegistry();}
     if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
@@ -160,11 +160,11 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       return replacement;
     };
     if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
-    if(arm==="native_skill_catalog_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>n!=="foundry_content_search"));
+    if(arm==="native_skill_catalog_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_content_search","foundry_content_list","foundry_actor_advance"].includes(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     if(arm==="native_skill_catalog_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_content_search","foundry_content_list","foundry_content_detail"])]);
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(arm==="native_skill_catalog_js"&&n==="foundry_content_search")&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
+    const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(arm==="native_skill_catalog_js"&&["foundry_content_search","foundry_content_list","foundry_actor_advance"].includes(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
     if(arm==="native_skill_catalog_tool")expectedTools.push("foundry_content_search","foundry_content_list","foundry_content_detail");
     const uniqueExpectedTools=[...new Set(expectedTools)];
     assert.deepEqual([...trial.activeTools].sort(),uniqueExpectedTools.sort(),"Ablated tool set changed");

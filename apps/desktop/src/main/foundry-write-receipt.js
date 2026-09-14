@@ -15,7 +15,7 @@ export function normalizeFoundryWriteReceipt(value, { action, args }) {
   steps = (steps ?? []).map(step => {
     const state = step.state === "not-started" ? "not_started" : step.state;
     const normalized = { ...step, targets: step.targets ?? [], state,
-      summary: step.summary ?? `${step.step}: ${state}` };
+      summary: step.summary ?? (step.step !== undefined ? `${step.step}: ${state}` : [step.slot, step.label].filter(Boolean).join(" ")) };
     if (step.step === "upload-image") {
       normalized.dataPaths = step.targets ?? [];
       normalized.targets = [];

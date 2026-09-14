@@ -15,7 +15,21 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 
 Character 路径中，模型只负责选择来源、等级和明确选项。不要自己计算 HP、AC、技能映射、法术位或资源；让 dnd5e 计算并通过一次 read-back 验证。
 
+## 车卡 / 升级施法职业：工具流与法术数量契约
+
+车卡或升级施法职业时优先工具流，不凭记忆推规则数量：
+
+1. 计划：`foundry_content_list`（`type:"classFeature"`，传 `actorUuid`、`classUuid`、目标 `characterLevel`，有子职/种族传 `subclassUuid`/`raceUuid`）。`automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复添加；`choiceRequirements` 每条带 `fill`（填到 advance 入参的键）、`valueFormat`、`count`/`cap`，只填这些要求。
+2. 数量预算：`spellBudget` 是该等级的施法数量契约——`cantrips` 戏法数、`known` 已知法术数（2014 诗/术/契/游）、`book` 法术书容量（法师）。选满这个数，不多不少。
+3. 候选：`foundry_content_list`（`type:"spell"`，传同一 `classUuid`）分页列候选并带 `eligibility`；戏法传 `maxLevel:0`。环位上限不背表：advance 后角色身上 `system.spells.spellN.max > 0` 的环即合法环位，按此选法术书/已知。
+4. 子职业：`subclass-uuid` 要求自带 `candidates`（uuid）和 `candidateNames`（名称映射）。用户指定学派时按名称从池里选；未指定时按任务默认或从池里挑，池为空才用 `foundry_content_search` 定位。定下 `subclassUuid` 后必须带它重调一次 list：子职业自身的授予/选择步骤（`subclass:` 前缀）才进输出，`actorAdvanceArgs` 也会带上它传给 advance。
+5. 落地与对账：法术随 `additionalItems` 交给 `foundry_actor_advance`，或事后走下面的授予路径；完成后回读 `actor.items` 数一遍——戏法数 == `cantrips`、书/已知 == `book`/`known` 才算完成。
+
+授予文档的来源优先级不变（下节合集包优先）：工具流确定的法术按 identifier 在模块合集包取文档，模块缺失再直接用工具返回的 dnd5e UUID。
+
 ## 给人物添加法术 / 职业能力
+
+零散"给某人加指定法术/特性"（非整体车卡升级）走本节合集包路径直接授予。
 
 法术、职业特性、专长等条目的默认来源是 **arcane-dnd5e-2014-automation 模块的合集包**（Foundry 合集栏里的 "Arcane 5e 2014 …" 系列）：先从这里拿，拿不到才回退 system 自带包。禁止凭记忆手写条目数据——一律从 compendium 文档拷贝，避免字段版本漂移。
 
@@ -31,6 +45,7 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
 2. 检索：`await pack.getIndex()`。条目名是中英双语（如 `法师护甲 Mage Armor`，也有纯中文条目），必须用大小写不敏感的包含匹配兼容中文或英文片段，禁止拿用户给的单一语言名称做全串精确匹配。index 条目带 `type`（法术是 `spell`；职业特性和专长都是 `feat`，只能靠选包区分）和 `_id`；命中后 `await pack.getDocument(entry._id)` 取完整文档。多个候选时取名称最接近的一个并在报告里说明，不中断流程反问。
 3. 授予：`await actor.createEmbeddedDocuments("Item", [doc.toObject()])`；一次给多个条目就把多个 `toObject()` 放进同一个数组一次调用。
 4. 回读 `actor.items` 确认条目已在该人物身上，报告条目名和来源包 id。
+5. 法术的 `system.prepared` 只是法术书页签标记，不影响施放：授予保持合集默认值即可，不要额外设置准备状态，除非用户明确要求。
 
 ### 由系统默认处理的字段
 

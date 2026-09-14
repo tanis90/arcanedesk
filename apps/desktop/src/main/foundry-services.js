@@ -39,6 +39,11 @@ export class FoundryServices {
     return this.withPage(signal, () => this.call("contentSearch", params, { signal, executionTimeoutMs: 30_000 }));
   }
 
+  async contentList(params, signal) {
+    if (this.mode !== "prep") throw new Error("MODE_FORBIDDEN: content tools are prep-only");
+    return this.withPage(signal, () => this.call("contentList", params, { signal, executionTimeoutMs: 30_000 }));
+  }
+
   async actorRead(params, signal) {
     return this.readContent("actorRead", params, signal);
   }

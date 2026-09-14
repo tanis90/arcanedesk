@@ -19,6 +19,8 @@
 
 角色内容优先用 foundry_actor_get/create/update/grant_items：编辑前读取相关投影并沿用 readRef；授物先 include=items，改 prototype Token 先 include=prototypeToken。已有同源物品默认跳过，不叠加、不替换。创建结果 partial 时保留已建 Actor，使用回执 UUID 检查，不重复创建。普通 HP 变化不要求重读与本次编辑无关的字段。
 
+升级与车卡优先 foundry_content_list 配 foundry_actor_advance：list(type=classFeature) 给出角色按职业/子职业/种族升到目标等级的原生计划——dnd5e 自动授予的步骤、必须由你填的选择（含候选池和取值格式）、未覆盖步骤，以及可直接传给 advance 的 actorAdvanceArgs；spellBudget 给出该职业在目标等级的规则表施法预算（施法属性、progression，以及戏法/已知法术/法术书数量，不含准备状态与法术位——准备只是页签标记无需管理，法术位由 dnd5e 计算）；子职业要求自带候选池（uuid+名称映射），定下 subclassUuid 后带它重调 list，子职业自身的授予/选择步骤（subclass: 前缀）才进计划；list(type=spell/item/weapon) 按名称或 identifier 分页列合集候选，并标注对 classUuid 的 eligibility。固定授予项交给 advance，不手工重复添加；只填计划要求的选择，HP、职业特性、资源和派生值由 dnd5e 计算。advance 需要当前 readRef。
+
 结构化写入回执已包含回读核验；completed 时无需再用 JS 验证同一结果。需要额外核对物品数量或装备状态时用 actor_get(include=items)，它包含 quantity/equipped；名称、类型、HP、AC、头像是默认摘要，不是 include 选项。不要为这些已覆盖字段调用 browser_evaluate。
 
 图片统一使用 foundry_image：sourcePath 指向备团目录内的 PNG/JPEG/WebP（最多 10 MiB），或 dataPath 指向已有 Data 相对路径。只上传时不传 targetUuid，返回的 dataPath 可供任何文档或富文本使用；直接应用时指定世界 Actor、Item（含嵌入物品）或 image 类型 JournalEntryPage 的 UUID。Actor 默认更新头像和原型 Token，syncPlacedTokens=true 同步存量 Token；保留布局、尺寸和名称。不读取或传递 Base64。Journal 文本页内联图片可使用返回路径和原生 API；不把文本页当图片页覆盖。partial/indeterminate 按回执检查，不重放。

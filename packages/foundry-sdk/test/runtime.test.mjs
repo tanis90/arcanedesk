@@ -22,6 +22,7 @@ test("runtime subpath exports the canonical runtime and integrity metadata", () 
 
 test("runtime includes the native Character advancement bridge", () => {
   assert.match(runtimeFunction, /actorAdvanceData/);
+  assert.match(runtimeFunction, /normalizeAdvancementSteps/);
   assert.match(runtimeFunction, /AdvancementManager\.forNewItem/);
   assert.match(runtimeFunction, /case "actorAdvance"/);
 });
