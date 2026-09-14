@@ -7,8 +7,8 @@ async function snapshot({ids,sourceUuid}) {
       sourceCurrent:currentSource,
       effective:{level:s.details.level,prof:s.attributes.prof,hp:s.attributes.hp,ac:s.attributes.ac,walk:s.attributes.movement.walk,
         movement:s.attributes.movement,traits:s.traits,abilities:s.abilities,skills:s.skills,spellcasting:s.attributes.spellcasting,spell:s.attributes.spell,slots:s.spells,
-        hd:s.attributes.hd,scale:a.getRollData().scale,items:a.items.map(i=>({id:i.id,identifier:i.system.identifier,type:i.type,uses:i.system.uses,activities:Array.from(i.system.activities||[]).map(x=>x.toObject())}))}});
-  }return result;
+        hd:{value:s.attributes.hd?.value,max:s.attributes.hd?.max},scale:a.getRollData().scale,items:a.items.map(i=>({id:i.id,identifier:i.system.identifier,type:i.type,uses:i.system.uses,activities:Array.from(i.system.activities||[]).map(x=>x.toObject())}))}});
+  }return JSON.parse(JSON.stringify(result,(_key,value)=>value instanceof Set?[...value]:value));
 }
 async function build({plan,runId,folderName}) {
   if(game.world.id!=='COS'||!game.user.isGM)throw Error('Review world guard');

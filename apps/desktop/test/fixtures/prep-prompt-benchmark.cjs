@@ -9,7 +9,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const imageHash=crypto.createHash("sha256").update(fs.readFileSync(imageFile)).digest("hex");
   assert.equal(imageHash,"b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785");
   const characterSuite=process.argv.includes("--character-suite");
-  const character=characterSuite?(comparison==="catalog"?require("../character-benchmark/catalog-model-adapter.cjs"):require("../character-benchmark/model-adapter.cjs"))(evaluate):null;
+  const characterActors=process.argv.includes("--character-actors");
+  const character=characterSuite?(comparison==="catalog"?require("../character-benchmark/catalog-model-adapter.cjs"):require("../character-benchmark/model-adapter.cjs"))(evaluate,{verifierVersion:process.argv.includes("--character-actors")?"v5":"v4"}):null;
   if(characterSuite)assert.equal(comparison,"catalog");
   const npcCases=[...(character?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
   const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
@@ -42,7 +43,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   if(comparison==="catalog"){report.experiment.kind="catalog query ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same write tools; only search/list/detail availability differs";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"prep-content-catalog.cjs"))).digest("hex");}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
-  if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?"character-v8-catalog-controlled":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
+  if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?characterActors?"character-v9-pc-controlled":"character-v8-catalog-controlled":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??(characterSuite?300000:180000));
   report.experiment.experienceTargetMs=120000;
 
@@ -109,7 +110,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       trial.prompt=`把世界角色“${label} 角色1”的头像、原型 Token 和所有已放置 Token 图片换成本地文件 ${localImage}。不要改变 Token 名称、位置、尺寸，也不要影响其他角色。`;save();
     }
     const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
-    if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
+    if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,characterActors?"prep-native-character-skill/SKILL.md":"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}
     if(nativeRevision){report.experiment.nativeSkillHash??=trial.skillHash;assert.equal(trial.skillHash,report.experiment.nativeSkillHash,"Native revision comparison must freeze its skill");}
     const skillPaths=nativeSkillArm?[path.dirname(skillPath)]:[];
     if(["pack-skill","rules-ablation","catalog"].includes(comparison)){
@@ -185,6 +186,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     }
     if(trial.buildSkill)prompt+="\n创建前读取车卡查询指南："+trial.buildSkill.path+"。本指南关于未指定项走默认的约束优先于其他指南的自由补充建议。";
     if(trial.characterSkill)prompt+="\n本轮是完整职业车卡测试。先读取 "+trial.characterSkill.path+"，其中完整成长范围与默认优先于旧指南的最小NPC建议。";
+    if(characterActors)prompt=prompt.replaceAll("NPC","Character").replaceAll("fvtt-native-Character","fvtt-native-npc");
     host.session._baseSystemPrompt=prompt;host.session.agent.state.systemPrompt=prompt;
     trial.systemPromptHash=crypto.createHash("sha256").update(prompt).digest("hex");trial.systemPromptChars=prompt.length;
     trial.normalizedSystemPromptHash=crypto.createHash("sha256").update(prompt.split(cwd).join("<TASK_CWD>").split(cwd.split(path.sep).join("/")).join("<TASK_CWD>")).digest("hex");
