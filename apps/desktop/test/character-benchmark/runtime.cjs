@@ -45,7 +45,7 @@ async function build({plan,runId,folderName}) {
   });
   let folder=game.folders.find(f=>f.type==='Actor'&&f.flags.arcanedesk?.benchReview===runId);
   if(!folder)folder=await Folder.create({name:folderName,type:'Actor',color:'#4d7caa',flags:{arcanedesk:{benchReview:runId}}});
-  const data=base?base.toObject():{type:'npc',system:{}};delete data._id;data.name=name;data.folder=folder.id;
+  const data=base?base.toObject():{type:'character',system:{}};delete data._id;data.name=name;data.folder=folder.id;
   data.flags??={};data.flags.arcanedesk??={};data.flags.arcanedesk.benchReview={runId,caseId:plan.id,provisional:true};
   data.prototypeToken??={};data.prototypeToken.name=name;
   const s=data.system;s.abilities??={};for(const [i,k]of ['str','dex','con','int','wis','cha'].entries())s.abilities[k]={...s.abilities[k],value:plan.abilities[i]};
