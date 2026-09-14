@@ -1,5 +1,7 @@
 # Character benchmark controlled round — 2026-09-14
 
+> 复核更正：A3 的 feature 失败不能等同于能力未导入；来源身份和 Trait 表示差异造成部分误判，也存在漏判。详见 [A3 trace 分析](prep-a3-trace-analysis-20260914.md)。下表保留原始评分，原原因归纳以复核分析为准。
+
 本轮固定为 Character 创建，DeepSeek Flash、thinking=high、300 秒上限、COS world（Foundry 13.351 / dnd5e 5.3.3），每个 case 每个 arm 一次。JS/native arm 与 catalog-tool arm 使用相同 prompt/skill；区别只有 catalog 查询方式。审计使用 Character v5 verifier，并在只读回读中验证角色类型和派生字段。
 
 | Case | JS/native | Catalog tool | 结论 |
