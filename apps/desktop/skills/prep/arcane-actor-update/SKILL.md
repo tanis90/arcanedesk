@@ -33,6 +33,21 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 但 HP 和移动速度可能默认为 0。用户或来源没有给出时可以省略并报告实际值；用户或 spec 有要求时，
 必须显式写入并回读 `system.attributes.hp` 和 `system.attributes.movement.walk`。
 
+### 不要自行推导 Foundry 默认字段
+
+下面这些是 Foundry/dnd5e 数据模型的系统职责，创建 NPC 时没有用户或 spec 的明确值就不要传：
+
+| 字段/问题 | 默认动作 | 只有何时才写 |
+|---|---|---|
+| `system.skills.<key>.ability` | 省略；`CONFIG.DND5E.skills` 会初始化技能对应属性 | 用户要求替代属性，或来源文档明确给出合法覆盖 |
+| `system.tools` 的 key、`art:*` / `vehicle:*` 等 MappingField 结构 | 省略；不要研究或重建 `MappingField` 的初始 key | 用户明确要求某项工具熟练/专精，并且写入后回读确认 |
+| `system.attributes.ac` 的派生/默认值 | 省略；让 dnd5e 计算 | spec 明确要求固定 AC 或 flat AC |
+| `system.resources`、法术位和 Item 派生 uses | 省略；由系统和导入的原生 Item 初始化 | spec 明确要求具体资源数值；只写要求的槽位/资源并回读 |
+| NPC 与 Character 的 HP 派生差异 | 不阅读系统源码猜公式；按 Actor 类型创建，读取实际结果 | spec 明确 HP 时写 `system.attributes.hp.value/max`，然后 read-back |
+| `system.attributes.movement.walk` | 未指定时可省略（系统可能得到 0） | spec 或来源明确要求速度时显式写入并回读 |
+
+不要为了确认这些默认值调用 `browser_evaluate` 去翻 dnd5e 源码。正确流程是：最小必要输入 → 一次写入 → 一次 read-back；若结果与明确 spec 不符，再针对该字段修复。默认字段不需要出现在模型生成的 patch 中。
+
 ## 人物头像与 Token 图像同步
 
 Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是互不联动的字段：只设头像，token 会显示默认的神秘人剪影。凡是创建人物或修改人物图像，两个位置必须一起设置、一起回读验证，不允许只改其一。
