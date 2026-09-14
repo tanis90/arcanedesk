@@ -5,6 +5,16 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 
 # 人物（Actor）更新
 
+## Actor 类型与派生计算
+
+先根据用户意图选择 Actor 类型：
+
+- “玩家角色”“角色卡”“我的 5 级法师”或仅提供职业+种族+等级而没有 NPC 语义时，使用 `type: "character"`。导入职业、种族、背景和子职的原生 Item，让 dnd5e 准备等级、HP、AC、技能、法术位和资源；然后 read-back 实际结果。
+- “NPC”“敌人”“守卫”“首领”“怪物”时，使用 `type: "npc"`。优先导入完整 stat block；空白 NPC 不会自动获得玩家角色式等级 HP。
+- 添加职业能力不会改变 Actor 类型；类型由用户意图决定。
+
+Character 路径中，模型只负责选择来源、等级和明确选项。不要自己计算 HP、AC、技能映射、法术位或资源；让 dnd5e 计算并通过一次 read-back 验证。
+
 ## 给人物添加法术 / 职业能力
 
 法术、职业特性、专长等条目的默认来源是 **arcane-dnd5e-2014-automation 模块的合集包**（Foundry 合集栏里的 "Arcane 5e 2014 …" 系列）：先从这里拿，拿不到才回退 system 自带包。禁止凭记忆手写条目数据——一律从 compendium 文档拷贝，避免字段版本漂移。
