@@ -64,3 +64,8 @@ The valid conclusion is: keep the UUID-verified import and compact catalog desig
 ## Tool-only validation after eval-scope fix (2026-09-14)
 
 After injecting `progressionView` into the browser evaluation scope, A1 completed successfully (114s) and its trace contained no catalog-list ReferenceError. The follow-up loop produced A2 as a provider/fixture-guard failure and did not yield valid business trials for A3-B3 because the QA-A fixture guard rejected the reused profile. These are harness lifecycle failures, not catalog correctness results. The remaining work is to isolate a fresh provider profile per case (or reset the QA fixture guard) and rerun A2-B3; only then can this loop certify the tool.
+
+
+## Clean tool-only rerun after scope fix
+
+Using separate profiles, A1, A2, B1 and B2 each reached a returned state and passed the business verifier. None emitted a catalog-tool error. A3 timed out with provider error; its catalog calls were clean, while browser/powershell calls failed. This supports treating remaining failures as model/provider execution instability rather than a catalog implementation defect. B3 remains to be rerun in a clean profile.
