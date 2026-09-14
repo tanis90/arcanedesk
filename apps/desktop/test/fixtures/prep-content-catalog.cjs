@@ -183,7 +183,7 @@ function createTools(evaluate) {
       : mode==='detail' ? 'Read one exact native Document in full; scope must match its UUID.'
       : 'Read a bounded source-defined list, including native class spell eligibility linked to import sources. Reports ambiguity and missing source data.',
     async execute(_id,args){return {content:[{type:'text',text:JSON.stringify(await evaluate(
-      `(${queryCatalog.toString()})(${JSON.stringify(mode)},${JSON.stringify(args)},${queryBuild.toString()})`))}]};}
+      `(${progressionView.toString()});(${queryCatalog.toString()})(${JSON.stringify(mode)},${JSON.stringify(args)},${queryBuild.toString()})`))}]};}
   }));
 }
 module.exports={queryCatalog,createTools};
