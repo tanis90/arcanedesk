@@ -59,3 +59,8 @@ The available post-change run cannot establish a tool benefit. The compact proje
 Before this defect is corrected, the paired post-change data is: JS 5/5 business passes among A1-A3/B1/B2 (B3 JS also passed in the continuation), while tool trials include A1 and B1 business failures, B2 provider failure, and B3 timeout. This is evidence that the tool did not improve the model in this run, but it is **not** evidence that the catalog design itself hurts performance: the tool path was partly broken and the model also used it inconsistently. Tool latency was usually higher when exploration occurred (for example A3 tool 261s vs JS 185s; B3 tool timed out at 300s), indicating the current skill/tool surface adds search cost without a reliable correctness gain.
 
 The valid conclusion is: keep the UUID-verified import and compact catalog design, fix and retest the fixture first, then compare at least five clean paired runs. Do not use the current contaminated batch to claim an LLM performance improvement or regression.
+
+
+## Tool-only validation after eval-scope fix (2026-09-14)
+
+After injecting `progressionView` into the browser evaluation scope, A1 completed successfully (114s) and its trace contained no catalog-list ReferenceError. The follow-up loop produced A2 as a provider/fixture-guard failure and did not yield valid business trials for A3-B3 because the QA-A fixture guard rejected the reused profile. These are harness lifecycle failures, not catalog correctness results. The remaining work is to isolate a fresh provider profile per case (or reset the QA fixture guard) and rerun A2-B3; only then can this loop certify the tool.
