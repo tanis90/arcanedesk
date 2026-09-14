@@ -1,4 +1,5 @@
 import test from 'node:test';
+import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
@@ -51,4 +52,27 @@ test('catalog: class eligibility, source linking, ambiguity, scope and paginatio
     assert.deepEqual(tools.map(t=>t.name),['foundry_content_search','foundry_content_list','foundry_content_detail']);
     assert.ok(tools.every(t=>t.parameters.required.includes('scope')));
   } finally {delete globalThis.game;delete globalThis.fromUuid;}
+});
+
+// Execute the exact expression sent to Chromium in a context with no host closures.
+// Calling queryCatalog directly misses dependencies lost by Function.toString().
+test('catalog browser expression resolves class progression without host module scope', async () => {
+  const uuid = 'Compendium.dnd5e.classfeatures.Item.wind';
+  const feature = {uuid, name:'Second Wind', type:'feat', system:{identifier:'second-wind', source:{rules:'2014'}, uses:{max:'1'}},
+    toObject(){return {name:this.name,type:this.type,system:this.system};}};
+  const cls = {uuid:'Compendium.dnd5e.classes.Item.fighter', pack:'dnd5e.classes', name:'Fighter', type:'class',
+    system:{identifier:'fighter',source:{rules:'2014'}, advancement:[{_id:'grant',type:'ItemGrant',level:1,configuration:{items:[uuid]}}]},
+    toObject(){return {name:this.name,type:this.type,system:this.system};}};
+  const pack = {collection:'dnd5e.classes',documentName:'Item',
+    getIndex:async()=>[{_id:'fighter',name:cls.name,system:cls.system}],getDocument:async()=>cls};
+  const context = vm.createContext({game:{packs:[pack]},fromUuid:async value=>value===uuid?feature:null});
+  const list = createTools(expression=>vm.runInContext(expression,context)).find(t=>t.name==='foundry_content_list');
+  const args = {scope:'compendium',type:'classFeature',class:'fighter',characterLevel:1};
+  const result = JSON.parse((await list.execute('compact',args)).content[0].text);
+  assert.equal(result.progression.class.uuid,cls.uuid);
+  assert.ok(result.progression.grants.some(d=>d.uuid===uuid));
+  assert.equal(result.progressionDetail,undefined);
+  const detailed = JSON.parse((await list.execute('detail',{...args,includeProgressionDetail:true})).content[0].text);
+  assert.equal(detailed.progressionDetail.class.advancements[0].configuration.items[0].uuid,uuid);
+  assert.ok(detailed.progressionDetail.documents.some(d=>d.uuid===uuid && d.uses.max==='1'));
 });
