@@ -76,3 +76,12 @@ Using separate profiles, A1, A2, B1 and B2 each reached a returned state and pas
 With independent profiles and the browser-scope fix, the clean tool-only checks are: A1 pass, A2 pass, A3 provider timeout (no catalog error), B1 pass, B2 pass, B3 pass. The catalog tool emitted no `progressionView` or catalog execution error in the valid returned trials. A3 remains a model/provider timeout and is retained as an infrastructure-confounded result.
 
 This closes the repair loop for the identified catalog defect. A future performance claim still requires a clean paired multi-run comparison; this tool-only smoke run certifies execution stability, not LLM uplift.
+
+
+## A3 timeout trace analysis (2026-09-14)
+
+A3 did not fail inside catalog. The task reached `timedOut:true` at 300,367 ms with `taskError: This operation was aborted`, `cancellation: timeout_abort`, and `modelError: provider error`. The first event arrived at 1.7 s. The trace contains 34 thinking blocks and 46 tool calls. Catalog calls themselves returned successfully, including a 55 KB classFeature list and a 77 KB progression list; no `progressionView` or catalog execution error occurred.
+
+The model completed source discovery by about 46 s, then spent the remaining ~254 s in exploratory `browser_evaluate` and `powershell` calls reading dnd5e internals and debating native NPC defaults. It repeatedly investigated MappingField/tool proficiency and HP preparation code instead of committing the actor and performing a bounded read-back. The final calls continued past the 300 s deadline (one browser evaluation at ~250 s failed, and powershell calls continued through ~305 s) before the harness abort arrived.
+
+This is a planning/stop-condition failure amplified by provider latency, not a catalog defect. The useful tool-design change is to make the skill prescribe: one catalog list, detail only for selected UUIDs, then write; do not inspect Foundry source code during a benchmark; after one failed browser operation, stop retrying and either write the known native fields or return a clear unresolved item. A per-task tool-call/time budget would also prevent a long diagnostic tail.
