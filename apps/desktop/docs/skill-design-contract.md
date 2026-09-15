@@ -281,3 +281,16 @@
 - 不教模型提取/阅读流程：建库时模型已通读全文，画图要不要再读由它自决。skill 只
   约束产物——图菜单（总览/骨架/线索/关系/拓扑，每张只回答一个问题）、每条边要有
   原文依据、≤15 节点、跨图同物同名。
+
+### advance 回执 trait 落地审计（2026-09-16）
+
+- v7 批次归因：B 组 NPC 扩展裸 eval 居高（B1 14 次、~54s）不是因为回执缺字段，而是
+  模型看到 `traits.armor:[]`/`traits.weapons:[]` 无法区分"没授予"与"授予被原生丢弃"，
+  花 8 次 eval 翻数据模型求证。dnd5e 5.3.3 的 NPCData 模型没有 `traits.armorProf`/
+  `weaponProf` 字段（character 才有），怪物挂职业等级后护甲/武器熟练被原生静默丢弃。
+- 决策：advance 提交后对所有 TraitAdvancement 已选值做落地审计——经
+  `CONFIG.DND5E.traits` 的 actorKeyPath 定位目标字段（skills/saves/tool/languages 特判），
+  字段不存在或值未落入即报 `TRAIT_GRANT_NOT_LANDED` 警告（按 code+value 去重）。
+  skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
+- 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
+  的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。

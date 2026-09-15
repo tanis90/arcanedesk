@@ -61,7 +61,10 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    before/after diff，`changed` 为空即原卡分毫未动，不需要再翻 traits 原文核对）、
    hpFill/slotFill/spellFill
    全在其中，收到 `completed` 即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，
-   视为工具缺口，在报告里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
+   视为工具缺口，在报告里注明。回执 warnings 的 `TRAIT_GRANT_NOT_LANDED` 是 dnd5e 原生
+   静默丢弃的显性化：该 actor 类型在当前系统版本没有对应字段（典型：NPC 卡没有护甲/武器
+   熟练字段，怪物挂职业等级后这两族熟练天然落空）——收到即在报告里披露，不要回读数据
+   模型求证，也不要手工修补。`partial`/`indeterminate` 按回执指引处理，不重放整批。
 
 ## 车卡 / 升级施法职业：法术数量契约
 

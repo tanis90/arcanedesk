@@ -600,3 +600,34 @@ B3 23c/68s），但残余裸 eval 未如预期下降（B1 12、B2 10、B3 9）�
 
 SDK 159 绿（新增 NPC preservation 干净/有变两例 + grantedItems identifier 一例）；桌面
 496 绿；bundle revision 23。
+
+### 12.5 v7 批次归因 → 第五轮修复（trait 落地审计）
+
+v7 工具臂 6/6 core 全绿（A1 21c/57s/bare4、A2 18c/40s/bare4、A3 25c/81s/bare10、
+B1 25c/104s/bare14、B2 28c/86s/bare13、B3 22c/80s/bare8）。关键发现：preservation
+回执没能降 B 组裸 eval——B1 trace 思考链显示模型收到了 `preservation.changed` 仍继续
+审计。真正原因：模型看到回执 `traits.armor:[]`/`traits.weapons:[]` 无法区分"没授予"
+和"授予被丢弃"，44s→98s 花 ~8 次 eval 调查，实证出 **dnd5e 5.3.3 的 NPCData 模型
+根本没有 `traits.armorProf`/`weaponProf` 字段**（character 有；`Trait.actorKeyPath(key)`
+签名不是传 key，直接调用会 throw）。也就是说怪物挂职业等级后，职业给的护甲/武器熟练
+在原生 dnd5e 下就是静默丢弃的——模型在替我们探明一个数据模型事实。
+
+修复（runtime + 回执）：
+
+- **落地审计**：advance 提交后遍历 resolved plans 的 TraitAdvancement 条目，非 expertise
+  槽逐个 chosen key 跑 `traitLanded()`：skills/saves/tool 直接查 value/proficient≥1；
+  其他族经 `CONFIG.DND5E.traits[family].actorKeyPath`（weapons→weapon 单数回退）定位
+  目标，目标字段不存在 → 判定丢弃；languages 特判 traits.languages；`setHas` 兼容
+  Set/{value:Set}/数组。整个检查以 `CONFIG.DND5E.traits` 存在为门（mock fixture 没有 →
+  旧测试零幻影警告）。未落地报 `TRAIT_GRANT_NOT_LANDED` 并按 (code,value) 去重——
+  一个职业等级的同族授予来自多个 advancement 条目（职业+子职业+战斗风格），不去重
+  同 key 会重复出现（活冒烟：9 条 → 去重后 6 条）。expertise 槽维持
+  `EXPERTISE_NOT_LANDED`（文案同步改为"在同次调用的 skills/tools 槽里先选熟练"）。
+- **回执 `traits.tools` 口径修正**：`toolProf` ∪ `system.tools` 中 value≥1 的 key——
+  NPC 的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+- 工具描述与 skill 教义同步：收到 `TRAIT_GRANT_NOT_LANDED` 即在报告披露，不回读
+  数据模型求证，不手工修补。
+
+活冒烟（狼人副本 + fighter 1 级）：completed，6 条去重后的 `TRAIT_GRANT_NOT_LANDED`
+（armor:lgt/med/hvy/shl、weapons:sim/mar），preservation.changed=[]，烟雾 actor 已删。
+SDK 161 绿；桌面 496 绿；bundle revision 24。

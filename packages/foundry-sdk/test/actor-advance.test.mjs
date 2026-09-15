@@ -23,7 +23,7 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [] } = {}) {
+function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [], traitPaths = false } = {}) {
   let writes = 0;
   const itemUpdates = [], itemDeletes = [];
   const preItems = actorItems.map(item => ({ ...item }));
@@ -73,7 +73,8 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
   const context = vm.createContext({
     game: { ready: true, user: { isGM: true }, world: { id: "w" }, packs },
     location: { origin: "https://foundry.test" },
-    CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])) } },
+    CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])),
+      ...(traitPaths ? { traits: { armor: { actorKeyPath: "system.traits.armorProf" }, weapon: { actorKeyPath: "system.traits.weaponProf" } } } : {}) } },
     dnd5e: { applications: { advancement: { AdvancementManager: manager } }, registry: { spellLists: { forType: () => null } },
       documents: { Trait: { keyLabel: key => key, ...(traitExpansion ? { mixedChoices: async keys => {
         const out = new Set();
@@ -144,6 +145,25 @@ test("expertise picks outside the proficient set reject the whole advance before
   assert.equal(result.code, "ADVANCEMENT_NEEDS_CHOICE");
   assert.match(result.message, /expertise picks not proficient: skills:slt/);
   assert.equal(f.writes(), 0);
+});
+
+test("armor/weapon grants that cannot land on the actor surface as TRAIT_GRANT_NOT_LANDED", async () => {
+  const profs = new TraitAdvancement({ grants: ["armor:lgt", "weapons:sim"] }, "Proficiencies");
+  profs.autoValue = { chosen: ["armor:lgt", "weapons:sim"] };
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: profs }], traitPaths: true });
+  const result = await f.advance({});
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.warnings.filter(w => w.code === "TRAIT_GRANT_NOT_LANDED").map(w => w.value).sort(), ["armor:lgt", "weapons:sim"]);
+});
+
+test("landed trait grants produce no landing warnings", async () => {
+  const profs = new TraitAdvancement({ grants: ["armor:lgt"] }, "Proficiencies");
+  profs.autoValue = { chosen: ["armor:lgt"] };
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: profs }], traitPaths: true });
+  f.actor.system.traits = { armorProf: { value: new Set(["lgt"]) } };
+  const result = await f.advance({});
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.warnings.length, 0);
 });
 
 test("the post-write net reports EXPERTISE_NOT_LANDED when the native apply drops a valid pick", async () => {
@@ -360,9 +380,11 @@ test("creation advance pulls hp up only, never pushes down", async () => {
 test("NPC advance receipt reports an empty preservation diff when innate traits survive", async () => {
   const f = fixture({ classFlows: [hp(1)], actorType: "npc" });
   f.actor.system.traits = { di: { value: ["poison"] }, size: "med" };
+  f.actor.system.tools = { thief: { value: 1 } };
   const result = await f.advance({ targetLevel: 1 });
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(result.verification.preservation, { changed: [] });
+  assert.deepEqual(result.verification.traits.tools, ["thief"]);
 });
 
 test("NPC preservation diff names the exact trait path that changed", async () => {
