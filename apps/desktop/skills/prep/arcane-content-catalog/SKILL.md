@@ -42,14 +42,21 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 - 子职业两次调用约定：先不带 `subclassUuid` 拿计划（`subclass-uuid` 步骤自带
   `candidates`/`candidateNames` 池，按职业与规则版本过滤）；定下后带它重调一次，子职业
   自身的授予/选择步骤（`subclass:` 前缀）才进输出。
+- HP 不进 `choiceRequirements`：1 级满骰、后续级固定均值，由 advance 原生完成，
+  `automaticSteps` 带信息摘要。HP 不需要选择、不需要验算，advance 回执的
+  `hp`/`hpFill` 即终态。
 - `actorAdvanceArgs` 原样传给 `foundry_actor_advance`。
 
 ## browse 过滤与 uuids 模式
 
-- 法术/物品候选：`type:"spell"/"item"`，按名称或 identifier 匹配，`page`/`pageSize`
-  分页；`maxLevel` 限制法术环位（戏法传 0），`itemType` 过滤物品类别（武器/装备等）。
-  传 `classUuid` 时候选带 `eligibility`：`legal` 在该职业法术列表上；`auto-grant` 由
-  职业/子职自动授予，不要再手工授予；`name-match` 仅名称命中，授予前自行核实。
+- 法术/物品发现的首选形态是 `names` 批量解析：把记得的名单一次传给
+  `foundry_compendium_browse`（`type:"spell"/"item"`，≤50 个），每个名字独立按单一
+  语言名称或 identifier 子串匹配——一条名字只用一种语言，中英不要组合进同一个字符串。
+  逐名返回 `status`：`unique` 直接取 uuid；`ambiguous` 多为 2014/2024 双版本重名，
+  加 `rules` 收窄即可；`miss` 才换拼写重试，或转 `query` 分页浏览（`page`/`pageSize`，
+  `maxLevel` 限环位、戏法传 0，`itemType` 过滤物品类别）。法术传同一 `classUuid` 时
+  候选带 `eligibility`：`legal` 在该职业法术列表上；`auto-grant` 由职业/子职自动授予，
+  不要再手工授予；`name-match` 仅名称命中，授予前自行核实。
 - uuids 模式（传 `uuids`，≤20 个）：返回完整文档（summary + document）。仅两个用途：
   语义选择（用户要"控场法术"这类理解题）与异常对账（授予不符预期时排查）。发现流程
   不得使用。

@@ -27,15 +27,24 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。
 3. 事后改属性：`foundry_actor_update` 的 `dnd5e.abilities` 是 SET 语义修正路径——
    advance 之后写入的必须是含种族/ASI 加成的最终基础值；名称/HP/AC/token 同此出口。
+   选择型种族（半精灵的自选属性、变体人类的专长、高等精灵的戏法等）的种族侧选择池
+   plan/advance 暂不下发：advance 后按回执核对，缺的部分用本工具 SET 补终值，并在
+   报告里注明哪些是手工补的。
 4. 升级写入：`foundry_actor_advance` 一次完成——`actorAdvanceArgs` 来自
    `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；装备、法术书
-   法术等额外条目随 `additionalItems`（≤50）同一批写入；`fullList` 职业改传
-   `fullSpellList:true`。0 级建档的 advance 收尾自动满血（回执 `hpFill` 可见），
-   既有角色升级不动当前 HP——都不需要额外补血操作。
+   法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
+   未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
+   改传 `fullSpellList:true`。HP 由 dnd5e 原生计算（1 级满骰、后续级固定均值），plan
+   不会询问 HP，也不需要自行验算。0 级建档的 advance 收尾自动满血（回执 `hpFill`
+   可见），既有角色升级不动当前 HP——都不需要额外补血操作。
 5. 补充授予：advance 之外的零散授予走 `foundry_actor_grant_items`（1~50 条/批，按来源
    去重不叠加）。能走 `additionalItems` 的优先随 advance 一次写入。
-6. 回执即对账：写工具回执带 verification，`completed` 即完成——禁止再裸 eval 回读自检
-   同一结果；`partial`/`indeterminate` 按回执指引处理，不重放整批。
+6. 回执即对账：advance 回执的 verification 就是 actor 终态报告——abilities（每属性
+   before/after + race/asi 分解）、subclass、race（含 size）、movement、languages、
+   traits（豁免/技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/
+   slots/戏法与法术计数）、ac、resources、hpFill/spellFill 全在其中，收到 `completed`
+   即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，视为工具缺口，在报告
+   里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
 
 ## 车卡 / 升级施法职业：法术数量契约
 
@@ -62,7 +71,7 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
 5. 落地与对账：法术书法术、装备随 `additionalItems` 交给 advance 一次写入；用户明确只
    点名少数几个法术而不要全列表时，才省略 `fullSpellList` 改用 `additionalItems` 按名
    授予。advance 回执带 verification（含 `fullSpellList` 时的 `spellFill` 授予计数）——
-   收到回执即对账完成，禁止裸 eval 回读数数。
+   收到回执即对账完成，不需要回读数数。
 
 授予文档的来源优先级不变（下节合集包优先）：browse 去重已按模块包优先呈现，直接用
 返回的 UUID 即可。

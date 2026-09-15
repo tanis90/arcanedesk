@@ -479,6 +479,10 @@ export interface CompendiumBrowseInput {
   maxLevel?: number;
   itemType?: "weapon" | "equipment" | "consumable" | "tool" | "loot" | "container" | "ammo";
   query?: string;
+  /** Batch name resolution (spell/item only): each entry resolves independently with the same
+   *  single-language substring/identifier matching as query — never combine languages in one
+   *  string. Mutually exclusive with query; pagination does not apply. */
+  names?: string[];
   page?: number;
   pageSize?: number;
   uuids?: string[];
@@ -489,7 +493,7 @@ export interface ContentListChoiceRequirement {
   valueFormat: string; fill: string[]; candidates?: string[]; candidateNames?: Record<string, string>; cap?: number; required: boolean;
 }
 export interface ContentListCandidate {
-  uuid: string; name: string; type: string | null; level: number | null;
+  uuid: string; name: string; identifier?: string | null; type: string | null; level: number | null;
   packId: string; entryId: string; eligibility?: "legal" | "auto-grant" | "name-match";
 }
 /** Discovery-catalog entry for type class/subclass/race: the bootstrap listing that hands the model
@@ -534,9 +538,16 @@ export interface CompendiumBrowseDocument {
   summary: { identifier: string | null; level: number | null; classIdentifier?: string };
   document: RuntimeArguments;
 }
+/** Per-name batch resolution result (names mode): exact name/identifier hits rank first in
+ *  candidates (capped at 10); unique = exactly one deduped row, miss = none, ambiguous otherwise
+ *  (cross-rules duplicates are the common ambiguous case — pass rules to narrow). */
+export interface ContentListNameResolution {
+  query: string; status: "unique" | "ambiguous" | "miss"; total: number; candidates: ContentListCandidate[];
+}
 export interface CompendiumBrowseResult {
   status: "completed" | "rejected"; code?: string; message?: string;
   candidates?: ContentListCandidate[] | ContentListCatalogEntry[];
+  resolutions?: ContentListNameResolution[];
   documents?: CompendiumBrowseDocument[];
   total?: number; page?: number; nextPage?: number | null;
   warnings?: Array<RuntimeArguments>;

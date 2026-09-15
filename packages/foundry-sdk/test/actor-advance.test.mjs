@@ -27,7 +27,8 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
   let writes = 0;
   const preItems = [];
   const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: "character",
-    items: [], system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel } },
+    items: [], system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel },
+      abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, { value: 8, proficient: 0 }])) },
     async update(patch = {}) { writes++; for (const [key, value] of Object.entries(patch)) {
       if (!key.includes(".")) { actor[key] = value; continue; }
       const keys = key.split("."); let target = actor.system;
@@ -142,6 +143,8 @@ test("ability score improvement applies native shapes and enforces cap and point
   const result = await f.advance({ targetLevel: 4, choices: { abilityScore: { str: 2 } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(asi.applied), [[4, { type: "asi", assignments: { str: 2 } }]]);
+  assert.equal(result.verification.abilities.str.asi, 2);
+  assert.equal(result.verification.abilities.dex.asi, 0);
 });
 
 test("feat branch consumes one feat per ASI step and warns on leftover abilityScore", async () => {
@@ -157,9 +160,14 @@ test("feat branch consumes one feat per ASI step and warns on leftover abilitySc
 test("race fixed ability bonuses apply automatically without choices", async () => {
   const racial = new AbilityScoreImprovementAdvancement(asiConfig({ points: 0, fixed: { str: 0, dex: 0, con: 2, int: 0, wis: 1, cha: 0 } }), "Ability Score Increase");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: racial }] });
+  f.actor.system.details.race = { type: "race", name: "人类", flags: { dnd5e: { sourceId: "Compendium.packs.rules.Item.race" } } };
   const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race" });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(racial.applied), [[0, { type: "asi", assignments: { str: 0, dex: 0, con: 2, int: 0, wis: 1, cha: 0 } }]]);
+  assert.equal(result.verification.abilities.con.race, 2);
+  assert.equal(result.verification.abilities.wis.race, 1);
+  assert.equal(result.verification.abilities.str.race, 0);
+  assert.deepEqual(result.verification.race, { uuid: "Compendium.packs.rules.Item.race", name: "人类", size: null });
 });
 
 test("item grants select non-optional items; spell selections without a consuming step warn", async () => {
@@ -245,6 +253,23 @@ test("fullSpellList grants the annotated class spell list after advancement; oth
   assert.equal(rejected.status, "rejected");
   assert.match(rejected.code, /INPUT_INVALID/);
   assert.equal(w.writes(), 0);
+});
+
+test("advance receipt carries the actor end-state blocks for reconciliation", async () => {
+  const f = fixture({ classFlows: [hp(1)] });
+  const result = await f.advance({});
+  assert.equal(result.status, "completed");
+  const v = result.verification;
+  assert.deepEqual(v.abilities.str, { before: 8, after: 8, race: 0, asi: 0 });
+  assert.equal(v.subclass, null);
+  assert.equal(v.race, null);
+  assert.deepEqual(v.movement, { walk: null });
+  assert.deepEqual(v.languages, { applied: [] });
+  assert.deepEqual(v.traits, { saves: [], skills: [], armor: [], weapons: [], tools: [] });
+  assert.deepEqual(v.proficiency, { bonus: null });
+  assert.equal(v.spellcasting, null);
+  assert.deepEqual(v.ac, { value: null, calc: null });
+  assert.deepEqual(v.resources, []);
 });
 
 test("creation advance (level 0) fills hp to the derived max and reports hpFill", async () => {

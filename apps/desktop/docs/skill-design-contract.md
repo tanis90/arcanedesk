@@ -58,6 +58,29 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### A 系列 trace 解剖优化（D1-D6，2026-09-15）
+
+- D1 HP 永不询问：HP 槽撤出 plan 的 choiceRequirements（1 级满骰、后续级固定均值，
+  dnd5e 原生计算，automaticSteps 给信息摘要）；choices.hp 保留为 advance 隐藏覆盖
+  （DM 掷骰 HP 才传），plan 不下发。实证：A1 模型因 hp-mode 槽语义不明翻系统源码
+  8 次，而默认行为本就正确。
+- D2 不做 HP 数值 preview/公式教学：对错由 benchmark 验收夹具判断，skill 引导模型
+  信任工具，不教模型自行验算派生值。
+- D3 receipt 即终态：advance verification 扩展为 abilities（before/after + race/asi
+  分解）/subclass/race/movement/languages/traits/proficiency/spellcasting/ac/resources
+  全字段——验收器查什么回执报什么，替代 34KB 裸 dump 式回读。亚种 = 独立 race 条目
+  沿用。选择型种族（半精灵自选属性、变体人类专长、高等精灵戏法）v1 走执行路径
+  （advance 后 actor_update SET 补终值 + 报告注明）；种族侧选择池进 plan/choices 是
+  backlog 最高优先级——工具不支持就迭代工具，不让模型长期手搓。
+- D4 browse names[] 批量解析：记忆名单一次 ≤50 个，每个名字独立做单一语言子串/
+  identifier 匹配（"火球 Fireball" 式中英组合串已实证 0 命中）；unique 直接取 uuid、
+  ambiguous 多为跨规则重名（传 rules 收窄）、miss 才翻页/search 兜底。匹配算法不变。
+- D5 skill 只教理想路径、不写禁令：模型绕开工具走裸 JS 是"工具不如裸 JS 好用"的
+  强信号，harness jsFallback 遥测天然记录，靠迭代工具收敛而非禁令压制。本条软化
+  2026-09-15"发现工具三分"记录里"禁止裸 eval 回读自检"的表述为正面路径教学。
+- D6 未点名装备从简（benchmark 与生产 skill 一致）：DM 点名的装备精确解析；未点名
+  起始装备按常识名单一次 names[] 带过，不逐件考证价格/包来源/备选组合。
+
 ### arcane-dnd5e-rules（2026-09-09）
 
 - 用户交互预算0：读取随包提供的SRD资料、选择查询路径属于C类技术细节，不要求DM确认。

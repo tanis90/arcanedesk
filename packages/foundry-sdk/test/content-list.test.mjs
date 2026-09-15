@@ -100,12 +100,27 @@ test("classFeature serializes the shared plan: requirements, automatics, coverag
   assert.equal(asiReq.cap, 2);
   assert.equal(asiReq.valueFormat, "asi-assignment");
   assert.ok(result.choiceRequirements.some(r => r.valueFormat === "subclass-uuid"));
-  assert.ok(result.choiceRequirements.some(r => r.valueFormat === "hp-mode" && r.required === false));
+  assert.ok(!result.choiceRequirements.some(r => r.kind === "HitPointsAdvancement"));
+  assert.ok(result.automaticSteps.some(s => s.kind === "HitPointsAdvancement" && s.summary === "hp: automatic system default"));
   assert.ok(result.automaticSteps.some(s => s.kind === "ItemGrantAdvancement" && s.summary === "grant 1 items"));
   assert.equal(result.coverage.nativeStepCount, 6);
   assert.equal(result.coverage.uncoveredRequiredSteps.length, 1);
   assert.match(result.coverage.uncoveredRequiredSteps[0], /class:1:TraitAdvancement:1/);
   assert.equal(f.writes(), 0);
+});
+
+test("classFeature reports hp as an automatic step with the hit-die derived summary", async () => {
+  const die = new HitPointsAdvancement({}, "Hit Points");
+  const f = fixture({ classFlows: [{ level: 1, advancement: die }, { level: 5, advancement: die }],
+    classSystem: { hd: { denomination: "d6" } } });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 5 });
+  assert.equal(result.status, "completed");
+  assert.ok(!result.choiceRequirements.some(r => r.kind === "HitPointsAdvancement"));
+  const summaries = result.automaticSteps.filter(s => s.kind === "HitPointsAdvancement").map(s => [s.level, s.summary]);
+  assert.deepEqual(summaries, [[1, "hp: max hit die (6) + con mod"], [5, "hp: fixed 4 (d6 average) + con mod"]]);
+  const legacy = await fixture({ classFlows: [hp(1)], classSystem: { hitDie: "d8" } })
+    .list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
+  assert.ok(legacy.automaticSteps.some(s => s.summary === "hp: max hit die (8) + con mod"));
 });
 
 test("classFeature hydrates candidateNames for pool-uuid and trait-key steps", async () => {
@@ -168,6 +183,46 @@ test("spell candidates filter by query, rules, maxLevel and mark class-list elig
   const page2 = await f.list({ type: "spell", pageSize: 2, page: 2 });
   assert.equal(page2.candidates.length, 1);
   assert.equal(page2.nextPage, null);
+});
+
+test("browse names mode batch-resolves each name with unique/ambiguous/miss status", async () => {
+  const spells = [
+    ["fb", "火球术", 3, "fireball"],
+    ["fb2", "火焰箭", 0, "fire-bolt"],
+    ["mm", "魔法飞弹", 1, "magic-missile"],
+    ["cs", "法术反制 Counterspell", 3, "counterspell"],
+  ];
+  const f = fixture({ spells, wizardList: ["fireball", "magic-missile", "counterspell"],
+    catalogPacks: [{ id: "dnd5e.spells24", entries: [
+      { _id: "fb24", name: "火球术 Fireball", type: "spell", system: { identifier: "fireball", level: 3, source: { rules: "2024" } } },
+    ] }] });
+  const r = await f.list({ type: "spell", classUuid: "Compendium.packs.rules.Item.class", rules: "2014",
+    names: ["火球术", "counterspell", "不存在的法术", "火"] });
+  assert.equal(r.status, "completed", JSON.stringify(r));
+  assert.equal(r.total, 4);
+  const at = query => r.resolutions.find(x => x.query === query);
+  assert.equal(at("火球术").status, "unique");
+  assert.equal(at("火球术").candidates[0].uuid, "Compendium.dnd5e.spells.Item.fb");
+  assert.equal(at("火球术").candidates[0].identifier, "fireball");
+  assert.equal(at("火球术").candidates[0].eligibility, "legal");
+  assert.equal(at("counterspell").status, "unique");
+  assert.equal(at("counterspell").candidates[0].entryId, "cs");
+  assert.equal(at("不存在的法术").status, "miss");
+  assert.equal(at("不存在的法术").total, 0);
+  assert.deepEqual(at("不存在的法术").candidates, []);
+  assert.equal(at("火").status, "ambiguous");
+  assert.equal(at("火").total, 2);
+  // Without the rules filter the cross-version duplicate makes 火球术 ambiguous, exact hit first.
+  const both = await f.list({ type: "spell", names: ["火球术"] });
+  assert.equal(both.resolutions[0].status, "ambiguous");
+  assert.equal(both.resolutions[0].total, 2);
+  assert.equal(both.resolutions[0].candidates[0].entryId, "fb");
+  const conflict = await f.list({ type: "spell", query: "火球", names: ["火球术"] });
+  assert.equal(conflict.status, "rejected");
+  assert.equal(conflict.code, "INPUT_INVALID");
+  const catalogNames = await f.list({ type: "class", names: ["法师"] });
+  assert.equal(catalogNames.status, "rejected");
+  assert.equal(catalogNames.code, "INPUT_INVALID");
 });
 
 test("spell eligibility judges at the identifier layer: module annotation authoritative, registry identifiers the fallback", async () => {

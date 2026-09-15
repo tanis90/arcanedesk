@@ -68,6 +68,7 @@ input: {
   // 通用过滤
   rules?: "2014" | "2024";       // 可选收窄；不传时双版本都返回（目录类）或按既有规则过滤（spell/item）
   query?: string;                // 名称/identifier 子串匹配（spell/item）
+  names?: string[];              // ≤ 50 批量名解析（spell/item，与 query 互斥，不分页）
   page?: number; pageSize?: number;  // 仅 spell/item 分页，pageSize ≤ 50
   // type=spell
   maxLevel?: number;             // 0 = 戏法
@@ -86,8 +87,12 @@ output: {
   candidates?: Array<{ uuid: string; name: string; identifier: string | null;
     packId: string; rules: "2014" | "2024" | null; classIdentifier?: string }>
   // 分页模式（type=spell/item）
-    | Array<{ uuid: string; name: string; type: string | null; level: number | null;
-    packId: string; entryId: string; eligibility?: "legal" | "auto-grant" | "name-match" }>;
+    | Array<{ uuid: string; name: string; identifier?: string | null; type: string | null;
+    level: number | null; packId: string; entryId: string;
+    eligibility?: "legal" | "auto-grant" | "name-match" }>;
+  // names 模式（type=spell/item）
+  resolutions?: Array<{ query: string; status: "unique" | "ambiguous" | "miss";
+    total: number; candidates: 分页模式行 /* ≤ 10 条/名，精确命中排前 */ }>;
   total?: number; page?: number; nextPage?: number | null;
   // uuids 模式
   documents?: Array<{ uuid: string; name: string; type: string; packId: string | null;
@@ -98,6 +103,10 @@ output: {
 
 语义备注：
 
+- **names 批量解析**（D4）：法术/装备发现的首选形态——模型按记忆名单一次给 ≤50 个
+  名字，每个名字**独立**做单一语言子串/identifier 匹配（禁止"火球 Fireball"式中英
+  组合串），精确命中排前。unique 直接取 uuid；ambiguous 常见于跨规则版本重名（传
+  rules 收窄，候选带 rules 标签）；miss 才翻页浏览或 search 兜底。
 - **包范围**：全 Item 包扫描（含 arcane 模块包）；旧实现只扫 dnd5e 硬编码三包，是模型
   裸 eval 枚举模块包的真因。
 - **去重**：key = `rules + identifier`（identifier 缺失退回 uuid）。同 key 合并、arcane 包
@@ -155,6 +164,11 @@ output: {
 - **子职业两次调用约定**：不带 subclassUuid 先拿计划（choiceRequirements 里
   valueFormat="subclass-uuid" 的步骤自带 candidates/candidateNames 池）；定下子职业后
   带 subclassUuid 重调一次，子职业自身的授予/选择步骤才会枚举（slot 带 subclass: 前缀）。
+- **HP 永不进 choiceRequirements**（D1）：1 级满骰、后续级固定均值，dnd5e 原生计算；
+  automaticSteps 给信息性摘要（"hp: max hit die (6) + con mod" / "hp: fixed 4 (d6
+  average) + con mod"）。choices.hp 保留为 advance 隐藏覆盖项（DM 掷骰 HP 才传），
+  plan 不下发、不询问。不做 HP 数值 preview（D2）——对错由验收夹具判断，skill 引导
+  模型信任工具而非自行验算。
 - **choiceRequirements 是唯一的填写清单**：fill 指明填到 advance 入参的哪个键
   （choices.skills / choices.cantrips / choices.abilityScore / subclass-uuid …），
   candidates 是该步骤的合法候选池，从池中选，不凭记忆。
@@ -208,9 +222,13 @@ input: { actorUuid: string; readRef: string; classUuid: string; subclassUuid?: s
   fullSpellList?: boolean }              // 仅 fullList 职业合法，否则写入前拒绝
 ```
 
-HP、职业特性、资源、衍生值由 dnd5e 原生计算；缺/错选择在任何写入前拒绝。回执带
-verification（含 fullSpellList 时的 spellFill 授予计数）——收到回执即对账完成，
-禁止再裸 eval 自检。
+HP、职业特性、资源、衍生值由 dnd5e 原生计算；缺/错选择在任何写入前拒绝。回执
+verification 覆盖 actor 终态全字段（D3）：abilities（每属性 before/after + race/asi
+分解，回答"人类 +1 是否落地"类问题）、subclass（uuid/name）、race（uuid/name/size）、
+movement（walk 及非零其他）、languages（applied + 种族默认池 note）、traits（豁免/
+技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/slots/戏法与法术
+计数）、ac、resources（带 uses 条目）、hpFill/spellFill。收到回执即对账完成，禁止再
+裸 eval 自检；回执未覆盖的字段先视为工具缺口上报，再考虑补读。
 
 ## 4. 主流程（发现 → 建档 → 写入）
 
@@ -220,8 +238,8 @@ verification（含 fullSpellList 时的 spellFill 授予计数）——收到回
 3. advancement_plan                完整计划 + 子职业池 + spellBudget
 4. browse type:"race"              拿 raceUuid（A 组）
 5. advancement_plan +subclassUuid  最终计划（actorAdvanceArgs）
-6. browse type:"spell"/"item"      仅已知施法者（法师书/戏法）与装备需要；
-                                   准备施法者法术 = 0 次浏览（fullSpellList 一个布尔值）
+6. browse names[记忆名单]          仅已知施法者（法师书/戏法）与装备需要；一次批量解析，
+                                   miss 才翻页；准备施法者法术 = 0 次浏览（fullSpellList 一个布尔值）
 7. foundry_actor_update            基础属性建档（标准数组等非 advancement 字段）
 8. foundry_actor_advance           actorAdvanceArgs + choices + additionalItems + fullSpellList?
 9. 回执 verification 对账           0 次调用
@@ -243,14 +261,13 @@ world_status）为两臂共同固定开销，不计入对比。"裸 JS"指 brows
 | 3 | advancement_plan L5 | 子职业池 + spellBudget（戏法 4 / 书 14） |
 | 4 | browse type:"race" | 选 2014 人类行 |
 | 5 | advancement_plan +塑能 | 最终 actorAdvanceArgs |
-| 6 | browse type:"spell" maxLevel:0 +classUuid | 戏法池选 4 |
-| 7 | browse type:"spell" maxLevel:3 +classUuid | ≤3 环池选 14（含火球）；1~2 页 |
-| 8 | browse type:"item" itemType:"weapon" query:"长棍" | 长棍+匕首 |
-| 9 | browse type:"item" query:"材料包"/"法术书" | 装备 uuid |
-| 10 | actor_update | 基础属性标准数组（智力向 18 分配） |
-| 11 | actor_advance | choices{skills:[arc,inv], abilityScore, cantrips:[4]} + additionalItems[14 书 + 4 装备] |
+| 6 | browse names[4 个戏法名] maxLevel:0 +classUuid | 批量解析，eligibility=legal 确认 |
+| 7 | browse names[14 个法术书名] +classUuid | 批量解析（含火球术）；miss 才翻页补 |
+| 8 | browse type:"item" names[长棍/材料包/法术书/学者套组] | 装备批量解析（未点名装备从简，D6） |
+| 9 | actor_update | 基础属性标准数组（智力向 18 分配） |
+| 10 | actor_advance | choices{skills:[arc,inv], abilityScore, cantrips:[4]} + additionalItems[14 书 + 4 装备] |
 
-预期 **11~13 次，裸 JS 0，search 0**。
+预期 **10~12 次，裸 JS 0，search 0**。
 对比：裸 JS 臂实测 39 次（30 次裸 eval）→ **降 ~67%**；现工具臂 36 次 → 降 ~64%。
 
 ### A2：人类冠军战士 5 级（长剑盾牌链甲手斧）
@@ -262,12 +279,11 @@ world_status）为两臂共同固定开销，不计入对比。"裸 JS"指 brows
 | 3 | advancement_plan L5 | 子职业池 + 战斗风格选择步骤 |
 | 4 | browse type:"race" | 2014 人类 |
 | 5 | advancement_plan +冠军 | 最终 actorAdvanceArgs |
-| 6 | browse type:"item" itemType:"weapon" query:"长剑" | 长剑+手斧×2 |
-| 7 | browse type:"item" query:"盾"/"链甲" | 防具 uuid |
-| 8 | actor_update | 基础属性（力量向 18） |
-| 9 | actor_advance | choices{skills, feats:[战斗风格], abilityScore} + additionalItems[4 装备] |
+| 6 | browse type:"item" names[长剑/盾/链甲/手斧] | 装备批量解析（quantity 在 grant 里给） |
+| 7 | actor_update | 基础属性（力量向 18） |
+| 8 | actor_advance | choices{skills, feats:[战斗风格], abilityScore} + additionalItems[4 装备] |
 
-预期 **9~11 次，裸 JS 0**。
+预期 **8~10 次，裸 JS 0**。
 对比：裸 JS 臂实测 21 次（17 次裸 eval）→ **降 ~52%**；现工具臂 19 次 → 降 ~47%。
 
 ### A3：丘陵矮人生命牧师 3 级（感知 16，轻锤）
@@ -279,18 +295,18 @@ world_status）为两臂共同固定开销，不计入对比。"裸 JS"指 brows
 | 3 | advancement_plan L3 | 子职业池 + spellBudget.fullList（34 个候选） |
 | 4 | browse type:"race" | 2014 丘陵矮人 |
 | 5 | advancement_plan +生命领域 | 最终 actorAdvanceArgs |
-| 6 | browse type:"spell" maxLevel:0 +classUuid | 戏法池选 3 |
-| 7 | browse type:"item" query:"轻锤" 等 | 5 件装备，1~2 次 |
+| 6 | browse names[3 个戏法名] maxLevel:0 +classUuid | 批量解析 |
+| 7 | browse type:"item" names[轻锤/链甲/盾/圣徽/探险家套组] | 装备批量解析（从简，D6） |
 | 8 | actor_update | 基础属性（感知向 16） |
 | 9 | actor_advance | fullSpellList:true + choices{cantrips:[3], skills} + additionalItems[5 装备]；34 法术一次写入，回执 spellFill.count=34 |
 
-预期 **9~11 次，裸 JS 0**。法术环节 0 次浏览——fullList 语义把"34 个法术的发现与填写"
+预期 **8~10 次，裸 JS 0**。法术环节 0 次浏览——fullList 语义把"34 个法术的发现与填写"
 压缩为一个布尔值，这是准备施法者的最大减负点。
 对比：裸 JS 臂实测 49 次（300s 超时失败）→ **降 ~78%**；现工具臂 40 次 → 降 ~72%。
 
 ### 验收标准（改造后重跑 A1-A3 时执行）
 
-- 工具臂总调用落在上述区间（A1 11~13 / A2 9~11 / A3 9~11），裸 JS（browser_evaluate
+- 工具臂总调用落在上述区间（A1 10~12 / A2 8~10 / A3 8~10），裸 JS（browser_evaluate
   +powershell）= 0，search ≤ 0（A 组无兜底场景）
 - advancement_plan 调用 = 2/案（子职业两次约定）；多于 2 次视为路径异常
 - 全部验收项通过（含修复后的 bonus-proficiency 别名期望）
@@ -299,7 +315,8 @@ world_status）为两臂共同固定开销，不计入对比。"裸 JS"指 brows
 
 - 三次发现调用合并为一次（跑一轮看模型是否还乱搜再说）
 - search 匹配算法改进（目录类型落地后 search 不再承担职业/种族发现，问题降级）
-- plan 扩面（startingEquipment、HP 公式下发）——下批候选，独立评估
+- HP 数值 preview / 公式下发——已否决（D2）：对错由验收夹具判断，skill 引导信任工具
+- plan 扩面（startingEquipment 候选池下发）——下批候选，独立评估
 - 法术分页体验（pageSize 上限/按环位精确过滤/给 wizard 也下发候选池）——观察项
 
 ## 7. 相对现状的变更清单
@@ -430,3 +447,31 @@ browse 去重与 catalog 目录去重统一走它，全链路口径一致。其�
 - uuids 模式吸收 detail：战斗风格/戏法池水合靠它，一次 6~9 个返回全文。
 - `additionalItems` 的 `quantity`（手斧×2）与 `equipped`（链甲+盾牌 AC 18）。
 - 模块数据 bonus-proficiency 已在生命牧师卡面（附赠熟练项 Bonus Proficiency）。
+
+## 9. 第二轮优化：A 系列 trace 解剖决策（D1-D6，2026-09-15 落地）
+
+v1 基线（r5/r5b）后逐秒解剖 A1 工具臂 trace：50 次调用里 ~33 次浪费精确落在
+plan/receipt 未覆盖的字段上——powershell 翻 dnd5e 源码验 HP 语义 ×8（24-57s）、
+不敢翻 489 池分页而逐名点查法术 ×18（66-83s）、裸 eval 回读 abilities/语言/种族
+advancement 原文核对 ×7（99-152s，含一次 34KB 全量 dump）。六条决策全部落地：
+
+| 决策 | 内容 | 落点 |
+|---|---|---|
+| D1 | HP 槽撤出 choiceRequirements，永不询问模型；choices.hp 留作 advance 隐藏覆盖（DM 掷骰 HP 才传） | runtime normalizeAdvancementSteps；automaticSteps 摘要带 hitDie 推导（§3.3） |
+| D2 | 不做 HP 数值 preview / 公式教学；对错由 benchmark 夹具判断，skill 引导模型信任工具 | §6 非目标 + 三份 skill |
+| D3 | receipt verification 扩展 actor 终态全字段（§3.8）；亚种 = 独立 race 条目（沿用，不改） | runtime actorAdvanceData |
+| D4 | browse 新增 names[] 批量解析（§3.1）；**不改匹配算法**，工具描述与 skill 写明单一语言名单教义 | runtime + desktop schema/描述 |
+| D5 | skill 只教理想路径、不写禁令；模型绕开工具走裸 JS 视为"工具不如裸 JS 好用"的强信号，harness jsFallback 遥测天然记录 | 三份 skill 改写 |
+| D6 | 未点名装备从简（benchmark 与生产 skill 一致）：DM 点名的装备精确解析，未点名的按常识名单一次 names[] 带过，不逐件考证 | skill |
+
+### 工具迭代积压（backlog）
+
+1. **选择型种族进工具**（todo，下轮迭代优先级最高）：半精灵（+2 魅力 + 两项自选
+   +1）、变体人类（自选专长）、高等精灵（自选戏法）等"种族带选择"形态，v1 走
+   skill 执行路径（advance 后 actor_update SET 补终值并在报告中注明）；下一迭代
+   把种族侧 ASI 自选/trait 选择池纳入 plan.choiceRequirements 与 advance.choices。
+2. **itemType 零命中回退**（观察项）：browse 带 itemType 过滤零命中时不回退
+   （实例："材料包"实际 type=container，按 equipment 查得 0）。若 trace 再出现
+   误过滤导致的回退搜索，再考虑零命中时去掉过滤重试并在结果标注。
+3. **B 组 NPC 职业等级支持**（已知大坑，本轮不动）：plan/advance 目前
+   ACTOR_TYPE_UNSUPPORTED 拒 NPC；B 组走怪物复制源路径。
