@@ -631,3 +631,35 @@ B1 25c/104s/bare14、B2 28c/86s/bare13、B3 22c/80s/bare8）。关键发现：pr
 活冒烟（狼人副本 + fighter 1 级）：completed，6 条去重后的 `TRAIT_GRANT_NOT_LANDED`
 （armor:lgt/med/hvy/shl、weapons:sim/mar），preservation.changed=[]，烟雾 actor 已删。
 SDK 161 绿；桌面 496 绿；bundle revision 24。
+
+### 12.6 v8 批次（12 trials）→ 迭代循环退出评估
+
+v8 全绿（12/12 core），工具臂对比 v7：
+
+| case | v7 calls/ms/bare | v8 calls/ms/bare | v8 js 臂 ms/bare |
+|---|---|---|---|
+| A1 | 21c/57s/4 | 21c/49s/4 | 197s/18 |
+| A2 | 18c/40s/4 | 19c/50s/6 | 92s/17 |
+| A3 | 25c/81s/10 | 28c/93s/7 | 284s/41 |
+| B1 | 25c/104s/14 | 17c/43s/5 | 67s/10 |
+| B2 | 28c/86s/13 | 16c/42s/5 | 185s/29 |
+| B3 | 22c/80s/8 | 19c/50s/3 | 113s/11 |
+
+B 组裸 eval 14/13/8 → 5/5/3、时长 104/86/80s → 43/42/50s：trait 落地审计 +
+preservation 回执 + skill 教义（收到警告即披露）消除了 B1 那种 54s 的数据模型求证。
+工具臂全面 2-4 倍快于裸 JS 臂且零 core 失败。
+
+残余裸 eval 逐条归因（A1/A2/A3/B1/B3 trace 全文）：只剩三桶，均无工具缺口——
+
+1. **创建期存在性检查 + Actor.create**（每案 2 次，含一次语法重试）：benchmark 工具
+   策略刻意不含 actor_create，设计内行为。
+2. **写后终态验证回读**（每案 1-5 次）：回读 spellcasting byLevel、traits 数组、
+   grantedItems identifier——**回执已全部覆盖**，模型在原始读里和 Set 序列化反复搏斗
+   （A2 连续 4 次重试 `arr(s.traits.armorProf.value)`），恰是回执已给干净数组的字段。
+   skill 已教"收到 completed 即对账完成"，这是模型的出报告前自查习惯，不是工具缺口；
+   按 D5 原则不禁止，继续观察。
+3. **怪物/职业源预读**（B 组 1-2 次）：语义理解性预读，低频，设计内。
+
+退出评估结论：**break loop**。工具臂时长 42-93s（js 臂 67-284s），core 全绿，残余
+裸写无系统性工具问题。观察项（不修，下轮数据恶化再议）：写后自查回读若在未来批次
+重新放大，优先考虑在回执里附"报告可直接引用的终态摘要块"而非加新工具。
