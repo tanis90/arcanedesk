@@ -10,7 +10,10 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 先根据用户意图选择 Actor 类型：
 
 - “玩家角色”“角色卡”“我的 5 级法师”或仅提供职业+种族+等级而没有 NPC 语义时，使用 `type: "character"`。导入职业、种族、背景和子职的原生 Item，让 dnd5e 准备等级、HP、AC、技能、法术位和资源；然后 read-back 实际结果。
-- “NPC”“敌人”“守卫”“首领”“怪物”时，使用 `type: "npc"`。优先导入完整 stat block；空白 NPC 不会自动获得玩家角色式等级 HP。
+- “NPC”“敌人”“守卫”“首领”“怪物”时，使用 `type: "npc"`。优先导入完整 stat block。
+  怪物加职业等级同样走 plan/advance 工具链：新增等级用怪物体型骰的固定均值
+  （medium 是 d8→5），没有玩家角色的首级满骰，也不会在收尾自动满血——HP 终值
+  以 advance 回执为准。
 - 添加职业能力不会改变 Actor 类型；类型由用户意图决定。
 
 Character 路径中，模型只负责选择来源、等级和明确选项。不要自己计算 HP、AC、技能映射、法术位或资源；让 dnd5e 计算并通过一次 read-back 验证。
@@ -27,22 +30,24 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。
 3. 事后改属性：`foundry_actor_update` 的 `dnd5e.abilities` 是 SET 语义修正路径——
    advance 之后写入的必须是含种族/ASI 加成的最终基础值；名称/HP/AC/token 同此出口。
-   选择型种族（半精灵的自选属性、变体人类的专长、高等精灵的戏法等）的种族侧选择池
-   plan/advance 暂不下发：advance 后按回执核对，缺的部分用本工具 SET 补终值，并在
-   报告里注明哪些是手工补的。
+   种族侧的技能/工具/语言选择已进 plan 的 `choiceRequirements`（填 `choices.skills`/
+   `choices.tools`/`choices.languages`，候选是具体 trait key）；其他种族侧选择
+   （专长、戏法、自选属性）以 plan 实际下发为准——出现在 `choiceRequirements` 就照填，
+   没出现就 advance 后按回执核对，用本工具 SET 补终值，并在报告里注明哪些是手工补的。
 4. 升级写入：`foundry_actor_advance` 一次完成——`actorAdvanceArgs` 来自
    `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；装备、法术书
    法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
    未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
    改传 `fullSpellList:true`。HP 由 dnd5e 原生计算（1 级满骰、后续级固定均值），plan
-   不会询问 HP，也不需要自行验算。0 级建档的 advance 收尾自动满血（回执 `hpFill`
-   可见），既有角色升级不动当前 HP——都不需要额外补血操作。
+   不会询问 HP，也不需要自行验算。0 级建档的 advance 收尾自动满血、自动把法术位
+   `value` 填到 `max`（回执 `hpFill`/`slotFill` 可见），既有角色升级不动当前 HP 与
+   法术位余量——都不需要额外补写操作。
 5. 补充授予：advance 之外的零散授予走 `foundry_actor_grant_items`（1~50 条/批，按来源
    去重不叠加）。能走 `additionalItems` 的优先随 advance 一次写入。
 6. 回执即对账：advance 回执的 verification 就是 actor 终态报告——abilities（每属性
    before/after + race/asi 分解）、subclass、race（含 size）、movement、languages、
    traits（豁免/技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/
-   slots/戏法与法术计数）、ac、resources、hpFill/spellFill 全在其中，收到 `completed`
+   slots/戏法与法术计数）、ac、resources、hpFill/slotFill/spellFill 全在其中，收到 `completed`
    即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，视为工具缺口，在报告
    里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
 

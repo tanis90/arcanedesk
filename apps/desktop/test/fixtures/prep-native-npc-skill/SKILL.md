@@ -6,7 +6,10 @@ description: Create or edit D&D 5e NPCs from a DM's description using Foundry Do
 # NPC preparation recipe
 
 Validated on Foundry 13 / dnd5e 5.3.3. Use browser_evaluate on the connected GM page.
-Keep variables inside an awaited async function; use public Document APIs. If the system differs,
+Top-level await is unavailable there, so every script is exactly one awaited, immediately-invoked
+async function: `await (async () => { ...; return result; })()`. A function declaration that is
+never called returns nothing; an unawaited call returns a pending Promise, not data. Keep variables
+inside that function; use public Document APIs. If the system differs,
 inspect only the affected fields. Do not modify compendiums, module files or auto-pack behavior.
 
 ## 1. Choose the base and discover the missing content

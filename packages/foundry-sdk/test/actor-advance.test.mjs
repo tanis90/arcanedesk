@@ -23,11 +23,12 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null } = {}) {
+function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {} } = {}) {
   let writes = 0;
   const preItems = [];
-  const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: "character",
+  const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: actorType,
     items: [], system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel },
+      ...(actorSpells ? { spells: actorSpells } : {}),
       abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, { value: 8, proficient: 0 }])) },
     async update(patch = {}) { writes++; for (const [key, value] of Object.entries(patch)) {
       if (!key.includes(".")) { actor[key] = value; continue; }
@@ -70,7 +71,15 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
     game: { ready: true, user: { isGM: true }, world: { id: "w" }, packs },
     location: { origin: "https://foundry.test" },
     CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])) } },
-    dnd5e: { applications: { advancement: { AdvancementManager: manager } }, registry: { spellLists: { forType: () => null } } },
+    dnd5e: { applications: { advancement: { AdvancementManager: manager } }, registry: { spellLists: { forType: () => null } },
+      documents: { Trait: { keyLabel: key => key, ...(traitExpansion ? { mixedChoices: async keys => {
+        const out = new Set();
+        for (const key of keys) {
+          if (key.endsWith(":*")) for (const k of traitExpansion[key.slice(0, -2)] ?? []) out.add(k);
+          else out.add(key);
+        }
+        return { asSet: () => out };
+      } } : {}) } } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
@@ -294,4 +303,67 @@ test("creation advance pulls hp up only, never pushes down", async () => {
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(result.verification.hp, { value: 40, max: 30 });
   assert.equal(result.verification.hpFill, undefined);
+});
+
+test("race language pools consume choices.languages with grants included", async () => {
+  const trait = new TraitAdvancement({ grants: ["languages:standard:common"], choices: [
+    { count: 1, pool: ["languages:standard:elvish", "languages:standard:dwarvish"] }] }, "Languages");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }] });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:standard:elvish"] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:common", "languages:standard:elvish"] }]]);
+  assert.equal(result.warnings.length, 0);
+});
+
+test("wildcard trait pools expand and accept any matching concrete key", async () => {
+  const trait = new TraitAdvancement({ grants: ["languages:standard:common"], choices: [
+    { count: 1, pool: ["languages:*"] }] }, "Languages");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }],
+    traitExpansion: { languages: ["languages:standard:elvish", "languages:exotic:deep", "languages:cant"] } });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:exotic:deep"] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:common", "languages:exotic:deep"] }]]);
+  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["skills:arc"] } });
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.code, "ADVANCEMENT_NEEDS_CHOICE");
+});
+
+test("wildcard pools fall back to raw keys plus prefix matching when the trait registry is unavailable", async () => {
+  const trait = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["languages:*"] }] }, "Languages");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }], traitExpansion: null });
+  const prefixed = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:standard:elvish"] } });
+  assert.equal(prefixed.status, "completed", JSON.stringify(prefixed));
+  assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:elvish"] }]]);
+  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["skills:arc"] } });
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.code, "ADVANCEMENT_NEEDS_CHOICE");
+});
+
+test("creation advance fills spell slots and reports slotFill", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorSpells: {
+    spell1: { value: 0, max: 4 }, spell2: { value: 2, max: 2 }, spell3: { value: 0, max: 0 }, pact: { value: 0, max: 1 } } });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.slotFill, { before: { spell1: 0, pact: 0 }, after: { spell1: 4, pact: 1 } });
+  assert.equal(f.actor.system.spells.spell1.value, 4);
+});
+
+test("advance of an already-leveled actor never fills slots", async () => {
+  const f = fixture({ classFlows: [hp(4)], actorLevel: 3, actorSpells: { spell1: { value: 0, max: 4 } } });
+  const result = await f.advance({ targetLevel: 4 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.verification.slotFill, undefined);
+  assert.equal(f.actor.system.spells.spell1.value, 0);
+});
+
+test("NPC actors advance with avg hit dice at every level and never fill hp", async () => {
+  const hp1 = new HitPointsAdvancement({}, "Hit Points"), hp2 = new HitPointsAdvancement({}, "Hit Points");
+  const f = fixture({ classFlows: [{ level: 1, advancement: hp1 }, { level: 2, advancement: hp2 }],
+    actorType: "npc", actorHp: { value: 50, max: 58 } });
+  const result = await f.advance({ targetLevel: 2 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(applied(hp1.applied), [[1, { 1: "avg" }]]);
+  assert.deepEqual(applied(hp2.applied), [[2, { 2: "avg" }]]);
+  assert.equal(result.verification.hpFill, undefined);
+  assert.deepEqual(result.verification.hp, { value: 50, max: 58 });
 });

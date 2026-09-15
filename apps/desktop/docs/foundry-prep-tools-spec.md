@@ -161,6 +161,15 @@ output: {
 
 语义备注：
 
+- **raceUuid 必带**（2026-09-15 定稿）：种族侧的技能/工具/语言 Trait 选择依赖
+  raceUuid 才进 choiceRequirements（slot 带 race: 前缀）。发现顺序因此定为
+  browse class → browse race → plan。
+- **trait-key 候选一律具体化**：Trait 池里的通配符（如人类额外语言的
+  `languages:*`）在 plan 出口用系统自带 `Trait.mixedChoices` 展开为具体 key
+  （`languages:standard:elvish` 等 24 个）并附 candidateNames；模型照抄池中 key
+  即可。注册表不可用时回退原始池，advance 侧匹配仍按通配符前缀语义接受具体 key。
+- **NPC 支持**：actor 类型门为 character|npc。NPC（怪物加职业等级）的 HP 摘要
+  按怪物体型骰（actor hd.denomination）下发"fixed N (dX average)"，无首级满骰。
 - **子职业两次调用约定**：不带 subclassUuid 先拿计划（choiceRequirements 里
   valueFormat="subclass-uuid" 的步骤自带 candidates/candidateNames 池）；定下子职业后
   带 subclassUuid 重调一次，子职业自身的授予/选择步骤才会枚举（slot 带 subclass: 前缀）。
@@ -215,28 +224,34 @@ CompendiumGrant: { uuid?: string; packId?: string; entryId?: string;
 ```ts
 input: { actorUuid: string; readRef: string; classUuid: string; subclassUuid?: string;
   raceUuid?: string; targetLevel: number;
-  choices?: { skills?: string[]; tools?: string[]; cantrips?: string[];
-    preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg";
+  choices?: { skills?: string[]; tools?: string[]; languages?: string[];
+    cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg";
     abilityScore?: Record<string, 1 | 2> };
   additionalItems?: CompendiumGrant[];   // ≤ 50；法术书、装备同一出口
   fullSpellList?: boolean }              // 仅 fullList 职业合法，否则写入前拒绝
 ```
+
+actor 类型门为 character|npc（2026-09-15 放开）。NPC 加职业等级：HP 步用怪物
+体型骰固定均值（无首级满骰、无 hpFill），法术位照常派生。
 
 HP、职业特性、资源、衍生值由 dnd5e 原生计算；缺/错选择在任何写入前拒绝。回执
 verification 覆盖 actor 终态全字段（D3）：abilities（每属性 before/after + race/asi
 分解，回答"人类 +1 是否落地"类问题）、subclass（uuid/name）、race（uuid/name/size）、
 movement（walk 及非零其他）、languages（applied + 种族默认池 note）、traits（豁免/
 技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/slots/戏法与法术
-计数）、ac、resources（带 uses 条目）、hpFill/spellFill。收到回执即对账完成，禁止再
-裸 eval 自检；回执未覆盖的字段先视为工具缺口上报，再考虑补读。
+计数）、ac、resources（带 uses 条目）、hpFill/slotFill/spellFill。hpFill 与 slotFill
+同属 0 级建档收尾（hpFill 仅 character；slotFill 把 spellN/pact 的 value 填到 max）。
+收到回执即对账完成，禁止再裸 eval 自检；回执未覆盖的字段先视为工具缺口上报，再考虑
+补读。
 
 ## 4. 主流程（发现 → 建档 → 写入）
 
 ```
 1. foundry_actor_create            建空 character（B 组：source=compendium 复制怪物）
 2. browse type:"class"             拿 classUuid（按 DM 指令的 rules 选行）
-3. advancement_plan                完整计划 + 子职业池 + spellBudget
-4. browse type:"race"              拿 raceUuid（A 组）
+3. browse type:"race"              拿 raceUuid（A 组）
+4. advancement_plan                classUuid + raceUuid：完整计划 + 子职业池 +
+                                   spellBudget + 种族侧选择（语言等）
 5. advancement_plan +subclassUuid  最终计划（actorAdvanceArgs）
 6. browse names[记忆名单]          仅已知施法者（法师书/戏法）与装备需要；一次批量解析，
                                    miss 才翻页；准备施法者法术 = 0 次浏览（fullSpellList 一个布尔值）
@@ -466,12 +481,27 @@ advancement 原文核对 ×7（99-152s，含一次 34KB 全量 dump）。六条�
 
 ### 工具迭代积压（backlog）
 
-1. **选择型种族进工具**（todo，下轮迭代优先级最高）：半精灵（+2 魅力 + 两项自选
-   +1）、变体人类（自选专长）、高等精灵（自选戏法）等"种族带选择"形态，v1 走
-   skill 执行路径（advance 后 actor_update SET 补终值并在报告中注明）；下一迭代
-   把种族侧 ASI 自选/trait 选择池纳入 plan.choiceRequirements 与 advance.choices。
+1. ~~选择型种族进工具~~ → 2026-09-15 部分落地（§10）：种族侧技能/工具/语言 trait
+   池已进 plan/advance；剩余缺口是种族侧 ASI 自选（半精灵 +1/+1 与职业 ASI 共用一个
+   choices.abilityScore 键会冲突）与其他 trait 类型池、optional grant——下轮迭代处理。
 2. **itemType 零命中回退**（观察项）：browse 带 itemType 过滤零命中时不回退
    （实例："材料包"实际 type=container，按 equipment 查得 0）。若 trace 再出现
    误过滤导致的回退搜索，再考虑零命中时去掉过滤重试并在结果标注。
-3. **B 组 NPC 职业等级支持**（已知大坑，本轮不动）：plan/advance 目前
-   ACTOR_TYPE_UNSUPPORTED 拒 NPC；B 组走怪物复制源路径。
+3. ~~B 组 NPC 职业等级支持~~ → 2026-09-15 落地（§10）：plan/advance 放开 npc，
+   体型骰 HP 语义与原生逐点对上。
+
+## 10. 第三轮修复：A 组缺口 G1/G2 + NPC 入口（2026-09-15 落地）
+
+A 组 v2 基线归因出的两个缺口与 B 组前置需求，一轮修完并活冒烟验证：
+
+| 缺口 | 修复 | 活冒烟证据 |
+|---|---|---|
+| G1 种族 Trait 选择不进 plan/advance（人类额外语言池原生是通配符 `languages:*`，既不可执行也无法匹配） | race 流程 Trait 池（技能/工具/语言）下发 choiceRequirements；通配符用系统 `Trait.mixedChoices` 展开为具体 key + candidateNames；advance 匹配按通配符前缀语义；choices 白名单与 ctx.provided 加 languages | 人类法师 plan：race:0 语言槽下发 24 个具体语言 key；advance choices.languages:[elvish] 落地，回执 languages.applied=[common, elvish] |
+| G2 法术位只派生 max、value 留 0（"满资源"终态不符） | 0 级建档收尾 slotFill：spellN/pact value 填到 max，回执 slotFill:{before,after} | 法师 5 级 slotFill spell1 0→4 / spell2 0→3 / spell3 0→2 |
+| NPC 入口 ACTOR_TYPE_UNSUPPORTED | plan/advance 类型门改 character\|npc；NPC HP 用怪物体型骰均值、无首级满骰、无 hpFill | 兽人（15=2d8+6, con+3）+ 法师 5 级 → hp 55/55、hd 7d8、slotFill 4/3/2、0 警告，与原生公式逐点一致 |
+
+SDK 150 断言全绿（新增通配符展开/拒绝/注册表回退 3 用例）；桌面 496 绿。
+配套教义：三份 skill 同步（发现顺序 class→race→plan、trait-key 具体 key 池、
+slotFill/hpFill 收尾语义、NPC 工具链）；js 臂 fixture skill 明确
+`await (async () => {...})()` 包裹形态（A3 裸 JS 臂曾因函数声明未调用/顶层 await
+连续摔跤 6 次）。

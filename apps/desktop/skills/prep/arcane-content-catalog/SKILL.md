@@ -22,9 +22,10 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 1. `foundry_compendium_browse`（`type:"class"`）：全部职业目录，按 `rules+identifier`
    去重、arcane 模块包优先；2014/2024 双版本各自成行，按用户指定的规则版本选行拿
    `classUuid`。
-2. `foundry_advancement_plan`（传 `actorUuid`、`classUuid`、目标 `characterLevel`）：
-   完整升级计划 + 子职业候选池 + `spellBudget`。
-3. `foundry_compendium_browse`（`type:"race"`）：同理选种族行拿 `raceUuid`。
+2. `foundry_compendium_browse`（`type:"race"`）：同理选种族行拿 `raceUuid`。
+3. `foundry_advancement_plan`（传 `actorUuid`、`classUuid`、`raceUuid`、目标
+   `characterLevel`）：完整升级计划 + 子职业候选池 + `spellBudget`；`raceUuid` 必须
+   传——种族侧的选择（语言、技能、工具熟练等）才进 `choiceRequirements`。
 
 `rules` 参数一律不传：目录自然呈现双版本供选行，plan 的规则版本由 `classUuid` 锚定
 自动推导。
@@ -34,6 +35,9 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 - `automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复添加。
 - `choiceRequirements` 是唯一的填写清单：每条带 `fill`（填到 advance 入参的哪个键）、
   `valueFormat`、`count`/`cap` 和候选池；只填这些要求，从池里选，不凭记忆。
+  `valueFormat:"trait-key"` 的池（技能/工具/语言，含种族侧）已展开为具体 key
+  （如 `languages:standard:elvish`）并附本地化 `candidateNames`；`fill` 对应
+  `choices.skills`/`choices.tools`/`choices.languages`，照抄池中的 key 即可。
 - `spellBudget` 是施法数量契约：`cantrips` 戏法数、`known` 已知法术数（2014 诗/术/契/
   游）、`book` 法术书容量（法师），选满这个数。准备施法者（2014 牧师/德鲁伊/圣武士/
   奇械）改发 `fullList`：他们能会的全部法术候选（带 uuid/名称/环位，上限为最高法术位
@@ -44,7 +48,8 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   自身的授予/选择步骤（`subclass:` 前缀）才进输出。
 - HP 不进 `choiceRequirements`：1 级满骰、后续级固定均值，由 advance 原生完成，
   `automaticSteps` 带信息摘要。HP 不需要选择、不需要验算，advance 回执的
-  `hp`/`hpFill` 即终态。
+  `hp`/`hpFill` 即终态。NPC（怪物加职业等级）同样走 plan/advance：新增等级用
+  怪物体型骰的固定均值（无首级满骰），摘要照常下发。
 - `actorAdvanceArgs` 原样传给 `foundry_actor_advance`。
 
 ## browse 过滤与 uuids 模式

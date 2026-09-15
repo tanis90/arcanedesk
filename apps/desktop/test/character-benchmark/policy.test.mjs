@@ -1,10 +1,10 @@
 import {createRequire} from 'node:module';import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url),{proficiency,extensionHp}=require('./policy.cjs');
 const base=(size,hp,formula,con)=>({system:{traits:{size},attributes:{hp:{max:hp,formula}},abilities:{con:{value:con}}}});
-assert.equal(extensionHp(base('med',58,'9d8 + 18',14),5,14),90);
-assert.equal(extensionHp(base('sm',7,'2d6',10),3,10),17);
-assert.equal(extensionHp(base('med',15,'2d8 + 6',16),5,16),52);
-assert.equal(extensionHp(base('med',58,'9d8 + 18',14),5,16),104);
+assert.equal(extensionHp(base('med',58,'9d8 + 18',14),5,14),93);
+assert.equal(extensionHp(base('sm',7,'2d6',10),3,10),19);
+assert.equal(extensionHp(base('med',15,'2d8 + 6',16),5,16),55);
+assert.equal(extensionHp(base('med',58,'9d8 + 18',14),5,16),98);
 for(const [cr,p]of [[0,2],[0.125,2],[4,2],[5,3],[8,3],[9,4],[20,6],[24,7]])assert.equal(proficiency(cr),p);
 assert.throws(()=>extensionHp(base('missing',1,'1d8',10),1,10));
 assert.equal(proficiency(3,5),3);

@@ -23,11 +23,11 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], wizardList = [], classSystem = {}, subclassEntries = [], catalogPacks = [], traitLabels = {}, poolPacks = [] } = {}) {
+function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], wizardList = [], classSystem = {}, subclassEntries = [], catalogPacks = [], traitLabels = {}, traitExpansion = {}, poolPacks = [], actorType = "character", actorHd = null } = {}) {
   let writes = 0;
   const preItems = [];
-  const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: "character",
-    items: [], system: { attributes: { hp: { value: 10, max: 10 } }, details: { level: 0 } },
+  const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: actorType,
+    items: [], system: { attributes: { hp: { value: 10, max: 10 }, ...(actorHd ? { hd: actorHd } : {}) }, details: { level: 0 } },
     async update() { writes++; }, async createEmbeddedDocuments() { writes++; },
     async updateEmbeddedDocuments() { writes++; }, async deleteEmbeddedDocuments() { writes++; } };
   const source = (uuid, type, flows, system = {}) => ({ documentName: "Item", uuid, pack: "packs.rules", type, name: type,
@@ -64,7 +64,14 @@ function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells =
     CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])) } },
     dnd5e: { applications: { advancement: { AdvancementManager: manager } },
       registry: { spellLists: { forType: key => (key === "class:wizard" ? { identifiers: new Set(wizardList) } : null) } },
-      documents: { Trait: { keyLabel: key => traitLabels[key] ?? key } } },
+      documents: { Trait: { keyLabel: key => traitLabels[key] ?? key, ...(traitExpansion ? { mixedChoices: async keys => {
+        const out = new Set();
+        for (const key of keys) {
+          if (key.endsWith(":*")) for (const k of traitExpansion[key.slice(0, -2)] ?? []) out.add(k);
+          else out.add(key);
+        }
+        return { asSet: () => out };
+      } } : {}) } } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
@@ -137,6 +144,44 @@ test("classFeature hydrates candidateNames for pool-uuid and trait-key steps", a
   const skillReq = result.choiceRequirements.find(r => r.valueFormat === "trait-key");
   assert.deepEqual(skillReq.candidateNames, { "skills:arc": "奥秘", "skills:his": "历史" });
   assert.equal(f.writes(), 0);
+});
+
+test("classFeature accepts NPC actors and summarizes hp with the monster size die", async () => {
+  const f = fixture({ classFlows: [hp(1), hp(2)], actorType: "npc", actorHd: { max: 9, denomination: 8 } });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 2 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const summaries = result.automaticSteps.filter(s => s.kind === "HitPointsAdvancement").map(s => [s.level, s.summary]);
+  assert.deepEqual(summaries, [[1, "hp: fixed 5 (d8 average) + con mod"], [2, "hp: fixed 5 (d8 average) + con mod"]]);
+});
+
+test("classFeature surfaces race language pools as choices.languages requirements", async () => {
+  const languages = new TraitAdvancement({ grants: ["languages:standard:common"],
+    choices: [{ count: 1, pool: ["languages:standard:elvish", "languages:standard:dwarvish"] }] }, "语言");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: languages }],
+    traitLabels: { "languages:standard:elvish": "精灵语", "languages:standard:dwarvish": "矮人语" } });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero",
+    classUuid: "Compendium.packs.rules.Item.class", raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:TraitAdvancement:0.pool0");
+  assert.ok(req, JSON.stringify(result.choiceRequirements));
+  assert.deepEqual({ count: req.count, fill: req.fill, candidates: req.candidates },
+    { count: 1, fill: ["choices.languages"], candidates: ["languages:standard:elvish", "languages:standard:dwarvish"] });
+  assert.deepEqual(req.candidateNames, { "languages:standard:elvish": "精灵语", "languages:standard:dwarvish": "矮人语" });
+  assert.ok(!result.coverage.uncoveredRequiredSteps.some(s => s.startsWith("race:")));
+});
+
+test("classFeature expands wildcard trait pools into concrete candidates", async () => {
+  const languages = new TraitAdvancement({ grants: ["languages:standard:common"], choices: [{ count: 1, pool: ["languages:*"] }] }, "语言");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: languages }],
+    traitExpansion: { languages: ["languages:standard:common", "languages:standard:elvish", "languages:exotic:deep"] },
+    traitLabels: { "languages:standard:elvish": "精灵语", "languages:exotic:deep": "深潜语" } });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero",
+    classUuid: "Compendium.packs.rules.Item.class", raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:TraitAdvancement:0.pool0");
+  assert.ok(req, JSON.stringify(result.choiceRequirements));
+  assert.deepEqual(req.candidates, ["languages:standard:common", "languages:standard:elvish", "languages:exotic:deep"]);
+  assert.deepEqual(req.candidateNames, { "languages:standard:elvish": "精灵语", "languages:exotic:deep": "深潜语" });
 });
 
 test("classFeature omits candidateNames when nothing resolves", async () => {

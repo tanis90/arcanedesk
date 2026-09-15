@@ -432,7 +432,7 @@ export interface ActorChanges {
 }
 export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
 export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
-export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number> }
+export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number>; languages?: string[] }
 /** fullSpellList: when true and the class is a prepared-list caster (its advancement_plan spellBudget
  *  carries fullList), the runtime grants the whole annotated class spell list up to the target
  *  level's highest slot level after advancement, chunked and deduplicated by source UUID.

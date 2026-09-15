@@ -58,6 +58,23 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
+
+- G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
+  `choiceRequirements`（fill `choices.skills/tools/languages`），通配符池
+  （`languages:*`）用系统自带 `Trait.mixedChoices` 展开为具体 key 再下发——候选与
+  匹配共用一套词汇表，模型拿到的是可执行枚举不是通配符；注册表不可用时回退原始池
+  + 前缀匹配。实证：人类额外语言池原生就是 `languages:*`，不展开模型无从填写。
+- G2 法术位填充 slotFill：0 级建档的 advance 收尾把 `system.spells.spellN/pact.value`
+  填到 `max`（回执 `slotFill:{before,after}`），与 hpFill 同门（preLevel===0）；
+  既有角色不动余量。HP 收尾仍只对 character；NPC 不 hpFill（保留战斗史语义）。
+- NPC 入口放开：plan/advance 的 actor 类型门从 character-only 改为 character|npc；
+  NPC 加职业等级的 HP 用怪物体型骰（`actor.system.attributes.hd.denomination`）固定
+  均值、无首级满骰。实证：兽人（2d8,con+3）+法师 5 级 → hp 55、hd 7d8、slotFill
+  4/3/2，与原生公式逐点一致。
+- 发现顺序定稿：browse class → browse race → plan（必带 `raceUuid`）——种族侧选择
+  依赖 raceUuid 进 plan，原"class → plan → race"顺序会让语言选择漏出填写清单。
+
 ### A 系列 trace 解剖优化（D1-D6，2026-09-15）
 
 - D1 HP 永不询问：HP 槽撤出 plan 的 choiceRequirements（1 级满骰、后续级固定均值，

@@ -49,7 +49,7 @@ async function build({plan,runId,folderName}) {
   data.flags??={};data.flags.arcanedesk??={};data.flags.arcanedesk.benchReview={runId,caseId:plan.id,provisional:true};
   data.prototypeToken??={};data.prototypeToken.name=name;
   const s=data.system;s.abilities??={};for(const [i,k]of ['str','dex','con','int','wis','cha'].entries())s.abilities[k]={...s.abilities[k],value:plan.abilities[i]};
-  s.attributes??={};const die={tiny:4,sm:6,med:8,lg:10,huge:12,grg:20}[base?.system.traits.size];const oldHd=Number(base?.system.attributes.hp.formula?.match(/(\d+)d/)?.[1]||0);const mod=n=>Math.floor((n-10)/2);const hp=base?Math.floor(base.system.attributes.hp.max+plan.level*((die+1)/2+mod(plan.abilities[2]))+oldHd*(mod(plan.abilities[2])-mod(base.system.abilities.con.value))):plan.hp;s.attributes.hp={...s.attributes.hp,value:hp,max:hp};
+  s.attributes??={};const die={tiny:4,sm:6,med:8,lg:10,huge:12,grg:20}[base?.system.traits.size];const mod=n=>Math.floor((n-10)/2);const hp=base?base.system.attributes.hp.max+plan.level*Math.max(die/2+1+mod(plan.abilities[2]),1):plan.hp;s.attributes.hp={...s.attributes.hp,value:hp,max:hp};
   if(!base){s.attributes.hp.formula='';s.attributes.movement={walk:plan.walk,units:'ft'};s.attributes.ac={calc:plan.cls==='wizard'?'flat':'default',flat:plan.ac};s.details={...s.details,type:{value:'humanoid',subtype:plan.ancestry}};}
   s.source={...s.source,rules:'2014'};
   if(plan.slots.length){s.attributes.spellcasting=plan.cls==='cleric'?'wis':'int';s.attributes.spell={level:plan.level};s.spells??={};for(let n=1;n<=9;n++)s.spells['spell'+n]={value:plan.slots[n-1]||0,override:null};}
