@@ -525,8 +525,14 @@ export interface ContentListSpellBudget {
 export interface AdvancementPlanResult {
   status: "completed" | "rejected"; code?: string; message?: string;
   actorAdvanceArgs?: { classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number };
+  /** Race-side facts the advancement steps cannot express (race items carry movement directly,
+   *  not as advancement steps): surfaced so the model never reads race source for speed. */
+  race?: { uuid: string; name: string | null; movement: Record<string, string | number> | null };
   automaticSteps?: ContentListStepSummary[];
   choiceRequirements?: ContentListChoiceRequirement[];
+  /** Aggregate per single-fill choices key: total values needed and the consuming slots in order.
+   *  Shared keys (rogue skills 4+1+2) otherwise read as independent requirements. */
+  fillAllocation?: Array<{ fill: string; total: number; slots: Array<{ slot: string; label: string; count: number }>; note?: string }>;
   spellBudget?: ContentListSpellBudget | null;
   coverage?: { nativeStepCount: number; automaticStepCount: number; choiceStepCount: number; uncoveredRequiredSteps: string[] };
   warnings?: Array<RuntimeArguments>;

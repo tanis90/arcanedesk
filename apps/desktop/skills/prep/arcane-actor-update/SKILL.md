@@ -35,7 +35,10 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    （专长、戏法、自选属性）以 plan 实际下发为准——出现在 `choiceRequirements` 就照填，
    没出现就 advance 后按回执核对，用本工具 SET 补终值，并在报告里注明哪些是手工补的。
 4. 升级写入：`foundry_actor_advance` 一次完成——`actorAdvanceArgs` 来自
-   `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；装备、法术书
+   `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；多个槽位共用
+   一个 choices 键时（如游荡者 技能×4 与 专精×2 同吃 `choices.skills`），plan 的
+   `fillAllocation` 给出该键的总值与各槽消耗顺序，一次填够总数即可，不足会在写入前
+   整体拒绝并带分配提示。装备、法术书
    法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
    未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
    改传 `fullSpellList:true`。`expectedName`/`expectedType` 是全等漂移校验：照抄 browse
@@ -48,9 +51,11 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
 6. 回执即对账：advance 回执的 verification 就是 actor 终态报告——abilities（每属性
    before/after + race/asi 分解）、subclass、race（含 size）、movement、languages、
    traits（豁免/技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/
-   slots/戏法与法术计数）、ac、resources、hpFill/slotFill/spellFill 全在其中，收到 `completed`
-   即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，视为工具缺口，在报告
-   里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
+   slots/戏法与法术计数 + byLevel 按环计数）、ac、init、scale（职业 scale 值，如
+   sneak-attack 骰）、resources、grantedItems（advancement 实际授予的条目名/类型清单，
+   含职业特性与种族条目）、preservedItems（既有条目保留计数）、hpFill/slotFill/spellFill
+   全在其中，收到 `completed` 即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，
+   视为工具缺口，在报告里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
 
 ## 车卡 / 升级施法职业：法术数量契约
 

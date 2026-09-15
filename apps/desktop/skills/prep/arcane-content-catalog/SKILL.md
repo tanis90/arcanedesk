@@ -38,6 +38,11 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   `valueFormat:"trait-key"` 的池（技能/工具/语言，含种族侧）已展开为具体 key
   （如 `languages:standard:elvish`）并附本地化 `candidateNames`；`fill` 对应
   `choices.skills`/`choices.tools`/`choices.languages`，照抄池中的 key 即可。
+  多个槽位共用一个 choices 键时（如游荡者 技能×4 + 专精×2 同吃 `choices.skills`），
+  `fillAllocation` 给出该键总值与槽位消耗顺序，一次填够总数。
+- `automaticSteps` 的 `summary` 带具体值：种族 ASI 逐属性列明（如 `str+1, dex+1…`）、
+  体型、职业 scale 骰（如 `scale: 2d6`）、HP 公式；种族移动速度在顶层 `race.movement`
+  （种族条目直接携带，不走 advancement 步骤）。这些都不需要翻种族/职业原文核对。
 - `spellBudget` 是施法数量契约：`cantrips` 戏法数、`known` 已知法术数（2014 诗/术/契/
   游）、`book` 法术书容量（法师），选满这个数。准备施法者（2014 牧师/德鲁伊/圣武士/
   奇械）改发 `fullList`：他们能会的全部法术候选（带 uuid/名称/环位，上限为最高法术位
@@ -56,7 +61,10 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 
 - 法术/物品发现的首选形态是 `names` 批量解析：把记得的名单一次传给
   `foundry_compendium_browse`（`type:"spell"/"item"`，≤50 个），每个名字独立按单一
-  语言名称或 identifier 子串匹配——一条名字只用一种语言，中英不要组合进同一个字符串。
+  语言名称或 identifier 子串匹配——一条名字只用一种语言，中英不要组合进同一个字符串；
+  identifier 匹配忽略标点（`Explorer's Pack` 能命中 identifier `explorers-pack`）。
+  `names` 模式不要加 `itemType`：它把候选收窄到单一原生类别，equipment 不含武器，
+  会漏掉长剑这类条目。
   逐名返回 `status`：`unique` 直接取 uuid；`ambiguous` 多为 2014/2024 双版本重名，
   加 `rules` 收窄即可；`miss` 才换拼写重试，或转 `query` 分页浏览（`page`/`pageSize`，
   `maxLevel` 限环位、戏法传 0，`itemType` 过滤物品类别）。法术传同一 `classUuid` 时

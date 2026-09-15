@@ -505,3 +505,42 @@ SDK 150 断言全绿（新增通配符展开/拒绝/注册表回退 3 用例）�
 slotFill/hpFill 收尾语义、NPC 工具链）；js 臂 fixture skill 明确
 `await (async () => {...})()` 包裹形态（A3 裸 JS 臂曾因函数声明未调用/顶层 await
 连续摔跤 6 次）。
+
+## 11. 第四轮：v3/v4 批次归因修复（2026-09-15 落地）
+
+### 11.1 v3 批次（12 trials）归因与修复（commit e57425d）
+
+| 现象 | 归因 | 修复 |
+|---|---|---|
+| B1/B2/B3 工具臂全挂 preserve.item | AdvancementManager clone roundtrip 物化空 `flags.dnd5e:{}`，commit() 用 diff:false 全量重写既有条目，字节级保留被破坏 | commit 对既有条目做 canonical 比较（剪空对象后 JSON 比对），内容不变就跳过重写；活验证：兽人复制件 + 法师 5 级后 4 个源条目字节不变 |
+| A1 工具臂 advance partial（SOURCE_MISMATCH） | 模型自创中英组合 expectedName 而非照抄 browse 的 name | 错误信息带 entry uuid + expected/actual；additionalItems 的 prepPrepareGrants 提前到 commit 前，坏条目在零写入时整体拒绝 |
+
+v3 数据基线：A1 26c/83s✅、A2 20c/54s✅、A3 27c/110s✅、B 组工具臂全 ❌（修复前）；
+js 臂 A 组 22-38c ✅、B2 超时。
+
+### 11.2 v4 批次（12 trials）结果
+
+修复生效：B 组三案工具臂 core 26/26 全绿（preserve 清零）；A1 工具臂 19c/50s（无 partial）；
+A3 21c/73s。js 臂 A1/A3 双双 300s 超时（控制臂自身波动，不修）。
+
+### 11.3 v4 工具臂 trace 逐秒归因 → 本轮修复
+
+残余裸 eval 五桶归因（A2 12 次、B1 10 次、B2 13 次、B3 9 次）：
+
+| 桶 | 实例 | 修复 |
+|---|---|---|
+| 授予后回读（最大头，每案 1-6 次） | B2 授予后连读 traits/class  advancement/getRollData().scale；A2 回读 196KB items dump 找"额外攻击/长剑" | 回执 verification 新增 `grantedItems`（commit 前后 item id 差集，advancement 实际授予清单：名称/类型/uuid）、`preservedItems`（既有条目保留计数）、`scale`（职业 scale 值打平，如 `rogue.sneak-attack:"2d6"`）、`init`、`spellcasting.byLevel`（按环法术计数） |
+| 种族原文调研（A2 ×4） | plan 种族步骤只写 "fixed ability bonuses" 不带值；体型无摘要；移动速度不在 plan 里（种族条目直接携带 movement，非 advancement） | ASI 摘要逐属性列明（`str+1, dex+1…`）；SizeAdvancement 走通用 dataFor 摘要（`"med"`）；新增 ScaleValueAdvancement 分支从 `configuration.scale[level]` 渲染骰子（`scale: 2d6`）；plan 顶层新增 `race:{uuid,name,movement}` |
+| 共享 fill 键困惑（B2） | 游荡者 技能×4 + 技能×1 + 专精×2 同吃 `choices.skills`，模型只填 5 个被拒，翻 class 原文 3 次才搞懂 | plan 新增 `fillAllocation`（按单 fill 键聚合 total + 槽位消耗顺序 + note）；ADVANCEMENT_NEEDS_CHOICE 拒绝信息追加共享键分配（`[choices.skills feeds 技能×4 → 专精×2]`），重试零调研 |
+| 装备发现回退翻包（A2/A3 各 1 次） | "Explorer's Pack" 0 命中：2014 包条目名是纯中文"探索者套组"，identifier `explorers-pack`，而匹配归一化 `[\s_-]` 保留了撇号 | 名称/identifier 归一化改 `[^\p{L}\p{N}]`（撇号/弯撇号全剥），search 与 browse 三处同步；工具描述与 skill 写明标点不敏感 |
+| itemType 误过滤（A2） | `itemType:"equipment"` 漏掉武器类长剑/手斧（原生 type=weapon） | 工具描述 + skill 写明：names 模式不要带 itemType，equipment 不含武器 |
+
+额外发现并修复的**回执保真缺陷**：回执读取发生在 commit 后、系统下一次自主 prepare 前，
+`details.race` 未链接、`movement.walk` 读得 0（真实终值 30）——回执会主动误导。
+修复：verification 读取前 `actor.reset()` 重备，race 改读嵌入 race 条目（不等 details.race
+链接），movement 派生值为空时按 prepareRace 语义回退种族条目移动值。活冒烟：人类游荡者 3 级
+回执 movement.walk=30、race 含 uuid/name/size、scale 2d6、grantedItems 13 条全列。
+
+SDK 151 绿；桌面 496 绿；bundle revision 21。skill 教义同步：回执覆盖清单（grantedItems/
+preservedItems/scale/init/byLevel）、fillAllocation 用法、names 模式勿带 itemType、
+identifier 匹配标点不敏感。
