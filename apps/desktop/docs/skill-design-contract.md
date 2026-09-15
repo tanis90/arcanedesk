@@ -98,6 +98,22 @@
 - D6 未点名装备从简（benchmark 与生产 skill 一致）：DM 点名的装备精确解析；未点名
   起始装备按常识名单一次 names[] 带过，不逐件考证价格/包来源/备选组合。
 
+### 专精落地检测与回执活动计数（2026-09-15）
+
+- 专精槽独立 fill 键 `choices.expertise`：与 choices.skills 共用词汇表（skills:/tool:
+  key）但不共消费队列——take() 每值只消费一次，同 key 双填在唯一性约束下本就不可表达
+  （v5 B2 模型发 4 熟练 + 2 新 key，dnd5e 原生对未熟练目标静默丢弃 1→2 从不 0→2，
+  模型被迫裸写 `skills.slt.value:2` 补锅，读取 before=0 实锤）。
+- 双层防护：写入前校验——专精每个值必须在"卡面已熟练 ∪ 本次调用前面技能/工具槽已选"
+  集合内，非法值以 ADVANCEMENT_NEEDS_CHOICE 整体拒绝并点名（零写入）；写入后兜底——
+  按定居值复查，仍被丢弃的回执 `warnings` 报 `EXPERTISE_NOT_LANDED`。plan 侧
+  choiceRequirement 带 `mode:"expertise"` + `note` 说明该规则。
+- 回执 `verification.traits.expertise:{skills,tools}`（value≥2 清单）让专精对账免于
+  回读；grantedItems/createdItems/spellFill.created 条目带 `activities` 计数，
+  "武器攻击活动在不在卡面"从回执直接可查（v5 A3/B1 各有一次活动回读）。
+- 教义保持正面路径：skill 只教"专精槽填 choices.expertise + 先熟练后专精"，不列禁令
+  （沿用 D5）。
+
 ### arcane-dnd5e-rules（2026-09-09）
 
 - 用户交互预算0：读取随包提供的SRD资料、选择查询路径属于C类技术细节，不要求DM确认。

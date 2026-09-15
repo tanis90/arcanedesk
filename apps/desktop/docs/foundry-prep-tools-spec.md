@@ -544,3 +544,43 @@ A3 21c/73s。js 臂 A1/A3 双双 300s 超时（控制臂自身波动，不修）
 SDK 151 绿；桌面 496 绿；bundle revision 21。skill 教义同步：回执覆盖清单（grantedItems/
 preservedItems/scale/init/byLevel）、fillAllocation 用法、names 模式勿带 itemType、
 identifier 匹配标点不敏感。
+
+## 12. 第五轮：v5 批次归因 + 专精独立 fill 键（2026-09-15 落地）
+
+### 12.1 v5 批次（12 trials）结果
+
+工具臂 6/6 全绿：A1 18c/48s、A2 19c/41s、A3 24c/76s、B1 18c/67s、B2 25c/87s、B3 25c/85s。
+js 臂 A2/B1 超时、B2 FAIL actor.exists（控制臂自身波动，不修）。
+
+### 12.2 v5 残余裸 eval 归因（trace 逐条）
+
+| 桶 | 实例 | 修复 |
+|---|---|---|
+| 专精丢选择（真 bug） | B2 模型 67s 裸写 `system.skills.slt.value:2`，读取 before=**0**——专精槽选了未熟练技能，dnd5e 原生静默丢弃（expertise 只做 1→2，从不 0→2，dnd5e.mjs:9793） | 见 12.3 |
+| 回执缺专精等级 | B2 38-59s、A3 51s、B1 25s 回读 traits 验证专精 | 回执 `verification.traits.expertise:{skills,tools}`（value≥2 清单） |
+| 回执缺活动计数 | A3 68s 回读轻锤 activities、B1 62s 回读武器/特性活动 | grantedItems/createdItems/spellFill.created 条目带 `activities` 计数 |
+| 圣徽 2014 包无此条目 | B1 search 兜底"Holy Symbol"（只在 dnd5e.equipment24） | 数据缺口非工具 bug，search 兜底路径工作正常，不修 |
+| 存在性预查/怪物源预读（每案 2-3 次） | benchmark 工具策略不含 foundry_actor_create 的设计内行为 | 不修 |
+
+### 12.3 专精修复：从"提示"到"独立键 + 写前校验"（冒烟推翻初版设计）
+
+初版设计（note 写"同一 key 同时填进技能槽和专精槽是合法的"）在活冒烟时被发现**机制上
+不可表达**：`take()` 对每个值只消费一次且 schema `uniqueItems:true` 禁止重复——同一个
+key 被技能槽吃掉后根本到不了专精槽。终版设计：
+
+- 专精槽（TraitAdvancement `mode:"expertise"`）独立 fill 键 **`choices.expertise`**：
+  与 choices.skills 共用 skills:/tool: 词汇表，但不共消费队列。plan 的
+  choiceRequirement 带 `mode:"expertise"` + `note`（说明须选已熟练项）；fillAllocation
+  里 choices.skills 与 choices.expertise 各自成行。
+- **写前校验**：专精每个值必须在"卡面已熟练（skills/tools value≥1）∪ 本次调用前面
+  技能/工具槽已选"集合内——该集合随槽位处理顺序累积（与原生 apply 顺序一致），非法值
+  以 ADVANCEMENT_NEEDS_CHOICE 整体拒绝并点名，零写入。
+- **写后兜底**：提交后按定居值复查，仍被原生丢弃的报 `EXPERTISE_NOT_LANDED` 警告
+  （如种族 grant 在 class 专精之后落地的边角序）。
+- 活冒烟（人类游荡者 1 级）：skills×4 + expertise 双选同 key → completed、零警告、
+  `traits.expertise.skills:[ins,slt]` 真实落地；expertise 选未熟练 → rejected
+  ADVANCEMENT_NEEDS_CHOICE 点名 skills:inv、actor 零写入。烟雾 actor 已删。
+
+SDK 156 绿（新增 3 个 advance 用例 + 1 个 list 用例 + additionalItems activities 用例）；
+桌面 496 绿；bundle revision 22。工具描述（advance/plan）与两个 skill 同步为
+choices.expertise 语义。

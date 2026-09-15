@@ -38,8 +38,11 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   `valueFormat:"trait-key"` 的池（技能/工具/语言，含种族侧）已展开为具体 key
   （如 `languages:standard:elvish`）并附本地化 `candidateNames`；`fill` 对应
   `choices.skills`/`choices.tools`/`choices.languages`，照抄池中的 key 即可。
-  多个槽位共用一个 choices 键时（如游荡者 技能×4 + 专精×2 同吃 `choices.skills`），
-  `fillAllocation` 给出该键总值与槽位消耗顺序，一次填够总数。
+  专精槽（带 `mode:"expertise"` 与 `note`）独立吃 `choices.expertise`：每个值必须是
+  卡面已有、或本次调用 choices.skills/choices.tools 里已选的熟练项——先填熟练槽再填
+  专精槽，非法值会在写入前整体拒绝并点名。
+  多个普通槽位共用一个 choices 键时，`fillAllocation` 给出该键总值与槽位消耗顺序，
+  一次填够总数。
 - `automaticSteps` 的 `summary` 带具体值：种族 ASI 逐属性列明（如 `str+1, dex+1…`）、
   体型、职业 scale 骰（如 `scale: 2d6`）、HP 公式；种族移动速度在顶层 `race.movement`
   （种族条目直接携带，不走 advancement 步骤）。这些都不需要翻种族/职业原文核对。

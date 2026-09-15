@@ -120,6 +120,55 @@ test("trait pools consume pool keys per pool and include grants in chosen", asyn
   assert.equal(result.warnings.length, 0);
 });
 
+test("expertise picks ride choices.expertise and may re-pick a same-call proficiency slot value", async () => {
+  const skills = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Skills");
+  const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Expertise");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: skills }, { level: 1, advancement: expertise }] });
+  f.actor.system.skills = { slt: { value: 0 }, ste: { value: 0 } };
+  // Simulate the native apply order: the proficiency slot lands value 1, expertise upgrades to 2.
+  skills.apply = async (_level, data) => { for (const key of data.chosen ?? []) if (key.startsWith("skills:")) f.actor.system.skills[key.slice(7)].value = 1; };
+  expertise.apply = async (_level, data) => { for (const key of data.chosen ?? []) if (key.startsWith("skills:")) f.actor.system.skills[key.slice(7)].value = 2; };
+  const result = await f.advance({ choices: { skills: ["skills:slt"], expertise: ["skills:slt"] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.warnings.length, 0);
+  assert.deepEqual(result.verification.traits.skills, ["slt"]);
+  assert.deepEqual(result.verification.traits.expertise, { skills: ["slt"], tools: [] });
+});
+
+test("expertise picks outside the proficient set reject the whole advance before any write", async () => {
+  const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Expertise");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: expertise }] });
+  f.actor.system.skills = { slt: { value: 0 }, ste: { value: 1 } };
+  const result = await f.advance({ choices: { expertise: ["skills:slt"] } });
+  assert.equal(result.status, "rejected");
+  assert.equal(result.code, "ADVANCEMENT_NEEDS_CHOICE");
+  assert.match(result.message, /expertise picks not proficient: skills:slt/);
+  assert.equal(f.writes(), 0);
+});
+
+test("the post-write net reports EXPERTISE_NOT_LANDED when the native apply drops a valid pick", async () => {
+  const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt"] }] }, "Expertise");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: expertise }] });
+  f.actor.system.skills = { slt: { value: 1 } };
+  // The mock apply never upgrades the value, emulating a native drop the pre-write check passed.
+  const result = await f.advance({ choices: { expertise: ["skills:slt"] } });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(result.warnings.map(w => w.code), ["EXPERTISE_NOT_LANDED"]);
+  assert.equal(result.warnings[0].value, "skills:slt");
+});
+
+test("additionalItems receipt entries report the created item's activity count", async () => {
+  const f = fixture({ classFlows: [hp(1)] });
+  f.docs.set("Compendium.packs.gear.Item.sword", { documentName: "Item", uuid: "Compendium.packs.gear.Item.sword", pack: "packs.gear", type: "weapon", name: "Longsword",
+    system: { activities: { attack: {} } },
+    toObject: () => ({ uuid: "Compendium.packs.gear.Item.sword", type: "weapon", name: "Longsword", system: { activities: { attack: {} } } }) });
+  const result = await f.advance({ additionalItems: [{ uuid: "Compendium.packs.gear.Item.sword" }] });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.verification.createdItems.length, 1);
+  assert.equal(result.verification.createdItems[0].name, "Longsword");
+  assert.equal(result.verification.createdItems[0].activities, 1);
+});
+
 test("item choice uses per-level counts and routes selections by pool membership", async () => {
   const cantripFlow = new ItemChoiceAdvancement({ type: "spell", choices: { 1: { count: 2 } },
     pool: [{ uuid: "Compendium.packs.spells.Item.c1" }, { uuid: "Compendium.packs.spells.Item.c2" }, { uuid: "Compendium.packs.spells.Item.c3" }] }, "Cantrips");
@@ -277,7 +326,7 @@ test("advance receipt carries the actor end-state blocks for reconciliation", as
   assert.equal(v.race, null);
   assert.deepEqual(v.movement, { walk: null });
   assert.deepEqual(v.languages, { applied: [] });
-  assert.deepEqual(v.traits, { saves: [], skills: [], armor: [], weapons: [], tools: [] });
+  assert.deepEqual(v.traits, { saves: [], skills: [], expertise: { skills: [], tools: [] }, armor: [], weapons: [], tools: [] });
   assert.deepEqual(v.proficiency, { bonus: null });
   assert.equal(v.spellcasting, null);
   assert.deepEqual(v.ac, { value: null, calc: null });

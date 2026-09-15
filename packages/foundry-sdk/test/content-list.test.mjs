@@ -116,6 +116,25 @@ test("classFeature serializes the shared plan: requirements, automatics, coverag
   assert.equal(f.writes(), 0);
 });
 
+test("classFeature marks expertise requirements with mode/note and routes them to choices.expertise", async () => {
+  const skills = new TraitAdvancement({ grants: [], choices: [{ count: 4, pool: ["skills:acr", "skills:ath", "skills:dec", "skills:ins", "skills:slt", "skills:ste"] }] }, "Skills");
+  const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 2, pool: ["skills:acr", "skills:ath", "skills:dec", "skills:ins", "skills:per", "skills:slt", "skills:ste"] }] }, "Expertise");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: skills }, { level: 1, advancement: expertise }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
+  const skillReq = result.choiceRequirements.find(r => r.slot === "class:1:TraitAdvancement:0.pool0");
+  assert.equal(skillReq.mode, undefined);
+  assert.deepEqual(skillReq.fill, ["choices.skills"]);
+  const expReq = result.choiceRequirements.find(r => r.slot === "class:1:TraitAdvancement:1.pool0");
+  assert.equal(expReq.mode, "expertise");
+  assert.deepEqual(expReq.fill, ["choices.expertise"]);
+  assert.match(expReq.note, /already be proficient/);
+  const skillAlloc = result.fillAllocation.find(entry => entry.fill === "choices.skills");
+  assert.equal(skillAlloc.total, 4);
+  const expAlloc = result.fillAllocation.find(entry => entry.fill === "choices.expertise");
+  assert.equal(expAlloc.total, 2);
+  assert.deepEqual(expAlloc.slots.map(s => [s.slot, s.count]), [[expReq.slot, 2]]);
+});
+
 test("classFeature reports hp as an automatic step with the hit-die derived summary", async () => {
   const die = new HitPointsAdvancement({}, "Hit Points");
   const f = fixture({ classFlows: [{ level: 1, advancement: die }, { level: 5, advancement: die }],
