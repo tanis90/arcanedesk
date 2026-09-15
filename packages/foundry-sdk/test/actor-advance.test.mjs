@@ -357,6 +357,34 @@ test("creation advance pulls hp up only, never pushes down", async () => {
   assert.equal(result.verification.hpFill, undefined);
 });
 
+test("NPC advance receipt reports an empty preservation diff when innate traits survive", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorType: "npc" });
+  f.actor.system.traits = { di: { value: ["poison"] }, size: "med" };
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.preservation, { changed: [] });
+});
+
+test("NPC preservation diff names the exact trait path that changed", async () => {
+  const lang = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["languages:standard:common", "languages:standard:elvish"] }] }, "Languages");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: lang }], actorType: "npc" });
+  f.actor.system.traits = { di: { value: ["poison"] }, size: "med" };
+  lang.apply = async (_level, data) => { f.actor.system.traits.languages = { value: data.chosen.map(key => key.split(":").pop()) }; };
+  const result = await f.advance({ targetLevel: 1, choices: { languages: ["languages:standard:elvish"] } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.preservation.changed, [{ path: "traits.languages", before: null, after: { value: ["elvish"] } }]);
+});
+
+test("grantedItems entries carry the item identifier when the source has one", async () => {
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [hp(0)] });
+  const raceDoc = f.docs.get("Compendium.packs.rules.Item.race"), base = raceDoc.toObject();
+  f.docs.set("Compendium.packs.rules.Item.race", { ...raceDoc, toObject: () => ({ ...base, system: { identifier: "human" } }) });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race" });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const raceGrant = result.verification.grantedItems.find(entry => entry.type === "race");
+  assert.equal(raceGrant?.identifier, "human");
+});
+
 test("race language pools consume choices.languages with grants included", async () => {
   const trait = new TraitAdvancement({ grants: ["languages:standard:common"], choices: [
     { count: 1, pool: ["languages:standard:elvish", "languages:standard:dwarvish"] }] }, "Languages");

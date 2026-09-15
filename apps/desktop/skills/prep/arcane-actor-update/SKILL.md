@@ -56,7 +56,10 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    traits（豁免/技能/护甲/武器/工具熟练 + expertise 专精级技能/工具清单）、proficiency.bonus、spellcasting（ability/
    slots/戏法与法术计数 + byLevel 按环计数）、ac、init、scale（职业 scale 值，如
    sneak-attack 骰）、resources、grantedItems（advancement 实际授予的条目名/类型清单，
-   含职业特性与种族条目，带 `activities` 活动计数）、createdItems（additionalItems 授予，同带 activities）、preservedItems（既有条目保留计数）、hpFill/slotFill/spellFill
+   含职业特性与种族条目，带 identifier 与 `activities` 活动计数）、createdItems（additionalItems 授予，同带 activities）、preservedItems（既有条目保留计数）、preservation
+   （仅 NPC：怪物固有特性族——伤害抗免/状态免疫/感官/体型/语言/生物类型/移动——的
+   before/after diff，`changed` 为空即原卡分毫未动，不需要再翻 traits 原文核对）、
+   hpFill/slotFill/spellFill
    全在其中，收到 `completed` 即对账完成，不需要任何回读补查；你要核对的字段不在回执里时，
    视为工具缺口，在报告里注明。`partial`/`indeterminate` 按回执指引处理，不重放整批。
 

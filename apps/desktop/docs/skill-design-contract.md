@@ -113,6 +113,10 @@
   "武器攻击活动在不在卡面"从回执直接可查（v5 A3/B1 各有一次活动回读）。
 - 教义保持正面路径：skill 只教"专精槽填 choices.expertise + 先熟练后专精"，不列禁令
   （沿用 D5）。
+- NPC 回执 `preservation.changed`：advance 前后对怪物固有特性族（dr/di/dv/ci/cv/senses/
+  size/languages/details.type/movement）做 before/after diff，空数组 = 原卡未动。实证：
+  v6 B1/B2 模型为证明原怪物保留，dump 全量 traits + 遍历 NPC schema 字段各 3-5 次；
+  把"保留证明"做成回执字段后这些回读全部不必要。grantedItems 同步补 `identifier`。
 
 ### arcane-dnd5e-rules（2026-09-09）
 

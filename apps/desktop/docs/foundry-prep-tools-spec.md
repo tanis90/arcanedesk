@@ -584,3 +584,19 @@ key 被技能槽吃掉后根本到不了专精槽。终版设计：
 SDK 156 绿（新增 3 个 advance 用例 + 1 个 list 用例 + additionalItems activities 用例）；
 桌面 496 绿；bundle revision 22。工具描述（advance/plan）与两个 skill 同步为
 choices.expertise 语义。
+
+### 12.4 v6 批次归因 → 第四轮修复（NPC preservation 回执）
+
+v6 工具臂 6/6 core 全绿（A1 25c/55s、A2 21c/45s、A3 26c/80s、B1 22c/69s、B2 19c/79s、
+B3 23c/68s），但残余裸 eval 未如预期下降（B1 12、B2 10、B3 9）。逐条归因：
+
+| 桶 | 实例 | 处置 |
+|---|---|---|
+| NPC 保留证明（最大头） | B1 8 次、B2 6 次：dump 全量 traits、toObject 深读、遍历 NPC dataModel schema 枚举字段，只为证明"原怪物的抗免/感官/语言没被职业扩展洗掉" | 回执新增 `preservation.changed`（仅 NPC）：advance 前后对固有特性族（dr/di/dv/ci/cv/senses/size/languages/details.type/movement）做 before/after diff，空数组 = 原卡未动；保留证明从"模型自己枚举字段做 diff"变成回执一句话 |
+| 创建期存在性检查 + Actor.create（每案 2-3 次） | benchmark 工具策略不含 foundry_actor_create，模型按 fixture 要求先查重再裸建 | 设计内行为，不修 |
+| 怪物源/职业源预读（B 组每案 1-3 次） | 模型从 monsters 包读源 NPC、从 classes 包读职业文档做语义理解 | 设计内（源预读）/低频语义好奇（职业文档），不修 |
+| 按 identifier 找条目（A1 ×2） | grantedItems 有 name/type/uuid 无 identifier，模型回读 items 按 identifier 定位 | grantedItems 补 `identifier` 字段 |
+| 种族文档复读（A2 ×2） | plan 已下发种族 ASI/语言池/movement，模型仍读原文确认——低频语义好奇 | 不修（D5：不禁止，观察） |
+
+SDK 159 绿（新增 NPC preservation 干净/有变两例 + grantedItems identifier 一例）；桌面
+496 绿；bundle revision 23。
