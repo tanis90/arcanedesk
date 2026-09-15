@@ -38,7 +38,8 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；装备、法术书
    法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
    未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
-   改传 `fullSpellList:true`。HP 由 dnd5e 原生计算（1 级满骰、后续级固定均值），plan
+   改传 `fullSpellList:true`。`expectedName`/`expectedType` 是全等漂移校验：照抄 browse
+   返回的 `name` 原串或整个省略，凭记忆拼写（含自创中英组合）会让整批在写入前拒绝。HP 由 dnd5e 原生计算（1 级满骰、后续级固定均值），plan
    不会询问 HP，也不需要自行验算。0 级建档的 advance 收尾自动满血、自动把法术位
    `value` 填到 `max`（回执 `hpFill`/`slotFill` 可见），既有角色升级不动当前 HP 与
    法术位余量——都不需要额外补写操作。

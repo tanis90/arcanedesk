@@ -23,11 +23,13 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {} } = {}) {
+function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [] } = {}) {
   let writes = 0;
-  const preItems = [];
+  const itemUpdates = [], itemDeletes = [];
+  const preItems = actorItems.map(item => ({ ...item }));
   const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: actorType,
-    items: [], system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel },
+    items: actorItems.map(item => ({ ...item, id: item._id, toObject: () => JSON.parse(JSON.stringify(item)) })),
+    system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel },
       ...(actorSpells ? { spells: actorSpells } : {}),
       abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, { value: 8, proficient: 0 }])) },
     async update(patch = {}) { writes++; for (const [key, value] of Object.entries(patch)) {
@@ -36,8 +38,9 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
       for (const part of keys.slice(1, -1)) target = target?.[part];
       if (target) target[keys.at(-1)] = value;
     } },
-    async createEmbeddedDocuments(_kind, data = []) { writes++; const made = data.map((d, i) => ({ id: "made" + i + "_" + writes, uuid: "Actor.hero.Item.made" + i + "_" + writes, name: d.name, type: d.type, flags: d.flags ?? {}, system: d.system ?? {}, _stats: {} })); actor.items.push(...made); return made; },
-    async updateEmbeddedDocuments() { writes++; }, async deleteEmbeddedDocuments() { writes++; } };
+    async createEmbeddedDocuments(_kind, data = []) { writes++; const made = data.map((d, i) => ({ id: "made" + i + "_" + writes, uuid: "Actor.hero.Item.made" + i + "_" + writes, name: d.name, type: d.type, flags: d.flags ?? {}, system: d.system ?? {}, _stats: {}, toObject() { return JSON.parse(JSON.stringify({ ...d, _id: this.id })); } })); actor.items.push(...made); return made; },
+    async updateEmbeddedDocuments(_kind, data = []) { writes++; itemUpdates.push(...data); },
+    async deleteEmbeddedDocuments(_kind, ids = []) { writes++; itemDeletes.push(...ids); } };
   const source = (uuid, type, flows, system = {}) => ({ documentName: "Item", uuid, pack: "packs.rules", type, name: type,
     system, toObject: () => ({ uuid, type, name: type, system: { ...system }, __flows: flows }) });
   const docs = new Map();
@@ -60,7 +63,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
         items: { get: id => items.get(id), values: () => items.values() },
         updateSource: ({ items: added = [] } = {}) => { for (const item of added) items.set(item._id, item); },
         reset() {},
-        toObject: () => ({ items: [] }),
+        toObject: () => ({ items: [...items.values()].map(item => JSON.parse(JSON.stringify(item))) }),
       };
       return { steps: (data.__flows ?? []).map(({ level, advancement }) => ({ type: "forward", flow: { level, advancement } })), clone };
     },
@@ -84,7 +87,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
   const readState = { actorUuid: actor.uuid, world: { origin: "https://foundry.test", id: "w" }, include: [], fields: {}, items: [] };
-  return { actor, docs, preItems, writes: () => writes,
+  return { actor, docs, preItems, writes: () => writes, itemUpdates, itemDeletes,
     advance: async (input = {}) => JSON.parse(JSON.stringify(await run("actorAdvance", {
       world: { origin: "https://foundry.test", id: "w" }, requestId: "r1", actorUuid: actor.uuid, readState,
       classUuid: "Compendium.packs.rules.Item.class", targetLevel: 1, ...input }, {}))) };
@@ -366,4 +369,19 @@ test("NPC actors advance with avg hit dice at every level and never fill hp", as
   assert.deepEqual(applied(hp2.applied), [[2, { 2: "avg" }]]);
   assert.equal(result.verification.hpFill, undefined);
   assert.deepEqual(result.verification.hp, { value: 50, max: 58 });
+});
+
+test("pre-existing items are never rewritten or deleted by advancement commit", async () => {
+  const axe = { _id: "w1", name: "Greataxe", type: "weapon", flags: {}, system: { damage: "1d12" } };
+  const f = fixture({ classFlows: [hp(1)], actorType: "npc", actorItems: [axe] });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(f.itemUpdates, []);
+  assert.deepEqual(f.itemDeletes, []);
+  const f2 = fixture({ classFlows: [hp(1)], actorType: "npc", actorItems: [axe] });
+  f2.preItems[0].flags = { dnd5e: {} };
+  const result2 = await f2.advance({ targetLevel: 1 });
+  assert.equal(result2.status, "completed", JSON.stringify(result2));
+  assert.deepEqual(f2.itemUpdates, [], "empty flags materialized by the clone roundtrip must not trigger a rewrite");
+  assert.deepEqual(f2.itemDeletes, []);
 });
