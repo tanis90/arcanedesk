@@ -114,11 +114,62 @@
   发明"会话边界"概念，只让它检查自己上下文里有没有记录。用户只说"导入"不视为同意
   第三方云上传。
 
+### 发现工具三分：browse / plan / search（2026-09-15）
+
+- `foundry_content_list` 拆为 `foundry_advancement_plan`（升级计划唯一来源）与
+  `foundry_compendium_browse`（条件枚举 + uuids 读全文，吸收旧 detail）；`foundry_content_search`
+  收窄为身份解析兜底。硬切换无别名——与 main 的差异是探索性质，定稿即可破坏性变更。
+- 车卡发现三次拿全：browse type:"class" → plan → browse type:"race"；目录按
+  rules+identifier 去重、arcane 模块包优先、2014/2024 双版本各自成行；rules 参数不传，
+  由 classUuid 锚定推导。理由：实证模型在 search 中文名与 50/页翻页上浪费轮次，目录化
+  把"找身份"从模糊搜索变为一次枚举。
+- 写路径回执即对账：advance/grant_items 的 verification 回执就是验收依据，禁止裸 eval
+  回读自检同一结果——旧"回读 actor.items 数数"教义只适用于裸 JS 授予回退路径。
+- 建档写工具（actor_create/update/grant_items）补进 skill 教学：工具早已激活但零教学，
+  实证 A1/A2 模型零调用；装备与法师法术书统一走 advance 的 additionalItems 单次写入。
+- 完整 spec 见 `foundry-prep-tools-spec.md`（含 A1-A3 预期路径与验收标准）。
+
+### 准备施法者全法术列表（2026-09-15）
+
+- 用户裁决：准备施法者（2014 牧/德/圣/奇械）建卡时直接授满理论上能会的全部法术——他们
+  规则上"会"整个职业法术列表，"准备 N 个"是长休时的页签标记，留给 DM 与玩家在游戏中
+  自行协商；工具不管理准备（与 2026-09-14 的 prepared 决议一致：那不是数量管理）。
+  法师不受此影响：法术书是独立的已知子集概念（book 照旧）。
+- `spellBudget.fullList: {maxLevel, count, candidates}`：枚举来自模块合集包法术文档上的
+  `flags.<moduleId>.spellClasses`（模块 build 时从 donor 法术表注入，522/522 全覆盖，
+  含非 SRD 条目），运行时按职业 identifier + 最高法术位环（progression 环位表硬编码）
+  过滤，不再硬编码法术清单；2024 包无此标注，2024 职业维持不下发（已知限制）。
+- `actorAdvance` 新增 `fullSpellList: true` 开关：落地后按列表自动授予（≤50 一批、按来源
+  UUID 去重——领域法术不会叠双），模型无需回抄 30+ 个 uuid；非 fullList 职业传此开关在
+  任何写入前以 INPUT_INVALID 拒绝。list 侧仍下发完整 candidates：模型看得见将授什么。
+- benchmark 语义同步：该教义进公共 skill（两臂共享）；A3 期望从"6 个点名准备法术 + 4 个
+  领域法术 = 10"改为"2014 牧师 ≤2 环全列表 = 34"（SRD 32 + 典礼术/借鉴才学，验收器按
+  计数制，非 SRD 条目不参与 known-membership 校验）。
+
 ### arcane-actor-update（2026-09-14）
 
 - 法术授予不置 `system.prepared`：dnd5e 5.3.3 源码确认 prepared 只是法术书页签标记，
   无任何 usage/施放闸门；置准备是额外写操作且会把"合集默认值"覆写漂移。保持默认即可，
   用户明确要求才设置。character benchmark 校验同步移除 prepared 断言（降级为诊断项）。
+
+### 建档属性与候选池水合（2026-09-15）
+
+- 基础属性建档主路径是 `actor_create` 的 `dnd5e.abilities`（六属性整数 1..20）：实测种族
+  与 ASI 加成不是 ActiveEffect，而是 advance 执行时对基础值做加法（两张自测卡
+  abilityEffects 全空、数值逐项对得上），SET 型写入必须先于 advance——create 结构性保证
+  顺序，不靠教义约束。`actor_update` 的 abilities 是 SET 语义修正路径：advance 之后写入
+  必须含种族/ASI 的最终基础值。readRef 覆盖六个 `system.abilities.*.value`（actor_get
+  默认下发），写前必读纪律不变。
+- plan 的 `choiceRequirements` 统一水合 `candidateNames`：pool-uuid 从合集 index 取名、
+  trait-key 走 dnd5e `Trait.keyLabel` 本地化（子职业池已有名）。模型在 plan 出口即可做
+  语义选择，废掉"候选只有 uuid 再发 uuids-browse 水合"的强制往返（自测每案 +1 次）。
+- 0 级建档的 advance 收尾自动把 `hp.value` 拉到派生好的 `hp.max`（只拉不压、回执
+  `hpFill:{before,after}` 可见）：value 是 HP 步用各步当时体质调整值累加的定格历史，
+  max 是 prepare 用最终体质重算的派生值，车卡中途种族 ASI 必然让两条通道对不上
+  （dnd5e 源码实证；prepare 只有 min(value,max) 钳制，少了不补）。界定签名用
+  "advance 前 details.level === 0"——0 级角色没有战斗史，拉满不抹任何真实状态；
+  既有角色（≥1 级）升级不动当前 HP（规则语义是 max 增量同步加 value，系统已正确实现）。
+  无新入参：车卡场景终态恒为满血，中间累加是纯噪声，不需要模型传旗标。
 
 ### foundry_content_list spellBudget（2026-09-14）
 
@@ -130,8 +181,8 @@
   法术书（6+2×(L−1)，两版同公式），不发 2024 Max Prepared；第三施法者（奥法骑士/诡术贼）
   v1 放弃。法术位不进表：dnd5e 按 progression 自动计算（含兼职混合规则），重复下发只会
   与系统漂移。
-- full-list 职业（牧/德/圣/奇械）只有 ability/progression/cantrips；known 仅 2014
-  诗/术/契/游；book 仅法师。Actor Studio 的 2024 列照抄 2014 有误，其数值未采用；表数值
+- full-list 职业（牧/德/圣/奇械）发 ability/progression/cantrips + fullList（见 2026-09-15 记录）；
+  known 仅 2014 诗/术/契/游；book 仅法师。Actor Studio 的 2024 列照抄 2014 有误，其数值未采用；表数值
   以 dnd5e 5.3.3 两版职业 advancement 与 TCE 奇械实测为准。
 - 配套引导：`arcane-content-catalog` 重写对齐现行工具（原稿写的是实验 fixture 的旧参数面：
   小写 class/subclass、classEligible 三字段、不存在的 foundry_content_detail；fixture 侧

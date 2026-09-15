@@ -15,21 +15,64 @@ description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC�
 
 Character 路径中，模型只负责选择来源、等级和明确选项。不要自己计算 HP、AC、技能映射、法术位或资源；让 dnd5e 计算并通过一次 read-back 验证。
 
-## 车卡 / 升级施法职业：工具流与法术数量契约
+## 车卡 / 升级：写入工具链
 
-车卡或升级施法职业时优先工具流，不凭记忆推规则数量：
+车卡与升级全程走结构化写工具，不裸写世界：
 
-1. 计划：`foundry_content_list`（`type:"classFeature"`，传 `actorUuid`、`classUuid`、目标 `characterLevel`，有子职/种族传 `subclassUuid`/`raceUuid`）。`automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复添加；`choiceRequirements` 每条带 `fill`（填到 advance 入参的键）、`valueFormat`、`count`/`cap`，只填这些要求。
-2. 数量预算：`spellBudget` 是该等级的施法数量契约——`cantrips` 戏法数、`known` 已知法术数（2014 诗/术/契/游）、`book` 法术书容量（法师）。选满这个数，不多不少。
-3. 候选：`foundry_content_list`（`type:"spell"`，传同一 `classUuid`）分页列候选并带 `eligibility`；戏法传 `maxLevel:0`。环位上限不背表：advance 后角色身上 `system.spells.spellN.max > 0` 的环即合法环位，按此选法术书/已知。
-4. 子职业：`subclass-uuid` 要求自带 `candidates`（uuid）和 `candidateNames`（名称映射）。用户指定学派时按名称从池里选；未指定时按任务默认或从池里挑，池为空才用 `foundry_content_search` 定位。定下 `subclassUuid` 后必须带它重调一次 list：子职业自身的授予/选择步骤（`subclass:` 前缀）才进输出，`actorAdvanceArgs` 也会带上它传给 advance。
-5. 落地与对账：法术随 `additionalItems` 交给 `foundry_actor_advance`，或事后走下面的授予路径；完成后回读 `actor.items` 数一遍——戏法数 == `cantrips`、书/已知 == `book`/`known` 才算完成。
+1. 建档：`foundry_actor_create` 建空白 `character`（`source.kind:"blank"`），基础属性
+   （标准数组/购点分配，整数 1..20）随 `dnd5e.abilities` 同批下发——种族/ASI 加成是
+   advance 时对基础值做加法，属性必须先于 advance 落地，create 天然满足这个顺序。
+   怪物复制用 `source.kind:"compendium"` + packId/entryId。同名冲突按回执处理，不重复创建。
+2. readRef：一切写操作前用 `foundry_actor_get` 读 actor 拿 `readRef`；授予前
+   `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。
+3. 事后改属性：`foundry_actor_update` 的 `dnd5e.abilities` 是 SET 语义修正路径——
+   advance 之后写入的必须是含种族/ASI 加成的最终基础值；名称/HP/AC/token 同此出口。
+4. 升级写入：`foundry_actor_advance` 一次完成——`actorAdvanceArgs` 来自
+   `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；装备、法术书
+   法术等额外条目随 `additionalItems`（≤50）同一批写入；`fullList` 职业改传
+   `fullSpellList:true`。0 级建档的 advance 收尾自动满血（回执 `hpFill` 可见），
+   既有角色升级不动当前 HP——都不需要额外补血操作。
+5. 补充授予：advance 之外的零散授予走 `foundry_actor_grant_items`（1~50 条/批，按来源
+   去重不叠加）。能走 `additionalItems` 的优先随 advance 一次写入。
+6. 回执即对账：写工具回执带 verification，`completed` 即完成——禁止再裸 eval 回读自检
+   同一结果；`partial`/`indeterminate` 按回执指引处理，不重放整批。
 
-授予文档的来源优先级不变（下节合集包优先）：工具流确定的法术按 identifier 在模块合集包取文档，模块缺失再直接用工具返回的 dnd5e UUID。
+## 车卡 / 升级施法职业：法术数量契约
+
+车卡或升级施法职业时优先工具流，不凭记忆推规则数量。发现流程（browse 目录 → plan）
+见 `arcane-content-catalog`；写入侧契约：
+
+1. 计划即填写清单：`automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复
+   添加；`choiceRequirements` 每条带 `fill`（填到 advance 入参的键）、`valueFormat`、
+   `count`/`cap`，只填这些要求。
+2. 数量预算：`spellBudget` 是该等级的施法数量契约——`cantrips` 戏法数、`known` 已知
+   法术数（2014 诗/术/契/游）、`book` 法术书容量（法师）。选满这个数，不多不少。准备
+   施法者（2014 牧师/德鲁伊/圣武士/奇械）没有数量，改发 `fullList`：他们"会"整个职业
+   法术列表，建卡时给 advance 传 `fullSpellList:true` 一次授满（领域法术等已有条目按
+   来源 UUID 自动去重，高级别自动分批）；`system.prepared` 页签标记留给 DM 和玩家在
+   游戏中自行决定，一律不设置。
+3. 候选：法术候选用 `foundry_compendium_browse`（`type:"spell"`，传同一 `classUuid`）
+   分页列取并带 `eligibility`；戏法传 `maxLevel:0`。环位上限按目标等级的规则知识传
+   `maxLevel`；总数不背表，以 `spellBudget` 为准。`fullList` 职业的候选已在
+   `spellBudget.fullList.candidates` 里给全，不必再分页搜。
+4. 子职业：先不带 `subclassUuid` 调计划拿候选池（`candidates`/`candidateNames`）；用户
+   指定学派时按名称从池里选，未指定时按任务默认或从池里挑。定下 `subclassUuid` 后必须
+   带它重调一次计划：子职业自身的授予/选择步骤（`subclass:` 前缀）才进输出，
+   `actorAdvanceArgs` 也会带上它传给 advance。
+5. 落地与对账：法术书法术、装备随 `additionalItems` 交给 advance 一次写入；用户明确只
+   点名少数几个法术而不要全列表时，才省略 `fullSpellList` 改用 `additionalItems` 按名
+   授予。advance 回执带 verification（含 `fullSpellList` 时的 `spellFill` 授予计数）——
+   收到回执即对账完成，禁止裸 eval 回读数数。
+
+授予文档的来源优先级不变（下节合集包优先）：browse 去重已按模块包优先呈现，直接用
+返回的 UUID 即可。
 
 ## 给人物添加法术 / 职业能力
 
-零散"给某人加指定法术/特性"（非整体车卡升级）走本节合集包路径直接授予。
+零散"给某人加指定法术/特性"（非整体车卡升级）优先工具路径：用
+`foundry_compendium_browse`/`foundry_content_search` 定位来源 UUID，再用
+`foundry_actor_grant_items` 授予（回执即对账）。下面的合集包裸 JS 路径仅在需要
+自定义字段或工具不可用时使用。
 
 法术、职业特性、专长等条目的默认来源是 **arcane-dnd5e-2014-automation 模块的合集包**（Foundry 合集栏里的 "Arcane 5e 2014 …" 系列）：先从这里拿，拿不到才回退 system 自带包。禁止凭记忆手写条目数据——一律从 compendium 文档拷贝，避免字段版本漂移。
 
@@ -95,7 +138,7 @@ Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是�
 
 ## 验收
 
-1. 添加的法术/能力回读 `actor.items` 确认在角色卡上，来源为 arcane-dnd5e-2014-automation 的包或已报告的回退来源。
+1. 工具授予以回执 verification 为准（created/skipped 计数）；裸 JS 授予回读 `actor.items` 确认在角色卡上，来源为 arcane-dnd5e-2014-automation 的包或已报告的回退来源。
 2. 角色卡 / Actor 目录显示头像。
 3. 新拖一个 token 到场景，显示正确图像。
 4. 场景中该人物已有的 token 图像已同步。

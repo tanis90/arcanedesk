@@ -78,7 +78,8 @@ test("public allowlists are complete and the safe default is narrow", () => {
     "sceneRead",
     "actorRead",
     "contentSearch",
-    "contentList",
+    "advancementPlan",
+    "compendiumBrowse",
     "staticContext",
     "playContext",
     "doctor",
@@ -116,8 +117,8 @@ test("public allowlists are complete and the safe default is narrow", () => {
     "startCombat",
     "nextTurn",
   ]);
-  assert.equal(ALL_DIRECT_ACTIONS.length, 42);
-  assert.equal(READ_DIRECT_ACTIONS.length, 17);
+  assert.equal(ALL_DIRECT_ACTIONS.length, 43);
+  assert.equal(READ_DIRECT_ACTIONS.length, 18);
   assert.equal(WRITE_DIRECT_ACTIONS.length, 25);
   for (const action of ALL_DIRECT_ACTIONS) {
     assert.equal(isWriteDirectAction(action), DIRECT_ACTION_EFFECTS[action] === "write");

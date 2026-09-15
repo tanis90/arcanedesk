@@ -99,6 +99,11 @@
     "cls": "cleric",
     "level": 1
   },
+  "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.68bYIOvx6rIqnlOW": {
+    "identifier": "bonus-proficiency",
+    "cls": "cleric",
+    "level": 1
+  },
   "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk": {
     "identifier": "channel-divinity",
     "cls": "cleric",

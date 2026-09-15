@@ -37,9 +37,10 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
     assert.equal(session.getActiveToolNames().includes("browser_evaluate"), false);
     assert.equal(session.getActiveToolNames().includes("read"), false);
   } else {
-    assert.equal(expected.length, 21);
+    assert.equal(expected.length, 22);
     assert.equal(session.getActiveToolNames().includes("foundry_actor_advance"), true);
-    assert.equal(session.getActiveToolNames().includes("foundry_content_list"), true);
+    assert.equal(session.getActiveToolNames().includes("foundry_compendium_browse"), true);
+    assert.equal(session.getActiveToolNames().includes("foundry_advancement_plan"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_scene_get"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_scene_apply"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_execute_action"), false);

@@ -66,7 +66,8 @@ export function actionFamily(action) {
   switch (String(action ?? "")) {
     case "worldInfo":
     case "contentSearch":
-    case "contentList":
+    case "advancementPlan":
+    case "compendiumBrowse":
     case "actorRead":
     case "sceneRead":
       return "world_info";

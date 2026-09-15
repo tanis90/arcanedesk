@@ -23,20 +23,34 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [] } = {}) {
+function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null } = {}) {
   let writes = 0;
   const preItems = [];
   const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: "character",
-    items: [], system: { attributes: { hp: { value: 10, max: 10 } }, details: { level: 0 } },
-    async update() { writes++; }, async createEmbeddedDocuments() { writes++; },
+    items: [], system: { attributes: { hp: actorHp ?? { value: 10, max: 10 } }, details: { level: actorLevel } },
+    async update(patch = {}) { writes++; for (const [key, value] of Object.entries(patch)) {
+      if (!key.includes(".")) { actor[key] = value; continue; }
+      const keys = key.split("."); let target = actor.system;
+      for (const part of keys.slice(1, -1)) target = target?.[part];
+      if (target) target[keys.at(-1)] = value;
+    } },
+    async createEmbeddedDocuments(_kind, data = []) { writes++; const made = data.map((d, i) => ({ id: "made" + i + "_" + writes, uuid: "Actor.hero.Item.made" + i + "_" + writes, name: d.name, type: d.type, flags: d.flags ?? {}, system: d.system ?? {}, _stats: {} })); actor.items.push(...made); return made; },
     async updateEmbeddedDocuments() { writes++; }, async deleteEmbeddedDocuments() { writes++; } };
-  const source = (uuid, type, flows) => ({ documentName: "Item", uuid, pack: "packs.rules", type, name: type,
-    toObject: () => ({ uuid, type, name: type, system: {}, __flows: flows }) });
+  const source = (uuid, type, flows, system = {}) => ({ documentName: "Item", uuid, pack: "packs.rules", type, name: type,
+    system, toObject: () => ({ uuid, type, name: type, system: { ...system }, __flows: flows }) });
   const docs = new Map();
-  docs.set("Compendium.packs.rules.Item.class", source("Compendium.packs.rules.Item.class", "class", classFlows));
+  docs.set("Compendium.packs.rules.Item.class", source("Compendium.packs.rules.Item.class", "class", classFlows, { identifier: "wizard", ...classSystem }));
   docs.set("Compendium.packs.rules.Item.race", source("Compendium.packs.rules.Item.race", "race", raceFlows));
   docs.set("Compendium.packs.rules.Item.sub", source("Compendium.packs.rules.Item.sub", "subclass", []));
   docs.set(actor.uuid, actor);
+  const spellIndex = spells.map(([id, name, level, identifier, flags]) => ({ _id: id, name, type: "spell", system: { identifier, level }, ...(flags ? { flags } : {}) }));
+  for (const [id, name, level, identifier] of spells) {
+    const uuid = "Compendium.dnd5e.spells.Item." + id;
+    docs.set(uuid, { documentName: "Item", uuid, pack: "dnd5e.spells", type: "spell", name,
+      system: { identifier, level }, toObject: () => ({ uuid, type: "spell", name, system: { identifier, level } }) });
+  }
+  const spellPack = { metadata: { id: "dnd5e.spells", type: "Item" }, getIndex: async () => spellIndex };
+  const packs = Object.assign([spellPack], { get: id => (id === "dnd5e.spells" ? spellPack : null) });
   const manager = {
     forNewItem: (_actor, data) => {
       const items = new Map(preItems.map(item => [item._id, item]));
@@ -52,7 +66,7 @@ function fixture({ classFlows = [], raceFlows = [] } = {}) {
       .map(({ level: flowLevel, advancement }) => ({ level: flowLevel, advancement })),
   };
   const context = vm.createContext({
-    game: { ready: true, user: { isGM: true }, world: { id: "w" } },
+    game: { ready: true, user: { isGM: true }, world: { id: "w" }, packs },
     location: { origin: "https://foundry.test" },
     CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])) } },
     dnd5e: { applications: { advancement: { AdvancementManager: manager } }, registry: { spellLists: { forType: () => null } } },
@@ -201,4 +215,58 @@ test("subclass item's own grants apply in the same session after the subclass st
   assert.deepEqual(applied(grant.applied), [[2, { selected: ["Compendium.packs.rules.Item.feature"] }]]);
   assert.ok(result.steps.some(step => step.label === "subclass" && step.kind === "ItemGrantAdvancement"));
   assert.equal(result.warnings.length, 0);
+});
+
+test("fullSpellList grants the annotated class spell list after advancement; other classes reject before writes", async () => {
+  const mod = "arcane-dnd5e-2014-automation";
+  const clericSpells = [
+    ["ble", "Bless", 1, "bless", { [mod]: { spellClasses: ["cleric", "paladin"] } }],
+    ["cure", "Cure Wounds", 1, "cure-wounds", { [mod]: { spellClasses: ["cleric"] } }],
+    ["sw", "Spiritual Weapon", 2, "spiritual-weapon", { [mod]: { spellClasses: ["cleric"] } }],
+    ["guard", "Spirit Guardians", 3, "spirit-guardians", { [mod]: { spellClasses: ["cleric"] } }],
+    ["fb", "Fireball", 3, "fireball"],
+  ];
+  const clericSystem = { identifier: "cleric", spellcasting: { progression: "full", ability: "wis" }, source: { rules: "2014" } };
+  const f = fixture({ classFlows: [hp(1)], spells: clericSpells, classSystem: clericSystem });
+  const result = await f.advance({ targetLevel: 3, fullSpellList: true });
+  assert.equal(result.status, "completed");
+  assert.equal(result.verification.spellFill.maxLevel, 2);
+  assert.equal(result.verification.spellFill.count, 3);
+  assert.equal(result.verification.spellFill.created.length, 3);
+  assert.deepEqual(result.verification.spellFill.created.map(item => item.name).sort(), ["Bless", "Cure Wounds", "Spiritual Weapon"]);
+  // Granting again skips existing sources instead of stacking.
+  const again = await f.advance({ targetLevel: 3, fullSpellList: true });
+  assert.equal(again.status, "completed");
+  assert.equal(again.verification.spellFill.created.length, 0);
+  assert.equal(again.verification.spellFill.skippedExisting.length, 3);
+  // Wizard is not a prepared-list class: rejected before any write.
+  const w = fixture({ classFlows: [hp(1)], spells: clericSpells, classSystem: { identifier: "wizard", spellcasting: { progression: "full", ability: "int" }, source: { rules: "2014" } } });
+  const rejected = await w.advance({ targetLevel: 3, fullSpellList: true });
+  assert.equal(rejected.status, "rejected");
+  assert.match(rejected.code, /INPUT_INVALID/);
+  assert.equal(w.writes(), 0);
+});
+
+test("creation advance (level 0) fills hp to the derived max and reports hpFill", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorHp: { value: 24, max: 30 } });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.hp, { value: 30, max: 30 });
+  assert.deepEqual(result.verification.hpFill, { before: 24, after: 30 });
+});
+
+test("advance of an already-leveled character never fills hp", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorLevel: 3, actorHp: { value: 24, max: 30 } });
+  const result = await f.advance({ targetLevel: 4 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.hp, { value: 24, max: 30 });
+  assert.equal(result.verification.hpFill, undefined);
+});
+
+test("creation advance pulls hp up only, never pushes down", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorHp: { value: 40, max: 30 } });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification.hp, { value: 40, max: 30 });
+  assert.equal(result.verification.hpFill, undefined);
 });

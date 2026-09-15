@@ -20,7 +20,7 @@
 ## Full A1-B3 rerun on D:\\FVTT_DATA COS (2026-09-11)
 
 - Target: `http://127.0.0.1:30000`, world `COS`, Foundry 13.351, dnd5e 5.3.3; login and readiness verified with `packages/fvtt-cli` over Chrome CDP 9230.
-- Batch: `C:\\Users\\yangqi\\AppData\\Local\\Temp\\deepseek-flash-full-178910\\manifest.json`.
+- Batch: `%TEMP%\deepseek-flash-full-178910\manifest.json`.
 - JS arm passed 6/6. Catalog-tool arm passed 4/6: A2, B1, B2, B3 passed; A1 failed `hp.full,movement.walk`; A3 failed `skills.abilities,resource.channel-divinity`.
 - Catalog calls occurred in 4/6 tool trials and 0/6 JS trials. Tool arm call counts were A1 0, A2 19 catalog calls, A3 1, B1 0, B2 2, B3 0.
 - Mean elapsed time: JS 205.3s; tool 189.6s. This is one paired batch, so it is directional rather than a stable performance estimate.
@@ -44,7 +44,7 @@
 
 ## Five-run execution checkpoint (2026-09-11)
 
-The first five-run batch was started against local COS. Run 1 completed 9/12 audited trials (A1-A3 and B1 both arms, B2 JS). B2 tool produced a settled business report but the provider returned a batch-level failure afterward, so the runner paused before B3. The manifest is preserved at `C:\Users\yangqi\AppData\Local\Temp\deepseek-flash-5x-20260911\run-1b\manifest.json`. This is recorded as an infrastructure/provider interruption, not a model pass/fail; the five-run aggregate is therefore not yet valid.
+The first five-run batch was started against local COS. Run 1 completed 9/12 audited trials (A1-A3 and B1 both arms, B2 JS). B2 tool produced a settled business report but the provider returned a batch-level failure afterward, so the runner paused before B3. The manifest is preserved at `%TEMP%\deepseek-flash-5x-20260911\run-1b\manifest.json`. This is recorded as an infrastructure/provider interruption, not a model pass/fail; the five-run aggregate is therefore not yet valid.
 
 
 ### Continuation result

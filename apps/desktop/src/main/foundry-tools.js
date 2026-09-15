@@ -57,12 +57,15 @@ const sceneFields = { name: Type.Optional(ref()), active: Type.Optional(Type.Boo
   width: Type.Optional(Type.Integer({ minimum: 1 })), height: Type.Optional(Type.Integer({ minimum: 1 })),
   grid: Type.Optional(exact({ type: Type.Optional(Type.Integer()), size: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
     distance: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), units: Type.Optional(Type.String({ maxLength: 256 })) })) };
+const abilityScores = exact({ str: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })), dex: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+  con: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })), int: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+  wis: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })), cha: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })) });
 const actorChanges = exact({ name: Type.Optional(ref()), folderId: Type.Optional(Type.Union([ref(), Type.Null()])),
   prototypeToken: Type.Optional(exact({ name: Type.Optional(ref()), width: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })),
     height: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 100 })), disposition: Type.Optional(Type.Union([Type.Literal(-1), Type.Literal(0), Type.Literal(1)])) })),
   dnd5e: Type.Optional(exact({ hp: Type.Optional(exact({ value: Type.Optional(Type.Number({ minimum: 0 })),
     max: Type.Optional(Type.Number({ minimum: 0 })), temp: Type.Optional(Type.Number({ minimum: 0 })) })),
-    ac: Type.Optional(exact({ flat: Type.Number() })) })) });
+    ac: Type.Optional(exact({ flat: Type.Number() })), abilities: Type.Optional(abilityScores) })) });
 
 /** Definitions are mode-independent; activation belongs to the host's explicit allowlist. */
 export function createFoundryTools(host) {
@@ -128,13 +131,14 @@ export function createFoundryTools(host) {
         exact({ kind: Type.Literal("compendium"), packId: ref(), entryId: ref() })]),
       name: ref(), folderId: Type.Optional(ref()), initialItems: Type.Optional(Type.Array(grant, { maxItems: 50 })),
       prototypeToken: Type.Optional(exact({ name: ref() })),
-    }), "Create an empty or compendium Actor with an explicit name and optional initial compendium Items. Optional prototypeToken.name sets the prototype Token name in the same creation. Existing names are returned as collisions; partial creation is never retried automatically. Prep-only."),
+      dnd5e: Type.Optional(exact({ abilities: abilityScores })),
+    }), "Create an empty or compendium Actor with an explicit name and optional initial compendium Items. Optional prototypeToken.name sets the prototype Token name in the same creation. Optional dnd5e.abilities sets base ability scores (integers 1..20) at creation — before any advancement, so racial and ASI bonuses add on top; new characters should receive their standard array here. Existing names are returned as collisions; partial creation is never retried automatically. Prep-only."),
     actorWrite("foundry_actor_update", "actorEdit", exact({ actorUuid: ref(), readRef: ref(), changes: actorChanges }),
-      "Update bounded Actor name, existing folder, prototype Token fields, HP or flat AC. Requires a current readRef for touched fields; unrelated changes do not block. Use foundry_image for portraits, local uploads and Token image synchronization. Prep-only."),
+      "Update bounded Actor name, existing folder, prototype Token fields, HP, flat AC or base ability scores (integers 1..20). Ability writes are SET semantics: after advancement they must already include racial/ASI additions, so new characters should receive base scores via foundry_actor_create instead. Requires a current readRef for touched fields; unrelated changes do not block. Use foundry_image for portraits, local uploads and Token image synchronization. Prep-only."),
     actorWrite("foundry_actor_grant_items", "actorGrantItems", exact({ actorUuid: ref(), readRef: ref(), items: Type.Array(grant, { minItems: 1, maxItems: 50 }) }),
       "Grant exact compendium Items to an Actor after reading its items projection. Existing sources are skipped, never stacked or replaced. Reports created and skipped identities. Prep-only."),
     actorWrite("foundry_actor_advance", "actorAdvance", exact({ actorUuid: ref(), readRef: ref(), classUuid: ref(), subclassUuid: Type.Optional(ref()), raceUuid: Type.Optional(ref()), targetLevel: Type.Integer({ minimum: 1, maximum: 20 }), choices: Type.Optional(exact({ skills: Type.Optional(Type.Array(ref(), { maxItems: 10, uniqueItems: true })), tools: Type.Optional(Type.Array(ref(), { maxItems: 10, uniqueItems: true })), cantrips: Type.Optional(Type.Array(ref(), { maxItems: 20, uniqueItems: true })), preparedSpells: Type.Optional(Type.Array(ref(), { maxItems: 50, uniqueItems: true })), feats: Type.Optional(Type.Array(ref(), { maxItems: 10, uniqueItems: true })), hp: Type.Optional(Type.Union([Type.Literal("max"), Type.Literal("avg")])), abilityScore: Type.Optional(Type.Record(ref(), Type.Integer({ minimum: 1, maximum: 2 }))) })), additionalItems: Type.Optional(Type.Array(grant, { maxItems: 50 })) }),
-      "Advance an existing dnd5e Character through the native AdvancementManager. Supply source UUIDs and only choices the native steps require; HP, class features, resources and derived values are calculated by dnd5e. Skill/tool choices use native trait keys from each step's pool (e.g. skills:arc); spell/feat choices use exact compendium UUIDs from that step's candidate pool. Selections no native step consumes are reported as warnings. Requires a current Actor readRef. Missing or invalid choices are rejected before any world write. Prep-only."),
+      "Advance an existing dnd5e Character through the native AdvancementManager. Supply source UUIDs and only choices the native steps require; HP, class features, resources and derived values are calculated by dnd5e. Skill/tool choices use native trait keys from each step's pool (e.g. skills:arc); spell/feat choices use exact compendium UUIDs from that step's candidate pool. Selections no native step consumes are reported as warnings. Requires a current Actor readRef. Missing or invalid choices are rejected before any world write. Advances from character level 0 (fresh creation) automatically end at full HP, reported as hpFill in the receipt; advances of existing characters never touch current HP. Prep-only."),
     defineTool({
       name: "foundry_content_search", label: "Search Foundry Content",
       description: "Search world Actors/Scenes or compendium Actors/Items by name; Items also match their system identifier across translated names. documentType is case-sensitive: Actor, Item, or Scene. Returns exact UUIDs and source pack references in bounded pages. Use these references to avoid guessing identities or duplicate content. Prep-only.",
@@ -146,17 +150,29 @@ export function createFoundryTools(host) {
       execute: async (_id, params, signal) => textResult(await host.foundryServices().contentSearch(params, signal)),
     }),
     defineTool({
-      name: "foundry_content_list", label: "List Foundry Content",
-      description: "List level-up options without writing the world. type=classFeature returns the native dnd5e advancement plan for an existing character (actorUuid) taking a class (with optional subclassUuid/raceUuid) to characterLevel: steps dnd5e grants automatically, the choices a caller must supply (each with its candidate pool and value format), any uncovered native steps, and actorAdvanceArgs to pass straight into foundry_actor_advance. spellBudget gives the hardcoded rules-table spellcasting totals for the class at that level (ability, progression, plus cantrips/known/spellbook counts where the class has them; preparation state and slot counts are out of scope). type=spell/item/weapon pages compendium candidates matched by name or identifier (rules filters 2014 vs 2024 packs, maxLevel bounds spell level); candidates carry eligibility for classUuid when given. Read-only. Prep-only.",
-      parameters: exact({ scope: Type.Literal("compendium"),
-        type: Type.Union([Type.Literal("classFeature"), Type.Literal("spell"), Type.Literal("item"), Type.Literal("weapon")]),
-        rules: Type.Optional(Type.Union([Type.Literal("2014"), Type.Literal("2024")])),
-        actorUuid: Type.Optional(ref()), classUuid: Type.Optional(ref()), subclassUuid: Type.Optional(ref()), raceUuid: Type.Optional(ref()),
-        characterLevel: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
-        maxLevel: Type.Optional(Type.Integer({ minimum: 0, maximum: 9 })),
-        query: Type.Optional(Type.String({ maxLength: 256 })),
-        page: Type.Optional(Type.Integer({ minimum: 1 })), pageSize: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })) }),
-      execute: async (_id, params, signal) => textResult(await host.foundryServices().contentList(params, signal)),
+      name: "foundry_compendium_browse", label: "Browse Compendium",
+      description: "Enumerate compendium candidates by type and filters, or read full documents by UUID. type=class/subclass/race returns the deduplicated discovery catalog (entries carry uuid, identifier, packId and rules label; subclass filters by classUuid) so class/subclass/race identities never need fuzzy search. type=spell/item pages candidates matched by name or identifier (rules narrows 2014 vs 2024, maxLevel bounds spell level, itemType filters item kind); candidates carry eligibility hints for classUuid. uuids mode returns up to 20 full documents for semantic selection or reconciliation, never for discovery. Read-only. Prep-only.",
+      parameters: Type.Union([
+        exact({ scope: Type.Literal("compendium"),
+          type: Type.Union([Type.Literal("spell"), Type.Literal("item"), Type.Literal("class"), Type.Literal("subclass"), Type.Literal("race")]),
+          rules: Type.Optional(Type.Union([Type.Literal("2014"), Type.Literal("2024")])),
+          classUuid: Type.Optional(ref()), maxLevel: Type.Optional(Type.Integer({ minimum: 0, maximum: 9 })),
+          itemType: Type.Optional(Type.Union([Type.Literal("weapon"), Type.Literal("equipment"), Type.Literal("consumable"), Type.Literal("tool"), Type.Literal("loot"), Type.Literal("container"), Type.Literal("ammo")])),
+          query: Type.Optional(Type.String({ maxLength: 256 })),
+          page: Type.Optional(Type.Integer({ minimum: 1 })), pageSize: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })) }),
+        exact({ scope: Type.Literal("compendium"),
+          uuids: Type.Array(ref(), { minItems: 1, maxItems: 20 }) }),
+      ]),
+      execute: async (_id, params, signal) => textResult(await host.foundryServices().compendiumBrowse(params, signal)),
+    }),
+    defineTool({
+      name: "foundry_advancement_plan", label: "Advancement Plan",
+      description: "Compute the native dnd5e level-up plan for an existing character (actorUuid) taking a class to characterLevel, without writing the world: steps dnd5e grants automatically, the choices a caller must supply (each with its candidate pool and value format), uncovered native steps, spellBudget (hardcoded rules-table spellcasting totals; prepared-list casters receive their full class spell list instead), and actorAdvanceArgs to pass straight into foundry_actor_advance. Call once without subclassUuid to get the subclass candidate pool, then again with subclassUuid for the final plan. rules is derived from the class document, never supplied. Read-only. Prep-only.",
+      parameters: exact({
+        actorUuid: ref(), classUuid: ref(),
+        subclassUuid: Type.Optional(ref()), raceUuid: Type.Optional(ref()),
+        characterLevel: Type.Integer({ minimum: 1, maximum: 20 }) }),
+      execute: async (_id, params, signal) => textResult(await host.foundryServices().advancementPlan(params, signal)),
     }),
     defineTool({
       name: "foundry_execute_action", label: "Execute Action",

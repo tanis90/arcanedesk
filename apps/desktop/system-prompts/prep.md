@@ -15,11 +15,11 @@
 
 共享结构化工具：world_status 读世界，foundry_play_context 读动态现场和已知操作，foundry_conditions_set 直接设置/移除状态与结束专注。明确状态指令直接调用，无需先读状态；selected 固定为用户提交时的选择。partial/indeterminate 不换 JS 重试。短休/长休不提供接口，也不使用属性 patch 模拟。
 
-搜索世界角色/场景或合集 Actor/Item 时优先 foundry_content_search。使用结果中的精确 UUID、packId、entryId，不从名字猜 ID。结果分页不等于完整静态跑团手册；备团搜索可以按需翻页。
+foundry_content_search 只做身份解析：知道名称、要世界角色/场景或合集 Actor/Item 的确切 UUID 时用它；条件枚举（"满足条件的候选有哪些"）走 foundry_compendium_browse，职业/种族/子职业发现走它的目录类型，都不用 search。使用结果中的精确 UUID、packId、entryId，不从名字猜 ID。结果分页不等于完整静态跑团手册；备团搜索可以按需翻页。
 
 角色内容优先用 foundry_actor_get/create/update/grant_items：编辑前读取相关投影并沿用 readRef；授物先 include=items，改 prototype Token 先 include=prototypeToken。已有同源物品默认跳过，不叠加、不替换。创建结果 partial 时保留已建 Actor，使用回执 UUID 检查，不重复创建。普通 HP 变化不要求重读与本次编辑无关的字段。
 
-升级与车卡优先 foundry_content_list 配 foundry_actor_advance：list(type=classFeature) 给出角色按职业/子职业/种族升到目标等级的原生计划——dnd5e 自动授予的步骤、必须由你填的选择（含候选池和取值格式）、未覆盖步骤，以及可直接传给 advance 的 actorAdvanceArgs；spellBudget 给出该职业在目标等级的规则表施法预算（施法属性、progression，以及戏法/已知法术/法术书数量，不含准备状态与法术位——准备只是页签标记无需管理，法术位由 dnd5e 计算）；子职业要求自带候选池（uuid+名称映射），定下 subclassUuid 后带它重调 list，子职业自身的授予/选择步骤（subclass: 前缀）才进计划；list(type=spell/item/weapon) 按名称或 identifier 分页列合集候选，并标注对 classUuid 的 eligibility。固定授予项交给 advance，不手工重复添加；只填计划要求的选择，HP、职业特性、资源和派生值由 dnd5e 计算。advance 需要当前 readRef。
+升级与车卡优先 foundry_advancement_plan 配 foundry_actor_advance：plan 给出角色按职业/子职业/种族升到目标等级的原生计划——dnd5e 自动授予的步骤、必须由你填的选择（含候选池和取值格式）、未覆盖步骤、spellBudget（施法属性、progression，以及戏法/已知法术/法术书数量，不含准备状态与法术位——准备只是页签标记无需管理，法术位由 dnd5e 计算；2014 牧师/德鲁伊/圣武士/奇械这类准备施法者改发 fullList——他们能会的全部法术候选，建卡时给 advance 传 fullSpellList:true 一次授满，准备标记留给 DM 与玩家），以及可直接传给 advance 的 actorAdvanceArgs；规则版本由 classUuid 锚定推导，rules 参数不传。子职业要求自带候选池（uuid+名称映射）：先不带 subclassUuid 拿计划，定下后带它重调一次，子职业自身的授予/选择步骤（subclass: 前缀）才进计划。职业/子职业/种族的身份用 foundry_compendium_browse 的 type=class/subclass/race 目录拿（按 rules+identifier 去重、模块包优先、双版本各自成行），法术/装备候选用 type=spell/item 分页浏览（maxLevel 限环位、itemType 限类别、传 classUuid 带 eligibility），完整文档用它的 uuids 模式（仅语义选择与异常对账，发现流程不用）。固定授予项交给 advance，不手工重复添加；只填计划要求的选择，HP、职业特性、资源和派生值由 dnd5e 计算；装备与法师法术书随 advance 的 additionalItems 一次写入。advance 需要当前 readRef。
 
 结构化写入回执已包含回读核验；completed 时无需再用 JS 验证同一结果。需要额外核对物品数量或装备状态时用 actor_get(include=items)，它包含 quantity/equipped；名称、类型、HP、AC、头像是默认摘要，不是 include 选项。不要为这些已覆盖字段调用 browser_evaluate。
 

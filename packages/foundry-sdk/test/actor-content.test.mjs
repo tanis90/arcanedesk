@@ -9,7 +9,8 @@ function fixture(globals = {}) {
   const actors = new Map();
   const makeActor = (id, data = {}) => {
     const actor = { documentName: "Actor", id, uuid: `Actor.${id}`, name: "Guard", type: "npc", img: "guard.png", folder: null,
-      system: { attributes: { hp: { value: 10, max: 12, temp: 0 }, ac: { calc: "flat", flat: 13, value: 13 } } },
+      system: { attributes: { hp: { value: 10, max: 12, temp: 0 }, ac: { calc: "flat", flat: 13, value: 13 } },
+        abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(key => [key, { value: 10 }])) },
       prototypeToken: { name: "Guard", width: 1, height: 1, disposition: -1, texture: { src: "guard.png" }, ring: { enabled: false, subject: { texture: "" } } }, items: new Map(), ...data,
       async update(patch) { writes++; for (const [key, value] of Object.entries(patch)) {
         const keys = key.split("."); let target = this; for (const part of keys.slice(0, -1)) target = target[part]; target[keys.at(-1)] = value;
@@ -320,4 +321,67 @@ test("HTTP image hashing fallback agrees with SHA-256 across block and padding b
     const bytes = Buffer.from(Array.from({ length: size }, (_, index) => (index * 31 + 13) % 256));
     assert.equal(await run("actorRead", { bytes: [...bytes] }, {}), createHash("sha256").update(bytes).digest("hex"), `length=${size}`);
   }
+});
+
+test("creation writes base abilities into the actor data and echoes them in verification", async () => {
+  const f = fixture();
+  const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "character" }, name: "Mage", dnd5e: { abilities: { int: 15, cha: 8 } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(result.verification[0].abilities, { int: 15, cha: 8 });
+  const created = f.actors.get(result.steps[0].targets[0].split(".")[1]);
+  assert.equal(created.system.abilities.int.value, 15);
+  assert.equal(created.system.abilities.cha.value, 8);
+});
+
+test("creation merges abilities into a compendium source without dropping source fields", async () => {
+  const f = fixture(), source = f.sources.get("npc"), toObject = source.toObject;
+  source.toObject = () => ({ ...toObject(), system: { abilities: { str: { value: 12, proficient: 1 } } } });
+  const result = await f.call("actorCreate", { ...f.identity, source: { kind: "compendium", packId: "test.pack", entryId: "npc" }, name: "New Actor", dnd5e: { abilities: { str: 14 } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const created = f.actors.get(result.steps[0].targets[0].split(".")[1]);
+  assert.deepEqual(JSON.parse(JSON.stringify(created.system.abilities.str)), { value: 14, proficient: 1 });
+});
+
+test("creation rejects invalid ability scores before any write", async () => {
+  const f = fixture();
+  for (const abilities of [{ int: 0 }, { int: 21 }, { int: 15.5 }, { san: 10 }]) {
+    const result = await f.call("actorCreate", { ...f.identity, source: { kind: "blank", actorType: "character" }, name: "Mage", dnd5e: { abilities } });
+    assert.equal(result.status, "rejected", JSON.stringify({ abilities, result }));
+    assert.equal(result.code, "INPUT_INVALID");
+  }
+  assert.equal(f.writes(), 0);
+});
+
+test("edit writes bounded abilities covered by the readRef", async () => {
+  const f = fixture();
+  const read = await f.read([]);
+  assert.equal(read.readState.fields["system.abilities.int.value"], 10);
+  const result = await f.edit(read.readState, { dnd5e: { abilities: { int: 15, wis: 13 } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(f.actor.system.abilities.int.value, 15);
+  assert.equal(f.actor.system.abilities.wis.value, 13);
+  const steps = Object.fromEntries(result.steps.map(step => [step.step, step.state]));
+  assert.equal(steps["system.abilities.int.value"], "completed");
+  assert.equal(steps["system.abilities.wis.value"], "completed");
+});
+
+test("edit rejects invalid ability scores before any write", async () => {
+  const f = fixture();
+  const read = await f.read([]);
+  for (const abilities of [{ int: 0 }, { int: 21 }, { int: 15.5 }, { san: 10 }]) {
+    const result = await f.edit(read.readState, { dnd5e: { abilities } });
+    assert.equal(result.status, "rejected", JSON.stringify({ abilities, result }));
+    assert.equal(result.code, "INPUT_INVALID");
+  }
+  assert.equal(f.writes(), 0);
+});
+
+test("edit abilities requires a readRef that covered them", async () => {
+  const f = fixture();
+  const read = await f.read([]);
+  delete read.readState.fields["system.abilities.int.value"];
+  const result = await f.edit(read.readState, { dnd5e: { abilities: { int: 15 } } });
+  assert.equal(result.status, "rejected", JSON.stringify(result));
+  assert.equal(result.code, "READ_REF_STALE");
+  assert.equal(f.writes(), 0);
 });

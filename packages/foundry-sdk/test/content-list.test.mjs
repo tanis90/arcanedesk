@@ -23,7 +23,7 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], wizardList = [], classSystem = {}, subclassEntries = [] } = {}) {
+function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], wizardList = [], classSystem = {}, subclassEntries = [], catalogPacks = [], traitLabels = {}, poolPacks = [] } = {}) {
   let writes = 0;
   const preItems = [];
   const actor = { documentName: "Actor", id: "hero", uuid: "Actor.hero", name: "Hero", type: "character",
@@ -51,21 +51,31 @@ function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells =
     flowsForLevel: (item, level) => (item?.__flows ?? []).filter(flow => flow.level === level)
       .map(({ level: flowLevel, advancement }) => ({ level: flowLevel, advancement })),
   };
-  const spellIndex = spells.map(([id, name, level, identifier]) => ({ _id: id, name, type: "spell", system: { identifier, level } }));
+  const spellIndex = spells.map(([id, name, level, identifier, flags]) => ({ _id: id, name, type: "spell", system: { identifier, level }, ...(flags ? { flags } : {}) }));
   const spellPack = { metadata: { id: "dnd5e.spells", type: "Item" }, getIndex: async () => spellIndex };
   const subclassPack = { metadata: { id: "dnd5e.subclasses", type: "Item" }, getIndex: async () => subclassEntries };
-  const packs = Object.assign([spellPack, subclassPack], { get: id => (id === "dnd5e.spells" ? spellPack : null) });
+  const extraPacks = catalogPacks.map(({ id, entries }) => ({ metadata: { id, type: "Item" }, getIndex: async () => entries }));
+  const choicePools = poolPacks.map(({ id, index }) => ({ metadata: { id, type: "Item" }, index, getIndex: async () => [...index.values()] }));
+  const allPacks = [spellPack, subclassPack, ...extraPacks, ...choicePools];
+  const packs = Object.assign(allPacks, { get: id => allPacks.find(pack => pack.metadata.id === id) ?? null });
   const context = vm.createContext({
     game: { ready: true, user: { isGM: true }, world: { id: "w" }, packs },
     location: { origin: "https://foundry.test" },
     CONFIG: { DND5E: { abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(k => [k, {}])) } },
     dnd5e: { applications: { advancement: { AdvancementManager: manager } },
-      registry: { spellLists: { forType: key => (key === "class:wizard" ? { has: uuid => wizardList.some(suffix => uuid.endsWith(suffix)) } : null) } } },
+      registry: { spellLists: { forType: key => (key === "class:wizard" ? { identifiers: new Set(wizardList) } : null) } },
+      documents: { Trait: { keyLabel: key => traitLabels[key] ?? key } } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
   return { actor, docs, writes: () => writes,
-    list: async (input = {}) => JSON.parse(JSON.stringify(await run("contentList", { scope: "compendium", ...input }, {}))) };
+    list: async (input = {}) => {
+      const { type, ...rest } = input;
+      const result = type === "classFeature"
+        ? await run("advancementPlan", rest, {})
+        : await run("compendiumBrowse", { scope: "compendium", type, ...rest }, {});
+      return JSON.parse(JSON.stringify(result));
+    } };
 }
 
 const applied = calls => JSON.parse(JSON.stringify(calls));
@@ -98,6 +108,32 @@ test("classFeature serializes the shared plan: requirements, automatics, coverag
   assert.equal(f.writes(), 0);
 });
 
+test("classFeature hydrates candidateNames for pool-uuid and trait-key steps", async () => {
+  const style = new ItemChoiceAdvancement({ type: "feat", choices: { 1: { count: 1 } },
+    pool: [{ uuid: "Compendium.packs.rules.Item.fs-defense" }, { uuid: "Compendium.packs.rules.Item.fs-dueling" }] }, "Fighting Style");
+  const skills = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["skills:arc", "skills:his"] }] }, "技能");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: style }, { level: 1, advancement: skills }],
+    traitLabels: { "skills:arc": "奥秘", "skills:his": "历史" },
+    poolPacks: [{ id: "packs.rules", index: new Map([["fs-defense", { _id: "fs-defense", name: "防御" }], ["fs-dueling", { _id: "fs-dueling", name: "决斗" }]]) }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const styleReq = result.choiceRequirements.find(r => r.valueFormat === "pool-uuid");
+  assert.deepEqual(styleReq.candidateNames, { "Compendium.packs.rules.Item.fs-defense": "防御", "Compendium.packs.rules.Item.fs-dueling": "决斗" });
+  const skillReq = result.choiceRequirements.find(r => r.valueFormat === "trait-key");
+  assert.deepEqual(skillReq.candidateNames, { "skills:arc": "奥秘", "skills:his": "历史" });
+  assert.equal(f.writes(), 0);
+});
+
+test("classFeature omits candidateNames when nothing resolves", async () => {
+  const skills = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["skills:arc"] }] }, "技能");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: skills }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const skillReq = result.choiceRequirements.find(r => r.valueFormat === "trait-key");
+  assert.deepEqual(skillReq.candidates, ["skills:arc"]);
+  assert.equal(skillReq.candidateNames, undefined);
+});
+
 test("classFeature with subclass enumerates the subclass item's own grants", async () => {
   const subclass = new SubclassAdvancement({}, "Arcane Tradition");
   const grant = new ItemGrantAdvancement({ items: [{ uuid: "Compendium.packs.rules.Item.sculpt" }] }, "Tradition Features");
@@ -113,9 +149,10 @@ test("classFeature with subclass enumerates the subclass item's own grants", asy
 });
 
 test("spell candidates filter by query, rules, maxLevel and mark class-list eligibility", async () => {
-  const f = fixture({ spells: [["fb", "火球术", 3, "fireball"], ["ble", "祝福术", 1, "bless"], ["mm", "魔法飞弹", 1, "magic-missile"]], wizardList: [".fb"] });
+  const f = fixture({ spells: [["fb", "火球术", 3, "fireball"], ["ble", "祝福术", 1, "bless"], ["mm", "魔法飞弹", 1, "magic-missile"]], wizardList: ["fireball"] });
   const byQuery = await f.list({ type: "spell", query: "火球" });
   assert.deepEqual(byQuery.candidates.map(c => c.uuid), ["Compendium.dnd5e.spells.Item.fb"]);
+  assert.equal(byQuery.candidates[0].eligibility, undefined);
   const byIdentifier = await f.list({ type: "spell", query: "magic missile" });
   assert.deepEqual(byIdentifier.candidates.map(c => c.entryId), ["mm"]);
   const capped = await f.list({ type: "spell", maxLevel: 1 });
@@ -131,6 +168,25 @@ test("spell candidates filter by query, rules, maxLevel and mark class-list elig
   const page2 = await f.list({ type: "spell", pageSize: 2, page: 2 });
   assert.equal(page2.candidates.length, 1);
   assert.equal(page2.nextPage, null);
+});
+
+test("spell eligibility judges at the identifier layer: module annotation authoritative, registry identifiers the fallback", async () => {
+  const mod = "arcane-dnd5e-2014-automation";
+  const spells = [
+    ["ann-yes", "翠炎剑", 0, "green-flame-blade", { [mod]: { spellClasses: ["wizard"] } }],
+    ["ann-no", "注解火球", 3, "fireball", { [mod]: { spellClasses: ["cleric"] } }],
+    ["reg-yes", "魔法飞弹", 1, "magic-missile"],
+    ["reg-no", "祝福术", 1, "bless"],
+  ];
+  const f = fixture({ spells, wizardList: ["fireball", "magic-missile"] });
+  const r = await f.list({ type: "spell", classUuid: "Compendium.packs.rules.Item.class" });
+  const at = id => r.candidates.find(c => c.entryId === id).eligibility;
+  assert.equal(at("ann-yes"), "legal");
+  assert.equal(at("ann-no"), "name-match");
+  assert.equal(at("reg-yes"), "legal");
+  assert.equal(at("reg-no"), "name-match");
+  const plain = await f.list({ type: "spell" });
+  assert.ok(plain.candidates.every(c => c.eligibility === undefined));
 });
 
 test("classFeature rejects bad targets and sources before any work", async () => {
@@ -159,11 +215,40 @@ test("classFeature projects the hardcoded spellcasting budget for the class, rul
   const wizard24 = await list5(fixture({ classFlows: [hp(1)], classSystem: casting("full", "int", "2024") }));
   assert.deepEqual(wizard24.spellBudget, { ability: "int", progression: "full", cantrips: 4, book: 14 });
   const paladin = await list5(fixture({ classFlows: [hp(1)], classSystem: { ...casting("half", "cha"), identifier: "paladin" } }));
-  assert.deepEqual(paladin.spellBudget, { ability: "cha", progression: "half" });
+  assert.deepEqual(paladin.spellBudget, { ability: "cha", progression: "half", fullList: { maxLevel: 2, count: 0, candidates: [] } });
   const artificer = await list5(fixture({ classFlows: [hp(1)], classSystem: { ...casting("artificer"), identifier: "artificer" } }));
-  assert.deepEqual(artificer.spellBudget, { ability: "int", progression: "artificer", cantrips: 2 });
+  assert.deepEqual(artificer.spellBudget, { ability: "int", progression: "artificer", cantrips: 2, fullList: { maxLevel: 2, count: 0, candidates: [] } });
   const fighter = await list5(fixture({ classFlows: [hp(1)], classSystem: { identifier: "fighter" } }));
   assert.equal(fighter.spellBudget, null);
+});
+
+test("classFeature fills prepared-list casters with module-annotated class spells", async () => {
+  const mod = "arcane-dnd5e-2014-automation";
+  const spells = [
+    ["ble", "Bless", 1, "bless", { [mod]: { spellClasses: ["cleric", "paladin"] } }],
+    ["cure", "Cure Wounds", 1, "cure-wounds", { [mod]: { spellClasses: ["cleric"] } }],
+    ["sw", "Spiritual Weapon", 2, "spiritual-weapon", { [mod]: { spellClasses: ["cleric"] } }],
+    ["guard", "Spirit Guardians", 3, "spirit-guardians", { [mod]: { spellClasses: ["cleric"] } }],
+    ["fb", "Fireball", 3, "fireball"],
+    ["sorc", "Chaos Bolt", 1, "chaos-bolt", { [mod]: { spellClasses: ["sorcerer"] } }],
+  ];
+  const cleric = fixture({ classFlows: [hp(1)], spells,
+    classSystem: { spellcasting: { progression: "full", ability: "wis" }, source: { rules: "2014" }, identifier: "cleric" } });
+  const at = level => cleric.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: level });
+  const l3 = await at(3);
+  assert.equal(l3.spellBudget.fullList.maxLevel, 2);
+  assert.equal(l3.spellBudget.fullList.count, 3);
+  assert.deepEqual(l3.spellBudget.fullList.candidates, [
+    { uuid: "Compendium.dnd5e.spells.Item.ble", name: "Bless", level: 1 },
+    { uuid: "Compendium.dnd5e.spells.Item.cure", name: "Cure Wounds", level: 1 },
+    { uuid: "Compendium.dnd5e.spells.Item.sw", name: "Spiritual Weapon", level: 2 }]);
+  const l5 = await at(5);
+  assert.equal(l5.spellBudget.fullList.maxLevel, 3);
+  assert.equal(l5.spellBudget.fullList.count, 4);
+  const p1 = await fixture({ classFlows: [hp(1)], spells,
+    classSystem: { spellcasting: { progression: "half", ability: "cha" }, source: { rules: "2014" }, identifier: "paladin" } })
+    .list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
+  assert.equal(p1.spellBudget.fullList, undefined);
 });
 
 test("classFeature omits zero budget entries (ranger level 1 has no spells known)", async () => {
@@ -189,4 +274,93 @@ test("classFeature attaches the subclass candidate pool filtered by class identi
   assert.deepEqual(req24.candidates, ["Compendium.dnd5e.subclasses.Item.wiz24"]);
   const empty = (await fixture({ classFlows: flows() }).list(args)).choiceRequirements.find(r => r.valueFormat === "subclass-uuid");
   assert.equal(empty.candidates, undefined);
+});
+
+test("classFeature subclass pool dedupes SRD and module copies by identifier, arcane preferred", async () => {
+  const subs = [
+    { _id: "evo-srd", name: "塑能学派", type: "subclass", system: { identifier: "school-of-evocation", classIdentifier: "wizard", source: { rules: "2014" } } },
+    { _id: "evo-mod", name: "塑能学派 School of Evocation", type: "subclass", system: { identifier: "school-of-evocation", classIdentifier: "wizard", source: { rules: "2014" } } },
+    { _id: "illusion", name: "幻术学派", type: "subclass", system: { identifier: "school-of-illusion", classIdentifier: "wizard", source: { rules: "2014" } } },
+  ];
+  const flows = () => [hp(1), { level: 2, advancement: new SubclassAdvancement({}, "Arcane Tradition") }];
+  const args = { type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 2 };
+  const f = fixture({ classFlows: flows(), subclassEntries: [subs[0], subs[2]],
+    catalogPacks: [{ id: "arcane-dnd5e-2014-automation.subclasses", entries: [subs[1]] }] });
+  const req = (await f.list(args)).choiceRequirements.find(r => r.valueFormat === "subclass-uuid");
+  assert.deepEqual(req.candidates, ["Compendium.dnd5e.subclasses.Item.illusion", "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo-mod"]);
+  assert.equal(req.candidateNames["Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo-mod"], "塑能学派 School of Evocation");
+});
+
+test("catalog enumerates classes: arcane-preferred dedupe within a rules version, separate rows across versions", async () => {
+  const classes = [
+    { _id: "a", name: "法师", type: "class", system: { identifier: "wizard", source: { rules: "2014" } } },
+    { _id: "b", name: "Wizard", type: "class", system: { identifier: "wizard", source: { rules: "2014" } } },
+    { _id: "c", name: "Wizard 2024", type: "class", system: { identifier: "wizard", source: { rules: "2024" } } },
+    { _id: "d", name: "牧师", type: "class", system: { identifier: "cleric", source: { rules: "2014" } } },
+  ];
+  const f = fixture({ catalogPacks: [
+    { id: "dnd5e.classes", entries: [classes[1], classes[3]] },
+    { id: "arcane-dnd5e-2014-automation.classes", entries: [classes[0]] },
+    { id: "dnd5e.classes24", entries: [classes[2]] },
+  ] });
+  const both = await f.list({ type: "class" });
+  assert.equal(both.total, 3);
+  const wizard14 = both.candidates.find(c => c.identifier === "wizard" && c.rules === "2014");
+  assert.equal(wizard14.uuid, "Compendium.arcane-dnd5e-2014-automation.classes.Item.a");
+  assert.ok(both.candidates.some(c => c.identifier === "wizard" && c.rules === "2024" && c.uuid === "Compendium.dnd5e.classes24.Item.c"));
+  const only14 = await f.list({ type: "class", rules: "2014" });
+  assert.equal(only14.total, 2);
+  assert.ok(only14.candidates.every(c => c.rules === "2014"));
+});
+
+test("catalog subclass filters by classUuid and race enumerates with inferred pack rules", async () => {
+  const subs = [
+    { _id: "evo", name: "塑能学派", type: "subclass", system: { identifier: "school-of-evocation", classIdentifier: "wizard", source: { rules: "2014" } } },
+    { _id: "life", name: "生命领域", type: "subclass", system: { identifier: "life-domain", classIdentifier: "cleric", source: { rules: "2014" } } },
+  ];
+  const races = [
+    { _id: "hu", name: "人类", type: "race", system: { identifier: "human" } },
+    { _id: "hu24", name: "Human", type: "race", system: { identifier: "human", source: { rules: "2024" } } },
+  ];
+  const f = fixture({ catalogPacks: [
+    { id: "arcane-dnd5e-2014-automation.subclasses", entries: subs },
+    { id: "dnd5e.races", entries: [races[0]] },
+    { id: "dnd5e.origins24", entries: [races[1]] },
+  ] });
+  const filtered = await f.list({ type: "subclass", classUuid: "Compendium.packs.rules.Item.class" });
+  assert.deepEqual(filtered.candidates.map(c => c.uuid), ["Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo"]);
+  const all = await f.list({ type: "subclass" });
+  assert.equal(all.total, 2);
+  const raceRows = await f.list({ type: "race" });
+  assert.equal(raceRows.total, 2);
+  assert.deepEqual(raceRows.candidates.map(c => c.rules).sort(), ["2014", "2024"]);
+});
+
+test("browse item supports itemType and rejects the retired weapon type", async () => {
+  const items = [
+    { _id: "ls", name: "长剑", type: "weapon", system: { identifier: "longsword" } },
+    { _id: "cm", name: "链甲", type: "equipment", system: { identifier: "chain-mail" } },
+  ];
+  const f = fixture({ catalogPacks: [{ id: "arcane-dnd5e-2014-automation.basicweapons", entries: items }] });
+  const weapons = await f.list({ type: "item", itemType: "weapon" });
+  assert.deepEqual(weapons.candidates.map(c => c.uuid), ["Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.ls"]);
+  const retired = await f.list({ type: "weapon" });
+  assert.equal(retired.status, "rejected");
+  assert.equal(retired.code, "INPUT_INVALID");
+});
+
+test("browse uuids mode returns full documents and rejects non-compendium references", async () => {
+  const f = fixture({});
+  const got = await f.list({ uuids: ["Compendium.packs.rules.Item.class"] });
+  assert.equal(got.status, "completed");
+  assert.equal(got.documents.length, 1);
+  assert.equal(got.documents[0].packId, "packs.rules");
+  assert.equal(got.documents[0].summary.identifier, "wizard");
+  assert.equal(got.documents[0].document.system.identifier, "wizard");
+  const missing = await f.list({ uuids: ["Compendium.packs.rules.Item.nope"] });
+  assert.equal(missing.status, "rejected");
+  assert.equal(missing.code, "SOURCE_NOT_FOUND");
+  const world = await f.list({ uuids: ["Actor.hero"] });
+  assert.equal(world.status, "rejected");
+  assert.equal(world.code, "INPUT_INVALID");
 });
