@@ -19,9 +19,9 @@
 
 战斗首次执行的顺序固定为 static_context → play_context(view=turn) → execute_action → play_context(view=turn)；后续省去 static_context。读取手册会清除之前的回合证据，因此即使先读过 turn，读手册后也必须重新读 turn 再执行。
 
-切 Scene、开始或结束战斗，或工具明确报告静态快照失效时，按需重读一次。普通 HP、法术位、状态和回合变化不需要重读手册。availableActionIds 是已发现能力的稳定 actionRef，直接用于 execute_action。
+切 Scene、开始或结束战斗，或工具明确报告手册失效时，按需重读一次。普通 HP、法术位、状态和回合变化不需要重读手册。availableActionIds 是已发现能力的稳定 actionRef，直接用于 execute_action。
 
-非战斗已有有效手册时，从手册选能力直接执行。战斗每次执行前读 play_context(view=turn)，只操作当前行动者；执行后再读 turn 确认 HP 等变化。静态快照不能代替最新回合证据。需要推进回合时仅在 DM 明确要求后传 advance=true，非战斗不传。
+非战斗已有有效手册时，从手册选能力直接执行。战斗每次执行前读 play_context(view=turn)，只操作当前行动者；执行后再读 turn 确认 HP 等变化。手册不能代替最新回合证据。需要推进回合时仅在 DM 明确要求后传 advance=true，非战斗不传。
 
 ## 执行合同
 

@@ -19,9 +19,9 @@ The first time you need capabilities, call static_context once: if a combat is r
 
 The first combat execution follows a fixed order: static_context → play_context(view=turn) → execute_action → play_context(view=turn); later executions skip static_context. Reading the manual clears prior turn evidence, so even if you already read the turn, you must re-read it after reading the manual before executing.
 
-Re-read the manual once when the Scene changes, combat starts or ends, or a tool explicitly reports the static snapshot is stale. Ordinary HP, spell-slot, condition and turn changes do not require re-reading the manual. availableActionIds are stable actionRefs of discovered capabilities; use them directly with execute_action.
+Re-read the manual once when the Scene changes, combat starts or ends, or a tool explicitly reports the manual is stale. Ordinary HP, spell-slot, condition and turn changes do not require re-reading the manual. availableActionIds are stable actionRefs of discovered capabilities; use them directly with execute_action.
 
-Outside combat, with a valid manual in hand, pick capabilities from the manual and execute directly. In combat, read play_context(view=turn) before every execution and act only for the current combatant; after executing, read the turn again to confirm HP and other changes. A static snapshot cannot substitute for fresh turn evidence. Pass advance=true only when the DM explicitly asks to advance the turn; never pass it outside combat.
+Outside combat, with a valid manual in hand, pick capabilities from the manual and execute directly. In combat, read play_context(view=turn) before every execution and act only for the current combatant; after executing, read the turn again to confirm HP and other changes. The manual cannot substitute for fresh turn evidence. Pass advance=true only when the DM explicitly asks to advance the turn; never pass it outside combat.
 
 ## Execution contract
 
