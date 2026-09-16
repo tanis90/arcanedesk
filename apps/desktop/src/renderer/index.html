@@ -344,6 +344,34 @@
       max-width: 78%;
       white-space: pre-wrap;
     }
+    /* 发送回执(中断/失败/不确定):气泡底部虚线分隔,状态文字在左、重试 chip 在右 */
+    .msg.user .input-state {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 7px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-soft);
+      text-align: left;
+    }
+    .msg.user .retry-input {
+      margin-left: auto;
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 1px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--accent);
+      font: var(--fs-meta)/1.6 var(--font-ui);
+      letter-spacing: .03em;
+      cursor: pointer;
+    }
+    .msg.user .retry-input::before { content: "↻"; font-size: 11px; }
+    .msg.user .retry-input:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+    .msg.user .retry-input:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 1px; }
     .msg.assistant { color: var(--text); align-self: stretch; }
     .msg.assistant .body { padding-left: 2px; }
     .msg.assistant.streaming .body::after {

@@ -359,7 +359,7 @@ async function installSnapshot(payload, pageIntent = "latest", requestEvents = [
       updateInputReceipt(commandId, "uncertain");
       const retry = el("button", "retry-input", t("chat.input.retry"));
       retry.addEventListener("click", () => { void sendSubmission(submission); });
-      node.appendChild(retry);
+      mountRetryInput(node, retry);
     }
     if (revision === draftRevision) {
       input.value = saved.draft ?? "";
@@ -1804,6 +1804,10 @@ function updateInputReceipt(commandId, state) {
   if (!receipt) { receipt = el("div", "input-state status-line"); node.appendChild(receipt); }
   receipt.textContent = t(inputStateKeys[state] ?? inputStateKeys.uncertain);
 }
+/** 重试按钮挂进回执行(有回执时),与状态文字同一行;没有回执则落气泡末尾。 */
+function mountRetryInput(card, retry) {
+  (card.querySelector(".input-state") ?? card).appendChild(retry);
+}
 function submissionNode(submission) {
   let node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(submission.context.commandId) + '"]'));
   if (!node) {
@@ -1828,7 +1832,7 @@ function renderRecoveredInput(item, oldSubmission = null) {
     retry.remove(); saveWorkspace();
     void sendSubmission(submission);
   });
-  card.appendChild(retry);
+  mountRetryInput(card, retry);
 }
 
 async function sendSubmission(submission) {
@@ -1863,7 +1867,7 @@ async function sendSubmission(submission) {
     updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "send_failed");
     const retry = el("button", "retry-input", t("chat.input.retry"));
     retry.addEventListener("click", () => { void sendSubmission(submission); });
-    node.appendChild(retry);
+    mountRetryInput(node, retry);
     if (result?.code === "MODEL_PROVIDER_KEY_REQUIRED") addModelSetupCard(result);
   }
   if (selectedSessionId === id) saveWorkspace();
