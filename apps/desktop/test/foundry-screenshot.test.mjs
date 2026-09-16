@@ -1,23 +1,11 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { ResourceCoordinator } from "../src/main/scheduling/resource-coordinator.js";
 
 import {
   capturePageNavigationSafe,
   encodeFoundryScreenshot,
 } from "../src/main/foundry-screenshot.js";
-
-test("timed-out capture retains page admission until the GPU capture settles", async () => {
-  const r = new ResourceCoordinator(), wc = new EventEmitter();
-  let complete;
-  wc.capturePage = () => new Promise(resolve => { complete = resolve; });
-  const result = await r.run(["foundry:page"], {}, null, () => {}, () => capturePageNavigationSafe(wc, { timeoutMs: 5 }));
-  assert.equal(result.status, "timeout"); assert.equal(r.active.size, 1);
-  const next = r.acquire(["foundry:page"], {});
-  complete({ id: "frame" }); (await next).release();
-  assert.equal(r.active.size, 0); assert.equal(wc.eventNames().length, 0);
-});
 
 test("capturePageNavigationSafe returns a composed page image and removes listeners", async () => {
   const image = { id: "frame" };

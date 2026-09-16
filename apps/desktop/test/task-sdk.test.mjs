@@ -84,7 +84,7 @@ test("real SDK persists distinct same-timestamp message identities and input rec
     await h.first.promise;
     h.coordinator.submit({ commandId: "second", text: "second input" });
     h.release.resolve(); await h.coordinator.run;
-    const before = h.host.buildHistory();
+    const before = h.host.currentPayload().history;
     const assistant = before.filter(row => row.role === "assistant");
     assert.equal(assistant.length, 2); assert.equal(assistant[0].ts, assistant[1].ts);
     assert.notEqual(assistant[0].key, assistant[1].key);
@@ -95,7 +95,7 @@ test("real SDK persists distinct same-timestamp message identities and input rec
     const reopened = new AgentHost({ sendToRenderer() {}, log() {} });
     reopened.sessionManager = SessionManager.open(h.sessionManager.getSessionFile());
     reopened.session = { messages: [] }; // History is independent of current model context.
-    assert.deepEqual(reopened.buildHistory(), before);
+    assert.deepEqual(reopened.currentPayload().history, before);
   } finally { await h.session.abort(); h.session.dispose(); }
 });
 

@@ -27,10 +27,10 @@ test("legacy entry identities distinguish timestamp collisions and retain histor
   host.sessionManager = manager;
   host.session = { messages: manager.buildSessionContext().messages };
   assert.equal(host.session.messages.some(message => message.content === "early"), false);
-  const history = host.buildHistory();
+  const history = host.currentPayload().history;
   assert.deepEqual(history.map(row => row.text), ["early", "keep"]);
   assert.deepEqual(history.map(row => row.key), [`entry:${first}`, `entry:${second}`]);
   assert.equal(history[0].legacyKey, "user:1");
   manager.branch(first);
-  assert.deepEqual(host.buildHistory().map(row => row.key), [`entry:${first}`]);
+  assert.deepEqual(host.currentPayload().history.map(row => row.key), [`entry:${first}`]);
 });

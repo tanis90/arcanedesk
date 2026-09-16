@@ -1,0 +1,22 @@
+{
+  "requests": [
+    "A",
+    "B"
+  ],
+  "passed": true,
+  "checks": [
+    "CDP real pointer menus",
+    "same-name distinct projects",
+    "cross-mode navigation",
+    "stable streaming rows",
+    "busy archive rejected",
+    "archived submit rejected",
+    "rename",
+    "archive history and draft",
+    "reload",
+    "restore",
+    "undo",
+    "confirmed permanent delete preserves files",
+    "layout screenshots"
+  ]
+}

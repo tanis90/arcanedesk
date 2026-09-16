@@ -1,11 +1,22 @@
 name: Publish Arcane Skills
 
 # 内置 skills 的独立下发入口:只打包并发布 apps/desktop/skills/prep,不构建、
-# 不发 app 版本。revision 来自 skills/prep/bundle.json 且必须严格大于远端指针,
+# 不发 app 版本。revision 来自 bundle.json 且必须严格大于远端指针,
 # 不可变对象全部 HEAD 验收通过后才切换 skills/latest.json。
+# 国际化方案 M4 双轨:region=cn 发 skills/prep 到 OSS arcane-package;
+# region=intl 先组合 skills/prep-intl 英文基线(过四道 fail-closed 门禁)再发到
+# R2 arcane-desk-intl 独立前缀,两侧 revision 与 latest 指针互不影响。
 on:
   workflow_dispatch:
     inputs:
+      region:
+        description: "Target flavor: cn → OSS arcane-package; intl → R2 arcane-desk-intl"
+        required: true
+        default: cn
+        type: choice
+        options:
+          - cn
+          - intl
       skip_latest:
         description: "Upload and verify the immutable bundle without moving skills/latest.json"
         required: true
@@ -16,12 +27,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: arcane-skills-publish
+  group: arcane-skills-publish-${{ inputs.region }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish skills bundle
+    name: Publish skills bundle (${{ inputs.region }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: desktop-release
@@ -49,13 +60,16 @@ jobs:
       - name: Run Desktop tests
         run: npm test --workspace arcane-desktop
 
-      - name: Publish skills bundle to arcane-package OSS
+      - name: Publish skills bundle (${{ inputs.region }})
         env:
           OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
           OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          args=()
+          args=(--region "${{ inputs.region }}")
           if [[ "${{ inputs.skip_latest }}" == "true" ]]; then args+=(--skip-latest); fi
           node apps/desktop/scripts/publish-skills.mjs "${args[@]}"

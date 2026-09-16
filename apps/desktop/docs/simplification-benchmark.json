@@ -1,0 +1,139 @@
+{
+  "measuredAt": "2026-09-08T13:25:07.146Z",
+  "device": {
+    "platform": "win32",
+    "osRelease": "10.0.22631",
+    "arch": "x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+    "logicalCpus": 16,
+    "totalMemoryGiB": 63.77081298828125,
+    "electron": "44.0.0",
+    "node": "24.18.1"
+  },
+  "workload": {
+    "sessions": 16,
+    "activeTasks": 16,
+    "historyMessagesPerSession": 10000,
+    "historicalInputReceiptsPerSession": 5000,
+    "historyWindow": 100,
+    "progressEventsPerSecond": 160,
+    "stateEventsPerSecond": 32,
+    "interruptionSummaryPersistence": true,
+    "pendingInputPersistence": true,
+    "viewport": [
+      1200,
+      850
+    ],
+    "offscreen": true,
+    "hardwareAcceleration": false,
+    "sameModeSwitches": 60,
+    "crossModeSwitches": 60
+  },
+  "metrics": {
+    "selection": {
+      "samples": 120,
+      "p50Ms": 43.30000000447035,
+      "p95Ms": 159.59999999403954,
+      "maxMs": 232.79999999701977
+    },
+    "content": {
+      "samples": 120,
+      "p50Ms": 49.5,
+      "p95Ms": 159.59999999403954,
+      "maxMs": 232.79999999701977
+    },
+    "progress": {
+      "samples": 210,
+      "p50Ms": 17,
+      "p95Ms": 82,
+      "maxMs": 182
+    },
+    "states": {
+      "samples": 41,
+      "p50Ms": 18,
+      "p95Ms": 129,
+      "maxMs": 182
+    }
+  },
+  "progressDiagnostic": {
+    "selectedSessionId": "01a08131-14f2-7ee6-a9dd-62217db26219",
+    "viewSeq": 340,
+    "viewEpoch": "5f046d7c-a000-4679-9a72-739a4ee3367d",
+    "activityReady": true,
+    "restoringView": false,
+    "historyPage": {
+      "total": 10011,
+      "firstKey": "message:0-9911",
+      "lastKey": "message:28a449d0-6cf6-4b3a-afbd-623f3265482e",
+      "hasOlder": true,
+      "hasNewer": false
+    },
+    "followLatest": true,
+    "streamKeys": [
+      "message:82c54c19-9c56-42c4-9cec-5e17c1197296"
+    ],
+    "tail": "ing work. Update 243: ongoing work. Update 244: ongoing work. Update 245: ongoing work. Update 246: ongoing work. Update 247: ongoing work. Update 248: ongoing work. Update 249: ongoing work. Update 250: ongoing work. Update 251: ongoing work. Update 252: ongoing work. Update 253: ongoing work. Update 254: ongoing work. Update 255: ongoing work. Update 256: ongoing work. Update 257: ongoing work. "
+  },
+  "metadataReads": {
+    "samples": 289,
+    "p50Ms": 18.833800000000338,
+    "p95Ms": 30.660200000002078,
+    "maxMs": 76.52809999999954
+  },
+  "completedMessagesPerSecond": 16,
+  "metadataScope": "Production SessionRegistry merges native resident metadata; disk discovery is stubbed and excluded from these timings. Full messages trigger coalesced renderer row updates while tasks remain active.",
+  "byNavigation": {
+    "sameMode": {
+      "selection": {
+        "samples": 60,
+        "p50Ms": 56.100000001490116,
+        "p95Ms": 171.10000000149012,
+        "maxMs": 232.79999999701977
+      },
+      "content": {
+        "samples": 60,
+        "p50Ms": 56.100000001490116,
+        "p95Ms": 171.10000000149012,
+        "maxMs": 232.79999999701977
+      }
+    },
+    "crossMode": {
+      "selection": {
+        "samples": 60,
+        "p50Ms": 32.80000000447035,
+        "p95Ms": 80.80000000447035,
+        "maxMs": 161.69999999552965
+      },
+      "content": {
+        "samples": 60,
+        "p50Ms": 37.79999999701977,
+        "p95Ms": 98.89999999850988,
+        "maxMs": 161.69999999552965
+      }
+    }
+  },
+  "memory": [
+    {
+      "type": "Browser",
+      "workingSetMiB": 611.3359375,
+      "peakWorkingSetMiB": 819
+    },
+    {
+      "type": "GPU",
+      "workingSetMiB": 74.671875,
+      "peakWorkingSetMiB": 82.16796875
+    },
+    {
+      "type": "Utility",
+      "workingSetMiB": 50.7265625,
+      "peakWorkingSetMiB": 51.14453125
+    },
+    {
+      "type": "Tab",
+      "workingSetMiB": 232.6796875,
+      "peakWorkingSetMiB": 248.63671875
+    }
+  ],
+  "scope": "Production renderer/preload, AgentHost, TaskCoordinator, scheduler, projection, history index, activity center and native SessionManager; controlled prompt/IPC routing; first animation frame, not physical display; model and external tools excluded.",
+  "passed": true
+}

@@ -14,6 +14,8 @@ function deferred() {
   return { promise, resolve };
 }
 
+function runInput(host, text) { host.submitInput(text, []); return host.tasks.run; }
+
 function harness(root = null) {
   let count = 0;
   const created = [];
@@ -22,6 +24,7 @@ function harness(root = null) {
     const host = new AgentHost({ sendToRenderer: e => events.push(e), log: () => {} });
     const gate = deferred();
     host.start = async ({ sessionPath } = {}) => {
+      if (root && sessionPath && !existsSync(sessionPath)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
       const name = `session-${++count}`;
       const id = sessionPath ?? (root ? path.join(root, name) : name);
       host.sessionManager = { getSessionId: () => id, getSessionFile: () => id,
@@ -59,7 +62,7 @@ test("deletion blocks input and reopening, waits for stop, coalesces retries and
   const { registry, created } = harness(root);
   const a = await registry.start(), file = a.describeCurrent().path;
   writeFileSync(file, "history");
-  const run = a.prompt("work"), stopped = deferred(); let aborts = 0;
+  const run = runInput(a, "work"), stopped = deferred(); let aborts = 0;
   await new Promise(resolve => setImmediate(resolve));
   a.session.abort = async () => { aborts++; await stopped.promise; created[0].gate.resolve(); };
   const deleting = registry.deleteSession(file), again = registry.deleteSession(file);
@@ -70,7 +73,7 @@ test("deletion blocks input and reopening, waits for stop, coalesces retries and
   stopped.resolve(); assert.equal((await deleting).ok, true); assert.equal((await again).ok, true); await run;
   assert.equal(aborts, 1); assert.equal(existsSync(file), false); assert.equal(a.session, null);
   assert.equal(registry.activeHost, b); assert.equal(registry.get(a.describeCurrent().id), undefined);
-  await assert.rejects(registry.select(file), { code: "SESSION_DELETING" });
+  await assert.rejects(registry.select(file), { code: "ENOENT" });
 });
 
 test("deletion during historical loading retires the uninstalled host before removing the file", async () => {
@@ -80,7 +83,7 @@ test("deletion during historical loading retires the uninstalled host before rem
   const registry = new SessionRegistry({ createHost: () => ({
     start: () => gate.promise, describeCurrent: () => ({ id: "loaded", path: file }), dispose: () => { disposed++; },
   }) });
-  registry.activeHost = { openSessionManager() {} };
+  registry.activeHost = { openSessionManager() { return { getSessionId: () => "loaded" }; } };
   const loading = registry.select(file).catch(error => error.code);
   const deleting = registry.deleteSession(file);
   assert.equal(existsSync(file), true); gate.resolve();
@@ -88,13 +91,30 @@ test("deletion during historical loading retires the uninstalled host before rem
   assert.equal(disposed, 1); assert.equal(registry.allHosts().length, 0); assert.equal(existsSync(file), false);
 });
 
-test("failed filesystem deletion reopens admission and preserves the host", async () => {
+test("deletion waits for an already started model write before unlinking history", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-model-"));
+  const { registry } = harness(root);
+  const host = await registry.start(), file = host.describeCurrent().path, gate = deferred();
+  writeFileSync(file, "original");
+  host.modelRuntime = { getModel: (provider, id) => ({ provider, id }) };
+  host.session.model = { provider: "p", id: "old" };
+  host.session.setModel = async () => { await gate.promise; writeFileSync(file, "model change"); };
+  const changing = host.setCurrentModel("p", "new");
+  const deleting = registry.deleteSession(file);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(existsSync(file), true);
+  gate.resolve(); await changing;
+  assert.equal((await deleting).ok, true);
+  assert.equal(existsSync(file), false); assert.equal(host.retired, true);
+});
+
+test("failed filesystem deletion preserves the file and allows opening a fresh host", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "arcane-delete-failure-"));
   const { registry } = harness(root);
   const a = await registry.select(root);
   const result = await registry.deleteSession(root); // unlink cannot remove a directory
-  assert.equal(result.ok, false); assert.equal(a.deleting, false);
-  assert.equal(await registry.select(root), a); assert.ok(a.session); assert.equal(existsSync(root), true);
+  assert.equal(result.ok, false); assert.equal(a.retired, true);
+  assert.notEqual(await registry.select(root), a); assert.equal(existsSync(root), true);
 });
 
 test("replacement startup failure cannot report an already committed deletion as failed", async () => {
@@ -145,10 +165,10 @@ test("mode controller recovers an empty registry after deletion replacement fail
 test("same-mode A to B to A retains running host; stopping A does not stop B", async () => {
   const { registry, created } = harness();
   const a = await registry.start();
-  const aRun = a.prompt("A");
+  const aRun = runInput(a, "A");
   const aTask = a.task.id;
   const b = await registry.select(null, true);
-  const bRun = b.prompt("B");
+  const bRun = runInput(b, "B");
   assert.notEqual(a, b);
   assert.equal(a.busy, true);
   assert.equal(b.busy, true);
@@ -168,7 +188,7 @@ test("same-mode A to B to A retains running host; stopping A does not stop B", a
 test("initialization without a selected host reuses a live resident instead of recreating its SDK session", async () => {
   const { registry, created } = harness();
   const b = await registry.start();
-  const running = b.prompt("background task");
+  const running = runInput(b, "background task");
   registry.activeHost = null; // Selected A was removed and its replacement failed.
   try {
     assert.equal(await registry.start(), b);
@@ -181,7 +201,7 @@ test("initialization without a selected host reuses a live resident instead of r
 test("stale task stop never aborts a later task", async () => {
   const { registry } = harness();
   const host = await registry.start();
-  const run = host.prompt("task");
+  const run = runInput(host, "task");
   assert.deepEqual(await host.abort("old-task"), { ok: false, code: "STALE_TASK" });
   assert.equal(host.busy, true);
   await host.abort(host.task.id);

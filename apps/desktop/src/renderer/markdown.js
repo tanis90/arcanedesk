@@ -24,16 +24,23 @@ function el(tag, className, text) {
 // ---------- KaTeX 公式:$...$ / $$...$$ 先替换成占位符,DOM 构建时还原 ----------
 
 /**
- * 抽出数学片段换成 %%ARCKATEX_n%% 占位符;代码围栏与行内代码里的 $ 不动。
+ * 抽出数学片段换成 %%ARCKATEX_{nonce}_{n}%% 占位符;代码围栏与行内代码里的 $ 不动。
  * 顺带把中文编号 "1、" 归一成 "1. "(旧 markdown-lite 支持,marked 不认)。
  * @param {string} text
  * @returns {{ text: string, math: Array<{ tex: string, display: boolean }> }}
  */
 function extractMath(text) {
-  const math = [];
+  // 每次渲染换一个 nonce 并随 math 数组走:正文里字面的 %%ARCKATEX_0%% 是用户文本,
+  // 还原时只认本次渲染产出的占位符,不把用户文本错当公式
+  const math = /** @type {Array<{ tex: string, display: boolean }> & { nonce: string }} */ ([]);
+  math.nonce = Math.random().toString(36).slice(2, 10);
   const lines = String(text ?? "").split("\n");
   const out = [];
-  let inFence = false;
+  // 围栏追踪与 marked 对齐:~~~ 也是合法围栏;闭合必须与开符同字符、长度 ≥ 开符
+  // (```` 围栏里的一行 ``` 是内容)。追踪错了会把代码块里的 $...$ 抽成占位符,
+  // 而占位符在代码块里不会被还原,用户就看到 %%ARCKATEX%% 残渣
+  let fenceChar = "";
+  let fenceLen = 0;
   let seg = [];
   const flushSeg = () => {
     if (seg.length) {
@@ -42,13 +49,22 @@ function extractMath(text) {
     }
   };
   for (const line of lines) {
-    if (line.trimStart().startsWith("```")) {
-      if (!inFence) flushSeg();
-      inFence = !inFence;
+    const fence = /^(`{3,}|~{3,})/.exec(line.trimStart());
+    if (fenceChar) {
+      // 闭合行上只允许围栏符本身(marked 同样不认 ```js 这种带信息的闭合)
+      const closing = fence && fence[1][0] === fenceChar && fence[1].length >= fenceLen
+        && !line.trimStart().slice(fence[1].length).trim();
+      if (closing) {
+        fenceChar = "";
+        fenceLen = 0;
+      }
       out.push(line);
       continue;
     }
-    if (inFence) {
+    if (fence) {
+      flushSeg();
+      fenceChar = fence[1][0];
+      fenceLen = fence[1].length;
       out.push(line);
       continue;
     }
@@ -67,7 +83,7 @@ function scanMathSegment(seg, math) {
   let j = 0;
   const pushMath = (tex, display) => {
     math.push({ tex, display });
-    return `%%ARCKATEX_${math.length - 1}%%`;
+    return `%%ARCKATEX_${math.nonce}_${math.length - 1}%%`;
   };
   while (j < seg.length) {
     if (seg.startsWith("\\$", j)) {
@@ -129,12 +145,14 @@ function scanMathSegment(seg, math) {
   return out;
 }
 
-/** 文本节点按占位符切开,命中处插入 KaTeX 渲染结果。 */
+/** 文本节点按占位符切开,命中处插入 KaTeX 渲染结果;只认本次渲染 nonce 的占位符。 */
 function appendTextWithMath(container, text, math) {
-  for (const part of String(text ?? "").split(/(%%ARCKATEX_\d+%%)/)) {
+  const nonce = String(math?.nonce ?? "");
+  const pattern = new RegExp(`(%%ARCKATEX_${nonce}_\\d+%%)`);
+  for (const part of String(text ?? "").split(pattern)) {
     if (!part) continue;
-    const m = /^%%ARCKATEX_(\d+)%%$/.exec(part);
-    if (m && math[Number(m[1])]) container.appendChild(renderKatex(math[Number(m[1])]));
+    const m = new RegExp(`^%%ARCKATEX_${nonce}_(\\d+)%%$`).exec(part);
+    if (m && math?.[Number(m[1])]) container.appendChild(renderKatex(math[Number(m[1])]));
     else container.appendChild(document.createTextNode(part));
   }
 }
@@ -206,6 +224,190 @@ function appendMermaidBlock(container, source) {
       document.getElementById(`d${id}`)?.remove();
     }
   })();
+}
+
+// ---------- 围栏渲染器注册表(md-reader-spec §6) ----------
+
+/**
+ * 按 fence language 查表,命中即渲染,未命中保持源码块(管线缺省行为,无需降级逻辑)。
+ * 表挂在渲染管线本体上,所以 chat 气泡与右屏阅读器两处同时生效;
+ * 扩展新图类型 = 加一条注册项。只收纯离线渲染器(服务器通道的否决理由见 spec §10)。
+ */
+const FENCE_RENDERERS = new Map([
+  ["mermaid", appendMermaidBlock],
+]);
+
+// ---------- .md 路径 → 可点锚点(md-reader-spec §4.2) ----------
+
+/** 页面能不能真的打开笔记:chat 页有 arcane.openMdReader,阅读器页没有(v1 不做笔记间跳转)。
+    打不开就不产出可点外观——摆一个点了没反应的锚点比纯文本更糟(design-rules R5)。 */
+function canOpenNotes() {
+  return typeof /** @type {any} */ (window).arcane?.openMdReader === "function";
+}
+
+// 路径分量里的字符:含 CJK(npc-张三.md),排除空白、引号/反引号/尖括号这类包裹符、
+// ASCII 标点,以及全角引号与句读——它们在句子里做分隔符比在文件名里出现得多得多,
+// 不排除就会把 “notes/a.md” 的左引号一起吃进路径。
+const SEGMENT_CHAR = "[^\\s<>\"'`|*?()\\[\\]{},;:/\\\\“”‘’「」『』《》（）【】、。，；：！？…]";
+const NOTE_PATH_PATTERN = new RegExp(
+  "(?:[A-Za-z]:[\\\\/]|\\.{1,2}[\\\\/]|/)?" + // 盘符 / ./ ../ / 绝对 POSIX 起点
+  "(?:" + SEGMENT_CHAR + "+[\\\\/])*" + // 中间分量
+  SEGMENT_CHAR + "*?" + // 文件名(懒匹配,允许 CJK 名)
+  "\\.(?:md|markdown)" +
+  // 行号:v1 只剥除、不跳转。两个分支的边界都要额外拒绝 ":"——
+  // 否则 a.md:12:34x 回溯成行号组放弃后,a.md:12x 会链成 "a.md" + 悬空 ":12x",把非路径链成链接
+  "(?:(?::\\d+(?::\\d+)?)(?![\\w.\\-:])|(?![\\w.\\-:]))", // 右边界:a.md.bak / a.mdx 不算
+  "gi",
+);
+
+/** 文件名首字符是否 ASCII。CJK 开头的文件名只在两种情况下认(见 findNotePaths)。 */
+function startsAscii(value) {
+  return /^[A-Za-z0-9_]/.test(value);
+}
+
+/** 去掉行号与后缀后的文件名主干;空主干(".md")不是路径。 */
+function stemOf(name) {
+  return name.replace(/\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i, "");
+}
+
+/**
+ * 能不能当路径字符。直接复用 SEGMENT_CHAR:两份字符集写两遍早晚会走形,
+ * 而"能不能当路径字符"与"是不是词边界"就是同一个问题的正反两面。
+ */
+const PATH_CHAR = new RegExp(SEGMENT_CHAR);
+
+/**
+ * 命中处是否被词边界夹住(串首与串尾算边界)。
+ * 只有 CJK 开头的裸文件名需要这个判定:汉字没有词边界,不夹住就会把前后的散文一起吃进链接。
+ */
+function isDelimited(source, start, end) {
+  const before = start === 0 ? "" : source[start - 1];
+  const after = end >= source.length ? "" : source[end];
+  return (before === "" || !PATH_CHAR.test(before)) && (after === "" || !PATH_CHAR.test(after));
+}
+
+/**
+ * 命中处所在的空白分隔词元是不是个 URL(scheme:// 或 www. 开头)。那段属于外部链接,不是本地笔记。
+ * 正常渲染时 marked 的 gfm 自动链接已经把裸 URL 包成 <a>,walker 会跳过;
+ * 这里守的是行内 <code> 里的 URL 与 findNotePaths 被单独调用的场合。
+ */
+function insideUrl(source, start) {
+  let tokenStart = start;
+  while (tokenStart > 0 && !/\s/.test(source[tokenStart - 1])) tokenStart--;
+  const token = source.slice(tokenStart).replace(/^[^\w]+/, "");
+  return /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.)/i.test(token);
+}
+
+/**
+ * 在一段文本里找出所有笔记路径形态。
+ * 覆盖:相对(notes/a.md、./a.md)、绝对 POSIX(/home/u/a.md)、Windows 盘符
+ * (C:\Users\x\a.md 与 C:/Users/x/a.md)、行号(a.md:12)。包裹符与尾部标点已不在字符集里。
+ *
+ * CJK 开头的裸文件名分两步判:先看汉字后面是不是藏着一个 ASCII 名
+ * ("见README.md" → 让回粘着的散文,只链 "README.md");不是就要求它独立成词
+ * ("笔记 张三.md 很好" / <code>张三.md</code>)。两头都不成立则丢弃——宁可不链也不错链:
+ * 链错了用户点进去只看见"找不到这份笔记",却看不出是自己名字写错了还是程序吃错了字。
+ *
+ * @param {string} text
+ * @returns {Array<{ start: number, end: number, path: string }>}
+ */
+function findNotePaths(text) {
+  const source = String(text ?? "");
+  const hits = [];
+  for (const match of source.matchAll(NOTE_PATH_PATTERN)) {
+    const start = match.index;
+    const path = match[0];
+    if (insideUrl(source, start)) continue;
+    // 文件名在 path 里的起点 = 跳过盘符与各层分量之后
+    const nameOffset = pathLengthBeforeName(path);
+    const name = path.slice(nameOffset);
+    if (!stemOf(name)) continue; // ".md" 这种没主干的不是路径
+    if (startsAscii(name) || nameOffset > 0) {
+      hits.push({ start, end: start + path.length, path });
+      continue;
+    }
+    const stripped = name.replace(/^[^\x00-\x7f]+/, "");
+    if (startsAscii(stripped)) {
+      const offset = start + name.length - stripped.length;
+      hits.push({ start: offset, end: offset + stripped.length, path: stripped });
+      continue;
+    }
+    if (isDelimited(source, start, start + path.length)) hits.push({ start, end: start + path.length, path });
+  }
+  return hits;
+}
+
+/** 路径里文件名之前的长度(盘符 + 各层分量),用来定位文件名首字符。 */
+function pathLengthBeforeName(path) {
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return index === -1 ? 0 : index + 1;
+}
+
+/** href 形式的笔记路径([文字](笔记.md)):有 scheme 的一律不是本地笔记。 */
+function noteHref(href) {
+  const value = String(href ?? "").trim().replace(/^<(.*)>$/, "$1");
+  if (!value) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null;
+  if (!/\.(?:md|markdown)(?::\d+(?::\d+)?)?$/i.test(value)) return null;
+  // agent 常把 CJK 文件名 percent-encode(CommonMark 合法,如 plans/%E6%88%98%E6%9C%AF.md);
+  // 不解码的话交给 main 的路径查无此文件。% 序列残缺时 decodeURIComponent 抛错,保留原样
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * 可点笔记锚点。故意不挂 href:两个宿主页都是 file://,挂上去一点就把整个 view 导航走。
+ * 无 href 的 <a> 不可聚焦,所以自己补 tabIndex + role;点击由宿主页的事件委托接管(spec §8)。
+ */
+function noteAnchor(rawPath, tokens, math) {
+  const a = el("a", "md-path");
+  a.dataset.mdPath = rawPath;
+  a.tabIndex = 0;
+  a.setAttribute("role", "link");
+  if (tokens?.length) renderInlines(a, tokens, math);
+  else a.textContent = rawPath;
+  return a;
+}
+
+/**
+ * 渲染完的容器里遍历文本节点,把裸路径包成锚点。
+ * 高亮代码块(hljs)里的路径是源码不是入口,跳过;纯文本围栏(```text 文件清单)放行。
+ * 已包好的锚点不重复处理。
+ * KaTeX 产物(.md-katex)里的"路径"是公式文本,包上链接会把公式视觉破坏,同样跳过。
+ * 行内 <code> 里的路径要处理——反引号包裹是 spec §4.2 明列的形态。
+ */
+function linkifyNotePaths(root) {
+  if (!canOpenNotes()) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("a, .md-katex")) return NodeFilter.FILTER_REJECT;
+      // 高亮代码块(hljs)里的路径是源码不是入口,跳过;纯文本围栏(```text 等无高亮)
+      // 是 agent 列文件清单的常客,里面的路径要可点。行内 <code> 不在 pre 里,不受影响。
+      const code = node.parentElement?.closest("code");
+      if (code?.classList?.contains("hljs")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const targets = [];
+  while (walker.nextNode()) targets.push(walker.currentNode);
+  for (const node of targets) {
+    const text = node.nodeValue;
+    const hits = findNotePaths(text);
+    if (!hits.length) continue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const hit of hits) {
+      if (hit.start > cursor) fragment.appendChild(document.createTextNode(text.slice(cursor, hit.start)));
+      fragment.appendChild(noteAnchor(hit.path, null, null));
+      cursor = hit.end;
+    }
+    if (cursor < text.length) fragment.appendChild(document.createTextNode(text.slice(cursor)));
+    node.replaceWith(fragment);
+  }
 }
 
 // ---------- marked tokens → DOM ----------
@@ -307,7 +509,13 @@ function renderInlines(container, tokens, math) {
       case "link": {
         const href = safeUrl(token.href, false);
         if (!href) {
-          // 非 http/https(javascript: 等):只渲染链接文字,不挂链接
+          // 非 http/https:指向 .md/.markdown 的转成可点笔记锚点(§4.2),
+          // 其余(javascript: 等)只渲染链接文字,不挂链接
+          const note = canOpenNotes() ? noteHref(token.href) : null;
+          if (note) {
+            container.appendChild(noteAnchor(note, token.tokens ?? [], math));
+            break;
+          }
           renderInlines(container, token.tokens ?? [], math);
           break;
         }
@@ -348,8 +556,9 @@ function renderInlines(container, tokens, math) {
 function renderCodeBlock(container, token) {
   const lang = String(token.lang ?? "").trim().split(/\s+/)[0].toLowerCase();
   const code = token.text ?? "";
-  if (lang === "mermaid") {
-    appendMermaidBlock(container, code);
+  const fenceRenderer = FENCE_RENDERERS.get(lang);
+  if (fenceRenderer) {
+    fenceRenderer(container, code);
     return;
   }
   const box = el("div", "md-codeblock");
@@ -456,6 +665,7 @@ function renderMarkdown(container, text) {
     return;
   }
   renderBlocks(container, tokens ?? [], math);
+  linkifyNotePaths(container);
 }
 
 // ---------- hljs 高亮主题:暗 nord / 亮 stackoverflow-light(均避开红色系) ----------
@@ -476,5 +686,6 @@ new MutationObserver(applyHljsTheme).observe(document.documentElement, {
 });
 
   // 入口挂 window:chat.js 通过 window.arcaneMd.render 调用(tsc 模块作用域下不能直接引用函数名)
-  /** @type {any} */ (window).arcaneMd = { render: renderMarkdown };
+  // findNotePaths 也挂出去:它是路径形态的唯一判据,单测按 spec §9 跑全形态。
+  /** @type {any} */ (window).arcaneMd = { render: renderMarkdown, findNotePaths };
 })();

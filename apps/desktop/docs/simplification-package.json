@@ -1,0 +1,13 @@
+{
+  "platform": "win32-x64",
+  "sourceCommit": "3c428e9",
+  "modelCredential": "protected credential usable in trial profile",
+  "releaseId": "0.4.3-3c428e91",
+  "sourceFilesMatched": 69,
+  "actualExecutableStartup": "passed with isolated profile",
+  "verificationCommand": "npm run verify:package --workspace arcane-desktop -- dist/win-unpacked/resources/app",
+  "requiredFilesVerified": 47,
+  "executableSha256": "520d232046776836e6970b8120ab59c2d6be0c4f6132e07a41f618afe52ea73e",
+  "model": "alibaba-token-plan/qwen3.7-plus",
+  "note": "P8 changes only tests, evidence and documentation after this product source commit"
+}

@@ -1,0 +1,41 @@
+{
+  "startedAt": "2026-09-08T12:05:40.101Z",
+  "model": "qwen3.7-plus",
+  "provider": "alibaba-token-plan",
+  "endpoint": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+  "scope": "Production renderer -> preload IPC -> main -> AgentHost/TaskCoordinator -> Pi SDK -> real provider; native read tool -> real provider -> renderer and session file",
+  "checks": [
+    {
+      "elapsedMs": 2387,
+      "state": "completed",
+      "deltas": 15,
+      "toolStarts": 0,
+      "toolEnds": 0,
+      "expectedVisible": true,
+      "expectedInAnswer": true,
+      "expectedInHistoryFile": true,
+      "name": "real_streamed_text"
+    },
+    {
+      "elapsedMs": 3782,
+      "state": "completed",
+      "deltas": 37,
+      "toolStarts": 1,
+      "toolEnds": 1,
+      "expectedVisible": true,
+      "expectedInAnswer": true,
+      "expectedInHistoryFile": true,
+      "name": "real_read_tool_roundtrip"
+    }
+  ],
+  "actualModel": "qwen3.7-plus",
+  "actualProvider": "alibaba-token-plan",
+  "ok": true,
+  "finishedAt": "2026-09-08T12:05:58.906Z",
+  "baselineCommit": "5cef239fff540bcf0b7e9f64a571b909c3086323",
+  "limitations": [
+    "Single sample per case; elapsed time is not P95 or time-to-first-token",
+    "No live Foundry world interaction, multi-session stress, stop or restart acceptance",
+    "Earlier isolated-profile credential setup failures were corrected by providing the matching encrypted Local State; real provider responses were not mocked"
+  ]
+}

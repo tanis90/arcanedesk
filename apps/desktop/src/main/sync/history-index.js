@@ -28,15 +28,13 @@ export class HistoryIndex {
       }
       const visible = message.role === "user"
         ? Boolean(textOf(message).trim() || parts.some(part => part?.type === "image" && part.data))
-        : message.role === "assistant" && Boolean(textOf(message) || parts.some(part => part?.type === "toolCall" || (part?.type === "thinking" && part.thinking)));
+        : message.role === "assistant" && Boolean((message.errorMessage && message.stopReason !== "aborted") || textOf(message) || parts.some(part => part?.type === "toolCall" || (part?.type === "thinking" && part.thinking)));
       if (!visible) continue;
       const position = this.records.length;
       this.records.push(record);
       this.positions.set(identity(record), position);
-      const legacy = `${message.role}:${message.timestamp}`;
-      if (!this.positions.has(legacy)) this.positions.set(legacy, position);
       for (const part of parts) if (part?.type === "toolCall") {
-        toolOwners.set(part.id, record); this.positions.set(`tool:${part.id}`, position);
+        toolOwners.set(part.id, record);
       }
     }
   }
@@ -44,7 +42,8 @@ export class HistoryIndex {
   render(record) {
     const message = record.message, parts = partsOf(message);
     const row = { role: message.role, ts: message.timestamp, key: identity(record),
-      legacyKey: `${message.role}:${message.timestamp}`, text: textOf(message) };
+      legacyKey: `${message.role}:${message.timestamp}`, text: textOf(message),
+      ...(!textOf(message) && message.errorMessage && message.stopReason !== "aborted" ? { error: message.errorMessage } : {}) };
     if (message.role === "user") return { ...row, images: parts.filter(part => part?.type === "image" && part.data)
       .map(part => ({ data: part.data, mimeType: part.mimeType ?? "image/png" })) };
     return { ...row, thinking: parts.filter(part => part?.type === "thinking" && typeof part.thinking === "string").map(part => part.thinking).join(""),
@@ -55,33 +54,31 @@ export class HistoryIndex {
       }) };
   }
 
-  all() { return structuredClone(this.records.map(record => this.render(record))); }
-
   /** @param {any} query */
   page(query = {}) {
     if (!query || typeof query !== "object" || Array.isArray(query)) throw invalid("History query must be an object");
-    if (Object.keys(query).some(key => !["before", "after", "around", "limit"].includes(key))) throw invalid("Unknown history query field");
+    if (Object.keys(query).some(key => !["before", "after", "limit"].includes(key))) throw invalid("Unknown history query field");
     const limit = query.limit ?? 100;
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw invalid("History page limit must be 1–200");
-    const boundaries = ["before", "after", "around"].filter(key => query[key] !== undefined);
+    const boundaries = ["before", "after"].filter(key => query[key] !== undefined);
     if (boundaries.length > 1) throw invalid("Use one history boundary");
     let start = Math.max(0, this.records.length - limit), end = this.records.length;
     if (boundaries.length) {
       const kind = boundaries[0], key = query[kind];
       if (typeof key !== "string" || !key.length || key.length > 256) throw invalid("Invalid history cursor");
-      // Work/thinking containers inherit their message's identity.
-      const plain = key.replace(/^(?:think:|work:)/, "");
-      const position = this.positions.get(key) ?? this.positions.get(plain);
+      const position = this.positions.get(key);
       if (position === undefined) throw Object.assign(new Error("History cursor is no longer on this branch"), { code: "HISTORY_CURSOR_NOT_FOUND" });
       if (kind === "before") { end = position; start = Math.max(0, end - limit); }
       else if (kind === "after") { start = position + 1; end = Math.min(this.records.length, start + limit); }
-      else { start = Math.max(0, position - Math.floor(limit / 2)); end = Math.min(this.records.length, start + limit); }
     }
     const records = this.records.slice(start, end);
+    // 空页没有任何可当游标的 key:hasOlder/hasNewer 都得是 false,
+    // 否则渲染层会拿 null key 画出一个点下去必抛 INVALID_HISTORY_QUERY 的按钮
+    const empty = records.length === 0;
     return { history: structuredClone(records.map(record => this.render(record))), historyPage: {
-      total: this.records.length, firstKey: records.length ? identity(records[0]) : null,
-      lastKey: records.length ? identity(records.at(-1)) : null,
-      hasOlder: start > 0, hasNewer: end < this.records.length,
+      total: this.records.length, firstKey: empty ? null : identity(records[0]),
+      lastKey: empty ? null : identity(records.at(-1)),
+      hasOlder: !empty && start > 0, hasNewer: !empty && end < this.records.length,
     } };
   }
 }

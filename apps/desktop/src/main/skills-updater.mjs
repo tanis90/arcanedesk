@@ -1,4 +1,5 @@
-// skills-updater — 内置 skills 的自维护通道:启动时从固定 OSS 位置拉取 skill
+// skills-updater — 内置 skills 的自维护通道:启动时从 region 默认的对象存储位置
+// (cn = OSS 北京,intl = R2;见 region.mjs)拉取 skill
 // bundle 指针,有新 revision 就下载、校验、原子换入 userData,让"改 skill 文本"
 // 不再依赖 app 发版。涉及新基础能力的 skill 用 manifest.minAppVersion 门住,
 // 能力不足的旧 app 永远停在旧 bundle(fail closed)。
@@ -28,9 +29,10 @@ import path from "node:path";
 
 import { extractArchiveFile, safeArchivePath } from "../../scripts/archive.mjs";
 import { replaceDirectory } from "./fvtt-ops-runtime.mjs";
+import { regionConfig } from "./region.mjs";
 
-export const SKILLS_UPDATE_BASE_URL =
-  "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills";
+// 默认更新源跟随 region 默认值（D1：cn = OSS 北京，intl = R2 dl.arcanedesk.app）。
+export const SKILLS_UPDATE_BASE_URL = regionConfig().skillsUpdateBaseUrl;
 
 /** baseUrl 只允许 HTTPS;HTTP 仅限精确 loopback(与 provider 端点纪律一致),供本地联调。 */
 function assertSafeBaseUrl(url) {

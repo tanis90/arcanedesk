@@ -4,8 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { ProviderStore } from "../src/main/providers.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
+
+// 本文件的断言钉死 cn 默认值契约（国际化方案 D1：历史默认即 cn）。
+// providers.js 在模块加载时按 regionConfig() 固化 Spark 默认 baseUrl，
+// 而 generated/region.json 可能是上一次 intl 构建的产物——显式钉 ARCANE_REGION=cn
+// 再动态导入，保证测试不受本机构建状态污染。
+process.env.ARCANE_REGION = process.env.ARCANE_REGION ?? "cn";
+const { ProviderStore } = await import("../src/main/providers.js");
 
 function tempConfig() {
   const dir = mkdtempSync(join(tmpdir(), "arcane-provider-test-"));

@@ -1,40 +1,15 @@
 "use strict";
 
 (() => {
-  const activeStates = new Set(["running", "queued", "waiting_resource", "waiting_user", "stopping"]);
-  const keys = { idle: "activity.idle", running: "chat.task.running", queued: "activity.queued",
-    waiting_resource: "activity.waitingResource", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
-    completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped",
-    interrupted: "chat.task.interrupted", cancelled: "activity.cancelled" };
-  const node = (tag, className, text = "") => {
-    const element = document.createElement(tag); element.className = className; element.textContent = text; return element;
-  };
-
   class ActivityView {
-    constructor({ api, t, getView, open, drawer, changed }) {
-      this.api = api; this.t = t; this.getView = getView; this.open = open; this.changed = changed;
-      this.rows = new Map(); this.items = new Map(); this.notices = new Map();
+    constructor({ api, t, getView, changed }) {
+      this.api = api; this.t = t; this.getView = getView; this.changed = changed;
+      this.rows = new Map();
       this.epoch = null; this.seq = 0; this.pending = []; this.loading = false;
-      this.frame = null; this.readPending = false; this.selected = null; this.boundary = null;
-      this.list = document.getElementById("activity-list");
-      this.toggle = document.getElementById("activity-toggle");
-      this.noticeButton = document.getElementById("activity-notice");
-      this.dismiss = document.getElementById("activity-dismiss");
       this.error = document.getElementById("activity-error");
-      this.jump = document.getElementById("activity-jump");
-      this.toggle.addEventListener("click", () => drawer());
-      this.noticeButton.addEventListener("click", () => {
-        const notice = [...this.notices.values()].at(-1);
-        if (notice) void open(this.rows.get(notice.sessionId), notice);
-      });
-      this.dismiss.addEventListener("click", () => { this.notices.clear(); this.renderNotice(); });
+      this.jump = document.getElementById("scroll-bottom");
       this.error.addEventListener("click", () => { void this.load(); });
-      this.jump.addEventListener("click", () => {
-        const view = getView(); view.toLatest(); this.scheduleRead();
-      });
     }
-
-    stateLabel(state) { return this.t(keys[state] ?? "activity.idle"); }
 
     async load() {
       if (this.loading) return;
@@ -60,15 +35,7 @@
     }
 
     receive(event) {
-      if (event.type === "activity_notice") {
-        const view = this.getView();
-        if (!(view.sessionId === event.notice.sessionId && view.visible)) {
-          this.notices.set(event.notice.sessionId + ":" + event.notice.key, event.notice);
-          if (this.notices.size > 20) this.notices.delete(this.notices.keys().next().value);
-          this.renderNotice();
-        }
-        return true;
-      }
+      if (event.type === "activity_notice") return true;
       if (!["activity_update", "activity_removed"].includes(event.type)) return false;
       if (this.loading || event.activityEpoch !== this.epoch || event.activitySeq > this.seq + 1) {
         this.pending.push(event);
@@ -87,94 +54,20 @@
     }
 
     render() {
-      const view = this.getView();
-      const rows = [...this.rows.values()];
-      const selectedRow = this.rows.get(view.sessionId);
-      if (selectedRow?.name) document.getElementById("conversation-title").textContent = selectedRow.name;
-      const running = rows.filter(row => activeStates.has(row.state) && !row.needsAttention).length;
-      const waiting = rows.filter(row => row.needsAttention).length;
-      this.toggle.textContent = this.t("activity.counts", { running, waiting });
-      this.toggle.classList.toggle("needs-attention", waiting > 0);
-      const displayed = rows.filter(row => activeStates.has(row.state) || row.unread);
-      const ids = new Set(displayed.map(row => row.sessionId));
-      for (const [id, item] of this.items) if (!ids.has(id)) { item.remove(); this.items.delete(id); }
-      for (const row of displayed) {
-        let item = this.items.get(row.sessionId);
-        if (!item) {
-          item = node("button", "activity-item");
-          item.type = "button"; item.dataset.sessionId = row.sessionId;
-          item.append(node("span", "activity-title"), node("span", "activity-meta"));
-          item.addEventListener("click", () => { void this.open(this.rows.get(row.sessionId)); });
-          this.items.set(row.sessionId, item); this.list.appendChild(item);
-        }
-        item.classList.toggle("active", row.sessionId === view.sessionId);
-        item.setAttribute("aria-current", row.sessionId === view.sessionId ? "true" : "false");
-        item.dataset.state = row.state;
-        item.querySelector(".activity-title").textContent = row.name || this.t("sessions.untitled");
-        item.querySelector(".activity-meta").textContent = this.t("header.mode." + row.mode + "Short") + " · " + this.stateLabel(row.state)
-          + (row.unread ? " · " + this.t("activity.unread") : "");
-      }
-      document.getElementById("activity-empty").hidden = displayed.length > 0;
-      for (const [key, notice] of this.notices) {
-        const row = this.rows.get(notice.sessionId);
-        if (!row || (notice.kind === "waiting_user" ? !row.needsAttention : !row.unread || row.taskId !== notice.taskId)) this.notices.delete(key);
-      }
-      this.renderNotice(); this.updateReading(); this.changed(); this.scheduleRead();
-    }
-
-    renderNotice() {
-      const notice = [...this.notices.values()].at(-1);
-      this.noticeButton.hidden = !notice; this.dismiss.hidden = !notice;
-      if (!notice) return;
-      const title = notice.name || this.t("sessions.untitled");
-      this.noticeButton.textContent = title + " · " + this.stateLabel(notice.kind)
-        + (this.notices.size > 1 ? this.t("activity.more", { count: this.notices.size - 1 }) : "");
-      this.noticeButton.title = this.noticeButton.textContent;
+      this.updateReading(); this.changed();
     }
 
     updateReading() {
       const view = this.getView(), row = this.rows.get(view.sessionId);
-      if (this.selected !== view.sessionId) { this.selected = view.sessionId; this.boundary = null; }
-      if (!this.boundary && row?.unread) this.boundary = { readKey: row.readKey, firstUnreadKey: row.firstUnreadKey };
-      if (this.boundary && !this.boundary.firstUnreadKey && row?.firstUnreadKey) this.boundary.firstUnreadKey = row.firstUnreadKey;
-      this.jump.hidden = !(row?.unread && !view.atBottom);
-      const container = view.messages;
-      if (!container || !view.ready || container.querySelector(".unread-divider") || !this.boundary) return;
-      const key = this.boundary.readKey || this.boundary.firstUnreadKey;
-      if (!key) return;
-      const findKey = key => container.querySelector('[data-item-key="' + CSS.escape(key) + '"]')
-        ?? container.querySelector('[data-legacy-key="' + CSS.escape(key) + '"]');
-      let target = findKey(key);
-      let after = Boolean(this.boundary.readKey);
-      if (!target && this.boundary.firstUnreadKey) {
-        target = findKey(this.boundary.firstUnreadKey);
-        after = false;
-      }
-      if (!target) return;
-      while (target.parentElement !== container) target = target.parentElement;
-      const divider = node("div", "unread-divider", this.t("activity.lastRead"));
-      divider.setAttribute("role", "separator");
-      // Preserve the reading anchor when inserting above the viewport.
-      const before = target.getBoundingClientRect().top;
-      if (after) target.after(divider); else target.before(divider);
-      if (!view.atBottom && before < container.getBoundingClientRect().top) container.scrollTop += divider.getBoundingClientRect().height;
-      if (view.atBottom) view.toLatest();
+      this.jump.textContent = row?.unread && !view.atBottom ? this.t("activity.newProgress") : "↓";
+      this.jump.classList.toggle("has-unread", Boolean(row?.unread && !view.atBottom));
+      this.jump.title = row?.unread && !view.atBottom ? this.t("activity.newProgress") : this.t("scrollBottom.title");
+      this.jump.setAttribute("aria-label", this.jump.title);
     }
 
-    scheduleRead() {
-      if (this.frame) return;
-      this.frame = requestAnimationFrame(async () => {
-        this.frame = null;
-        this.updateReading();
-        const view = this.getView(), row = this.rows.get(view.sessionId);
-        if (this.readPending || !row?.unread || !view.ready || !view.visible || !view.atBottom || !view.runtimeEpoch) return;
-        this.readPending = true;
-        try {
-          await this.api.markActivityRead({ sessionId: view.sessionId, runtimeEpoch: view.runtimeEpoch,
-            seq: view.seq, visible: view.visible, atBottom: view.atBottom, readKey: view.readKey });
-        } catch { this.error.hidden = false; }
-        finally { this.readPending = false; }
-      });
+    async opened(sessionId) {
+      try { await this.api.activityOpened(sessionId); }
+      catch { this.error.hidden = false; }
     }
   }
   /** @type {any} */ (globalThis).ArcaneActivityView = ActivityView;

@@ -7,11 +7,22 @@ import os from "node:os";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
-import { extractZip } from "./archive-zip.mjs";
+import { extractZip, listZipEntries, readZipEntryText } from "./archive-zip.mjs";
+import { writeModuleBundle, writeModuleArchive } from "@arcanedesk/foundry-pack-builder";
 
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
+
+// 索引地址解析（国际化方案 D2/M3，名字与语义在 M1 规格钉死）：
+// --index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。
+// intl 构建由 main.js 把 region 默认值写进 ARCANE_MOD_INDEX_URL，子进程自然继承。
+export function resolveIndexUrl(flagValue, env = process.env) {
+  const flag = typeof flagValue === "string" && flagValue.trim() ? flagValue.trim() : null;
+  const fromEnv = String(env.ARCANE_MOD_INDEX_URL ?? "").trim() || null;
+  const value = flag ?? fromEnv;
+  return value ? httpsUrl(value, "mirror index URL") : MIRROR_INDEX_URL;
+}
 
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 8 * 1024 * 1024 * 1024;
@@ -531,7 +542,7 @@ function versionStatus(localVersion, remoteVersion) {
   return "current";
 }
 
-export function buildCatalog(indexValue, installedValue) {
+export function buildCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.modules) ? installedValue.modules : [];
   const mirrorModules = index.packages.filter(isModuleIndexEntry);
@@ -560,7 +571,7 @@ export function buildCatalog(indexValue, installedValue) {
   rows.sort((a, b) => a.id.localeCompare(b.id));
   notInMirror.sort((a, b) => a.id.localeCompare(b.id));
   return {
-    indexUrl: MIRROR_INDEX_URL,
+    indexUrl,
     generated: index.generated,
     foundry: index.foundry ?? null,
     dnd5e: index.dnd5e ?? null,
@@ -577,7 +588,7 @@ export async function catalogModules({ dataDir, fetchImpl = fetch, indexUrl = MI
     loadIndex(fetchImpl, indexUrl),
     listInstalledModules(dataDir, { allowMissingDataDir }),
   ]);
-  return buildCatalog(index, installed);
+  return buildCatalog(index, installed, indexUrl);
 }
 
 function exactWorldIndexEntry(index, worldId) {
@@ -795,7 +806,7 @@ function worldResolutionSha256({ generated, profile, world, system, modules }) {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-export function buildWorldCatalog(indexValue, installedValue) {
+export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.worlds) ? installedValue.worlds : [];
   const rows = index.worlds.map((entry) => {
@@ -824,7 +835,7 @@ export function buildWorldCatalog(indexValue, installedValue) {
     .map((entry) => ({ id: entry.id, title: entry.title, version: entry.version, directory: entry.directory }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return {
-    indexUrl: MIRROR_INDEX_URL,
+    indexUrl,
     generated: index.generated,
     dataDirExists: installedValue?.dataDirExists ?? null,
     rows,
@@ -839,7 +850,7 @@ export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIR
     loadIndex(fetchImpl, indexUrl),
     listInstalledWorlds(dataDir, { allowMissingDataDir }),
   ]);
-  return buildWorldCatalog(index, installed);
+  return buildWorldCatalog(index, installed, indexUrl);
 }
 
 export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
@@ -987,6 +998,119 @@ async function sha256File(file) {
     bytes += chunk.length;
   }
   return { sha256: hash.digest("hex"), bytes };
+}
+
+async function inspectLocalArchive(archivePath) {
+  const archive = path.resolve(requireString(archivePath, "local module archive path"));
+  const stat = await fsp.lstat(archive);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_ARCHIVE_BYTES) {
+    throw new Error("local module archive must be a regular file within the archive size limit");
+  }
+  const identity = await sha256File(archive);
+  const entries = await listZipEntries(archive);
+  const names = new Set();
+  for (const entry of entries) {
+    const folded = entry.name.toLowerCase();
+    if (names.has(folded)) throw new Error(`duplicate local archive path: ${entry.name}`);
+    names.add(folded);
+  }
+  const candidates = entries.filter(entry => !entry.directory && /^(?:[^/]+\/)?module\.json$/.test(entry.name));
+  if (candidates.length !== 1) throw new Error("local module ZIP must contain exactly one root or single-directory module.json");
+  const manifestEntry = candidates[0].name;
+  const prefix = manifestEntry === "module.json" ? "" : manifestEntry.slice(0, -"module.json".length);
+  if (prefix && entries.some(entry => entry.name !== prefix.slice(0, -1) && !entry.name.startsWith(prefix))) {
+    throw new Error("local module ZIP has content outside its single module directory");
+  }
+  const text = await readZipEntryText(archive, manifestEntry, MAX_JSON_BYTES);
+  const manifest = manifestShape(JSON.parse(text), { requireDownload: false });
+  const after = await sha256File(archive);
+  if (identity.sha256 !== after.sha256 || identity.bytes !== after.bytes) throw new Error("local module ZIP changed during inspection");
+  return { archive, ...identity, manifest };
+}
+
+async function readPreparedBundle(inputPath) {
+  const input = path.resolve(requireString(inputPath, "prepared bundle path"));
+  const stat = await fsp.lstat(input);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024 * 1024) throw new Error("prepared bundle must be a regular file of at most 512 MiB");
+  const bytes = await fsp.readFile(input);
+  if (bytes.length !== stat.size) throw new Error("prepared bundle changed during inspection");
+  const bundle = JSON.parse(bytes.toString("utf8"));
+  if (bundle?.format !== "arcane-module-bundle" || bundle.schemaVersion !== 1) throw new Error("input is not a supported prepared module bundle");
+  const id = requireString(bundle.manifest?.id, "prepared module id", 128);
+  if (!ID_PATTERN.test(id)) throw new Error("prepared module id is unsafe");
+  const version = requireString(bundle.manifest?.version, "prepared module version", 128);
+  return { input, bundle, id, version, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+export async function inspectPreparedModule({ inputPath }) {
+  const source = await readPreparedBundle(inputPath);
+  return { sourceKind: "prepared-module-bundle", inputPath: source.input, id: source.id, version: source.version,
+    inputBytes: source.bytes, inputSha256: source.sha256, validation: "metadata-only; full validation occurs during build" };
+}
+
+export async function buildPreparedModule({ inputPath, directory, archive, expectedSha256 }) {
+  const source = await readPreparedBundle(inputPath);
+  assertExpected(source.sha256, expectedSha256, "prepared module input SHA256");
+  const output = path.resolve(requireString(directory, "prepared module output directory"));
+  const zip = path.resolve(requireString(archive, "prepared module archive path"));
+  const result = await writeModuleBundle({ directory: output, bundle: source.bundle });
+  const receipt = await writeModuleArchive({ directory: result.directory, archive: zip });
+  return { ...result, inputSha256: source.sha256, archive: receipt, installed: false };
+}
+
+export async function inspectLocalModule({ archivePath, dataDir }) {
+  const source = await inspectLocalArchive(archivePath);
+  const installed = await listInstalledModules(dataDir);
+  const matches = installed.modules.filter(entry => entry.id === source.manifest.id);
+  return {
+    kind: "module", sourceKind: "local-archive", archivePath: source.archive,
+    id: source.manifest.id, title: source.manifest.title, version: source.manifest.version,
+    archiveBytes: source.bytes, archiveSha256: source.sha256, integrity: "local-file-sha256",
+    compatibility: source.manifest.compatibility ?? null,
+    local: matches.length === 1 ? { version: matches[0].version, directory: matches[0].directory } : null,
+    localConflict: matches.length > 1 ? matches.map(entry => ({ version: entry.version, directory: entry.directory })) : null,
+    target: matches.length === 1 ? matches[0].directory : path.join(installed.modulesRoot, source.manifest.id),
+    requiredModules: requiredModuleRows(source.manifest, installed.modules),
+  };
+}
+
+export async function stageLocalModule({ archivePath, expectedId, expectedVersion, expectedSha256, expectedBytes }) {
+  const source = await inspectLocalArchive(archivePath);
+  assertExpected(source.manifest.id, expectedId, "local module id");
+  assertExpected(source.manifest.version, expectedVersion, "local module version");
+  assertExpected(source.sha256, expectedSha256, "local module SHA256");
+  assertExpected(source.bytes, expectedBytes, "local module bytes");
+  const stageDir = await fsp.mkdtemp(path.join(os.tmpdir(), STAGE_PREFIX));
+  try {
+    const archive = path.join(stageDir, "package.zip");
+    await fsp.copyFile(source.archive, archive, fs.constants.COPYFILE_EXCL);
+    const copied = await sha256File(archive);
+    assertExpected(copied.sha256, source.sha256, "copied local module SHA256");
+    assertExpected(copied.bytes, source.bytes, "copied local module bytes");
+    const extracted = path.join(stageDir, "extracted");
+    await extractZip(archive, extracted);
+    const payload = await findModulePayload(extracted);
+    const manifestFile = path.join(payload, "module.json");
+    const manifest = manifestShape(await readJsonFile(manifestFile, "local module manifest"), { requireDownload: false });
+    assertExpected(manifest.id, expectedId, "staged local module id");
+    assertExpected(manifest.version, expectedVersion, "staged local module version");
+    const manifestIdentity = await sha256File(manifestFile);
+    const record = {
+      schemaVersion: 2, createdAt: new Date().toISOString(), sourceKind: "local-archive",
+      sourceArchivePath: source.archive, id: manifest.id, title: manifest.title, version: manifest.version,
+      manifestUrl: manifest.manifest, downloadUrl: manifest.download, finalDownloadUrl: null,
+      archive: "package.zip", payload: path.relative(stageDir, payload),
+      archiveBytes: copied.bytes, archiveSha256: copied.sha256,
+      manifestBytes: manifestIdentity.bytes, manifestSha256: manifestIdentity.sha256,
+      trustedByMirrorIndex: false, mirrorGenerated: null, indexError: null,
+    };
+    await fsp.writeFile(path.join(stageDir, "stage.json"), `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    return { ...record, stageDir, requiresSecondConfirmation: false };
+  } catch (error) {
+    // mkdtemp created this exact directory; existing user paths are never removed.
+    await fsp.rm(stageDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function downloadArchive(fetchImpl, url, file, label = "module ZIP") {
@@ -1967,29 +2091,48 @@ function parseCli(argv) {
 function usage() {
   return [
     "Usage:",
-    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url>",
+    "  mod-manager bundle-inspect --input <prepared-bundle.json>",
+    "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
+    "  mod-manager local-inspect --archive <zip> --data-dir <dir>",
+    "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
+    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>]",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
-    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir]",
-    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256>",
+    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
+    "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
+    "",
+    "镜像索引地址解析顺序：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。",
   ].join("\n");
 }
 
 export async function runCli(argv = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   switch (command) {
+    case "bundle-inspect":
+      return inspectPreparedModule({ inputPath: options.input });
+    case "bundle-build":
+      return buildPreparedModule({ inputPath: options.input, directory: options.out, archive: options.zip, expectedSha256: options["expected-sha256"] });
+    case "local-inspect":
+      return inspectLocalModule({ archivePath: options.archive, dataDir: options["data-dir"] });
+    case "local-stage":
+      return stageLocalModule({
+        archivePath: options.archive, expectedId: options["expected-id"], expectedVersion: options["expected-version"],
+        expectedSha256: options["expected-sha256"], expectedBytes: Number(options["expected-bytes"]),
+      });
     case "inspect":
       return inspectModule({
         manifestUrl: options["manifest-url"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "catalog":
       return catalogModules({
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "stage":
@@ -1998,6 +2141,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         expectedId: options["expected-id"],
         expectedVersion: options["expected-version"],
         expectedDownloadUrl: options["expected-download-url"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
       });
     case "commit":
       return commitStage({
@@ -2010,17 +2154,20 @@ export async function runCli(argv = process.argv.slice(2)) {
       return inspectWorldEnvironment({
         worldId: options["world-id"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-catalog":
       return catalogWorlds({
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-stage":
       return stageWorldEnvironment({
         worldId: options["world-id"],
         dataDir: options["data-dir"],
+        indexUrl: resolveIndexUrl(options["index-url"]),
         expectedWorldVersion: options["expected-world-version"],
         expectedWorldSha256: options["expected-world-sha256"],
         expectedProfileId: options["expected-profile-id"],
@@ -2044,8 +2191,10 @@ export async function runCli(argv = process.argv.slice(2)) {
   }
 }
 
-const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
-if (invokedPath === import.meta.url) {
+const invokedPath = process.argv[1]
+  ? await fsp.realpath(path.resolve(process.argv[1])).catch(() => null)
+  : null;
+if (invokedPath === await fsp.realpath(fileURLToPath(import.meta.url))) {
   runCli()
     .then((result) => process.stdout.write(`${JSON.stringify(result, null, 2)}\n`))
     .catch((error) => {

@@ -1,0 +1,13 @@
+
+> arcane-desktop@0.4.3 pretypecheck
+> npm run verify:source
+
+
+> arcane-desktop@0.4.3 verify:source
+> node scripts/verify-source.mjs
+
+Desktop source boundary verified.
+
+> arcane-desktop@0.4.3 typecheck
+> tsc --noEmit
+

@@ -294,3 +294,23 @@
   skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
 - 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
   的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+
+### arcane-module-reader（2026-09-12）
+
+- 给 DM 展示库中文档一律走 open_document（右侧阅读器），禁用系统 open/start 甩给
+  Obsidian：Obsidian 是建库/编辑工具，不是展示途径。C 类默认行为，不占交互预算。
+  实测中模型因"Obsidian 资料库"语境惯性优先调系统 open，故在 SKILL.md 与 prep
+  system prompt 双侧写明，并把"文档请求=阅读器、不同步 JournalEntry"作为默认。
+
+### arcane-fvtt-mods 本地模块包（2026-09-07）
+
+- 本地完整模块 ZIP 是独立安装来源，不要求先发布到 mirror；用户内容留在本机。
+- 交互预算最多两点：给文件、确认准确安装计划。已有文件和相同计划授权沿用；本地包未获镜像审核的信任说明并入计划，哈希/工具选择由 agent 处理。
+- local-inspect 只读 ZIP，local-stage 锁定 id/version/bytes/SHA256 后复制、解压；复用 commit 的旧版本检查、备份和原子替换。包内 URL 不作为本次下载来源。
+- 本地哈希只标识本次物料，不表示官方签名或再分发许可；用户包和完整描述不上传。该入口安装已装配产物，不编译原始内容或改写世界 Actor。
+
+### arcane-fvtt-mods 离线构建（2026-09-07）
+
+- 已准备 module bundle 的本地构建是用户明确请求的新产物生成，独立于安装计划。最多一次提供文件交互；输出临时路径和工具选择属 C 类，不增加构建确认。安装仍按既有本地包规则处理，不能用构建授权替代安装授权。
+- bundle-inspect 只读身份与哈希，不宣称完整内容通过验证；bundle-build 锁定输入哈希并复用共享构建器，完整校验后生成新 ZIP。构建阶段不下载、执行内容脚本或更改既有 Foundry。
+- 构建器源自锁定公开提交，依赖由仓库根 lockfile 固定并作为生成副本随 skill 携带。CI 与发布前比较文件哈希，禁止手工修补副本；原始游戏内容不随工具发布。

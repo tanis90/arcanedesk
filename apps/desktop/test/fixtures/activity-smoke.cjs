@@ -21,24 +21,11 @@ app.whenReady().then(async () => {
     projection: new SessionProjection({ sessionId: id, epoch: "activity-test" }) });
   let mode = "prep", selected = "B", generation = 0, focused = false, notices = 0;
   const emit = event => window.webContents.send("arcane:event", event);
-  const { ResourceCoordinator, retainResourceUntil } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/resource-coordinator.js")));
-  const { PanelCommands } = await import(pathToFileURL(path.join(desktop, "src/main/scheduling/panel-commands.js")));
-  const panelResources = new ResourceCoordinator(); let panelNavigations = 0;
-  let recoveryApproved = false, finishOldPage;
-  const deletedIds = [];
-  const { ShutdownCoordinator } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/shutdown-coordinator.js")));
-  let finishExitStop, didQuit = false, exitAdmission = false;
-  const exitHost = { busy: true, task: { id: "exit-test" }, async abort() {
-    await new Promise(resolve => { finishExitStop = resolve; }); this.busy = false;
-  } };
-  const shutdown = new ShutdownCoordinator({ registries: [{ allHosts: () => [exitHost], pending: new Map() }],
-    gate: value => { exitAdmission = value; }, quiesce: async () => {}, finish: () => { didQuit = true; },
-    emit: state => emit({ type: "shutdown_state", ...state }) });
-  const panelCommands = new PanelCommands({ resources: panelResources, emit: state => emit({ type: "panel_command", ...state }),
-    operations: { open: async () => { panelNavigations++; return { ok: true }; } } });
+  let panelNavigations = 0;
+  const submissions = [];
   let notificationBroker;
   const nativeNotifications = [];
-  const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id),
+  const center = new ActivityCenter({ file: path.join(scratch, "activity.json"), describe: id => sessions.get(id), foreground: id => focused && selected === id,
     emit, notify: notice => { notices++; emit({ type: "activity_notice", notice }); notificationBroker?.deliver(notice); } });
   notificationBroker = new DesktopNotifications({ file: path.join(scratch, "notifications.json"),
     supported: () => true, foreground: () => focused, lookup: id => center.get(id), text: kind => kind,
@@ -52,7 +39,7 @@ app.whenReady().then(async () => {
     const row = sessions.get(id);
     return { ok: true, session: { id, name: row.name, path: row.path }, mode: row.mode, generation,
       history: row.history, task: row.task, busy: row.task?.state === "running" || row.task?.state === "waiting_user",
-      attentions: row.attentions, inFlight: row.projection.snapshot() };
+      attentions: row.attentions, inputs: row.inputs ?? [], inFlight: row.projection.snapshot() };
   }
   function send(id, payload) {
     const row = sessions.get(id);
@@ -64,22 +51,22 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
-    if (channel === "sessions:deleted") return { ok: true, sessionIds: deletedIds };
-    if (channel === "lifecycle:get") return shutdown.snapshot();
-    if (channel === "lifecycle:cancel-exit") { shutdown.cancel(); return shutdown.snapshot(); }
-    if (channel === "panel:open") return panelCommands.request("open");
-    if (channel === "panel:command-state") return panelCommands.snapshot();
-    if (channel === "panel:cancel-command") return panelCommands.cancel(input);
-    if (channel === "panel:recover") return recoveryApproved ? panelCommands.recover({
-      stopOwners() {}, destroyPage() { finishOldPage(); }, reopen: async () => { panelNavigations++; return { ok: true }; },
-    }) : { ok: true, cancelled: true };
+    if (channel === "sessions:identities") return { ok: true, sessionIds: [...sessions.keys()] };
+    if (channel === "panel:open") { panelNavigations++; return { ok: true }; }
     if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };
     if (channel === "notifications:set") return notificationBroker.setEnabled(input);
     if (channel === "notifications:take-target") return notificationBroker.takeTarget();
     if (channel === "activity:snapshot") return { ok: true, ...center.snapshot() };
-    if (channel === "activity:read") return center.markRead(input, focused);
+    if (channel === "activity:opened") return center.opened(input);
+    if (channel === "chat:prompt") {
+      submissions.push(input);
+      const row = sessions.get(input.sessionId);
+      row.inputs = (row.inputs ?? []).filter(item => item.id !== input.replacesInputId);
+      return { ok: true };
+    }
     if (channel === "sessions:current") return snapshot(selected);
     if (channel === "sessions:snapshot") return snapshot(input);
+    if (channel === "sessions:navigation") return { ok: true, sessions: [...sessions.values()].map(s => ({ id: s.id, name: s.name, path: s.path, mode: s.mode, projectKey: s.mode, cwd: "C:/test/" + s.mode, activity: center.get(s.id) })) };
     if (channel === "sessions:list") return { sessions: [...sessions.values()].filter(s => s.mode === input.mode).map(s => ({ id: s.id, name: s.name, path: s.path, active: s.id === selected, messageCount: s.history.length })) };
     if (channel === "mode:set") {
       mode = input; generation++;
@@ -118,15 +105,36 @@ app.whenReady().then(async () => {
     sessions.get("A").history = Array.from({ length: 40 }, (_, i) => ({ role: "user", ts: i + 10, text: `素材 ${i}：古堡、森林与失踪的商队。` }));
     send("A", { type: "task_state", task: { id: "task-A", state: "running" } });
     send("A", { type: "message", role: "assistant", key: "assistant:100", text: "正在整理素材。" });
-    center.markRead({ sessionId: "A", runtimeEpoch: "activity-test", seq: 2, visible: true, atBottom: true, readKey: "assistant:100" }, true);
+    center.opened("A");
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "B" && activityReady && activityView.rows.has("A")');
+    if (process.env.ARCANE_SMOKE_INPUT_RECOVERY === "1") {
+      await until('workspaceReady.has("B")');
+      const recovered = { id: "pending-1", commandId: "old-1", text: "interrupted first", state: "interrupted", images: [] };
+      sessions.get("B").inputs = [recovered, { ...recovered, id: "pending-2", commandId: "old-2", text: "interrupted second" }];
+      await evaluate('workspaceStore.save("B", { draft: "independent draft", outbox: [{ context: { sessionId: "B", commandId: "old-1" }, text: "interrupted first", images: [] }, { context: { sessionId: "B", commandId: "old-outbox" }, text: "uncertain outbox", images: [] }] }); outboxBySession.delete("B"); workspaceReady.delete("B");');
+      await evaluate('pullCurrentSession()');
+      await until('messages.textContent.includes("uncertain outbox") && messages.querySelectorAll(".retry-input").length === 3');
+      assert.equal(await evaluate('input.value'), "independent draft");
+      assert.equal(await evaluate(`messages.querySelectorAll('[data-command-id="old-1"]').length`), 1);
+      await evaluate(`messages.querySelector('[data-command-id="old-1"] .retry-input').click()`);
+      await until('messages.querySelectorAll(".retry-input").length === 2');
+      assert.equal(submissions.length, 1);
+      assert.notEqual(submissions[0].commandId, "old-1"); assert.equal(submissions[0].replacesInputId, "pending-1");
+      assert.equal(submissions[0].sessionId, "B");
+      await evaluate(`messages.querySelector('[data-command-id="old-outbox"] .retry-input').click()`);
+      await until('messages.querySelectorAll(".retry-input").length === 1');
+      assert.equal(submissions.length, 2); assert.notEqual(submissions[1].commandId, "old-outbox");
+      assert.equal(await evaluate('input.value'), "independent draft");
+      console.log("PASS renderer/preload recovery: pending and outbox merged; explicit resend uses new identity; draft preserved");
+      window.destroy(); app.exit(0); return;
+    }
     assert.equal(await evaluate('document.body.classList.contains("sidebar-pinned")'), true);
     assert.equal(await evaluate('drawer.inert'), false);
     await evaluate('input.value = "B 的草稿"; input.dispatchEvent(new Event("input")); input.focus();');
     send("A", { type: "message", role: "assistant", key: "assistant:101", text: "已准备好今晚的冒险素材：古堡主线与商队支线。" });
     send("A", { type: "task_state", task: { id: "task-A", state: "completed" } });
-    await until('!document.getElementById("activity-notice").hidden');
+    await until('activityView.rows.get("A")?.unread === true');
     assert.equal(await evaluate('selectedSessionId'), "B");
     assert.equal(await evaluate('input.value'), "B 的草稿");
     assert.equal(await evaluate('document.activeElement === input'), true);
@@ -134,17 +142,12 @@ app.whenReady().then(async () => {
     // Explicitly simulate trusted foreground presence; the test window stays hidden.
     focused = true;
     await evaluate('Object.defineProperty(document, "hasFocus", { value: () => true, configurable: true }); void 0;');
-    await evaluate('workspaceStore.save("A", {followLatest:false, anchor:{key:"user:15", offset:0}})');
-    await evaluate('document.getElementById("activity-notice").click()');
-    await until('selectedSessionId === "A" && activityReady && !followLatest');
-    assert.equal(center.get("A").unread, true);
-    assert.equal(await evaluate('document.getElementById("activity-jump").hidden'), false);
-    assert.equal(await evaluate('document.querySelectorAll(".unread-divider").length'), 1);
-    await capture("activity-wide-history");
-    await evaluate('document.getElementById("activity-jump").click()');
+    await evaluate('document.querySelector(".session-item[data-session-id=A] .s-body").click()');
+    await until('selectedSessionId === "A" && activityReady && followLatest');
     await until('activityView.rows.get("A").unread === false');
+    await capture("activity-wide-latest");
     assert.equal(center.get("A").state, "completed");
-    assert.equal(await evaluate('document.getElementById("activity-notice").hidden'), true);
+    assert.equal(await evaluate('!document.getElementById("activity-notice")'), true);
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "C" && activityReady');
     send("B", { type: "task_state", task: { id: "task-B", state: "running" } });
@@ -153,15 +156,15 @@ app.whenReady().then(async () => {
     center.flush();
     await until('activityView.rows.get("B")?.needsAttention === true');
     assert.equal(await evaluate('selectedSessionId'), "C");
-    await evaluate('document.querySelector(".activity-item[data-session-id=B]").click()');
+    await evaluate('document.querySelector(".session-item[data-session-id=B] .s-body").click()');
     await until('selectedSessionId === "B" && !!document.querySelector("[data-attention-id=question-B] textarea")');
     assert.equal(await evaluate('currentMode'), "prep");
     assert.equal(await evaluate('input.value'), "B 的草稿");
     await capture("activity-wide-question");
     window.setSize(480, 820);
     await until('!document.body.classList.contains("sidebar-pinned")');
-    assert.equal(await evaluate('document.getElementById("activity-toggle").getBoundingClientRect().right <= document.body.clientWidth'), true);
-    await evaluate('document.getElementById("activity-toggle").click()');
+    assert.equal(await evaluate('document.getElementById("sessions-toggle").getBoundingClientRect().right <= document.body.clientWidth'), true);
+    await evaluate('document.getElementById("sessions-toggle").click()');
     await until('drawer.classList.contains("open")');
     await capture("activity-narrow");
     await evaluate('setDrawer(false)');
@@ -174,7 +177,7 @@ app.whenReady().then(async () => {
     window.reload(); await reloaded;
     await until('selectedSessionId === "B" && activityView.rows.has("B") && activityReady');
     assert.equal(notices, countBeforeReload);
-    assert.equal(await evaluate('document.getElementById("activity-notice").hidden'), true);
+    assert.equal(await evaluate('!document.getElementById("activity-notice")'), true);
     assert.equal(await evaluate('activityView.rows.get("B").needsAttention'), true);
     // Gap in the independent activity stream recovers the full summary snapshot.
     await evaluate('activityView.seq -= 3');
@@ -207,66 +210,40 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('taskIndicator.textContent'), await evaluate('t("activity.capacityQueue")'));
     send("B", { type: "task_state", task: { id: "task-B-queued", state: "cancelled" } });
     await until('!busy && taskIndicator.textContent.startsWith(t("activity.cancelled"))');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-next").textContent'), await evaluate('t("chat.terminal.cancelledNext")'));
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "running" } });
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "waiting_resource",
-      waitingFor: { resources: ["fs:c:/workspace/shared"], holders: [{ sessionId: "A", taskId: "task-A", name: "Session A" }] } } });
-    await until('busy && taskIndicator.textContent.includes("Session A") && taskIndicator.textContent.includes("shared")');
-    send("B", { type: "task_state", task: { id: "task-B-resource", state: "completed" } });
-    await until('!busy');
-    const heldPage = await panelResources.acquire(["foundry:page"], { taskId: "page-owner", name: "Session A" });
+    assert.equal(await evaluate('document.querySelector(".task-terminal-next, .recover-task")'), null);
+    await evaluate(`showTaskState({ id: "error-test", state: "failed", error: '401: {"type":"invalid_authentication_error"}' })`);
+    assert.equal(await evaluate('taskIndicator.querySelector(".error-summary").textContent'), await evaluate('t("chat.error.auth")'));
+    assert.equal(await evaluate('taskIndicator.querySelector("details").open'), false);
+    await capture("error-collapsed");
+    await evaluate('taskIndicator.querySelector("summary").click()');
+    assert.equal(await evaluate('taskIndicator.querySelector("details").open'), true);
+    assert.ok(await evaluate('taskIndicator.querySelector("pre").textContent.includes("invalid_authentication_error")'));
+    await evaluate('input.focus(); navigationView.notify("Archived", () => {}, "toast-test")');
+    assert.equal(await evaluate('document.querySelectorAll("#navigation-toast button").length'), 1);
+    await new Promise(resolve => setTimeout(resolve, 5500));
+    assert.equal(await evaluate('document.getElementById("navigation-toast").hidden'), true);
+    assert.equal(await evaluate('document.activeElement === input'), true);
+    await evaluate('showTaskState(null)');
     await evaluate('document.getElementById("toggle-panel").click()');
-    await until('!document.getElementById("panel-command").hidden && document.getElementById("panel-command").textContent.includes("Session A")');
-    assert.equal(panelNavigations, 0);
-    const panelReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
-    window.reload(); await panelReloaded;
-    await until('!document.getElementById("panel-command").hidden && document.getElementById("panel-command").textContent.includes("Session A")');
-    await evaluate('document.getElementById("panel-command-cancel").click()');
-    await until('panelCommandSnapshot.command?.state === "cancelled"');
-    heldPage.release(); assert.equal(panelNavigations, 0);
-    await evaluate('document.getElementById("toggle-panel").click()');
-    await until('panelCommandSnapshot.command?.state === "completed"');
     assert.equal(panelNavigations, 1);
-    await panelResources.run(["foundry:page"], { sessionId: "A", taskId: "hung-page", name: "Session A" }, null, () => {}, () => {
-      retainResourceUntil(new Promise(resolve => { finishOldPage = resolve; }));
-    });
-    await evaluate('document.getElementById("toggle-panel").click()');
-    await until('panelCommandSnapshot.command?.state === "queued" && !document.getElementById("panel-command-recover").hidden');
-    await evaluate('document.getElementById("panel-command-recover").click()');
-    await until('!document.getElementById("panel-command-recover").disabled');
-    assert.equal(panelResources.active.size, 1); assert.equal(panelNavigations, 1);
-    recoveryApproved = true;
-    await evaluate('document.getElementById("panel-command-recover").click()');
-    await until('panelCommandSnapshot.command?.action === "recover" && panelCommandSnapshot.command?.state === "completed"');
-    assert.equal(panelNavigations, 2); assert.equal(panelResources.active.size, 0);
     const deletedSnapshot = snapshot("A");
     await evaluate('workspaceStore.save("A", { draft: "private draft", images: [{ data: "private image" }], outbox: [{ text: "pending" }] })');
     center.remove("A"); sessions.delete("A");
-    await until('deletedSessions.has("A") && !snapshotCache.has("A") && !eventInbox.sessions.has("A")');
+    await until('deletedSessions.has("A") && selectedSessionId !== "A"');
     const beforeDeletedInstall = await evaluate('selectedSessionId');
     await evaluate(`installSnapshot(${JSON.stringify(deletedSnapshot)})`);
     assert.equal(await evaluate('selectedSessionId'), beforeDeletedInstall);
     assert.deepEqual(await evaluate('workspaceStore.load("A")'), {});
-    assert.deepEqual(await evaluate('(async () => { const fresh = new ArcaneConversationState.WorkspaceStore(); await fresh.save("A", { draft: "late resurrection" }); return fresh.load("A"); })()'), {});
+    assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("A")'), {});
     await evaluate('Promise.all([workspaceStore.save("delete-race", { images: [{ data: "secret" }] }), workspaceStore.remove("delete-race")])');
     assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("delete-race")'), {});
     await evaluate('workspaceStore.save("offline-session", { draft: "missed deletion", images: [{ data: "secret" }] })');
-    deletedIds.push("A", "offline-session");
     const deletionReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await deletionReload;
     await until('deletedSessions.has("offline-session") && selectedSessionId === "B"');
     assert.deepEqual(await evaluate('(new ArcaneConversationState.WorkspaceStore()).load("offline-session")'), {});
-    const exiting = shutdown.stop();
-    await until('!document.getElementById("shutdown-status").hidden');
-    assert.equal(exitAdmission, true);
-    const exitReload = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
-    window.reload(); await exitReload;
-    await until('!document.getElementById("shutdown-status").hidden');
-    await evaluate('document.getElementById("cancel-exit").click()');
-    await until('document.getElementById("shutdown-status").hidden');
-    finishExitStop(); await exiting; assert.equal(didQuit, false); assert.equal(exitAdmission, false);
     assert.equal(errors.length, 0, errors.join("\n"));
-    console.log("PASS Electron activity: foreground isolation, unread boundary, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
+    console.log("PASS Electron activity: foreground isolation, coarse unread, cross-mode question, wide/narrow navigation, reload, gap recovery and notification settings/click");
     app.exit(0);
   } catch (error) {
     console.error(error);

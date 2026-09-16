@@ -9,6 +9,7 @@ app.setPath("userData", mkdtempSync(path.join(tmpdir(), "arcane-conversation-smo
 app.disableHardwareAcceleration();
 const startedAt = Date.now() - 15000;
 let finished = false;
+let receiptInput = null;
 let question = null;
 let lastAnswer = null;
 let sendTestEvent = () => {};
@@ -25,11 +26,13 @@ function snapshot(mode) {
   return { ok: true, mode, generation: mode === "prep" ? 2 : 1, session: { id },
     busy: id === "A" && (taskOverride ? ["running", "stopping"].includes(taskOverride.state) : !finished || question?.state === "pending"),
     task: id === "A" ? taskOverride ?? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
+    inputs: id === "A" && receiptInput ? [receiptInput] : [],
     attentions: id === "A" && question ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
-      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : [])].map(row => migratedHistory
+      ...(finished ? [{ role: "assistant", ts: 3, text: "A final reply" }] : []),
+      ...(receiptInput ? [{ role: "user", ts: 900, text: "retry me" }] : [])].map(row => migratedHistory
         ? { ...row, key: `entry:${row.role}-${row.ts}`, legacyKey: `${row.role}:${row.ts}` } : row) : [],
     inFlight: { runtimeEpoch: id === "A" ? epochA : "test", seq: id === "A" && taskOverride ? overrideSeq : epochA !== "test" ? 0 : id === "A" && finished ? question?.state === "answered" ? 5 : 3 : 0,
       streaming: id === "A" && !finished ? [{ key: "draft-A", text: "A partial reply" }] : [],
@@ -39,8 +42,10 @@ let mode = "prep";
 let generation = 0;
 const submittedCommands = new Set();
 let submitAttempts = 0;
+let layoutActivity;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "activity:snapshot" && layoutActivity) return { ok: true, ...layoutActivity.snapshot() };
   if (channel === "chat:abort") return new Promise(resolve => abortRequests.push({ input, resolve }));
   if (channel === "tasks:respond") {
     lastAnswer = input;
@@ -61,7 +66,7 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
     return snapshot(input === "A" ? "prep" : "combat");
   }
   if (channel === "mode:set") { mode = input; return { ...snapshot(mode), generation: ++generation }; }
-  if (channel === "sessions:list") return { sessions: [] };
+  if (channel === "sessions:list" || channel === "sessions:navigation") return { ok: true, sessions: [] };
   if (channel === "voice:get-config") return { enabled: false };
   if (channel === "ui:get-locale") return { pref: "en-US", resolved: "en-US" };
   if (channel === "slash:list") return { skills: [], templates: [], commands: [] };
@@ -71,7 +76,7 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
 app.whenReady().then(async () => {
   const window = new BrowserWindow({ show: false, width: 1000, height: 800,
     webPreferences: { preload: path.join(desktop, "preload.cjs"), contextIsolation: true } });
-  const evaluate = code => window.webContents.executeJavaScript(code);
+  const evaluate = code => window.webContents.executeJavaScript(code).catch(error => { throw new Error(code + "\n" + error.message); });
   sendTestEvent = event => window.webContents.send("arcane:event", { ...event, sessionId: "A", mode: "prep", runtimeEpoch: "test", taskId: question.taskId });
   async function until(code) {
     const limit = Date.now() + 7000;
@@ -82,12 +87,23 @@ app.whenReady().then(async () => {
     throw new Error("Timed out: " + code);
   }
   try {
+    if (process.argv.includes("--layout-review")) {
+      const { pathToFileURL } = require("node:url");
+      const { ActivityCenter } = await import(pathToFileURL(path.join(desktop, "src/main/conversations/activity-center.js")));
+      layoutActivity = new ActivityCenter();
+      layoutActivity.reconcile({ ...snapshot("prep"), session: { id: "A", name: "多任务验收 · 正在整理剧本与地图" } }, "prep");
+      for (const id of ["B", "C"]) layoutActivity.reconcile({ ...snapshot("prep"), session: { id, name: `后台素材 ${id}` }, task: { id: `task-${id}`, state: "completed" } }, "prep");
+    }
     await window.loadFile(path.join(desktop, "src/renderer/index.html"));
     await until('selectedSessionId === "A" && workspaceReady.has("A") && !!document.querySelector(".streaming")');
     assert.equal(await evaluate('document.querySelector(".streaming .body").textContent'), "A partial reply");
+    if (process.argv.includes("--layout-review")) {
+      await require("./layout-review.cjs")({ window, evaluate });
+      app.exit(0); return;
+    }
     await evaluate('input.value = "draft A"; input.dispatchEvent(new Event("input")); pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; saveWorkspace();');
-    await evaluate('messages.scrollTop = 200; messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
-    const anchor = await evaluate('workspaceStore.cache.get("A").anchor');
+    await evaluate('messages.scrollTo({top:200, behavior:"instant"}); messages.dispatchEvent(new Event("scroll")); toolCards.get("tool-A").card.classList.remove("open"); saveWorkspace();');
+    assert.equal(await evaluate('followLatest'), false, "fixture actually moves away from the live tail before switching");
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B" && workspaceReady.has("B")');
     assert.equal(await evaluate('input.value'), "");
@@ -98,12 +114,8 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("running")'), true);
     assert.equal(await evaluate('toolCards.get("tool-A").startAt'), startedAt);
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(await evaluate('followLatest'), false);
-    assert.equal(await evaluate('toolCards.get("tool-A").card.classList.contains("open")'), false);
-    const restoredOffset = await evaluate(`messageNode(${JSON.stringify(anchor.key)}).getBoundingClientRect().top - messages.getBoundingClientRect().top`);
-    assert.ok(Math.abs(restoredOffset - anchor.offset) < 3, "reading anchor preserved");
-    assert.ok((await evaluate(`messageNode(${JSON.stringify(anchor.key)}).dataset.itemKey`)).includes("entry:"), "legacy anchor resolves to durable message identity");
-    await evaluate('workspaceStore.save(selectedSessionId, workspaceStore.cache.get(selectedSessionId))');
+    assert.equal(await evaluate('followLatest'), true);
+    await evaluate('saveWorkspace()');
     const reloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload();
     await reloaded;
@@ -127,6 +139,25 @@ app.whenReady().then(async () => {
     await until('outboxFor("A").size === 0');
     assert.equal(submitAttempts, 2);
     assert.equal(submittedCommands.size, 1);
+    assert.equal(await evaluate('document.querySelector(".retry-input")'), null, "successful receipt clears retry");
+    receiptInput = { commandId: [...submittedCommands][0], messageKey: "entry:user-900", text: "retry me", state: "context" };
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".input-state")'), null);
+    for (const state of ["sending", "accepted", "queued", "dispatching", "context", "consumed", "handled", "failed", "cancelled", "interrupted"]) {
+      receiptInput.state = state;
+      await evaluate('resyncSelected()');
+      assert.equal(await evaluate('!!document.querySelector(".input-state")'), ["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state), "receipt visibility after snapshot: " + state);
+    }
+    receiptInput.state = "consumed";
+    await evaluate('switchMode("combat")');
+    await until('selectedSessionId === "B"');
+    await evaluate('switchMode("prep")');
+    await until('selectedSessionId === "A"');
+    assert.equal(await evaluate('document.querySelector(".input-state")'), null, "returning to consumed history adds no caption");
+    await evaluate('onEvent({type: "agent_settled"})');
+    assert.equal(await evaluate('document.querySelector("#composer-action")'), null);
+    assert.equal(await evaluate('messages.textContent.includes("agent ready")'), false);
+
     question = { id: "question-A", taskId: "task-question", state: "pending", question: "Which scene?", options: ["Forest", "City"] };
     await evaluate('resyncSelected()');
     await until('!!document.querySelector("[data-attention-id] textarea")');
@@ -146,7 +177,7 @@ app.whenReady().then(async () => {
     epochA = "reloaded";
     await evaluate('resyncSelected()');
     await until('viewEpoch === "reloaded" && viewSeq === 0 && !syncingSessions.has("A")');
-    assert.equal(await evaluate('eventInbox.epoch("A")'), "reloaded");
+    assert.equal(await evaluate('eventInbox.pending.size'), 0);
     window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "test", seq: 100,
       type: "message", key: "stale", role: "assistant", text: "STALE OLD INSTANCE" });
     window.webContents.send("arcane:event", { sessionId: "A", mode: "prep", runtimeEpoch: "reloaded", seq: 1,
@@ -155,24 +186,24 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('messages.textContent.includes("STALE OLD INSTANCE")'), false);
     interrupted = true;
     await evaluate('resyncSelected()');
-    await until('!!document.querySelector(".recover-task")');
-    await evaluate('input.value = "keep my draft"; pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; document.querySelector(".recover-task").click(); document.querySelector(".recover-task").click();');
+    await until('displayedTask?.state === "interrupted"');
+    await evaluate('input.value = "keep my draft"; pendingImages = [{data:"aGVsbG8=",mimeType:"image/png",previewUrl:"data:image/png;base64,aGVsbG8="}]; input.dispatchEvent(new Event("input"));');
     const recoveryDraft = await evaluate('input.value');
-    assert.ok(recoveryDraft.startsWith("keep my draft\n\n"));
-    assert.equal(recoveryDraft, "keep my draft\n\n" + await evaluate('t("chat.recovery.prompt")'), "repeat clicks do not duplicate the recovery request");
+    assert.equal(recoveryDraft, "keep my draft", "interruption does not inject instructions");
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(submitAttempts, 2, "preparing recovery never submits a model request");
+    assert.equal(submitAttempts, 2, "interruption never submits a model request");
     await evaluate('saveWorkspace(); switchMode("combat")');
     await until('selectedSessionId === "B"');
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     await evaluate('switchMode("prep")');
-    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task")');
+    await until('selectedSessionId === "A" && displayedTask?.state === "interrupted"');
     assert.equal(await evaluate('input.value'), recoveryDraft);
     assert.equal(await evaluate('pendingImages.length'), 1);
     await evaluate('saveWorkspace()');
     const recoveryReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await recoveryReloaded;
-    await until('selectedSessionId === "A" && !!document.querySelector(".recover-task") && pendingImages.length === 1');
+    await until('selectedSessionId === "A" && displayedTask?.state === "interrupted" && pendingImages.length === 1');
     assert.equal(await evaluate('input.value'), recoveryDraft);
     assert.equal(submitAttempts, 2, "reloading recovery does not replay an input");
     taskOverride = { id: "stop-task", state: "running" };
@@ -189,7 +220,7 @@ app.whenReady().then(async () => {
     assert.equal(abortRequests[0].input.sessionId, "A");
     assert.equal(abortRequests[0].input.taskId, "stop-task");
     await evaluate('switchMode("combat")');
-    await until('selectedSessionId === "B" && !send.disabled');
+    await until('selectedSessionId === "B" && !restoringView && !send.disabled');
     assert.equal(await evaluate('send.getAttribute("aria-label")'), await evaluate('t("composer.newTask")'));
     const bDraft = await evaluate('input.value');
     abortRequests[0].resolve({ ok: false, code: "STOP_FAILED" });
@@ -236,45 +267,46 @@ app.whenReady().then(async () => {
     overrideSeq = 1;
     const failedEvent = { type: "task_state", task: taskOverride, taskId: taskOverride.id, sessionId: "A", mode: "prep", runtimeEpoch: "reloaded", seq: overrideSeq };
     window.webContents.send("arcane:event", failedEvent);
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
+    assert.equal(await evaluate('document.querySelector(".error-message")'), null);
     await evaluate('switchMode("prep")');
-    await until('selectedSessionId === "A" && !busy && !!document.querySelector(".task-terminal-reason")');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason b")'), null, "reason is plain text");
+    await until('selectedSessionId === "A" && !busy && !!document.querySelector(".error-message")');
+    assert.equal(await evaluate('document.querySelector(".error-message pre").textContent'), taskOverride.error);
+    assert.equal(await evaluate('document.querySelector(".error-message b")'), null, "reason is plain text");
     window.webContents.send("arcane:event", failedEvent);
     await evaluate('resyncSelected()');
-    assert.equal(await evaluate('document.querySelectorAll(".task-terminal-reason").length'), 1);
-    await evaluate('input.value = "retain this"; document.querySelector(".recover-task").click(); saveWorkspace()');
+    assert.equal(await evaluate('document.querySelectorAll(".error-message").length'), 1);
+    await evaluate('input.value = "retain this"; input.dispatchEvent(new Event("input")); saveWorkspace()');
     const failureDraft = await evaluate('input.value');
-    assert.equal(failureDraft, "retain this\n\n" + await evaluate('t("chat.terminal.failedPrompt")'));
+    assert.equal(failureDraft, "retain this");
+    assert.equal(await evaluate('document.querySelector(".recover-task, .task-terminal-next")'), null);
+    await evaluate('saveWorkspace()');
     const terminalReloaded = new Promise(resolve => window.webContents.once("did-finish-load", resolve));
     window.reload(); await terminalReloaded;
-    await until('selectedSessionId === "A" && !!document.querySelector(".task-terminal-reason") && workspaceReady.has("A")');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
+    await until('selectedSessionId === "A" && !!document.querySelector(".error-message") && workspaceReady.has("A")');
+    assert.equal(await evaluate('document.querySelector(".error-message pre").textContent'), taskOverride.error);
     assert.equal(await evaluate('input.value'), failureDraft);
     assert.equal(await evaluate('pendingImages.length'), 1);
     taskOverride = { id: "later-task", state: "stopped", error: "Tool stopped after its operation settled" };
     await evaluate('resyncSelected()');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), taskOverride.error);
+    assert.equal(await evaluate('document.querySelector(".error-message pre").textContent'), taskOverride.error);
     delete taskOverride.error;
     await evaluate('resyncSelected()');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason").textContent'), await evaluate('t("chat.terminal.stoppedReason")'));
+    assert.equal(await evaluate('document.querySelector(".error-message")'), null);
+    taskOverride.error = "This operation was aborted";
+    await evaluate('resyncSelected()');
+    assert.equal(await evaluate('document.querySelector(".error-message")'), null);
     taskOverride = { id: "next-task", state: "running" };
     await evaluate('resyncSelected()');
-    assert.equal(await evaluate('document.querySelector(".task-terminal-reason")'), null);
+    assert.equal(await evaluate('document.querySelector(".error-message")'), null);
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
-    assert.equal(submitAttempts, 2, "terminal recovery prepares a draft without executing work");
-    const lastConfirmation = await evaluate('confirmedAt.get("A")');
-    await evaluate('installSnapshot(snapshotCache.get("A"), null, true)');
-    assert.equal(await evaluate('confirmedAt.get("A")'), lastConfirmation, "rendering a cache is not new execution confirmation");
-    assert.equal(await evaluate('syncIndicator.dataset.status'), "chat.syncCached");
-    assert.equal(await evaluate('syncIndicator.hidden'), false);
+    assert.equal(submitAttempts, 2, "terminal states leave drafts unchanged without executing work");
+    assert.equal(await evaluate('syncIndicator.hidden'), true);
     await evaluate('resyncSelected()');
     deferSnapshots = true;
     await evaluate('void resyncSelected()');
     await until('!syncIndicator.hidden && syncIndicator.dataset.status === "chat.syncing"');
     assert.equal(await evaluate('busy'), true, "sync delay does not change execution state");
-    assert.ok(await evaluate('syncIndicator.textContent.includes(t("chat.syncLastConfirmed", {time: new Date(confirmedAt.get("A")).toLocaleTimeString()}))'));
+    assert.equal(await evaluate('syncIndicator.title'), "");
     await evaluate('switchMode("combat")');
     await until('selectedSessionId === "B"');
     await evaluate('switchMode("prep")');
@@ -296,7 +328,7 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('input.value'), keptDraft);
     // Force only the diagnostic clock stale, then let the real interval probe.
     deferSnapshots = true;
-    await evaluate('confirmedAt.set("A", Date.now() - 30000); syncAttemptAt.delete("A")');
+    await evaluate('lastContactAt = Date.now() - 30000');
     await until('syncingSessions.has("A")');
     assert.equal(snapshotRequests.length, 3, "silence triggers a read-only execution probe");
     // A hung invoke must not permanently keep the single-flight gate locked.

@@ -33,11 +33,12 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
   verifyActiveTools(session, expected);
   assert.deepEqual(new Set(session.getActiveToolNames()), new Set(expected));
   if (mode === "combat") {
-    assert.equal(expected.length, 7);
-    assert.equal(session.getActiveToolNames().includes("browser_evaluate"), false);
+    assert.equal(expected.length, 8);
+    assert.equal(session.getActiveToolNames().includes("browser_evaluate"), true);
+    assert.equal(session.getActiveToolNames().includes("combat_execute_turn"), true);
     assert.equal(session.getActiveToolNames().includes("read"), false);
   } else {
-    assert.equal(expected.length, 22);
+    assert.equal(expected.length, 23);
     assert.equal(session.getActiveToolNames().includes("foundry_actor_advance"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_compendium_browse"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_advancement_plan"), true);

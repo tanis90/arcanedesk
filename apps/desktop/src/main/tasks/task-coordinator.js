@@ -1,25 +1,24 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InputJournal } from "./input-journal.js";
+import { PendingInputs } from "./pending-inputs.js";
 import { TaskAdmission } from "../scheduling/execution-scheduler.js";
 
-const activeStates = new Set(["running", "stopping", "waiting_user", "queued", "waiting_resource"]);
+const activeStates = new Set(["running", "stopping", "waiting_user", "queued"]);
 const pendingStates = new Set(["accepted", "queued", "dispatching", "context"]);
 const messageText = message => typeof message?.content === "string" ? message.content
   : (message?.content ?? []).filter(p => p.type === "text").map(p => p.text).join("");
 
 /** One owner for a session's commands and task lifecycle. No view selection state. */
 export class TaskCoordinator {
-  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, journal?: InputJournal, scheduler?: any}} options */
-  constructor({ sessionId, adapter, emit = () => {}, journal = new InputJournal(), scheduler = null }) {
+  /** @param {{sessionId: string, adapter: any, emit?: (event: any) => void, pending?: PendingInputs, pendingModel?: any, saveModel?: (model: any) => void, scheduler?: any}} options */
+  constructor({ sessionId, adapter, emit = () => {}, pending = new PendingInputs(), pendingModel = null, saveModel = () => {}, scheduler = null }) {
     this.scheduler = scheduler; this.admission = null;
-    this.resourceWaits = new Map();
     this.sessionId = sessionId;
     this.adapter = adapter;
     this.emit = emit;
-    this.journal = journal;
+    this.pending = pending;
+    this.saveModel = saveModel;
     this.commands = new Map();
     this.inputs = new Map();
-    this.inputBindings = new Map();
     this.task = null;
     this.run = null;
     this.dispatching = null;
@@ -30,67 +29,20 @@ export class TaskCoordinator {
     this.queueWrites = new Set();
     this.attentions = new Map();
     this.attentionResolvers = new Map();
-    this.pendingModel = null;
-    for (const record of journal.records) {
-      if (record.type === "checkpoint") {
-        if (record.version !== 1) throw new Error("Unsupported task checkpoint");
-        this.commands = new Map(record.commands);
-        this.inputs = new Map(record.inputs.map(input => [input.id, input]));
-        this.attentions = new Map(record.attentions.map(attention => [attention.id, attention]));
-        this.task = record.task; this.pendingModel = record.pendingModel;
-      } else if (record.type === "accepted") {
-        this.commands.set(record.commandId, record);
-        this.inputs.set(record.input.id, record.input);
-        this.task = record.task;
-      } else if (record.type === "input_metadata") {
-        const input = this.inputs.get(record.inputId);
-        if (input) input.metadata = record.metadata;
-      } else if (record.type === "input_state") {
-        const input = this.inputs.get(record.inputId);
-        if (input) input.state = record.state;
-      } else if (record.type === "task_state") this.task = record.task;
-      else if (record.type === "attention") this.attentions.set(record.attention.id, record.attention);
-      else if (record.type === "response") {
-        this.commands.set(record.commandId, record);
-        this.attentions.set(record.attention.id, record.attention);
-      } else if (record.type === "pending_model") this.pendingModel = record.model;
-    }
-    if (this.busy) {
-      this.setTaskState("interrupted");
-      for (const input of this.inputs.values()) if (pendingStates.has(input.state)) this.setInputState(input, "interrupted");
-    }
-    for (const attention of this.attentions.values()) {
-      if (attention.state === "pending") this.updateAttention({ ...attention, state: "interrupted" });
-    }
-    this.compact();
+    this.inputBindings = new Map();
+    this.userWaits = 0;
+    this.pendingModel = pendingModel;
+    for (const input of pending.inputs) this.inputs.set(input.id, { ...input, state: "interrupted" });
   }
 
   get busy() { return activeStates.has(this.task?.state); }
-  compact(force = false) {
-    if (this.busy || typeof this.journal.compact !== "function") return false;
-    const consumed = input => ["consumed", "handled"].includes(input.state);
-    if (!force && this.journal.records.length < 128 && ![...this.inputs.values()].some(input => consumed(input) && input.images?.length)) return false;
-    const commands = /** @type {Array<[any, any]>} */ ([...this.commands].map(([id, record]) => [id, { fingerprint: record.fingerprint, ack: record.ack }]));
-    const inputs = [...this.inputs.values()].map(input => {
-      if (!consumed(input)) return { ...input };
-      const { images: _images, executionText: _execution, expandedText: _expanded, ...state } = input;
-      return state;
-    });
-    try {
-      this.journal.compact([{ type: "checkpoint", version: 1, commands, inputs, task: this.task,
-        attentions: [...this.attentions.values()], pendingModel: this.pendingModel }]);
-      this.commands = new Map(commands); this.inputs = new Map(inputs.map(input => [input.id, input]));
-      this.compactionError = null; return true;
-    } catch (error) { this.compactionError = error.message; return false; }
-  }
   snapshotAttentions() { return structuredClone([...this.attentions.values()]); }
   setPendingModel(model) {
-    this.journal.append({ type: "pending_model", model });
+    this.saveModel(model);
     this.pendingModel = model ? { ...model } : null;
     this.emit({ type: "model_pending", model: this.pendingModel });
   }
   updateAttention(attention) {
-    this.journal.append({ type: "attention", attention });
     this.attentions.set(attention.id, attention);
     this.emit({ type: "attention", attention: structuredClone(attention) });
   }
@@ -101,7 +53,6 @@ export class TaskCoordinator {
     if (!Array.isArray(options) || options.length > 8 || options.some(option => typeof option !== "string" || option.length > 1000)) throw new Error("Invalid answer options");
     const attention = { id: randomUUID(), taskId: this.task.id, question, options: [...options], state: "pending", createdAt: Date.now() };
     this.updateAttention(attention);
-    this.setTaskState("waiting_user");
     const pending = new Promise(resolve => {
       const cancel = () => this.cancelAttention(attention.id);
       this.attentionResolvers.set(attention.id, response => {
@@ -111,7 +62,17 @@ export class TaskCoordinator {
       signal?.addEventListener("abort", cancel, { once: true });
       if (signal?.aborted) cancel();
     });
-    return this.admission ? this.admission.waitForUser(pending).catch(() => ({ cancelled: true })) : pending;
+    return this.waitForUser(pending).catch(() => ({ cancelled: true }));
+  }
+
+  async waitForUser(pending) {
+    this.userWaits++;
+    if (!this.admission && this.busy && this.task.state !== "stopping") this.setTaskState("waiting_user");
+    try { return await (this.admission ? this.admission.waitForUser(pending) : pending); }
+    finally {
+      this.userWaits--;
+      if (!this.admission && !this.userWaits && this.task?.state === "waiting_user") this.setTaskState("running");
+    }
   }
 
   cancelAttention(id) {
@@ -136,11 +97,9 @@ export class TaskCoordinator {
     const answered = { ...attention, state: "answered", response, answeredAt: Date.now() };
     const ack = { ok: true, commandId, sessionId: this.sessionId, taskId, attentionId };
     const record = { type: "response", commandId, fingerprint, attention: answered, ack };
-    this.journal.append(record);
     this.commands.set(commandId, record);
     this.attentions.set(attentionId, answered);
     this.emit({ type: "attention", attention: structuredClone(answered) });
-    if (!this.admission && ![...this.attentions.values()].some(a => a.taskId === taskId && a.state === "pending")) this.setTaskState("running");
     this.attentionResolvers.get(attentionId)({ response });
     this.attentionResolvers.delete(attentionId);
     return ack;
@@ -149,28 +108,25 @@ export class TaskCoordinator {
   snapshotInputs(messageKeys = null) {
     return [...this.inputs.values()].filter(input => !messageKeys || messageKeys.has(input.messageKey)
       || !["consumed", "handled"].includes(input.state))
-      .map(({ id, commandId, taskId, state, text, messageKey }) => ({ id, commandId, taskId, state, text, messageKey }));
-  }
-  resourceWaiting(id, details) {
-    if (details) this.resourceWaits.set(id, details); else this.resourceWaits.delete(id);
-    if (!this.busy || ["stopping", "waiting_user", "queued"].includes(this.task.state)) return;
-    if (this.resourceWaits.size) this.setTaskState("waiting_resource");
-    else if (this.task.state === "waiting_resource") this.setTaskState("running");
+      .map(({ id, commandId, taskId, state, text, images, messageKey }) =>
+        ({ id, commandId, taskId, state, text, images: state === "interrupted" ? images : undefined, messageKey }));
   }
   setTaskState(state, error = null) {
-    this.task = { ...this.task, state, error, waitingFor: state === "waiting_resource" ? this.resourceWaits.values().next().value : null,
-      endedAt: activeStates.has(state) ? null : Date.now() };
-    this.journal.append({ type: "task_state", task: this.task });
+    this.task = { ...this.task, state, error, endedAt: activeStates.has(state) ? null : Date.now() };
     this.emit({ type: "task_state", task: { ...this.task } });
   }
   setInputState(input, state) {
-    this.journal.append({ type: "input_state", inputId: input.id, state });
+    if (input.state === state) return; // 幂等:重复迁移(如改道时的 queued→queued)不再发事件
+    if (["consumed", "handled"].includes(state)) {
+      this.pending.save([...this.inputs.values()].filter(item => item.id !== input.id));
+      delete input.images; delete input.executionText; delete input.expandedText;
+    }
     input.state = state;
     this.emit({ type: "input_state", inputId: input.id, commandId: input.commandId, taskId: input.taskId, state });
   }
 
   /** Accept synchronously after durable registration; execution is asynchronous. */
-  submit({ commandId = randomUUID(), text, images = [], prepare = null }) {
+  submit({ commandId = randomUUID(), text, images = [], prepare = null, replacesInputId = null }) {
     const fingerprint = createHash("sha256").update(JSON.stringify({ text, images })).digest("hex");
     const previous = this.commands.get(commandId);
     if (previous) {
@@ -180,28 +136,34 @@ export class TaskCoordinator {
     if (this.task?.state === "stopping") return { ok: false, code: "TASK_STOPPING", error: "Task is stopping" };
     const executionText = prepare ? prepare(text, images) : text;
     const supplement = this.busy;
+    // 投递方式只在"补充且 SDK 正在流式"时存在;busy 但非流式(如等调度)时 input 停留 app 层,delivery=null。
+    const streaming = supplement && Boolean(this.adapter.isStreaming?.());
+    // 记录即事实:声明 followUp 但缺该方法的 adapter 实际走 steer,delivery 也记 steer。
+    const declared = streaming ? this.adapter.streamingDelivery?.() ?? "steer" : null;
+    const delivery = declared === "followUp" && !this.adapter.followUp ? "steer" : declared;
     const task = supplement ? this.task : { id: randomUUID(), state: this.scheduler ? "queued" : "running", startedAt: Date.now(), endedAt: null, modelToApply: this.pendingModel };
-    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null };
+    const input = { id: randomUUID(), commandId, taskId: task.id, text, executionText, images, state: "accepted", expandedText: null, delivery };
     const ack = { ok: true, status: "accepted", commandId, inputId: input.id, sessionId: this.sessionId,
-      taskId: task.id, disposition: supplement ? "supplement" : "new_task" };
+      taskId: task.id, disposition: supplement ? "supplement" : "new_task", delivery };
     const record = { type: "accepted", commandId, fingerprint, input, task, ack };
-    this.journal.append(record);
+    const replaced = this.inputs.get(replacesInputId);
+    const replaceId = replaced?.state === "interrupted" ? replaced.id : null;
+    this.pending.save([...this.inputs.values()].filter(item => item.id !== replaceId).concat(input));
+    if (replaceId) this.inputs.delete(replaceId);
     this.commands.set(commandId, record);
     this.inputs.set(input.id, input);
     if (this.adapter.captureInput) {
-      // Start before scheduling or steering; persist separately because page reads are async.
+      // Start before scheduling or steering; the metadata lands on the input when the page read resolves.
       let capture;
       try { capture = this.adapter.captureInput(); } catch { capture = null; }
       const binding = Promise.resolve(capture).catch(() => null).then(metadata => {
-        this.journal.append({ type: "input_metadata", inputId: input.id, metadata });
         input.metadata = metadata;
         return metadata;
       });
       this.inputBindings.set(input.id, binding);
-      binding.catch(() => {}); // Tools/dispatch observe persistence failures, never unhandled rejection.
+      binding.catch(() => {}); // Tools/dispatch observe capture failures, never unhandled rejection.
     }
     this.task = task;
-    if (!supplement) this.resourceWaits.clear();
     if (!supplement && this.scheduler) this.admission = new TaskAdmission(this.scheduler,
       { sessionId: this.sessionId, taskId: task.id }, state => {
         if (this.task?.id === task.id && this.busy && this.task.state !== "stopping" && this.task.state !== state) this.setTaskState(state);
@@ -209,8 +171,8 @@ export class TaskCoordinator {
     this.emit({ type: "task_state", task: { ...task } });
     this.emit({ type: "input_state", inputId: input.id, commandId, taskId: task.id, state: "accepted" });
     if (!this.run) this.schedule();
-    else if (supplement && this.adapter.isStreaming?.()) {
-      this.queueSteer(input);
+    else if (streaming) {
+      this.queueInput(input);
     }
     return ack;
   }
@@ -224,7 +186,6 @@ export class TaskCoordinator {
     }).finally(() => {
       this.run = null;
       if (this.busy && [...this.inputs.values()].some(i => i.taskId === this.task.id && pendingStates.has(i.state))) this.schedule();
-      else this.compact();
     });
     this.run.catch(() => {});
   }
@@ -238,10 +199,12 @@ export class TaskCoordinator {
       metadata: this.inputBindings.get(input.id) ?? Promise.resolve(input.metadata ?? null) };
   }
 
-  queueSteer(input) {
+  queueInput(input) {
     this.queueing = input;
+    // 缺 followUp 能力的 adapter(旧 mock)回退 steer,与 streamingDelivery 的 "steer" 默认值一致。
+    const deliver = input.delivery === "followUp" && this.adapter.followUp ? this.adapter.followUp : this.adapter.steer;
     let pending;
-    try { pending = this.adapter.steer(input.executionText ?? input.text, input.images); }
+    try { pending = deliver.call(this.adapter, input.executionText ?? input.text, input.images); }
     catch { pending = Promise.reject(new Error("Unable to queue input")); }
     this.queueing = null;
     const write = Promise.resolve(pending).catch(() => {
@@ -251,11 +214,46 @@ export class TaskCoordinator {
     this.queueWrites.add(write);
   }
 
+  /** pi 无单条删除:clearQueue 全清后幸存者按序重排(走 queueInput,展开结果确定)。 */
+  requeueSurvivors(exceptId) {
+    for (const survivor of this.inputs.values()) {
+      if (survivor.id !== exceptId && survivor.taskId === this.task?.id && survivor.state === "queued") this.queueInput(survivor);
+    }
+  }
+
+  /** 取消一条 SDK 排队的输入;目标按 drain 同款 cancelled 收尾(重启后可召回)。 */
+  cancelQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    // adapter 无队列控制时,SDK 队列里的目标会被照常投递;假装取消成功会让 UI 与现实矛盾。
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
+    this.setInputState(input, "cancelled");
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
+  }
+
+  /** 排队输入改道 steer,下个 turn 边界软打断生效;reject 回退 accepted 由 drain 兜底。 */
+  steerQueuedInput(inputId) {
+    const input = this.inputs.get(inputId);
+    if (!input || input.taskId !== this.task?.id || input.state !== "queued") return { ok: false, code: "STALE_INPUT" };
+    if (!this.adapter.clearQueue) return { ok: false, code: "NO_QUEUE_CONTROL" };
+    this.adapter.clearQueue();
+    input.delivery = "steer";
+    this.queueInput(input);
+    this.requeueSurvivors(input.id);
+    return { ok: true, commandId: input.commandId };
+  }
+
   observe(event) {
     if (!this.busy) return;
-    if (event.type === "queue_update" && this.queueing && event.steering?.length) {
-      this.queueing.expandedText = event.steering.at(-1);
-      this.setInputState(this.queueing, "queued");
+    if (event.type === "queue_update" && this.queueing) {
+      // 两模式各只写一条队列;按本次投递方式读对应数组,取末位(刚压入的那条)。
+      const queued = this.queueing.delivery === "followUp" ? event.followUp : event.steering;
+      if (queued?.length) {
+        this.queueing.expandedText = queued.at(-1);
+        this.setInputState(this.queueing, "queued");
+      }
     }
     if (event.type === "message_start" && event.message?.role === "user") {
       const text = messageText(event.message);
@@ -299,7 +297,6 @@ export class TaskCoordinator {
         await this.inputBindings.get(input.id);
         if (this.task.state === "stopping") break;
         await this.adapter.prompt(input.executionText ?? input.text, input.images);
-        await this.adapter.settleTask?.(taskId);
         await Promise.all([...this.queueWrites]);
         if (input.state === "dispatching") this.setInputState(input, "handled"); // extension commands may consume input without a model message
         this.dispatching = null;
@@ -315,13 +312,12 @@ export class TaskCoordinator {
       this.setTaskState(state);
     } catch (error) {
       this.adapter.clearQueue?.();
-      await this.adapter.settleTask?.(taskId);
       for (const input of this.inputs.values()) {
         if (input.taskId === taskId && pendingStates.has(input.state)) this.setInputState(input, this.task.state === "stopping" ? "cancelled" : "failed");
       }
       this.setTaskState(this.task.state === "stopping" ? admission && !admission.started ? "cancelled" : "stopped" : "failed", error.message);
     } finally {
-      // A cancelled steering input may still be persisting its capture. Deletion waits for run.
+      // A cancelled steering input may still be resolving its capture. Deletion waits for run.
       await Promise.allSettled([...this.inputBindings.values()]);
       this.dispatching = null; admission?.release();
     }

@@ -1,5 +1,5 @@
 // Real production main/IPC/SDK; only the model endpoint and dialog decisions are controlled.
-const { app, dialog, Tray, ipcMain } = require("electron");
+const { app, dialog, Tray, Notification, ipcMain } = require("electron");
 const { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { pathToFileURL } = require("node:url");
@@ -7,20 +7,32 @@ const http = require("node:http");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
+const panelUi = process.argv.includes("--panel-ui");
+const mdReader = process.argv.includes("--md-reader");
+const mdReaderReview = process.argv.includes("--md-reader-review");
+const sidebarRestart = process.argv.includes("--sidebar-restart");
+const sidebarScenario = process.argv.includes("--sidebar-scenario");
+const quitProbe = process.argv.find(arg => arg.startsWith("--quit-probe="))?.split("=")[1];
+let quitStarted = 0, quitShows = 0;
+const trayLifecycle = process.argv.includes("--tray-lifecycle");
 const longTool = process.argv.includes("--long-tool");
+const toolRecovery = process.argv.includes("--tool-recovery");
+const deletionScenario = process.argv.includes("--deletion-scenario");
 const contextIsolation = process.argv.includes("--context-isolation");
 const retryScenario = process.argv.includes("--retry-scenario");
 const navigationScenario = process.argv.includes("--navigation-scenario");
-const nativeReview = process.argv.includes("--native-review");
+const nativeSystem = process.argv.includes("--native-system");
+const nativeReview = process.argv.includes("--native-review") || nativeSystem;
+let trayClicks = 0, notificationClicks = 0, notificationShows = 0;
 const metadataScenario = process.argv.includes("--metadata-scenario");
 const foundryScenario = process.argv.includes("--foundry-scenario");
 let delayedReply = null;
-if (navigationScenario) {
+if (navigationScenario || sidebarScenario) {
   const handle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel, listener) => handle(channel, async (...args) => {
     const result = await listener(...args);
     const gate = delayedReply;
-    if (gate && channel === gate.channel && result.session?.id === gate.sessionId && !gate.captured) {
+    if (gate && channel === gate.channel && (result.session?.id ?? result.sessionId) === gate.sessionId && !gate.captured) {
       gate.captured = structuredClone(result);
       await new Promise(resolve => { gate.release = resolve; });
       gate.delivered = true;
@@ -45,15 +57,27 @@ if (retryScenario) {
   mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
   writeFileSync(path.join(process.env.PI_CODING_AGENT_DIR, "settings.json"), JSON.stringify({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 8000 } }));
 }
-let window, tray, menu, decision = 0, prompts = [], finalExit = false, hostB;
+if (nativeSystem) {
+  mkdirSync(path.join(scratch, "config"), { recursive: true });
+  writeFileSync(path.join(scratch, "config", "notifications.json"), JSON.stringify({ enabled: true }));
+  const show = Notification.prototype.show;
+  Notification.prototype.show = function () {
+    this.on("show", () => { notificationShows++; console.log("NATIVE notification shown"); });
+    this.on("click", () => { notificationClicks++; console.log("NATIVE notification clicked"); });
+    this.on("failed", (_event, error) => console.log("NATIVE notification failed: " + error));
+    return show.call(this);
+  };
+}
+let window, tray, menu, prompts = [], finalExit = false, hostB;
 let pickedDirectory = null;
 dialog.showOpenDialog = async () => ({ canceled: !pickedDirectory, filePaths: pickedDirectory ? [pickedDirectory] : [] });
 const setContextMenu = Tray.prototype.setContextMenu;
-Tray.prototype.setContextMenu = function (value) { tray = this; menu = value; return setContextMenu.call(this, value); };
-if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: decision }; };
+Tray.prototype.setContextMenu = function (value) { if (quitProbe === "tray-failure") throw Error("Injected tray failure"); tray = this; menu = value; if (nativeSystem) this.on("click", () => { trayClicks++; console.log("NATIVE tray clicked"); }); return setContextMenu.call(this, value); };
+if (!nativeReview) dialog.showMessageBox = async (_window, options) => { prompts.push(options); return { response: 0 }; };
 app.on("browser-window-created", (_event, value) => {
   window = value;
-  if (!nativeReview && !foundryScenario) { value.hide(); value.on("show", () => value.hide()); }
+  // CDP 验收要真的看见窗口:隐藏着的页面不一定产帧,截出来就是空白。
+  if (!nativeReview && !foundryScenario && !sidebarScenario && !deletionScenario && !mdReaderReview) { value.hide(); value.on("show", () => value.hide()); }
   value.webContents.setBackgroundThrottling(false);
 });
 const streams = new Map();
@@ -80,9 +104,12 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   const write = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: `smoke-${tag}`, object: "chat.completion.chunk", created: 1, model: "arcane-spark", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
   const entry = { closed: false, finish() { write({ content: ` ${tag} final result` }); write({}, "stop"); res.end("data: [DONE]\n\n"); } };
-  res.on("close", () => { entry.closed = true; });
+  // Interactive native reviews can wait several minutes for a physical click.
+  const heartbeat = nativeReview ? setInterval(() => res.write(": keepalive\n\n"), 10000) : null;
+  res.on("close", () => { entry.closed = true; if (heartbeat) clearInterval(heartbeat); });
   streams.set(tag, entry);
   write({ role: "assistant", content: `${tag} partial` });
+  if (toolRecovery && tag === "B") require("./production-tool-recovery.cjs").respond({ data, entry, write, res, scratch, psLiteral });
   if (foundryScenario) {
     const result = data.messages.find(row => row.role === "tool" && row.tool_call_id === `world-${tag}`);
     if (result) {
@@ -91,7 +118,7 @@ const server = http.createServer(async (req, res) => {
     } else {
       const code = tag === "A"
         ? '(async () => { if (!game.ready || !game.user.isGM || game.world.id !== "test001") throw Error("Wrong test world"); globalThis.arcaneWriteEntered = true; await globalThis.arcaneWriteGate; const doc = await JournalEntry.create({name: "Arcane resource acceptance " + globalThis.arcaneProbeId, flags: {world: {arcaneProbe: globalThis.arcaneProbeId}}}); globalThis.arcaneCreatedId = doc.id; return {verified:"arcane-resource-verified", id:doc.id}; })()'
-        : '(async () => { globalThis.arcaneCancelledRan = true; throw Error("Cancelled resource waiter must never run"); })()';
+        : '(async () => { globalThis.arcaneConcurrentRan = true; return {verified:"arcane-resource-verified"}; })()';
       write({ tool_calls: [{ index: 0, id: `world-${tag}`, type: "function", function: { name: "browser_evaluate", arguments: JSON.stringify({ code }) } }] });
       write({}, "tool_calls"); res.end("data: [DONE]\n\n");
     }
@@ -114,16 +141,48 @@ async function until(check, label) {
   while (Date.now() < deadline) { if (await check()) return; await sleep(40); }
   throw new Error(`Timed out: ${label}`);
 }
-const evaluate = code => window.webContents.executeJavaScript(code);
+const evaluate = async code => { try { return await window.webContents.executeJavaScript(code); } catch (error) { throw new Error(code + "\n" + error.message); } };
 const ui = code => until(async () => { try { return await evaluate(code); } catch { return false; } }, code);
 const openHost = host => evaluate(`(async () => { const result = await window.arcane.openSession(${JSON.stringify(host.describeCurrent().path)}, modeContext()); if (!result.ok) throw new Error(result.error); await installSnapshot(result); })()`);
 app.on("will-quit", () => {
   try {
-    assert.ok(finalExit, "exit must follow the stop-and-exit decision");
+    assert.ok(finalExit, "exit must follow an explicit exit action");
+    if (quitProbe) return;
+    if (sidebarRestart) { assert.deepEqual(requests, []); console.log("PASS sidebar restart: durable archive, pin, title, project and workspace without model calls"); return; }
+    if (sidebarScenario) { assert.deepEqual(requests, ["A", "B"]); console.log("PASS production sidebar: CDP menus, projects, archive, restore, delete and execution isolation"); return; }
+    if (trayLifecycle) {
+      assert.deepEqual(requests, ["A"]);
+      assert.equal(hostB.tasks.task.state, "stopped");
+      assert.equal(prompts.length, 0);
+      assert.ok(tray.isDestroyed());
+      console.log("PASS tray lifecycle: idle and busy close hide without prompts; explicit tray exit waits for stop");
+      return;
+    }
+    if (toolRecovery) {
+      assert.deepEqual(requests, ["A", "B", "B", "B"]);
+      assert.equal(hostB.tasks.task.state, "stopped");
+      console.log("PASS production tool recovery: failed shell stays in task, successful artifact survives stop and reload");
+      return;
+    }
+    if (deletionScenario) {
+      assert.deepEqual(requests, ["A", "B"]);
+      assert.equal(hostB.tasks.task.state, "completed");
+      console.log("PASS production deletion: active archive remains disabled; explicit stop, archive and confirmed delete preserve B");
+      return;
+    }
+    if (nativeSystem) {
+      assert.equal(hostB.tasks.task.state, "completed");
+      assert.equal(trayClicks, 1); assert.equal(notificationClicks, 1); assert.equal(notificationShows, 1);
+      assert.ok(tray.isDestroyed()); assert.deepEqual(requests, ["A"]);
+      console.log("PASS native system: background continuation, actual tray and toast clicks, no focus stealing or repeated request");
+      return;
+    }
+    if (panelUi) { assert.equal(requests.length, 0); console.log("PASS panel UI: real connection retry, right-pane failure, agent recovery and reload"); return; }
+    if (mdReader) { assert.equal(requests.length, 0); console.log("PASS md reader: note click opens the right pane, both exits, Foundry takeover with keep-alive and the error pages"); return; }
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
       assert.equal(hostB.tasks.task.state, "stopped");
-      console.log("PASS production Foundry: actual Document write, queued task cancellation and single execution");
+      console.log("PASS production Foundry: actual Document write, concurrent calls and explicit stop");
       return;
     }
     if (metadataScenario) {
@@ -137,7 +196,7 @@ app.on("will-quit", () => {
       assert.equal(hostB.busy, false);
       assert.ok(tray.isDestroyed());
       assert.deepEqual(requests, ["A"]);
-      console.log("PASS native review: real dialog stop-and-exit settles task and destroys tray");
+      console.log("PASS native review: explicit tray exit settles task and destroys tray");
       return;
     }
     if (navigationScenario) {
@@ -175,13 +234,89 @@ app.on("will-quit", () => {
     console.log("PASS production main: real SDK concurrent tasks, background completion, reload, native tray callbacks and graceful stop/quit");
   } catch (error) { console.error(error); process.exitCode = 1; }
 });
+app.on("quit", () => {
+  if (!quitProbe || !quitStarted) return;
+  try {
+    const elapsed = Date.now() - quitStarted;
+    assert.equal(quitShows, 0, "exit must not reopen the window");
+    assert.equal(prompts.length, 0);
+    assert.ok(elapsed < 3500, `exit exceeded deadline tolerance: ${elapsed}ms`);
+    if (["timeout", "unload"].includes(quitProbe)) assert.ok(elapsed >= 1900);
+    if (quitProbe === "timeout") assert.equal(hostB.busy, true);
+    console.log(`PASS exit ${quitProbe}: ${elapsed}ms, no dialog or window reopening`);
+  } catch (error) { console.error(error); }
+});
 (async () => {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   process.env.ARCANE_SPARK_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
   await import(pathToFileURL(path.resolve(__dirname, "../../src/main/main.js")).href);
   await ui('typeof selectedSessionId !== "undefined" && selectedSessionId && workspaceReady.has(selectedSessionId)');
+  if (quitProbe) {
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    if (!["tray-failure", "unload"].includes(quitProbe)) {
+      await evaluate('input.value = "production-A"; submit()');
+      await ui('busy && messages.textContent.includes("A partial")');
+      hostB.abort = quitProbe === "timeout" ? () => new Promise(() => {}) : async () => { throw Error("Injected stop failure"); };
+    }
+    if (quitProbe === "unload") await evaluate('window.onbeforeunload = () => false; void 0');
+    window.on("show", () => { quitShows++; });
+    finalExit = true; quitStarted = Date.now();
+    if (quitProbe === "tray-failure") window.close(); else app.quit();
+    return;
+  }
+  if (trayLifecycle) {
+    hostB = globalThis.__arcaneHosts.prep.activeHost;
+    await require("./tray-lifecycle.cjs")({ window, host:hostB, evaluate, ui, until, sleep, menu:() => menu, prompts, beforeExit:() => {finalExit=true;} });
+    return;
+  }
   await evaluate('switchMode("prep")');
   await ui('modeContext().mode === "prep" && workspaceReady.has(selectedSessionId)');
+  if (panelUi) {
+    await require("./panel-ui.cjs")({ window, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
+  if (mdReader || mdReaderReview) {
+    // 阅读器的 resolve 基准是当前会话的工作目录(spec §4.2),所以先把备团目录指到 scratch 里。
+    pickedDirectory = path.join(scratch, "campaign"); mkdirSync(pickedDirectory, { recursive: true });
+    assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
+    await ui('workspaceReady.has(selectedSessionId) && !restoringView');
+    if (mdReaderReview) {
+      // CDP 验收(test/review-md-reader.mjs)从进程外驱动:这里只把现场准备好然后待命。
+      // 笔记写在真的磁盘上,点击、换页、Esc 全部由 runner 通过 CDP 发——
+      // 夹具不替它按任何按钮,否则"验收"就成了自己给自己打分。
+      const notes = path.join(pickedDirectory, "notes"); mkdirSync(notes, { recursive: true });
+      // 笔记正文里故意带两个 md 路径:阅读器页不该把它们变成锚点(R5)。
+      writeFileSync(path.join(notes, "gatekeeper.md"), "# 守门人\n\n石门后面站着一个不说话的人。\n\n另见 notes/second.md 与 ../outside.md。\n");
+      writeFileSync(path.join(notes, "second.md"), "# 第二份\n\n换一份笔记。\n");
+      // mermaid 围栏:单测里的 mermaid 是注进去的假全局,证明不了真 vendored 库
+      // 能在阅读器页的 CSP 下加载。这份笔记给 CDP 验收用。
+      writeFileSync(path.join(notes, "diagram.md"), "# 守门流程\n\n```mermaid\ngraph TD; A[石门]-->B[守门人];\n```\n");
+      writeFileSync(path.join(scratch, "review-ready.txt"), pickedDirectory);
+      const deadline = Date.now() + 240000;
+      while (!existsSync(path.join(scratch, "review-done.txt")) && Date.now() < deadline) await sleep(100);
+      assert.ok(existsSync(path.join(scratch, "review-done.txt")), "the CDP reviewer never signalled completion");
+      finalExit = true; app.quit(); return;
+    }
+    await require("./md-reader-panel.cjs")({ window, evaluate, ui, until, sleep, project: pickedDirectory });
+    finalExit = true; app.quit(); return;
+  }
+  if (sidebarRestart) {
+    const checkpoint = JSON.parse(readFileSync(path.join(scratch, "sidebar-checkpoint.json"), "utf8"));
+    await evaluate('refreshSessions()');
+    assert.ok(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.a)}).pinnedOrder != null`));
+    assert.ok(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).archivedAt != null`));
+    assert.equal(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).customTitle`), "Restart archive");
+    assert.equal(await evaluate(`navigationView.rows.get(${JSON.stringify(checkpoint.c)}).cwd`), checkpoint.cwd);
+    assert.ok(await evaluate(`navigationView.collapsed.has(${JSON.stringify(checkpoint.collapsed)})`));
+    await evaluate(`openActivity(navigationView.rows.get(${JSON.stringify(checkpoint.c)}))`);
+    await ui(`selectedSessionId === ${JSON.stringify(checkpoint.c)} && selectedArchived && workspaceReady.has(selectedSessionId)`);
+    assert.equal(await evaluate('input.value'), "Restart retained draft");
+    finalExit = true; app.quit(); return;
+  }
+  if (sidebarScenario) {
+    await require("./production-sidebar.cjs")({ window, scratch, streams, requests, until, ui, evaluate, delayReply: gate => { delayedReply = gate; } });
+    finalExit = true; app.quit(); return;
+  }
   if (foundryScenario) {
     const a = globalThis.__arcaneHosts.prep.activeHost;
     assert.equal((await a.openFoundry("http://127.0.0.1:30219")).ok, true);
@@ -201,18 +336,15 @@ app.on("will-quit", () => {
     await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('input.value = "production-B"; submit()');
-    await until(() => hostB.tasks.task.state === "waiting_resource", "B waits for A's actual page operation");
-    await ui('displayedTask.state === "waiting_resource"');
-    await evaluate('stop.click()');
-    await until(() => hostB.tasks.task.state === "stopped", "queued B cancellation settles");
+    await until(() => hostB.tasks.task.state === "completed", "B completes while A is still waiting in its script");
     assert.ok(a.busy);
-    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneConcurrentRan)'), true);
     await openHost(a);
     await wc.executeJavaScript('arcaneReleaseWrite(); true');
     await ui('!busy && messages.textContent.includes("A final result")');
     const documents = await wc.executeJavaScript('game.journal.filter(doc => doc.getFlag("world", "arcaneProbe") === globalThis.arcaneProbeId).map(doc=>doc.id)');
     assert.equal(documents.length, 1, "exactly one real document created");
-    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneCancelledRan)'), false);
+    assert.equal(await wc.executeJavaScript('Boolean(globalThis.arcaneConcurrentRan)'), true);
     await wc.executeJavaScript(`(async () => { const doc = game.journal.get(${JSON.stringify(documents[0])}); if (doc.getFlag("world", "arcaneProbe") !== globalThis.arcaneProbeId) throw Error("Unexpected document"); await doc.delete(); return true; })()`);
     finalExit = true; app.quit(); return;
   }
@@ -222,23 +354,23 @@ app.on("will-quit", () => {
     await evaluate('input.value = "production-A"; submit()');
     await ui('busy && messages.textContent.includes("A partial")');
     const row = host => `sessionList.querySelector('[data-session-id="${host.describeCurrent().id}"]')`;
-    await ui(`${row(a)}.querySelector('.s-title').textContent === "production-A" && ${row(a)}.querySelector('.s-meta').textContent.includes("1 条")`);
+    await ui(`${row(a)}.querySelector('.s-title').textContent === "production-A" && navigationView.rows.get(${JSON.stringify(a.describeCurrent().id)}).messageCount === 1`);
     await evaluate('document.getElementById("session-new").click()');
     await ui(`selectedSessionId !== ${JSON.stringify(a.describeCurrent().id)} && workspaceReady.has(selectedSessionId)`);
     hostB = globalThis.__arcaneHosts.prep.activeHost;
     await evaluate('refreshSessions()');
     await evaluate('setDrawer(true)');
     await evaluate('refreshSessions()');
-    await evaluate('globalThis.metadataRows = [...sessionList.children]; input.value = "production-B"; submit()');
-    await ui(`${row(hostB)}.querySelector('.s-title').textContent === "production-B" && ${row(hostB)}.querySelector('.s-meta').textContent.includes("1 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "first-turn metadata patches rows in place");
+    await evaluate('globalThis.metadataRows = [...sessionList.querySelectorAll(".session-item")]; input.value = "production-B"; submit()');
+    await ui(`${row(hostB)}.querySelector('.s-title').textContent === "production-B" && navigationView.rows.get(${JSON.stringify(hostB.describeCurrent().id)}).messageCount === 1`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "first-turn metadata patches rows in place");
     streams.get("A").finish();
     await until(() => a.tasks.task.state === "completed", "background A completes");
-    await ui(`${row(a)}.querySelector('.s-meta').textContent.includes("2 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "background completion does not reorder rows");
+    await ui(`navigationView.rows.get(${JSON.stringify(a.describeCurrent().id)}).messageCount === 2`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "background completion does not reorder rows");
     streams.get("B").finish();
-    await ui(`!busy && ${row(hostB)}.querySelector('.s-meta').textContent.includes("2 条")`);
-    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.children[i] === node)'), "visible drawer keeps its order after current task completion");
+    await ui(`!busy && navigationView.rows.get(${JSON.stringify(hostB.describeCurrent().id)}).messageCount === 2`);
+    assert.ok(await evaluate('metadataRows.every((node, i) => sessionList.querySelectorAll(".session-item")[i] === node)'), "visible drawer keeps its order after current task completion");
     finalExit = true; app.quit(); return;
   }
   if (nativeReview) {
@@ -253,7 +385,28 @@ app.on("will-quit", () => {
     window.on("hide", () => console.log(`NATIVE hidden busy=${hostB.busy}`));
     window.on("show", () => console.log(`NATIVE shown busy=${hostB.busy}`));
     finalExit = true;
-    console.log("READY native review: use the actual window controls and native dialog");
+    console.log("READY native review: close the window to tray; use the tray menu to quit");
+    if (nativeSystem) {
+      const nativeUntil = async (check, label) => {
+        const deadline = Date.now() + 600000;
+        while (Date.now() < deadline) { if (await check()) return; await sleep(200); }
+        throw Error("Timed out: " + label);
+      };
+      console.log("READY system step 1: close the window directly, then click the ArcaneDesk tray icon");
+      await nativeUntil(() => !window.isVisible(), "first background close");
+      assert.ok(hostB.busy);
+      await nativeUntil(() => trayClicks === 1 && window.isVisible(), "actual tray restoration");
+      await ui('busy && messages.textContent.includes("A partial")');
+      console.log("READY system step 2: close the window directly again; click the completion notification");
+      await nativeUntil(() => !window.isVisible(), "second background close");
+      streams.get("A").finish();
+      await nativeUntil(() => hostB.tasks.task.state === "completed", "background completion");
+      assert.equal(window.isVisible(), false, "completion must not show the window");
+      assert.equal(window.isFocused(), false, "completion must not steal focus");
+      await nativeUntil(() => notificationClicks === 1 && window.isVisible(), "actual notification activation");
+      await ui('!busy && messages.textContent.includes("A final result")');
+      console.log("READY system step 3: close the window, then choose Quit ArcaneDesk from the tray menu");
+    }
     return;
   }
   if (navigationScenario) {
@@ -349,15 +502,13 @@ app.on("will-quit", () => {
   if (crashPhase === "recover") {
     const saved = JSON.parse(readFileSync(path.join(scratch, "crash-checkpoint.json"), "utf8"));
     await openHost({ describeCurrent: () => saved.b });
-    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && !!document.querySelector(".recover-task")`);
+    await ui(`selectedSessionId === ${JSON.stringify(saved.b.id)} && !busy && displayedTask == null`);
     const restoredB = globalThis.__arcaneHosts.prep.get(saved.b.id);
-    assert.equal(restoredB.tasks.task.state, "interrupted");
-    assert.equal(restoredB.tasks.task.id, saved.taskId);
+    assert.equal(restoredB.tasks.task, null);
     assert.ok(await evaluate('messages.textContent.includes("production-B")'), "accepted input remains visible");
-    await evaluate('document.querySelector(".recover-task").click(); saveWorkspace()');
-    assert.ok(await evaluate('input.value.includes(t("chat.recovery.prompt"))'));
+    assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     await sleep(300);
-    assert.deepEqual(requests, [], "restart and recovery preparation do not replay model requests");
+    assert.deepEqual(requests, [], "restart does not replay model requests");
     await evaluate('input.value += " production-C"; submit()');
     await ui('busy && messages.textContent.includes("C partial")');
     assert.notEqual(restoredB.tasks.task.id, saved.taskId, "explicit continuation starts a new task in the same session");
@@ -366,7 +517,7 @@ app.on("will-quit", () => {
     assert.equal(restoredB.tasks.task.state, "completed");
     await openHost({ describeCurrent: () => saved.a });
     await ui(`selectedSessionId === ${JSON.stringify(saved.a.id)} && !busy && messages.textContent.includes("A final result")`);
-    assert.equal(globalThis.__arcaneHosts.prep.get(saved.a.id).tasks.task.state, "completed");
+    assert.equal(globalThis.__arcaneHosts.prep.get(saved.a.id).tasks.task, null);
     await sleep(300);
     assert.deepEqual(requests, ["C"], "only the explicitly submitted continuation executes");
     console.log("PASS crash recovery: durable result, interrupted first-turn task, no automatic replay and explicit continuation");
@@ -397,6 +548,14 @@ app.on("will-quit", () => {
   await ui('busy && messages.textContent.includes("B partial")');
   hostB = globalThis.__arcaneHosts.prep.get(idB);
   assert.ok(hostA.busy && hostB.busy);
+  if (toolRecovery) {
+    await require("./production-tool-recovery.cjs").verify({ hostA, hostB, streams, scratch, window, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
+  if (deletionScenario) {
+    await require("./production-deletion.cjs")({ hostA, hostB, streams, evaluate, ui, until });
+    finalExit = true; app.quit(); return;
+  }
   if (contextIsolation) {
     assert.equal(hostA.cwd(), path.join(scratch, "workspace-A"));
     assert.equal(hostB.cwd(), path.join(scratch, "workspace-B"));
@@ -509,6 +668,7 @@ app.on("will-quit", () => {
   const createHost = prepRegistry.createHost;
   prepRegistry.createHost = () => ({ start: async () => { throw new Error("injected replacement failure"); }, dispose() {} });
   try {
+    await evaluate(`window.arcane.archiveSession(${JSON.stringify(hostA.describeCurrent().id)})`);
     const deleted = await evaluate(`window.arcane.deleteSession(${JSON.stringify(hostA.describeCurrent().path)}, modeContext())`);
     assert.equal(deleted.ok, true);
     assert.equal(deleted.warning, "injected replacement failure");
@@ -518,13 +678,8 @@ app.on("will-quit", () => {
   assert.equal(prepRegistry.get(idB), hostB, "recovery must reuse the live background B, not overwrite it with a second SDK session");
   assert.ok(hostB.busy && !streams.get("B").closed);
   window.close();
-  await until(() => prompts.length === 1, "cancel close prompt");
   await sleep(50);
-  assert.ok(!window.isDestroyed() && hostB.busy);
-  decision = 2; window.close();
-  await until(() => prompts.length === 2, "background close prompt");
-  await sleep(50);
-  assert.equal(prompts[1].buttons.length, 3);
+  assert.equal(prompts.length, 0, "close to tray never asks for a lifecycle choice");
   assert.ok(!tray.isDestroyed() && !window.isVisible() && hostB.busy);
   let shows = 0;
   window.on("show", () => { shows++; });
@@ -532,10 +687,17 @@ app.on("will-quit", () => {
   assert.equal(shows, 1, "native menu callback restores window");
   tray.emit("click");
   assert.equal(shows, 2, "tray click callback restores window");
-  decision = 1; finalExit = true;
+  finalExit = true;
   menu.items[1].click();
 })().catch(async error => {
   console.error(error);
+  if (sidebarScenario) {
+    try {
+      const output = path.resolve(__dirname, "../../docs/navigation-evidence"); mkdirSync(output, { recursive: true });
+      writeFileSync(path.join(output, "failure.png"), (await window.webContents.capturePage()).toPNG());
+      console.error(await evaluate('JSON.stringify({selectedSessionId,archivePage:!navigationView.archivePage.hidden,menu:document.querySelector(".session-menu")?.textContent,toast:document.getElementById("navigation-toast").textContent,rows:[...navigationView.rows.values()].map(row=>({id:row.id,name:row.name,archivedAt:row.archivedAt}))})'));
+    } catch {}
+  }
   if (longTool) {
     writeFileSync(toolRelease, "release after test failure");
     await Promise.allSettled(Object.values(globalThis.__arcaneHosts ?? {}).flatMap(registry => registry.allHosts()).map(host => host.abort(host.task?.id)));

@@ -11,6 +11,8 @@ const attentionCards = new Map();
 const attentionDrafts = new Map();
 const attentionAttempts = new Map();
 let displayedTask = null;
+let navigationView = null;
+let selectedArchived = false;
 let displayedRetry = null;
 function showRetry(retry) {
   displayedRetry = retry;
@@ -19,13 +21,10 @@ function showRetry(retry) {
   indicator.textContent = indicator.hidden ? "" : t("chat.retrying", retry);
 }
 const stopRequests = new Map();
-const confirmedAt = new Map();
-const syncAttemptAt = new Map();
+let lastContactAt = Date.now();
 function showSyncStatus(key, id = selectedSessionId) {
   if (id !== selectedSessionId) return;
-  const at = confirmedAt.get(id);
-  const time = at ? new Date(at).toLocaleTimeString() : t("chat.syncNeverConfirmed");
-  syncIndicator.textContent = t(key) + " · " + t("chat.syncLastConfirmed", { time });
+  syncIndicator.textContent = t(key);
   syncIndicator.dataset.status = key;
   syncIndicator.hidden = false;
 }
@@ -37,7 +36,7 @@ async function fetchSessionSnapshot(id, query = {}) {
     })]);
   } finally { clearTimeout(timer); }
 }
-const activeTaskStates = new Set(["running", "queued", "waiting_user", "waiting_resource", "stopping"]);
+const activeTaskStates = new Set(["running", "queued", "waiting_user", "stopping"]);
 function reconcileStopRequest(id, task) {
   const request = stopRequests.get(id);
   if (request && (request.taskId !== task?.id || !activeTaskStates.has(task?.state))) stopRequests.delete(id);
@@ -50,38 +49,13 @@ function updateComposerAction() {
   const stopping = composerStopping();
   const key = stopping ? "composer.stopping" : activeTaskStates.has(displayedTask?.state) ? "composer.supplement" : "composer.newTask";
   const label = t(key);
-  document.getElementById("composer-action").textContent = label;
   send.title = label; send.setAttribute("aria-label", label);
-  send.toggleAttribute("disabled", stopping || !selectedSessionId);
+  send.toggleAttribute("disabled", stopping || !selectedSessionId || selectedArchived);
   stop.toggleAttribute("disabled", stopping);
   const feedback = document.getElementById("composer-stop-feedback");
   feedback.hidden = stopRequests.get(selectedSessionId)?.state !== "failed";
   feedback.textContent = feedback.hidden ? "" : t("composer.stopFailed");
 }
-let panelCommandSnapshot = { revision: -1, command: null };
-function showShutdown(state) {
-  const bar = document.getElementById("shutdown-status");
-  bar.hidden = !["stopping", "failed"].includes(state?.state);
-  if (bar.hidden) return;
-  bar.querySelector("span").textContent = t(`lifecycle.${state.state}`, state);
-  document.getElementById("cancel-exit").hidden = state.state !== "stopping";
-}
-function showPanelCommand(snapshot) {
-  if (!Number.isInteger(snapshot?.revision) || snapshot.revision < panelCommandSnapshot.revision) return;
-  panelCommandSnapshot = snapshot;
-  const bar = document.getElementById("panel-command"), command = snapshot.command;
-  if (!bar) return;
-  bar.hidden = !command;
-  if (!command) return;
-  bar.querySelector("span").textContent = t(`panel.${command.state}`, {
-    action: t(`panel.${command.action}`), owner: command.waitingFor?.holders?.[0]?.name || t("activity.otherTask"),
-    error: command.error || (command.result?.error ? fmtIpc(command.result.error) : command.result?.summary) || t("common.unknown"),
-  });
-  document.getElementById("panel-command-cancel").hidden = command.state !== "queued";
-  document.getElementById("panel-command-dismiss").hidden = ["queued", "running"].includes(command.state);
-  document.getElementById("panel-command-recover").hidden = !["queued", "failed"].includes(command.state);
-}
-
 function showPendingModel(model) {
   pendingModelIndicator.hidden = !model;
   pendingModelIndicator.textContent = model ? t("chat.modelDeferred", { model: model.providerId + "/" + model.modelId }) : "";
@@ -91,34 +65,15 @@ function showTaskState(task) {
   displayedTask = task;
   reconcileStopRequest(selectedSessionId, task);
   const labels = { running: "chat.task.running", waiting_user: "chat.task.waitingUser", stopping: "chat.task.stopping",
-    queued: "activity.capacityQueue", waiting_resource: "activity.waitingResource", cancelled: "activity.cancelled",
+    queued: "activity.capacityQueue", cancelled: "activity.cancelled",
     completed: "chat.task.completed", failed: "chat.task.failed", stopped: "chat.task.stopped", interrupted: "chat.task.interrupted" };
-  taskIndicator.hidden = !task;
+  taskIndicator.hidden = !task || ["running", "completed"].includes(task.state);
   taskIndicator.textContent = task ? t(labels[task.state] ?? "chat.task.running") : "";
-  if (["failed", "stopped", "cancelled"].includes(task?.state)) {
-    const reason = el("div", "task-terminal-reason", task.error || t(`chat.terminal.${task.state}Reason`));
-    taskIndicator.appendChild(reason);
-    taskIndicator.appendChild(el("div", "task-terminal-next", t(`chat.terminal.${task.state}Next`)));
-  }
-  if (["interrupted", "failed", "stopped"].includes(task?.state)) {
-    if (task.state === "interrupted") taskIndicator.appendChild(el("span", null, " · " + t("chat.recovery.explanation") + " "));
-    const target = { sessionId: selectedSessionId, taskId: task.id };
-    const recover = el("button", "recover-task", t("chat.recovery.action"));
-    recover.addEventListener("click", () => {
-      if (selectedSessionId !== target.sessionId || selectedTaskId !== target.taskId || busy) return;
-      const instruction = t(task.state === "interrupted" ? "chat.recovery.prompt" : `chat.terminal.${task.state}Prompt`);
-      if (!input.value.includes(instruction)) input.value += (input.value.trim() ? "\n\n" : "") + instruction;
-      draftRevision++; autosize(); scheduleWorkspaceSave(); input.focus();
-    });
-    taskIndicator.appendChild(recover);
-  }
-  if (task?.state === "waiting_resource" && task.waitingFor) {
-    const holder = task.waitingFor.holders?.[0];
-    const resource = task.waitingFor.resources?.find(key => key.startsWith("fs:"));
-    const name = resource?.slice(3).split("/").filter(Boolean).at(-1)
-      ?? (task.waitingFor.resources?.includes("foundry:page") ? "Foundry" : t("activity.resource"));
-    taskIndicator.textContent = t("activity.resourceWait", { resource: name,
-      owner: holder?.taskId === task.id ? t("activity.currentOperation") : holder?.name || t("activity.otherTask") });
+  if (task?.state === "failed") {
+    taskIndicator.textContent = "";
+    taskIndicator.appendChild(errorDetail(task.error));
+  } else if (["stopped", "cancelled"].includes(task?.state) && task.error && !/^(?:AbortError:\s*)?This operation was aborted\.?$/i.test(task.error.trim())) {
+    taskIndicator.appendChild(errorDetail(task.error));
   }
   updateComposerAction();
 }
@@ -191,6 +146,7 @@ const modeSegs = {
   combat: document.getElementById("mode-seg-combat"),
 };
 const dirChip = document.getElementById("dir-chip");
+const queueList = document.getElementById("queue-list");
 const scrollBottomBtn = document.getElementById("scroll-bottom");
 const togglePanelBtn = document.getElementById("toggle-panel");
 const welcome = document.getElementById("welcome");
@@ -217,8 +173,13 @@ let currentMode = "prep";
 let currentModeGeneration = 0;
 let selectedSessionId = null;
 let selectedTaskId = null;
-const { EventInbox, WorkspaceStore, BoundedCache } = /** @type {any} */ (globalThis).ArcaneConversationState;
-const eventInbox = new EventInbox();
+const { SnapshotEvents, WorkspaceStore } = /** @type {any} */ (globalThis).ArcaneConversationState;
+const eventInbox = new SnapshotEvents();
+async function withSnapshotEvents(operation) {
+  const captured = eventInbox.begin();
+  try { return await operation(captured); }
+  finally { eventInbox.end(captured); }
+}
 const workspaceStore = new WorkspaceStore();
 let viewSeq = 0;
 let viewEpoch = null;
@@ -229,71 +190,56 @@ let draftRevision = 0;
 let navigationRequest = 0;
 const workspaceReady = new Set();
 const syncingSessions = new Map();
-const snapshotCache = new BoundedCache();
 const deletedSessions = new Set();
 function forgetSession(id) {
   if (!id) return;
   stopRequests.delete(id);
-  confirmedAt.delete(id); syncAttemptAt.delete(id);
-  for (const attention of snapshotCache.get(id)?.attentions ?? []) {
-    attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id);
-  }
-  deletedSessions.add(id); eventInbox.remove(id); snapshotCache.delete(id);
+  deletedSessions.add(id);
   workspaceReady.delete(id); syncingSessions.delete(id); outboxBySession.delete(id);
-  for (const [mode, selected] of lastSessionByMode) if (selected === id) lastSessionByMode.delete(mode);
   const cleanup = workspaceStore.remove(id).catch(() => {});
   if (selectedSessionId === id) {
     snapshotRequest++; selectedSessionId = null; selectedTaskId = null;
-    historyPage = null; pendingHistoryAnchor = null; historyRetry = null; historyPageRequest++;
-    workspaceStore.setActive(null);
+    historyPage = null; historyRetry = null; historyPageRequest++;
     resetConversation(); input.value = ""; pendingImages = []; draftRevision++; renderAttachStrip();
     attentionDrafts.clear(); attentionAttempts.clear(); showTaskState(null); showPendingModel(null);
-    document.getElementById("conversation-title").textContent = "";
   }
   return cleanup;
 }
-async function syncDeletedSessions() {
-  const result = await window.arcane.deletedSessions?.();
-  await Promise.all((result?.sessionIds ?? []).map(forgetSession));
+async function reconcileWorkspaces() {
+  const result = await window.arcane.sessionIdentities?.();
+  if (!result?.ok) return;
+  const existing = new Set(result.sessionIds);
+  const known = new Set([...(await workspaceStore.keys()), ...outboxBySession.keys()]);
+  if (selectedSessionId) known.add(selectedSessionId);
+  await Promise.all([...known].filter(id => !existing.has(id)).map(forgetSession));
 }
-const lastSessionByMode = new Map();
 let workspaceSaveTimer;
 let activityView = null;
 let activityReady = false;
 let historyPage = null;
 let historyPageRequest = 0;
-let pendingHistoryAnchor = null;
 let historyRetry = null;
 
-function snapshotContainsAnchor(payload, key) {
-  const plain = key.replace(/^(?:think:|work:)/, "");
-  return (payload.history ?? []).some(row => [row.key, row.legacyKey, row.role + ":" + row.ts].includes(plain)
-    || row.toolCalls?.some(call => "tool:" + call.id === plain))
-    || (!payload.historyPage?.hasNewer && payload.inFlight?.streaming?.some(row => row.key === plain))
-    || (!payload.historyPage?.hasNewer && payload.inFlight?.tools?.some(row => "tool:" + row.toolCallId === plain && (!payload.historyPage || row.state === "running")))
-    || payload.attentions?.some(row => "attention:" + row.id === key);
-}
-
 async function showHistoryPage(query = {}, intent = "latest") {
-  const id = selectedSessionId, request = ++historyPageRequest, navigation = navigationRequest;
-  if (!id) return;
-  saveWorkspace();
-  document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
-  try {
-    const observedEpoch = eventInbox.epoch(id);
-    const payload = await fetchSessionSnapshot(id, query);
-    if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
-    if (!payload.ok) throw new Error(payload.code);
-    if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("Stale history snapshot");
-    await installSnapshot(payload, intent);
-  } catch {
-    if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
-      historyRetry = { id, query, intent };
-      showSyncStatus("chat.historyFailed", id);
+  return withSnapshotEvents(async captured => {
+    const id = selectedSessionId, request = ++historyPageRequest, navigation = navigationRequest;
+    if (!id) return;
+    saveWorkspace();
+    document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = true; });
+    try {
+      const payload = await fetchSessionSnapshot(id, query);
+      if (id !== selectedSessionId || request !== historyPageRequest || navigation !== navigationRequest) return;
+      if (!payload.ok) throw new Error(payload.code);
+      await installSnapshot(payload, intent, captured);
+    } catch {
+      if (id === selectedSessionId && request === historyPageRequest && navigation === navigationRequest) {
+        historyRetry = { id, query, intent };
+        showSyncStatus("chat.historyFailed", id);
+      }
+    } finally {
+      if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
     }
-  } finally {
-    if (id === selectedSessionId && request === historyPageRequest) document.querySelectorAll(".history-page-button").forEach(button => { if (button instanceof HTMLButtonElement) button.disabled = false; });
-  }
+  });
 }
 
 function renderHistoryNavigation() {
@@ -304,8 +250,8 @@ function renderHistoryNavigation() {
     node.addEventListener("click", () => { void showHistoryPage(query, intent); });
     return node;
   };
-  if (historyPage.hasOlder) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
-  if (historyPage.hasNewer) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
+  if (historyPage.hasOlder && historyPage.firstKey != null) messages.prepend(button("chat.historyOlder", { before: historyPage.firstKey }, "older"));
+  if (historyPage.hasNewer && historyPage.lastKey != null) messages.append(button("chat.historyNewer", { after: historyPage.lastKey }, "newer"));
 }
 
 function scheduleWorkspaceSave() {
@@ -315,195 +261,173 @@ function scheduleWorkspaceSave() {
 
 function saveWorkspace() {
   if (restoringView || !selectedSessionId || !workspaceReady.has(selectedSessionId)) return;
-  const top = messages.getBoundingClientRect().top;
-  const anchor = [...messages.querySelectorAll("[data-item-key]")].find(node => node.getBoundingClientRect().bottom > top);
-  const expansionStates = new Map((workspaceStore.cache.get(selectedSessionId)?.expansions ?? [])
-    .filter(state => /^(?:tool:|think:|work:)/.test(state.key)).map(state => [state.key, state]));
-  for (const node of messages.querySelectorAll("details[data-item-key], .card[data-item-key], .think[data-item-key]")) {
-    const state = {
-    key: /** @type {HTMLElement} */ (node).dataset.itemKey,
-    open: node instanceof HTMLDetailsElement ? node.open : node.classList.contains("open"),
-    };
-    expansionStates.set(state.key, state);
-  }
-  const expansions = [...expansionStates.values()];
-  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages, followLatest: pendingHistoryAnchor ? false : followLatest,
+  workspaceStore.save(selectedSessionId, { draft: input.value, images: pendingImages,
     attentionDrafts: Object.fromEntries([...attentionCards.keys()].map(id => [id, attentionDrafts.get(id) ?? ""])),
     attentionAttempts: Object.fromEntries([...attentionCards.keys()].filter(id => attentionAttempts.has(id)).map(id => [id, attentionAttempts.get(id)])),
-    outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })),
-    anchor: pendingHistoryAnchor ?? (anchor ? { key: /** @type {HTMLElement} */ (anchor).dataset.itemKey, offset: anchor.getBoundingClientRect().top - top } : null),
-    expansions }).catch(() => { input.title = t("chat.draftSaveFailed"); });
+    outbox: [...outboxFor(selectedSessionId).values()].map(item => ({ ...item, sending: false })) }).catch(() => { input.title = t("chat.draftSaveFailed"); });
 }
 
-async function installSnapshot(payload, pageIntent = null, fromCache = false) {
-  const id = payload.session?.id;
-  if (!id || deletedSessions.has(id)) return;
-  const token = ++snapshotRequest;
-  const changed = selectedSessionId !== id;
-  historyRetry = null;
-  activityReady = false;
-  saveWorkspace();
-  if (payload.mode) lastSessionByMode.set(payload.mode, id);
-  restoringView = true;
-  syncIndicator.hidden = true;
-  selectedSessionId = id;
-  if (!fromCache) confirmedAt.set(id, Date.now());
-  else showSyncStatus("chat.syncCached", id);
-  workspaceStore.setActive(id);
-  selectedTaskId = payload.task?.id ?? null;
-  document.getElementById("conversation-title").textContent = payload.session.name || "";
-  showTaskState(payload.task);
-  showRetry(payload.inFlight?.retry);
-  showPendingModel(payload.pendingModel);
-  viewSeq = payload.inFlight?.seq ?? 0;
-  viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
-  if (payload.mode) applyModeUi(payload.mode, payload.cwd);
-  if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
-  const revision = draftRevision;
-  setTimeout(() => {
-    if (token === snapshotRequest && restoringView) showSyncStatus("chat.syncing", id);
-  }, 1000);
-  let saved;
-  try { saved = await workspaceStore.load(id); } catch { saved = {}; }
-  if (token !== snapshotRequest || selectedSessionId !== id) return;
-  pendingHistoryAnchor = null;
-  let restoreError = false;
-  let anchorUnavailable = false;
-  if (!pageIntent && payload.historyPage && saved.followLatest === false && saved.anchor
-    && !snapshotContainsAnchor(payload, saved.anchor.key)) {
-    const observedEpoch = eventInbox.epoch(id);
-    try {
-      const around = await fetchSessionSnapshot(id, { around: saved.anchor.key });
-      if (token !== snapshotRequest || selectedSessionId !== id) return;
-      if (around.code === "HISTORY_CURSOR_NOT_FOUND") { saved = { ...saved, anchor: null, followLatest: true }; anchorUnavailable = true; }
-      else if (!around.ok || !eventInbox.acceptSnapshot(id, around.inFlight?.runtimeEpoch, observedEpoch)) throw new Error("History restore failed");
-      else { payload = around; fromCache = false; confirmedAt.set(id, Date.now()); }
-    } catch {
-      if (token !== snapshotRequest || selectedSessionId !== id) return;
-      pendingHistoryAnchor = saved.anchor; restoreError = true;
+async function installSnapshot(payload, pageIntent = "latest", requestEvents = []) {
+  return withSnapshotEvents(async captured => {
+    const id = payload.session?.id;
+    if (!id || deletedSessions.has(id)) return;
+    const token = ++snapshotRequest;
+    const changed = selectedSessionId !== id;
+    const keepReading = !changed && pageIntent === "refresh" && !followLatest;
+    const previousSeq = viewSeq, previousEpoch = viewEpoch;
+    historyRetry = null;
+    activityReady = false;
+    saveWorkspace();
+    restoringView = true;
+    syncIndicator.hidden = true;
+    selectedSessionId = id;
+    selectedArchived = (navigationView?.rows.get(id)?.archivedAt ?? payload.session?.archivedAt) != null;
+    updateArchivedView();
+    lastContactAt = Date.now();
+
+    selectedTaskId = payload.task?.id ?? null;
+    showTaskState(payload.task);
+    showRetry(payload.inFlight?.retry);
+    showPendingModel(payload.pendingModel);
+    viewSeq = payload.inFlight?.seq ?? 0;
+    viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+    if (payload.mode) applyModeUi(payload.mode, payload.cwd);
+    if (changed) { input.value = ""; pendingImages = []; attentionDrafts.clear(); attentionAttempts.clear(); draftRevision++; renderAttachStrip(); }
+    const revision = draftRevision;
+    setTimeout(() => {
+      if (token === snapshotRequest && restoringView) showSyncStatus("chat.syncing", id);
+    }, 1000);
+    let saved;
+    try { saved = await workspaceStore.load(id); } catch { saved = {}; }
+    if (token !== snapshotRequest || selectedSessionId !== id) return;
+    if (!keepReading) historyPage = payload.historyPage ?? null;
+    // keepReading 是"翻旧页不要被拽走",不是无中生有:只有之前已经 hasNewer 才保留,
+    // 否则按 payload 的实际值——无差别置 true 会造出点进去是空页的「查看后续消息」
+    else if (historyPage) historyPage = { ...historyPage, hasNewer: historyPage.hasNewer || Boolean(payload.historyPage?.hasNewer) };
+    selectedTaskId = payload.task?.id ?? null;
+    showTaskState(payload.task); showPendingModel(payload.pendingModel);
+    viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
+    if (keepReading && viewEpoch === previousEpoch) viewSeq = Math.max(viewSeq, previousSeq);
+    if (!keepReading) renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy), historyPage);
+    else { setBusy(Boolean(payload.busy)); messages.querySelectorAll(".history-page-button").forEach(node => node.remove()); }
+    renderHistoryNavigation();
+    if (payload.modelLabel) updateModelLabels(payload.modelLabel);
+    if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
+    for (const attention of payload.attentions ?? []) renderAttention(attention);
+    for (const approval of payload.approvals ?? []) addApprovalCard(approval);
+    if (payload.recoveryWarning) addStatus(payload.recoveryWarning);
+    resetInputStates();
+    for (const item of payload.inputs ?? []) {
+      noteInputState(item.commandId, item.state, { inputId: item.id, text: item.text, images: item.images }, true);
+      if (item.state === "interrupted") {
+        renderRecoveredInput(item);
+        continue;
+      }
+      if (item.state === "queued") {
+        // 备团排队消息只在队列列表;战斗(steer 瞬时态)维持气泡回显。
+        if (currentMode !== "prep" && ensureInputBubble(item.commandId)) updateInputReceipt(item.commandId, item.state);
+        continue;
+      }
+      const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
+      if (historyNode instanceof HTMLElement) {
+        historyNode.dataset.commandId = item.commandId;
+        updateInputReceipt(item.commandId, item.state);
+        continue;
+      }
+      if (["accepted", "dispatching", "context"].includes(item.state)) {
+        if (ensureInputBubble(item.commandId)) updateInputReceipt(item.commandId, item.state);
+      }
     }
-  }
-  snapshotCache.set(id, payload);
-  historyPage = payload.historyPage ?? null;
-  selectedTaskId = payload.task?.id ?? null;
-  showTaskState(payload.task); showPendingModel(payload.pendingModel);
-  viewSeq = payload.inFlight?.seq ?? 0; viewEpoch = payload.inFlight?.runtimeEpoch ?? null;
-  renderHistory(payload.history ?? [], payload.inFlight, Boolean(payload.busy), historyPage);
-  renderHistoryNavigation();
-  if (payload.modelLabel) updateModelLabels(payload.modelLabel);
-  if (typeof payload.supportsImages === "boolean") modelSupportsImages = payload.supportsImages;
-  for (const attention of payload.attentions ?? []) renderAttention(attention);
-  for (const approval of payload.approvals ?? []) addApprovalCard(approval);
-  for (const item of payload.inputs ?? []) {
-    const historyNode = item.messageKey ? messageNode(item.messageKey) : null;
-    if (historyNode instanceof HTMLElement) {
-      historyNode.dataset.commandId = item.commandId;
-      updateInputReceipt(item.commandId, item.state);
-      continue;
+    const replay = eventInbox.after([...requestEvents, ...captured], id, viewEpoch, viewSeq);
+    restoringView = false;
+    if (replay === null) { setTimeout(() => { void resyncSelected(); }, 0); return; }
+    for (const event of replay) receiveEvent(event, true);
+    if (token !== snapshotRequest || selectedSessionId !== id) return;
+    for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
+    for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
+    for (const [attentionId, card] of attentionCards) {
+      const answer = card.querySelector("textarea");
+      if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
     }
-    if (["accepted", "queued", "dispatching", "context"].includes(item.state)) {
-      const node = addMessage("user", item.text, undefined, "input:" + item.commandId);
-      node.dataset.commandId = item.commandId;
-      updateInputReceipt(item.commandId, item.state);
+    workspaceReady.add(id);
+    if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, { ...item, recovered: true, sending: false }])));
+    const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
+    for (const [commandId, submission] of outboxFor(id)) {
+      if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
+      if (submission.recovered) { renderRecoveredInput({ ...submission, commandId }, submission); continue; }
+      const node = submissionNode(submission);
+      updateInputReceipt(commandId, "uncertain");
+      const retry = el("button", "retry-input", t("chat.input.retry"));
+      retry.addEventListener("click", () => { void sendSubmission(submission); });
+      mountRetryInput(node, retry);
     }
-  }
-  const replay = eventInbox.acceptSnapshot(id, viewEpoch) ? eventInbox.after(id, viewEpoch, viewSeq) : null;
-  restoringView = false;
-  if (replay === null) { void resyncSelected(); return; }
-  for (const event of replay) receiveEvent(event, true);
-  if (token !== snapshotRequest || selectedSessionId !== id) return;
-  for (const [attentionId, draft] of Object.entries(saved.attentionDrafts ?? {})) if (!attentionDrafts.has(attentionId)) attentionDrafts.set(attentionId, draft);
-  for (const [attentionId, attempt] of Object.entries(saved.attentionAttempts ?? {})) if (!attentionAttempts.has(attentionId)) attentionAttempts.set(attentionId, attempt);
-  for (const [attentionId, card] of attentionCards) {
-    const answer = card.querySelector("textarea");
-    if (answer && !answer.value) answer.value = attentionDrafts.get(attentionId) ?? "";
-  }
-  workspaceReady.add(id);
-  if (!outboxBySession.has(id)) outboxBySession.set(id, new Map((saved.outbox ?? []).map(item => [item.context.commandId, item])));
-  const acceptedCommands = new Set([...(payload.acceptedCommandIds ?? []), ...(payload.inputs ?? []).map(item => item.commandId)]);
-  for (const [commandId, submission] of outboxFor(id)) {
-    if (acceptedCommands.has(commandId)) { outboxFor(id).delete(commandId); continue; }
-    const node = submissionNode(submission);
-    updateInputReceipt(commandId, "uncertain");
-    const retry = el("button", "retry-input", t("chat.input.retry"));
-    retry.addEventListener("click", () => { void sendSubmission(submission); });
-    node.appendChild(retry);
-  }
-  if (revision === draftRevision) {
-    input.value = saved.draft ?? "";
-    pendingImages = saved.images ?? [];
-    renderAttachStrip(); autosize();
-  }
-  followLatest = pageIntent ? pageIntent === "latest" : saved.followLatest !== false;
-  if (historyPage?.hasNewer) followLatest = false;
-  for (const state of saved.expansions ?? []) {
-    const node = messageNode(state.key);
-    if (node instanceof HTMLDetailsElement) node.open = state.open;
-    else node?.classList.toggle("open", state.open);
-  }
-  if (followLatest) scrollToEnd(true);
-  else if (pageIntent) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
-  else if (saved.anchor) {
-    const anchor = messageNode(saved.anchor.key);
-    if (anchor) messages.scrollTo({ top: messages.scrollTop + anchor.getBoundingClientRect().top - messages.getBoundingClientRect().top - saved.anchor.offset, behavior: "instant" });
-  }
-  updateScrollButton();
-  activityReady = true;
-  syncIndicator.hidden = !restoreError && !anchorUnavailable && !fromCache;
-  if (restoreError) showSyncStatus("chat.historyFailed", id);
-  else if (anchorUnavailable) showSyncStatus("chat.historyMoved", id);
-  else if (fromCache) showSyncStatus("chat.syncCached", id);
-  activityView?.render();
-  pruneOutboxes();
-  if (changed) refreshSessions();
+    if (revision === draftRevision) {
+      input.value = saved.draft ?? "";
+      pendingImages = saved.images ?? [];
+      renderAttachStrip(); autosize();
+    }
+    followLatest = !keepReading && !["older", "newer"].includes(pageIntent) && !historyPage?.hasNewer;
+    if (followLatest) scrollToEnd(true);
+    else if (!keepReading) messages.scrollTo({ top: pageIntent === "older" ? messages.scrollHeight : 0, behavior: "instant" });
+    updateScrollButton();
+    activityReady = true;
+    if (changed || pageIntent === "latest") void activityView?.opened(id);
+    syncIndicator.hidden = true;
+
+    if (revision !== draftRevision) saveWorkspace();
+    activityView?.render();
+    pruneOutboxes();
+    if (changed) refreshSessions();
+  });
 }
 
 async function resyncSelected() {
-  const id = selectedSessionId;
-  const token = snapshotRequest;
-  const navigation = navigationRequest;
-  if (!id) return;
-  const previous = syncingSessions.get(id);
-  if (previous?.navigation === navigation) return;
-  const request = { token, navigation };
-  syncingSessions.set(id, request);
-  syncAttemptAt.set(id, Date.now());
-  const stillCurrent = () => selectedSessionId === id && snapshotRequest === token && navigationRequest === navigation;
-  const indicatorTimer = setTimeout(() => {
-    if (stillCurrent()) showSyncStatus("chat.syncing", id);
-  }, 1000);
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const observedEpoch = eventInbox.epoch(id);
+  return withSnapshotEvents(async captured => {
+    const id = selectedSessionId;
+    const token = snapshotRequest;
+    const navigation = navigationRequest;
+    if (!id) return;
+    const previous = syncingSessions.get(id);
+    if (previous?.navigation === navigation) return;
+    const request = { token, navigation };
+    syncingSessions.set(id, request);
+    lastContactAt = Date.now();
+    const stillCurrent = () => selectedSessionId === id && snapshotRequest === token && navigationRequest === navigation;
+    const indicatorTimer = setTimeout(() => {
+      if (stillCurrent()) showSyncStatus("chat.syncing", id);
+    }, 1000);
+    try {
       saveWorkspace();
-      const saved = workspaceStore.cache.get(id);
-      const query = saved?.followLatest === false && saved.anchor ? { around: saved.anchor.key } : {};
-      let payload = await fetchSessionSnapshot(id, query);
-      if (!stillCurrent()) return;
-      if (payload.code === "HISTORY_CURSOR_NOT_FOUND") payload = await fetchSessionSnapshot(id, {});
+      const payload = await fetchSessionSnapshot(id);
       if (!stillCurrent()) return;
       if (!payload.ok) throw new Error(payload.code);
-      if (!eventInbox.acceptSnapshot(id, payload.inFlight?.runtimeEpoch, observedEpoch)) continue;
-      await installSnapshot(payload);
-      return;
+      await installSnapshot(payload, "refresh", captured);
+    } catch {
+      if (stillCurrent()) showSyncStatus("chat.syncFailed", id);
+    } finally {
+      clearTimeout(indicatorTimer);
+      if (syncingSessions.get(id) === request) syncingSessions.delete(id);
+      activityView?.updateReading();
     }
-    throw new Error("Session runtime changed during synchronization");
-  } catch {
-    if (stillCurrent()) showSyncStatus("chat.syncFailed", id);
-  } finally {
-    clearTimeout(indicatorTimer);
-    if (syncingSessions.get(id) === request) syncingSessions.delete(id);
-    activityView?.scheduleRead();
-  }
+  });
 }
 
 function receiveEvent(event, replay = false) {
-  if (event.type === "shutdown_state") { showShutdown(event); return; }
+  if (event.type === "navigation_changed") {
+    if (navigationView?.rows.has(event.sessionId)) {
+      const row = navigationView.rows.get(event.sessionId);
+      delete row.archivedAt; delete row.pinnedOrder; delete row.customTitle;
+      Object.assign(row, event.metadata);
+      updateArchivedView();
+    }
+    void refreshSessions(); return;
+  }
+  if (event.type === "panel_pointer") { navigationView?.searchDialog?.close(); setDrawer(false); return; }
   if (event.type === "activity_removed") forgetSession(event.sessionId);
   else if (event.sessionId && deletedSessions.has(event.sessionId)) return;
   if (event.type === "notification_target") { if (activityReady) void openNotificationTarget(); return; }
   if (activityView?.receive(event)) return;
-  if (!replay && eventInbox.record(event) === false) return;
+  if (!replay) eventInbox.record(event);
   if (!replay && (["message", "agent_end"].includes(event.type) || (event.type === "input_state" && event.state === "consumed"))) scheduleSessionMetadata();
   if (event.type === "task_state" && event.sessionId &&
     (stopRequests.get(event.sessionId)?.taskId === event.task.id || ["running", "queued"].includes(event.task.state))) {
@@ -514,15 +438,15 @@ function receiveEvent(event, replay = false) {
     if (event.runtimeEpoch !== viewEpoch || event.seq > viewSeq + 1) { void resyncSelected(); return; }
     if (event.seq <= viewSeq) return;
     viewSeq = event.seq;
-    if (!replay) confirmedAt.set(event.sessionId, Date.now());
+    if (!replay) lastContactAt = Date.now();
     if (historyPage?.hasNewer && ["message", "message_delta", "tool_start", "tool_end", "agent_settled", "compaction_start", "compaction_end"].includes(event.type)
       && !toolCards.has(event.toolCallId) && !streamBubbles.has(event.key) && !thinkBlocks.has(event.key)) {
-      updateScrollButton(); activityView?.scheduleRead(); return;
+      updateScrollButton(); activityView?.updateReading(); return;
     }
   }
   onEvent(event);
   if (event.sessionId === selectedSessionId && event.type === "agent_end" && historyPage && messages.children.length > 220) void resyncSelected();
-  activityView?.scheduleRead();
+  activityView?.updateReading();
 }
 /** @type {"combat" | "prep"} */
 let requestedMode = currentMode;
@@ -558,12 +482,103 @@ function syncDirChip() {
   dirChip.style.display = currentMode === "prep" && conversationEmpty ? "" : "none";
 }
 
+// 备团队列列表(spec §3⑤):排队消息不进对话流,在 composer 上方成行(立即/编辑/删除)。
+// 按 commandId 跟踪 input_state 迁移;恢复快照时整体重建;事件只在查看该会话时到达。
+const inputMetaByCommand = new Map(); // commandId -> { inputId, text, images }
+const inputStateByCommand = new Map(); // commandId -> 非终态 state
+const inputTerminalStates = ["consumed", "handled", "cancelled", "failed", "interrupted"];
+
+function inputBubbleNode(commandId) {
+  return /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(commandId) + '"]'));
+}
+function ensureInputBubble(commandId) {
+  const existing = inputBubbleNode(commandId);
+  if (existing) return existing;
+  const meta = inputMetaByCommand.get(commandId);
+  if (!meta || typeof meta.text !== "string") return null;
+  const node = addMessage("user", meta.text, meta.images, "input:" + commandId);
+  node.dataset.commandId = commandId;
+  return node;
+}
+
+function syncQueueList() {
+  const queued = [...inputStateByCommand.entries()].filter(([, state]) => state === "queued");
+  const show = currentMode === "prep" && queued.length > 0;
+  queueList.style.display = show ? "" : "none";
+  input.placeholder = show ? t("chat.input.queuePlaceholder") : t("composer.placeholder");
+  if (!show) return;
+  queueList.textContent = "";
+  let ord = 0;
+  for (const [commandId] of queued) {
+    ord += 1;
+    const meta = inputMetaByCommand.get(commandId);
+    const row = el("div", "queue-row");
+    row.appendChild(el("span", "queue-ord", `${ord}.`));
+    row.appendChild(el("span", "queue-text", meta?.text ?? ""));
+    for (const [action, label, titleKey] of /** @type {const} */ ([
+      ["steer", "↑", "chat.input.queueNow"],
+      ["edit", "✎", "chat.input.queueEdit"],
+      ["cancel", "×", "chat.input.queueRemove"],
+    ])) {
+      const button = el("button", "", label);
+      button.title = t(titleKey);
+      button.addEventListener("click", () => void queueAction(commandId, action));
+      row.appendChild(button);
+    }
+    queueList.appendChild(row);
+  }
+}
+
+function noteInputState(commandId, state, meta = null, fromSnapshot = false) {
+  if (meta) inputMetaByCommand.set(commandId, { ...inputMetaByCommand.get(commandId), ...meta });
+  const previous = inputStateByCommand.get(commandId);
+  if (previous === state) return;
+  if (inputTerminalStates.includes(state)) inputStateByCommand.delete(commandId);
+  else inputStateByCommand.set(commandId, state);
+  // 气泡迁移(仅备团实时事件):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
+  // 快照恢复不走这里——installSnapshot 的 inputs 循环自己负责落位(给历史节点打
+  // data-command-id / 补回显),抢跑会在去重标记打好之前往底部重复建气泡。
+  if (!fromSnapshot && currentMode === "prep") {
+    if (state === "queued") inputBubbleNode(commandId)?.remove();
+    else ensureInputBubble(commandId);
+  }
+  syncQueueList();
+}
+
+function resetInputStates() {
+  inputMetaByCommand.clear();
+  inputStateByCommand.clear();
+  syncQueueList();
+}
+
+async function queueAction(commandId, action) {
+  const meta = inputMetaByCommand.get(commandId);
+  if (!meta?.inputId) return;
+  if (action === "edit") {
+    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 事件自动把气泡放回对话流。
+    const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, "cancel");
+    if (result?.ok && typeof meta.text === "string") {
+      input.value = meta.text;
+      autosize();
+      input.focus();
+    }
+    return;
+  }
+  const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, action);
+  // 改道后立即离开用户队列;投递时 context 事件把气泡放回对话流。
+  if (result?.ok && action === "steer") {
+    inputStateByCommand.set(commandId, "dispatching");
+    syncQueueList();
+  }
+}
+
 function applyModeUi(mode, cwd) {
   currentMode = mode === "prep" ? "prep" : "combat";
   modeSegs.prep.classList.toggle("active", currentMode === "prep");
   modeSegs.combat.classList.toggle("active", currentMode === "combat");
   document.body.dataset.mode = currentMode;
   syncDirChip();
+  syncQueueList();
   lastPrepCwd = cwd || null;
   if (cwd) {
     dirChip.textContent = `📁 ${cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd} ⌄`;
@@ -575,39 +590,39 @@ function applyModeUi(mode, cwd) {
 }
 
 async function switchMode(next) {
-  next = next === "prep" ? "prep" : "combat";
-  if (next === requestedMode) return; // 已选中或已有同目标请求在途
-  requestedMode = next;
-  const navigation = ++navigationRequest;
-  const cached = snapshotCache.get(lastSessionByMode.get(next));
-  if (cached) void installSnapshot(cached, null, true);
-  const requestId = ++modeSwitchRequest;
-  let result;
-  try {
-    result = await window.arcane.setMode(next);
-  } catch (error) {
-    if (requestId !== modeSwitchRequest) return;
+  return withSnapshotEvents(async captured => {
+    next = next === "prep" ? "prep" : "combat";
+    if (next === requestedMode) return; // 已选中或已有同目标请求在途
+    requestedMode = next;
+    const navigation = ++navigationRequest;
+    const requestId = ++modeSwitchRequest;
+    let result;
+    try {
+      result = await window.arcane.setMode(next);
+    } catch (error) {
+      if (requestId !== modeSwitchRequest) return;
+      requestedMode = currentMode;
+      // invoke reject(handler 抛错)也要有反馈,不能静默卡在两态分裂里
+      addStatus(t("chat.status.modeSwitchFailed", { error: error?.message ?? "unknown" }));
+      return;
+    }
+    if (requestId !== modeSwitchRequest || navigation !== navigationRequest) return;
+    if (!result?.ok) {
+      requestedMode = currentMode;
+      addStatus(t("chat.status.modeSwitchFailed", {
+        error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
+      }));
+      return;
+    }
+    if (!acceptModeSnapshot(result)) return;
+    applyModeUi(result.mode, result.cwd);
     requestedMode = currentMode;
-    // invoke reject(handler 抛错)也要有反馈,不能静默卡在两态分裂里
-    addStatus(t("chat.status.modeSwitchFailed", { error: error?.message ?? "unknown" }));
-    return;
-  }
-  if (requestId !== modeSwitchRequest || navigation !== navigationRequest) return;
-  if (!result?.ok) {
-    requestedMode = currentMode;
-    addStatus(t("chat.status.modeSwitchFailed", {
-      error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-    }));
-    return;
-  }
-  if (!acceptModeSnapshot(result)) return;
-  applyModeUi(result.mode, result.cwd);
-  requestedMode = currentMode;
-  invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
-  void installSnapshot(result);
-  if (result.modelLabel) updateModelLabels(result.modelLabel);
-  if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
-  refreshSessions();
+    invalidateSlashItems(); // slash 候选按 host 走,换模式必须重拉
+    await installSnapshot(result, "latest", captured);
+    if (result.modelLabel) updateModelLabels(result.modelLabel);
+    if (typeof result.supportsImages === "boolean") modelSupportsImages = result.supportsImages;
+    refreshSessions();
+  });
 }
 
 modeSegs.prep.addEventListener("click", () => switchMode("prep"));
@@ -642,18 +657,20 @@ function scrollToEnd(force = false) {
   if (force && historyPage?.hasNewer) { void showHistoryPage({}, "latest"); return; }
   if (force || followLatest) {
     if (force) followLatest = true;
-    messages.scrollTop = messages.scrollHeight;
+    // Smooth programmatic scrolling emits intermediate positions which look
+    // like a user leaving the live tail and turn off following new output.
+    messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
   }
   updateScrollButton();
 }
 
 function updateScrollButton() {
+  scrollBottomBtn.style.bottom = `${Math.max(12, innerHeight - messages.getBoundingClientRect().bottom + 8)}px`;
   scrollBottomBtn.classList.toggle("show", Boolean(historyPage?.hasNewer) || (!nearBottom() && messages.scrollHeight > messages.clientHeight));
 }
 
 messages.addEventListener("scroll", () => {
   if (!restoringView) followLatest = !historyPage?.hasNewer && nearBottom();
-  if (!restoringView) scheduleWorkspaceSave();
   updateScrollButton();
 });
 scrollBottomBtn.addEventListener("click", () => scrollToEnd(true));
@@ -695,6 +712,31 @@ function renderMarkdown(container, text) {
   } else {
     container.textContent = text;
   }
+}
+
+// ---------- ② 消息体里的 .md 路径 → 右屏阅读器(md-reader-spec §4.2/§8) ----------
+
+// 委托挂在消息列表上而不是每个锚点:历史回显、流式定稿、翻页都会重建消息体,
+// 逐个绑定既漏又贵。锚点没有 href(file:// 下会把整个页面导航走),所以键盘激活也在这里。
+messages.addEventListener("click", event => {
+  if (event.button !== 0) return; // 中键/右键不打开阅读器,留给浏览器默认行为
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (anchor) openNote(/** @type {HTMLElement} */ (anchor));
+});
+messages.addEventListener("keydown", event => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const anchor = /** @type {Element | null} */ (event.target)?.closest("a.md-path");
+  if (!anchor) return;
+  event.preventDefault();
+  openNote(/** @type {HTMLElement} */ (anchor));
+});
+
+/** 把锚点上的原始路径交给 main:规范化、resolve、围栏、读取都在那边一次做完(§7)。
+    结果不消费:读链失败也在阅读器里出错误页,chat 侧不弹任何东西(design-rules R5)。 */
+function openNote(anchor) {
+  const path = anchor.dataset.mdPath;
+  if (!path) return;
+  window.arcane.openMdReader(path).catch(() => { /* main 不可用时聊天本身也已经不可用 */ });
 }
 
 // ---------- messages ----------
@@ -747,6 +789,31 @@ function renderUserText(node, text) {
     const count = inbox[1].split(";").length;
     node.appendChild(el("div", "inbox-note", t("chat.inboxNote", { count })));
   }
+}
+
+function errorDetail(raw) {
+  const text = String(raw || "");
+  const key = /(?:\b401\b|invalid.api.key|invalid_authentication|expired.*key)/i.test(text) ? "chat.error.auth"
+    : /(?:\b403\b|AccessDenied|access.*denied|permission.*denied)/i.test(text) ? "chat.error.access"
+    : /(?:\b429\b|rate.limit|too many requests)/i.test(text) ? "chat.error.rate"
+    : /(?:timeout|timed out)/i.test(text) ? "chat.error.timeout"
+    : /(?:ECONN|ENOTFOUND|fetch failed|network error|ERR_CONNECTION)/i.test(text) ? "chat.error.connection" : "chat.error.generic";
+  const container = el("div", "error-message");
+  container.append(el("div", "error-summary", t(key)));
+  if (text) {
+    const details = el("details", "error-detail");
+    details.append(el("summary", "", t("chat.error.details")), el("pre", "", text));
+    container.append(details);
+  }
+  return container;
+}
+
+function addErrorMessage(raw, key) {
+  closeWorkBlock(); dismissWelcome();
+  const node = el("div", "msg assistant");
+  if (key) node.dataset.itemKey = key;
+  node.append(errorDetail(raw)); messages.append(node); scrollToEnd();
+  return node;
 }
 
 function addMessage(role, text, images, key = null) {
@@ -1280,16 +1347,23 @@ function onEvent(event) {
       showPendingModel(event.model);
       break;
     case "input_state":
+      noteInputState(event.commandId, event.state, { inputId: event.inputId });
       updateInputReceipt(event.commandId, event.state);
       break;
     case "task_state":
       selectedTaskId = event.task.id;
-      setBusy(["running", "stopping", "waiting_user", "queued", "waiting_resource"].includes(event.task.state));
+      setBusy(["running", "stopping", "waiting_user", "queued"].includes(event.task.state));
       showTaskState(event.task);
       break;
     case "message": {
       // 终稿:替换对应流式草稿气泡(同 key),否则新建消息。
       // textI18n:主进程结构化文案(如模型调用失败),显示前本地化。
+      if (event.textI18n?.key === "agent.modelCallFailed") {
+        streamBubbles.get(event.key)?.remove(); streamBubbles.delete(event.key);
+        addErrorMessage(event.textI18n.params?.error, event.key);
+        if (event.key) settleThinkBlock(event.key, event.thinking);
+        break;
+      }
       const finalText = event.textI18n ? t(event.textI18n.key, event.textI18n.params) : event.text;
       const bubble = event.key ? streamBubbles.get(event.key) : null;
       if (bubble) {
@@ -1331,9 +1405,6 @@ function onEvent(event) {
       panelOpen = Boolean(event.open);
       panelDot.classList.toggle("on", panelOpen);
       togglePanelBtn.classList.toggle("open", panelOpen);
-      break;
-    case "panel_command":
-      showPanelCommand(event);
       break;
     case "panel_layout":
       panelLayout.open = Boolean(event.open);
@@ -1395,7 +1466,6 @@ function onEvent(event) {
     case "agent_settled":
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
-      addStatus(t("chat.status.agentReady"));
       break;
     case "agent_end":
       closeWorkBlock();
@@ -1717,9 +1787,7 @@ function pruneOutboxes() {
   }
 }
 const inputStateKeys = {
-  sending: "chat.input.sending", accepted: "chat.input.accepted", queued: "chat.input.queued",
-  dispatching: "chat.input.dispatching", context: "chat.input.context", consumed: "chat.input.consumed",
-  handled: "chat.input.handled", failed: "chat.input.failed", cancelled: "chat.input.cancelled",
+  failed: "chat.input.failed", send_failed: "chat.input.sendFailed", cancelled: "chat.input.cancelled",
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
 function outboxFor(id) {
@@ -1730,10 +1798,19 @@ function outboxFor(id) {
 function updateInputReceipt(commandId, state) {
   const node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(commandId) + '"]'));
   if (!node) return;
+  node.dataset.inputState = state;
+  if (!["failed", "send_failed", "uncertain"].includes(state)) node.querySelector(".retry-input")?.remove();
+  if (!["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state)) {
+    node.querySelector(".input-state")?.remove();
+    return;
+  }
   let receipt = node.querySelector(".input-state");
   if (!receipt) { receipt = el("div", "input-state status-line"); node.appendChild(receipt); }
   receipt.textContent = t(inputStateKeys[state] ?? inputStateKeys.uncertain);
-  node.dataset.inputState = state;
+}
+/** 重试按钮挂进回执行(有回执时),与状态文字同一行;没有回执则落气泡末尾。 */
+function mountRetryInput(card, retry) {
+  (card.querySelector(".input-state") ?? card).appendChild(retry);
 }
 function submissionNode(submission) {
   let node = /** @type {HTMLElement} */ (messages.querySelector('[data-command-id="' + CSS.escape(submission.context.commandId) + '"]'));
@@ -1743,11 +1820,35 @@ function submissionNode(submission) {
   }
   return node;
 }
+function renderRecoveredInput(item, oldSubmission = null) {
+  const node = item.messageKey ? messageNode(item.messageKey) : null;
+  const card = node ?? addMessage("user", item.text, item.images, "input:" + item.commandId);
+  card.dataset.commandId = item.commandId;
+  updateInputReceipt(item.commandId, "interrupted");
+  card.querySelector(".retry-input")?.remove();
+  const retry = el("button", "retry-input", t("chat.input.retry"));
+  retry.addEventListener("click", () => {
+    if (composerStopping() || selectedArchived) return;
+    const submission = { context: { ...modeContext(), commandId: crypto.randomUUID(), replacesInputId: item.id },
+      text: item.text, images: item.images ?? [], sending: false };
+    if (oldSubmission) outboxFor(selectedSessionId).delete(oldSubmission.context.commandId);
+    outboxFor(selectedSessionId).set(submission.context.commandId, submission);
+    retry.remove(); saveWorkspace();
+    void sendSubmission(submission);
+  });
+  mountRetryInput(card, retry);
+}
+
 async function sendSubmission(submission) {
   const id = submission.context.sessionId;
   if ((selectedSessionId === id && composerStopping()) || stopRequests.get(id)?.state === "pending") return;
   if (submission.sending) return;
   submission.sending = true;
+  // 队列列表的行数据源:inputId 由后续 input_state 事件合并进来(spec §3⑤)。
+  inputMetaByCommand.set(submission.context.commandId, {
+    ...inputMetaByCommand.get(submission.context.commandId),
+    text: submission.text, images: submission.images,
+  });
   if (selectedSessionId === id) {
     submissionNode(submission).querySelector(".retry-input")?.remove();
     updateInputReceipt(submission.context.commandId, "sending");
@@ -1760,17 +1861,17 @@ async function sendSubmission(submission) {
     outboxFor(id).delete(submission.context.commandId);
     if (selectedSessionId === id) {
       const node = submissionNode(submission);
-      if (!["consumed", "handled", "cancelled", "failed"].includes(node.dataset.inputState)) {
+      if (!["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
         updateInputReceipt(submission.context.commandId, result.compacted ? "handled" : "accepted");
       }
       if (result.compacted) setBusy(false);
     }
   } else if (selectedSessionId === id) {
     const node = submissionNode(submission);
-    updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "failed");
+    updateInputReceipt(submission.context.commandId, result?.uncertain ? "uncertain" : "send_failed");
     const retry = el("button", "retry-input", t("chat.input.retry"));
     retry.addEventListener("click", () => { void sendSubmission(submission); });
-    node.appendChild(retry);
+    mountRetryInput(node, retry);
     if (result?.code === "MODEL_PROVIDER_KEY_REQUIRED") addModelSetupCard(result);
   }
   if (selectedSessionId === id) saveWorkspace();
@@ -1785,7 +1886,7 @@ async function sendSubmission(submission) {
 }
 
 async function submit() {
-  if (composerStopping()) return;
+  if (composerStopping() || selectedArchived) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
@@ -1820,21 +1921,10 @@ stop.addEventListener("click", async () => {
   }
 });
 togglePanelBtn.addEventListener("click", async () => {
-  showPanelCommand(await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel()));
+  const result = await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel());
+  if (result?.ok === false && result.error) addStatus(result.error);
 });
-document.getElementById("panel-command-cancel")?.addEventListener("click", async () => {
-  await window.arcane.cancelPanelCommand(panelCommandSnapshot.command?.id);
-  showPanelCommand(await window.arcane.getPanelCommand());
-});
-document.getElementById("panel-command-dismiss")?.addEventListener("click", () => { document.getElementById("panel-command").hidden = true; });
-document.getElementById("panel-command-recover")?.addEventListener("click", async event => {
-  const button = /** @type {HTMLButtonElement} */ (event.currentTarget); button.disabled = true;
-  try {
-    const result = await window.arcane.recoverPanel();
-    showPanelCommand(result);
-    if (result?.code === "PAGE_OPERATION_RUNNING") document.querySelector("#panel-command > span").textContent = t("panel.recoveryBusy");
-  } finally { button.disabled = false; }
-});
+
 input.addEventListener("input", () => {
   autosize();
   renderSlash();
@@ -2060,7 +2150,8 @@ function renderHistory(entries, inFlight = {}, running = false, page = null) {
       for (const call of entry.toolCalls ?? []) restoreTool(call);
       const hasLiveTools = (entry.toolCalls ?? []).some(call => liveTools.get(call.id)?.state === "running");
       if (!hasLiveTools) closeWorkBlock(false);
-      if (entry.text) addMessage("assistant", entry.text, undefined, key);
+      if (entry.error) addErrorMessage(entry.error, key);
+      else if (entry.text) addMessage("assistant", entry.text, undefined, key);
     }
   }
   for (const tool of inFlight.tools ?? []) {
@@ -2085,14 +2176,16 @@ function renderHistory(entries, inFlight = {}, running = false, page = null) {
 let currentSessionRequest = 0;
 
 async function pullCurrentSession() {
-  const requestId = ++currentSessionRequest;
-  const navigation = navigationRequest;
-  const payload = await window.arcane.currentSession();
-  if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
-  if (payload.mode) requestedMode = payload.mode;
-  const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
-  if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
-  await installSnapshot(payload);
+  return withSnapshotEvents(async captured => {
+    const requestId = ++currentSessionRequest;
+    const navigation = navigationRequest;
+    const payload = await window.arcane.currentSession();
+    if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
+    if (payload.mode) requestedMode = payload.mode;
+    const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
+    if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
+    await installSnapshot(payload, "latest", captured);
+  });
 }
 
 const drawer = document.getElementById("session-drawer");
@@ -2102,150 +2195,99 @@ let sessionRefreshRequest = 0;
 let sessionMetadataTimer = null;
 let sessionMetadataBusy = false;
 let sessionMetadataDirty = false;
-function sessionRowMeta(s) {
-  const when = s.modified ? new Date(s.modified) : null;
-  const count = t("sessions.count", { count: s.messageCount });
-  return when ? `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")} · ${count}` : count;
-}
 function scheduleSessionMetadata() {
-  sessionMetadataDirty = true;
-  if (sessionMetadataTimer || sessionMetadataBusy) return;
-  sessionMetadataTimer = setTimeout(async () => {
-    sessionMetadataTimer = null;
-    sessionMetadataBusy = true; sessionMetadataDirty = false;
-    const context = modeContext(), revision = sessionRefreshRequest;
-    try {
-      const result = await window.arcane.listSessions(context);
-      if (!result?.ok || context.mode !== currentMode || context.generation !== currentModeGeneration || revision !== sessionRefreshRequest) return;
-      for (const s of result.sessions ?? []) {
-        const item = sessionList.querySelector('[data-session-id="' + CSS.escape(s.id) + '"]');
-        if (!item) continue;
-        item.querySelector(".s-title").textContent = s.name || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage) || t("sessions.untitled");
-        item.querySelector(".s-meta").textContent = sessionRowMeta(s);
-      }
-    } catch { /* Navigation still provides an explicit metadata refresh. */ }
-    finally { sessionMetadataBusy = false; if (sessionMetadataDirty) scheduleSessionMetadata(); }
-  }, 100);
+  if (sessionMetadataTimer) return;
+  sessionMetadataTimer = setTimeout(() => { sessionMetadataTimer = null; void refreshSessions(); }, 100);
+}
+function updateArchivedView() {
+  const row = navigationView?.rows.get(selectedSessionId);
+  if (row) selectedArchived = row.archivedAt != null;
+  document.getElementById("archive-readonly").hidden = !selectedArchived;
+  document.body.classList.toggle("archived-session", selectedArchived);
+  updateComposerAction();
+}
+function showEmptyConversation() {
+  saveWorkspace(); snapshotRequest++; navigationRequest++;
+  selectedSessionId = null; selectedTaskId = null; selectedArchived = false;
+  historyPage = null;
+  resetConversation(); input.value = ""; pendingImages = []; renderAttachStrip();
+  showTaskState(null); showPendingModel(null); updateArchivedView();
+  messages.append(el("p", "nav-empty-selection", t("navigation.emptySelection")));
+}
+async function createProjectSession(cwd = undefined) {
+  return withSnapshotEvents(async captured => {
+    setDrawer(false); navigationView?.showArchives(false);
+    const context = modeContext(), navigation = ++navigationRequest;
+    const result = await window.arcane.newSession({ ...context, cwd });
+    if (navigation !== navigationRequest) return;
+    if (result?.ok) { await installSnapshot(result, "latest", captured); await refreshSessions(); navigationView?.reveal(result.session.id); }
+    else addStatus(result?.code === "PROJECT_UNAVAILABLE" ? t("navigation.missingProject") : t("sessions.newFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+    input.focus();
+  });
 }
 
 function setDrawer(open) {
   drawer.classList.toggle("open", open);
   document.body.classList.toggle("drawer-open", open);
-  document.getElementById("activity-toggle").setAttribute("aria-expanded", String(open || document.body.classList.contains("sidebar-pinned")));
+  document.getElementById("sessions-toggle").setAttribute("aria-expanded", String(open || document.body.classList.contains("sidebar-pinned")));
   drawer.inert = !open && !document.body.classList.contains("sidebar-pinned");
   if (open) refreshSessions();
 }
 
-async function refreshSessions() {
-  const requestId = ++sessionRefreshRequest;
-  const context = modeContext();
-  const result = await window.arcane.listSessions(context);
-  if (requestId !== sessionRefreshRequest || !sameModeContext(context) || result?.ok === false) return;
-  const sessions = result?.sessions ?? [];
-  sessionList.innerHTML = "";
-  if (sessions.length === 0) {
-    sessionList.appendChild(el("div", "drawer-empty", t("sessions.empty")));
-    return;
-  }
-  for (const s of sessions) {
-    // 未落盘的新会话由 main 标 firstMessageI18n(sessions.unsaved),其余用真实首条消息
-    const sessionName = s.name
-      || (s.firstMessageI18n ? t(s.firstMessageI18n) : s.firstMessage)
-      || t("sessions.untitled");
-    const item = el("div", `session-item${s.active ? " active" : ""}`);
-    item.dataset.sessionId = s.id;
-    const body = el("button", "s-body");
-    body.type = "button";
-    body.appendChild(el("div", "s-title", sessionName));
-    body.appendChild(el("div", "s-meta", sessionRowMeta(s)));
-    body.appendChild(el("div", "s-activity"));
-    const del = el("button", "s-del", "×");
-    del.title = t("sessions.delete");
-    del.disabled = Boolean(s.deleting);
-    if (s.deleting) del.title = t("sessions.deleting");
-    del.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      if (!confirm(t("sessions.deleteConfirm", { name: sessionName }))) return;
-      if (!sameModeContext(context)) return;
-      del.disabled = true; del.title = t("sessions.deleting");
-      let result;
-      try { result = await window.arcane.deleteSession(s.path, context); }
-      catch (error) { result = { ok: false, error: error.message }; }
-      finally { del.disabled = false; del.title = t("sessions.delete"); }
-      if (!result?.ok) {
-        addStatus(t("sessions.deleteFailed", {
-          error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-        }));
-        return;
-      }
-      forgetSession(s.id);
-      refreshSessions();
-    });
-    item.append(body, del);
-    item.addEventListener("click", async () => {
-      setDrawer(false);
-      if (s.id !== selectedSessionId && context.mode === currentMode && context.generation === currentModeGeneration) {
-        const selectionContext = modeContext();
-        const navigation = ++navigationRequest;
-        const cached = snapshotCache.get(s.id);
-        if (cached) void installSnapshot(cached, null, true);
-        const result = await window.arcane.openSession(s.path, selectionContext);
-        if (navigation !== navigationRequest) return;
-        if (result?.ok) { await installSnapshot(result); refreshSessions(); }
-        if (!result?.ok) {
-          addStatus(t("sessions.openFailed", {
-            error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-          }));
-        }
-      }
-    });
-    sessionList.appendChild(item);
-  }
-  updateSessionActivity();
-}
-
-function updateSessionActivity() {
-  for (const item of sessionList.querySelectorAll(".session-item")) {
-    const id = /** @type {HTMLElement} */ (item).dataset.sessionId;
-    const row = activityView?.rows.get(id);
-    item.classList.toggle("active", id === selectedSessionId);
-    item.querySelector(".s-body")?.setAttribute("aria-current", String(id === selectedSessionId));
-    const status = item.querySelector(".s-activity");
-    if (status) status.textContent = row ? activityView.stateLabel(row.state) + (row.unread ? " · " + t("activity.unread") : "") : "";
-  }
-}
+async function refreshSessions() { await navigationView?.load(); }
+function updateSessionActivity() { navigationView?.updateActivities(activityView?.rows ?? new Map()); }
 
 async function openActivity(row, notice = null) {
-  if (!row) return;
-  const navigation = ++navigationRequest;
-  ++modeSwitchRequest;
-  setDrawer(false);
-  requestedMode = row.mode;
-  try {
-    let result = await window.arcane.setMode(row.mode);
-    if (navigation !== navigationRequest) return;
-    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
-    if (result.stale || !acceptModeSnapshot(result)) { requestedMode = currentMode; return; }
-    if (result.session?.id !== row.sessionId) {
-      result = await window.arcane.openSession(row.path, { mode: result.mode, generation: result.generation, sessionId: result.session?.id });
+  return withSnapshotEvents(async captured => {
+    if (!row) return;
+    const id = row.sessionId ?? row.id;
+    if (deletedSessions.has(id)) { navigationView?.notify(t("navigation.deleted")); return; }
+    navigationView?.showArchives(false); navigationView?.reveal(id);
+    if (row.mode === currentMode) {
+      setDrawer(false);
+      const navigation = ++navigationRequest;
+      const context = modeContext();
+      const result = await window.arcane.openSession(row.path, context);
       if (navigation !== navigationRequest) return;
+      if (result?.ok) { await installSnapshot(result, "latest", captured); focusActivityTarget(row, notice); void refreshSessions(); }
+      else navigationView?.notify(t("sessions.openFailed", { error: result?.error ? fmtIpc(result.error) : t("common.unknown") }));
+      return;
     }
-    if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
-    await installSnapshot(result);
-    if (navigation !== navigationRequest) return;
-    requestedMode = currentMode;
-    invalidateSlashItems();
-    refreshSessions();
+    row = { ...row, sessionId: id };
+    const navigation = ++navigationRequest;
+    ++modeSwitchRequest;
+    setDrawer(false);
+    requestedMode = row.mode;
+    try {
+      let result = await window.arcane.setMode(row.mode);
+      if (navigation !== navigationRequest) return;
+      if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+      if (result.stale || !acceptModeSnapshot(result)) { requestedMode = currentMode; return; }
+      if (result.session?.id !== row.sessionId) {
+        result = await window.arcane.openSession(row.path, { mode: result.mode, generation: result.generation, sessionId: result.session?.id });
+        if (navigation !== navigationRequest) return;
+      }
+      if (!result?.ok) throw new Error(result?.error ? fmtIpc(result.error) : t("common.unknown"));
+      await installSnapshot(result, "latest", captured);
+      if (navigation !== navigationRequest) return;
+      requestedMode = currentMode;
+      invalidateSlashItems();
+      refreshSessions();
+      focusActivityTarget(row, notice);
+    } catch (error) {
+      if (navigation === navigationRequest) {
+        requestedMode = currentMode;
+        addStatus(t("sessions.openFailed", { error: error.message }));
+      }
+    }
+  });
+}
+
+function focusActivityTarget(row, notice) {
     const attentionId = notice?.attentionId ?? row.attentionIds?.find(id => id.startsWith("question:"))?.slice(9);
     const approvalId = notice?.approvalId ?? row.attentionIds?.find(id => id.startsWith("approval:"))?.slice(9);
     const card = attentionId ? attentionCards.get(attentionId) : approvalId ? messages.querySelector('[data-approval-id="' + CSS.escape(approvalId) + '"]') : null;
     if (card) { followLatest = false; card.scrollIntoView({ block: "center" }); }
-  } catch (error) {
-    if (navigation === navigationRequest) {
-      requestedMode = currentMode;
-      addStatus(t("sessions.openFailed", { error: error.message }));
-    }
-  }
 }
 
 let openingNotification = false;
@@ -2257,6 +2299,7 @@ async function openNotificationTarget() {
       const navigation = navigationRequest;
       const target = await window.arcane.takeNotificationTarget();
       if (navigation !== navigationRequest) break;
+      if (target?.deleted) { navigationView?.notify(t("navigation.deleted")); continue; }
       if (!target?.row) break;
       await openActivity(target.row, target.notice);
     }
@@ -2268,21 +2311,14 @@ document.getElementById("sessions-toggle").addEventListener("click", () =>
   setDrawer(!drawer.classList.contains("open"))
 );
 drawerBackdrop.addEventListener("click", () => setDrawer(false));
-document.getElementById("drawer-close").addEventListener("click", () => setDrawer(false));
-document.addEventListener("keydown", event => { if (event.key === "Escape") setDrawer(false); });
-document.getElementById("session-new").addEventListener("click", async () => {
-  setDrawer(false);
-  const context = modeContext();
-  const navigation = ++navigationRequest;
-  const result = await window.arcane.newSession(context);
-  if (navigation !== navigationRequest) return;
-  if (result?.ok) { await installSnapshot(result); refreshSessions(); }
-  if (!result?.ok) {
-    addStatus(t("sessions.newFailed", {
-      error: result?.error ? fmtIpc(result.error) : t("common.unknown"),
-    }));
-  }
-  input.focus();
+document.addEventListener("pointerdown", event => {
+  if (event.target instanceof Element && drawer.classList.contains("open") && !drawer.contains(event.target) && !event.target.closest("#sessions-toggle, dialog, .session-menu")) setDrawer(false);
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape" && !document.querySelector("dialog[open]")) setDrawer(false); });
+document.getElementById("session-search").addEventListener("click", () => navigationView?.search());
+document.getElementById("session-new").addEventListener("click", () => {
+  const row = navigationView?.rows.get(selectedSessionId);
+  void createProjectSession(row?.cwd ?? undefined);
 });
 
 // ---------- settings:provider 管理 + 默认模型 ----------
@@ -3144,7 +3180,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
   chords: ["F5"],
   onTap: async () => {
     const result = await window.arcane.reloadPanel?.();
-    showPanelCommand(result);
+    if (result?.ok === false && result.error) addStatus(result.error);
   },
 });
 
@@ -3154,7 +3190,6 @@ window.ArcaneI18n.onLocaleChange(() => {
   showTaskState(displayedTask);
   showRetry(displayedRetry);
   if (!syncIndicator.hidden && syncIndicator.dataset.status) showSyncStatus(syncIndicator.dataset.status);
-  if (!document.getElementById("panel-command").hidden) showPanelCommand(panelCommandSnapshot);
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();
   if (currentModelLabel) updateModelLabels(currentModelLabel);
@@ -3171,9 +3206,6 @@ refreshTelemetryConsent();
 
 input.focus();
 window.arcane.onEvent(receiveEvent);
-window.arcane.lifecycleState?.().then(showShutdown).catch(() => {});
-document.getElementById("cancel-exit").addEventListener("click", async () => showShutdown(await window.arcane.cancelExit()));
-window.arcane.getPanelCommand?.().then(showPanelCommand).catch(() => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });
@@ -3182,15 +3214,12 @@ window.addEventListener("focus", () => { void resyncSelected(); });
 setInterval(() => {
   const id = selectedSessionId;
   if (!id || restoringView || !activeTaskStates.has(displayedTask?.state)) return;
-  const lastContact = Math.max(confirmedAt.get(id) ?? 0, syncAttemptAt.get(id) ?? 0);
-  if (Date.now() - lastContact >= 15000) void resyncSelected();
+  if (Date.now() - lastContactAt >= 15000) void resyncSelected();
 }, 5000);
 syncIndicator.addEventListener("click", () => {
   if (historyRetry?.id === selectedSessionId) void showHistoryPage(historyRetry.query, historyRetry.intent);
   else void resyncSelected();
 });
-messages.addEventListener("click", scheduleWorkspaceSave);
-messages.addEventListener("toggle", scheduleWorkspaceSave, true);
 setInterval(() => {
   for (const entry of toolCards.values()) {
     if (entry.card.classList.contains("running")) {
@@ -3198,25 +3227,25 @@ setInterval(() => {
     }
   }
 }, 1000);
+navigationView = new (/** @type {any} */ (globalThis).ArcaneNavigationView)({ api: window.arcane, t,
+  selected: () => selectedSessionId, open: openActivity, create: createProjectSession,
+  changed: updateArchivedView, removed: forgetSession, empty: showEmptyConversation });
 activityView = new (/** @type {any} */ (globalThis).ArcaneActivityView)({ api: window.arcane, t,
-  getView: () => ({ sessionId: selectedSessionId, runtimeEpoch: viewEpoch, seq: viewSeq,
-    ready: activityReady && !restoringView && !syncingSessions.has(selectedSessionId), messages,
-    visible: document.visibilityState === "visible" && document.hasFocus() && !settingsBackdrop.classList.contains("open")
-      && !(document.body.classList.contains("drawer-open") && !document.body.classList.contains("sidebar-pinned")),
-    atBottom: !historyPage?.hasNewer && !pendingHistoryAnchor && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8,
-    readKey: /** @type {HTMLElement} */ ([...messages.querySelectorAll("[data-item-key]")].at(-1))?.dataset.itemKey,
-    toLatest: () => scrollToEnd(true) }), open: openActivity, drawer: () => setDrawer(true), changed: updateSessionActivity });
+  getView: () => ({ sessionId: selectedSessionId,
+    atBottom: !historyPage?.hasNewer && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 8 }),
+  changed: updateSessionActivity });
 applyPanelLayout();
 setDrawer(false);
 new ResizeObserver(() => {
+  updateScrollButton();
   drawer.inert = !drawer.classList.contains("open") && !document.body.classList.contains("sidebar-pinned");
-  activityView.scheduleRead();
+  activityView.updateReading();
 }).observe(messages);
-messages.addEventListener("scroll", () => activityView.scheduleRead());
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.scheduleRead(); } });
-window.addEventListener("focus", () => { void syncDeletedSessions().catch(() => {}); void activityView.load(); activityView.scheduleRead(); });
+messages.addEventListener("scroll", () => activityView.updateReading());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { void activityView.load(); activityView.updateReading(); } });
+window.addEventListener("focus", () => { void reconcileWorkspaces().catch(() => {}); void activityView.load(); if (activityReady) void activityView.opened(selectedSessionId); });
 void activityView.load();
-syncDeletedSessions().catch(() => {}).finally(() => {
+reconcileWorkspaces().catch(() => {}).finally(() => {
   refreshSessions();
   pullCurrentSession().then(() => openNotificationTarget());
 });

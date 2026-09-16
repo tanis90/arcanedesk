@@ -1,6 +1,6 @@
 ---
 name: arcane-fvtt-mods
-description: 安装、升级或检查本机 Foundry VTT 模组、游戏 system 与 Arcane Demo world。当用户提供 module.json manifest URL、说“安装/升级这个 mod”或“安装 dnd5e 等 system”，要求检查“Arcane 包/国内镜像有什么更新”，要求安装、更新、重置 arcane-demo，或 Foundry Core 装完后继续 Demo 环境时使用。所有内容统一从 arcane mirror 的 OSS 索引安装；Foundry Core 本身的安装不属于本 skill。
+description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或 Arcane Demo world 时使用。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
 ---
 
 # Foundry VTT 模组管理
@@ -39,6 +39,11 @@ macOS Bash 调用形态：
 
 ## 路由
 
+- 用户提供模块构建文件并要求生成安装包：读取
+  [references/prepared-module.md](references/prepared-module.md)。只接受已准备的 module bundle，
+  不把任意原始法术/职业 JSON 当成已完成自动化的内容。
+- 用户提供本地模块 ZIP，或要求安装本地生成的 Auto 2014 完整包：读取
+  [references/local-module.md](references/local-module.md)。该路径全程离线，不上传包或描述。
 - 用户给出 `module.json` manifest URL，或点名安装/升级一个 mod：读取
   [references/install.md](references/install.md)。
 - 用户问 Arcane 包、国内镜像或本机 mod 有什么更新：读取
@@ -46,7 +51,8 @@ macOS Bash 调用形态：
 - 用户要求安装、检查、更新或重置 Arcane Demo world，安装 FVTT 后继续 Demo 环境，或点名
   安装 dnd5e 等 system：读取 [references/demo-world.md](references/demo-world.md)。
 
-只读的 `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
+只读的 `bundle-inspect` 可检查构建输入，无需 Foundry 目录；其他只读的
+`local-inspect` / `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
 Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
 `arcane-fvtt-setup` 全新安装流程在计划确认前传 `--allow-missing-data-dir`，输出带 `dataDirExists`
 标记；stage/commit 不接受该旗标，永远严格。下载前说明来源、
@@ -58,12 +64,16 @@ Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意
 
 ## 共同边界
 
-- 只接受 HTTPS manifest 和 download URL。外部 manifest 是分发元数据的唯一规范来源；archive 内根
+- 远端流程只接受 HTTPS manifest 和 download URL。外部 manifest 是分发元数据的唯一规范来源；archive 内根
   `module.json` / `system.json` / `world.json` 的 `id`、`version` 必须与它完全一致。archive 内保留的
   上游 `manifest` / `download` URL 允许不同，但仅在 ZIP bytes/SHA256 与包身份均已通过校验后，helper
   才会把已验证外部 manifest 的原始字节写入 staging。身份、哈希或外部 URL 不一致仍必须拒绝。
 - 默认镜像目录是 `https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json`。这是带
-  `generated` 时间的全局当前版本索引，不是名为 `latest.json` 的指针。
+  `generated` 时间的全局当前版本索引，不是名为 `latest.json` 的指针。国际版构建默认改用
+  R2 上的英文索引（`https://dl.arcanedesk.app/mods/index-en.json`）：helper 的索引地址按
+  `--index-url` 参数 > `ARCANE_MOD_INDEX_URL` 环境变量 > 内置默认解析，桌面端会把构建
+  region 的默认索引写进环境变量，命令行一般不需要显式传参；运维联调时才用 `--index-url`
+  显式指定。
 - 索引中与 manifest URL 精确匹配的包必须逐字节核对 `bytes` 和 SHA256；不匹配即停止，
   不允许跳过校验。mirror 内容的验证基准只用索引声明的哈希；禁止混链校验（从 mirror 下载却拿
   其他来源的哈希验，mirror 为重打包，哈希本就不同，混链必误报）。

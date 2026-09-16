@@ -1,41 +1,7 @@
-import { retainResourceUntil } from "./scheduling/resource-coordinator.js";
-
 const DEFAULT_EVALUATE_TIMEOUT_MS = 10_000;
 
 function errorMessage(error) {
   return error?.message ?? String(error);
-}
-
-/** Returns the raw operation's settlement callback, independent of tool timeouts. */
-export function trackPageOperation(webContents) {
-  let endExecution;
-  const completion = new Promise(done => { endExecution = done; });
-  if (!retainResourceUntil(completion)) return () => {};
-  let navigationPending = false;
-  let rawSettled = false;
-  const navigationFailed = (_event, _code, _description, _url, isMainFrame) => {
-    if (isMainFrame === false) return;
-    navigationPending = false;
-    if (rawSettled) executionEnded();
-  };
-  const navigationStarted = (_event, _url, isInPlace, isMainFrame) => {
-    if (isMainFrame !== false && !isInPlace) navigationPending = true;
-  };
-  const executionEnded = () => {
-    webContents.off?.("did-start-navigation", navigationStarted);
-    webContents.off?.("did-fail-load", navigationFailed);
-    webContents.off?.("did-navigate", executionEnded);
-    webContents.off?.("destroyed", executionEnded);
-    webContents.off?.("render-process-gone", executionEnded);
-    endExecution();
-  };
-  // A navigation request can fail while the old page is still executing.
-  webContents.on?.("did-navigate", executionEnded);
-  webContents.on?.("did-start-navigation", navigationStarted);
-  webContents.on?.("did-fail-load", navigationFailed);
-  webContents.on?.("destroyed", executionEnded);
-  webContents.on?.("render-process-gone", executionEnded);
-  return () => { rawSettled = true; if (!navigationPending) executionEnded(); };
 }
 
 /**
@@ -63,7 +29,6 @@ export function evaluateNavigationSafe(
   return new Promise((resolve) => {
     let settled = false;
     let timer = null;
-    const executionEnded = trackPageOperation(webContents);
 
     const cleanup = () => {
       if (timer) clearTimeout(timer);
@@ -94,12 +59,12 @@ export function evaluateNavigationSafe(
     // unhandled rejection.
     Promise.resolve()
       .then(() => {
-        if (signal?.aborted) { executionEnded(); return undefined; }
+        if (signal?.aborted) { return undefined; }
         return webContents.executeJavaScript(code, true);
       })
       .then(
-        (value) => { executionEnded(); finish({ status: "completed", value }); },
-        (error) => { executionEnded(); finish({ status: "error", error: errorMessage(error) }); }
+        (value) => { finish({ status: "completed", value }); },
+        (error) => { finish({ status: "error", error: errorMessage(error) }); }
       );
   });
 }

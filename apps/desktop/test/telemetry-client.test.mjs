@@ -464,6 +464,27 @@ test("skills.update_completed records outcome plus classified error, dropping ho
   assert.equal(updates[0].mode, null);
 });
 
+test("turnQueued records turn.queued without marking the turn as steered", async () => {
+  const { client, userDataDir } = tempClient();
+  let now = 0;
+  client.monotonicNow = () => now;
+  client.start(); await client.whenReady;
+  const session = client.forSession();
+  session.sessionAttached("prep", "deepseek", "deepseek-v4", true);
+  session.taskState("prep", { id: "TASK_QUEUED", state: "running" });
+  now = 100;
+  session.turnQueued("prep");
+  session.taskState("prep", { id: "TASK_QUEUED", state: "completed" });
+  const events = await readAllEvents(client, userDataDir);
+  await client.close();
+  const queued = events.filter(e => e.event === "turn.queued");
+  assert.equal(queued.length, 1);
+  assert.equal(typeof queued[0].data.elapsed_bucket, "string");
+  const summary = events.find(e => e.event === "turn.summary");
+  // 排队不是介入:summary 的 user_intervention 不因 turnQueued 变为 steer。
+  assert.equal(summary.data.user_intervention, "none");
+});
+
 test("public semantic entrypoints swallow collaborator failures", () => {
   const logs = [];
   const { client } = tempClient({ log: (...args) => logs.push(args) });
@@ -482,6 +503,7 @@ test("public semantic entrypoints swallow collaborator failures", () => {
   client.activeTurns.set("combat", { turnId: "turn_test", startedMonotonicMs: 0 });
   client.summarizer = { noteSteer: boom };
   assert.doesNotThrow(() => client.turnSteered("combat"));
+  assert.doesNotThrow(() => client.turnQueued("combat"));
   client.summarizer = { noteAbort: boom };
   assert.doesNotThrow(() => client.turnAborted("combat"));
   client.summarizer = { noteError: boom };

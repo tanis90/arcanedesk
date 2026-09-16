@@ -5,12 +5,11 @@
 //   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
-import { readFileSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
+import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAgentSession, createBashTool, createPowerShellTool, createReadTool, createWriteTool, createEditTool, defineTool, DefaultResourceLoader, getAgentDir, isToolCallEventType, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { filesystemResource, toolFilesystemPath } from "./scheduling/resource-coordinator.js";
 import { Type } from "typebox";
 import { capturePageNavigationSafe, encodeFoundryScreenshot } from "./foundry-screenshot.js";
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
@@ -20,14 +19,21 @@ import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
 import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
+import { forkStoredSession } from "./conversations/session-fork.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
-import { InputJournal } from "./tasks/input-journal.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
 import { createFoundryTools } from "./foundry-tools.js";
 import { activeToolNames, verifyActiveTools } from "./foundry-tool-policy.js";
+import { PendingInputs } from "./tasks/pending-inputs.js";
+import { replaceFile } from "./atomic-file.js";
+import { regionConfig } from "./region.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 系统提示词目录按 region 默认值表取（D1）：intl 构建指向构建期生成的英文目录
+// generated/system-prompts-intl，cn 指向 system-prompts。
+const SYSTEM_PROMPTS_DIR = regionConfig().systemPromptsDir;
 
 /**
  * 战斗模式的系统提示 = system-prompts/combat.md。
@@ -35,10 +41,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 function loadCombatSystemPrompt(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "combat.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "combat.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("combat prompt is empty");
-    log(`[agent] system prompt: system-prompts/combat.md (${body.length} chars)`);
+    log(`[agent] system prompt: ${SYSTEM_PROMPTS_DIR}/combat.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] combat prompt unavailable, fallback to SDK default prompt: ${error.message}`);
@@ -57,10 +63,10 @@ const APPROVAL_TIMEOUT_MS = 120_000;
  */
 function loadPrepPreamble(log) {
   try {
-    const promptPath = path.join(__dirname, "..", "..", "system-prompts", "prep.md");
+    const promptPath = path.join(__dirname, "..", "..", SYSTEM_PROMPTS_DIR, "prep.md");
     const body = readFileSync(promptPath, "utf8").trim();
     if (!body) throw new Error("prep preamble is empty");
-    log(`[agent] prep preamble: system-prompts/prep.md (${body.length} chars)`);
+    log(`[agent] prep preamble: ${SYSTEM_PROMPTS_DIR}/prep.md (${body.length} chars)`);
     return body;
   } catch (error) {
     log(`[agent] prep preamble unavailable, fallback to bare SDK default prompt: ${error.message}`);
@@ -122,6 +128,7 @@ const COMBAT_PROFILE = {
   skillPaths: [], // prep: 用 getSkillPaths() 现取(SkillsUpdater 激活副本优先于包内基线)
   getSkillPaths: null,
   fence: false, // prep: true 挂 cwd 围栏
+  streamingInput: "steer", // 流式期间输入投递:"steer" 软打断(战斗默认);"followUp" 排队(prep)
 };
 
 /** Pi 默认仍启用 Bash；Windows 必须显式选择一等公民的 PowerShell 工具。 */
@@ -201,6 +208,7 @@ export class AgentHost {
    *   foundryRuntime?: any,
    *   getFoundryView?: () => any,
    *   openFoundry?: (url?: string) => Promise<any> | any,
+   *   openMdReader?: (rawPath: string) => any,
    *   sendToRenderer?: (payload: any) => void,
    *   providerStore?: any,
    *   telemetry?: import("./telemetry/telemetry-client.js").TelemetryClient | null,
@@ -211,17 +219,16 @@ export class AgentHost {
    *   taskStorageDir?: string,
    *   operationStorageDir?: string,
    *   scheduler?: any,
-   *   resources?: any,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler, resources } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
-    this.resources = resources;
     this.foundryRuntime = foundryRuntime;
     this.getFoundryView = getFoundryView;
     this.openFoundry = openFoundry;
+    this.openMdReader = openMdReader ?? null;
     this.sendToRenderer = sendToRenderer;
     this.providerStore = providerStore ?? null;
     this.telemetry = telemetry ?? null;
@@ -248,6 +255,10 @@ export class AgentHost {
     // 本轮最近一次模型/重试错误(agent_start 时重置);AgentSession 无 errorMessage 属性,
     // 错误只能从 assistant 消息与 auto_retry 事件里跟踪。
     this._lastError = null;
+    /** @type {import("./conversations/session-navigation.js").SessionNavigation | undefined} */
+    this.navigation = undefined;
+    this.registry = undefined;
+    this.operationWaiters = [];
   }
 
   /** 本 host 的工作目录:session 分桶、内置工具、skills 扫描全部以它为锚。 */
@@ -279,6 +290,7 @@ export class AgentHost {
     if (!isPathInside(this.sessionDir(), sessionPath)) {
       throw new SessionModeError("SESSION_PATH_OUTSIDE_MODE_DIR", "会话文件不在当前模式目录内");
     }
+    if (!statSync(sessionPath).isFile()) throw new Error("Session path is not a file");
     const manager = SessionManager.open(sessionPath, this.sessionDir());
     claimSessionMode(manager, this.profile.mode);
     return manager;
@@ -286,7 +298,9 @@ export class AgentHost {
 
   /** 目录与 JSONL marker 双重验证；损坏/误放文件不进入 UI，也不会被自动认领。 */
   async listOwnedSessionInfos() {
-    const list = await SessionManager.list(this.cwd(), this.sessionDir());
+    // The explicit mode directory contains multiple projects. SDK list(cwd, dir)
+    // filters by cwd even with an explicit directory; listAll(dir) preserves the project index.
+    const list = await SessionManager.listAll(this.sessionDir());
     return list.filter((sessionInfo) => {
       try {
         if (!isPathInside(this.sessionDir(), sessionInfo.path)) return false;
@@ -347,6 +361,7 @@ export class AgentHost {
     try {
       const existing = await this.listOwnedSessionInfos();
       const recent = existing
+        .filter(row => this.navigation?.get(row.id).archivedAt == null)
         .slice()
         .sort((a, b) => (Number(b.modified) || 0) - (Number(a.modified) || 0))[0];
       manager = recent ? this.openSessionManager(recent.path) : this.createSessionManager();
@@ -355,6 +370,7 @@ export class AgentHost {
       manager = this.createSessionManager();
     }
     }
+    this.profile = { ...this.profile, getCwd: () => manager.getCwd() };
     await this.attach(manager);
     return this.session;
   }
@@ -372,8 +388,7 @@ export class AgentHost {
       if (!this.fvttOpsNode) throw new Error("Arcane FVTT Node is unavailable for the Agent shell");
       // SDK custom tools override built-ins with the same name. This keeps Pi's
       // native shell behavior/rendering while enforcing our spawn environment.
-      customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]
-        .map(tool => this.coordinateWorkspaceTool(tool)));
+      customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]);
     }
     const options = {
       cwd,
@@ -450,6 +465,8 @@ export class AgentHost {
       ? `${this._currentModelRef.providerId}/${this._currentModelRef.modelId}`
       : null;
     this.supportsImages = selectedModel?.input?.includes("image") ?? true;
+    const savedModel = this.navigation?.get(sessionManager.getSessionId()).selectedModel;
+    if (savedModel) await this.setCurrentModel(savedModel.providerId, savedModel.modelId, true);
     this.log(`[agent:${this.profile.mode}] session ready (${customTools.length} custom tools, builtin ${this.profile.builtinTools ? "ON" : "off"}, approvals ${APPROVALS_ENABLED ? "ON" : "off"}, id=${sessionManager.getSessionId?.()?.slice(0, 8) ?? "?"})`);
     this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
     // 遥测只拿 provider/model 的 family 映射,原始 id 不落盘(§7.2)
@@ -472,7 +489,9 @@ export class AgentHost {
     return {
       id: this.sessionManager.getSessionId?.() ?? null,
       path: this.sessionManager.getSessionFile?.() ?? null,
-      name: this.sessionManager.getSessionName?.() ?? "",
+      name: this.navigation?.get(this.sessionManager.getSessionId?.()).customTitle ?? this.sessionManager.getSessionName?.() ?? "",
+      cwd: this.sessionManager.getCwd?.() ?? null,
+      ...this.navigation?.get(this.sessionManager.getSessionId?.()),
     };
   }
 
@@ -484,10 +503,11 @@ export class AgentHost {
         .map((s) => ({
           id: s.id,
           path: s.path,
+          cwd: s.cwd ?? null,
           name: s.name ?? "",
           firstMessage: (s.firstMessage ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
           // 结构化文案 key:仅"未保存新会话"占位用(见下方 unshift),真实首条消息是用户数据
-          firstMessageI18n: null,
+          firstMessageI18n: s.messageCount ? null : "sessions.unsaved",
           modified: s.modified instanceof Date ? s.modified.getTime() : Number(s.modified) || 0,
           messageCount: s.messageCount ?? 0,
           active: s.path === activePath,
@@ -500,6 +520,7 @@ export class AgentHost {
         mapped.unshift({
           id: this.sessionManager.getSessionId?.() ?? null,
           path: activePath,
+          cwd: this.cwd(),
           name: "",
           firstMessage: "",
           firstMessageI18n: "sessions.unsaved",
@@ -528,8 +549,6 @@ export class AgentHost {
     return index;
   }
 
-  buildHistory() { return this.historyIndex().all(); }
-
   currentPayload(historyQuery = {}) {
     const page = this.historyIndex().page(historyQuery);
     const messageKeys = new Set(page.history.flatMap(row => [row.key, row.legacyKey]));
@@ -538,6 +557,7 @@ export class AgentHost {
       approvals: structuredClone([...this.approvalSnapshots.values()]),
       pendingModel: this.tasks?.pendingModel ?? null,
       inputs: this.tasks?.snapshotInputs(messageKeys) ?? [],
+      recoveryWarning: this.tasks?.pending.warning ?? null,
       acceptedCommandIds: this.tasks?.snapshotInputCommandIds?.() ?? [],
       busy: this.busy,
       task: this.task ? { ...this.task } : null,
@@ -630,6 +650,8 @@ export class AgentHost {
    * 自然恢复。只作用于本 host 当前会话,不广播、不改全局默认。
    */
   async setCurrentModel(providerId, modelId, applyNow = false) {
+    const unavailable = this.registry?.admit(this);
+    if (unavailable) return unavailable;
     this.operations++;
     try {
       const ref = { providerId, modelId };
@@ -637,6 +659,7 @@ export class AgentHost {
       if (this.modelRuntime && !model) {
         return { ok: false, error: `model not found: ${providerId}/${modelId}` };
       }
+      this.navigation?.patch(this.describeCurrent()?.id, { selectedModel: ref });
       if (this.busy && !applyNow) {
         this.taskCoordinator().setPendingModel(ref);
         return { ok: true, deferred: true, model: ref };
@@ -662,7 +685,7 @@ export class AgentHost {
       this.emit({ type: "model_info", label: this.modelLabel, supportsImages: this.supportsImages });
       if (!applyNow && this.tasks?.pendingModel) this.tasks.setPendingModel(null);
       return { ok: true, ...(sameModel ? { noop: true } : null) };
-    } finally { this.operations--; }
+    } finally { this.endOperation(); }
   }
 
   /** 会话是否已开始对话(有消息条目);空会话才允许被全局默认接管。 */
@@ -700,11 +723,10 @@ export class AgentHost {
   async compact(instructions) {
     this.operations++;
     try {
-      if (!this.session) throw new Error("agent session not started");
       if (this.session.isCompacting) return { ok: false, error: "compaction already in progress" };
       const result = await this.session.compact(instructions || undefined);
       return { ok: true, tokensBefore: result?.tokensBefore };
-    } finally { this.operations--; }
+    } finally { this.endOperation(); }
   }
 
   get task() { return this.tasks?.task ?? null; }
@@ -715,9 +737,9 @@ export class AgentHost {
     const sessionId = this.describeCurrent()?.id;
     this._foundryServices = new FoundryServices({ sessionId, directory: this.operationStorageDir,
       mode: this.profile.mode,
-      withPage: (signal, operation) => this.withResources(["foundry:page"], signal, operation),
+      withPage: (signal, operation) => operation(),
       getCwd: () => this.cwd(),
-      withAssets: (cwd, signal, operation) => this.withResources(["foundry:page", filesystemResource(cwd)], signal, operation),
+      withAssets: (cwd, signal, operation) => operation(),
       decodeImage: async (bytes, mimeType, signal) => {
         // Chromium decodes all three supported formats, including WebP. This fixed read
         // runs inside the outer combined lease; no model-generated page code is involved.
@@ -744,7 +766,11 @@ export class AgentHost {
     if (this.tasks) return this.tasks;
     const sessionId = this.describeCurrent()?.id ?? "unattached";
     const file = this.taskStorageDir ? path.join(this.taskStorageDir, `${sessionId}.jsonl`) : null;
-    this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, journal: new InputJournal(file), emit: event => this.emit(event),
+    const pending = new PendingInputs(this.taskStorageDir ? path.join(path.dirname(this.taskStorageDir), "pending-inputs", sessionId + ".json") : null);
+    if (file) pending.migrate(file, model => this.navigation.patch(sessionId, { selectedModel: model, pendingModel: model }));
+    this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, pending,
+      pendingModel: this.navigation?.get(sessionId).pendingModel ?? null,
+      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }), emit: event => this.emit(event),
       adapter: {
         captureInput: () => captureFoundryInputContext(this.getFoundryView?.()?.webContents),
         beginTask: async (pending) => {
@@ -755,18 +781,10 @@ export class AgentHost {
         },
         prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
         steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
+        followUp: (text, images) => this.session.followUp(text, images?.length ? images : undefined),
+        streamingDelivery: () => this.profile.streamingInput ?? "steer",
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
-        settleTask: async taskId => {
-          const waitId = `settle:${taskId}`;
-          try {
-            await this.resources?.waitForOwner(sessionId, taskId, details => {
-              if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, details);
-            });
-          } finally {
-            if (this.tasks.task?.id === taskId) this.tasks.resourceWaiting(waitId, null);
-          }
-        },
         abort: async () => {
           for (const id of this.approvals.keys()) this.respondApproval(id, false);
           await this.session?.abort();
@@ -775,36 +793,14 @@ export class AgentHost {
     return this.tasks;
   }
 
-  submitInput(text, images, commandId, prepare = null) {
-    if (this.closing) return { ok: false, code: "APP_STOPPING" };
-    if (this.deleting) return { ok: false, code: "SESSION_DELETING" };
-    if (!this.session) throw new Error("agent session not started");
-    const result = this.taskCoordinator().submit({ commandId, text, images, prepare });
+  submitInput(text, images, commandId, prepare = null, replacesInputId = null) {
+    const unavailable = this.registry?.admit(this);
+    if (unavailable) return unavailable;
+    const result = this.taskCoordinator().submit({ commandId, text, images, prepare, replacesInputId });
     if (result.ok && !result.duplicate && !this.sessionManager?.getSessionName()) {
       try { this.sessionManager?.appendSessionInfo(text.trim().replace(/\s+/g, " ").slice(0, 24)); } catch { /* naming is best effort */ }
     }
     return result;
-  }
-
-  async prompt(text, images) {
-    if (!this.session) throw new Error("agent session not started");
-    if (this.busy) throw new Error("Task already running");
-    this.submitInput(text, images, randomUUID());
-    await this.tasks.run;
-    // 首轮结束后用首条用户消息做会话标题(best-effort;侧栏展示用)
-    try {
-      if (this.sessionManager && !this.sessionManager.getSessionName()) {
-        const title = text.trim().replace(/\s+/g, " ").slice(0, 24);
-        if (title) this.sessionManager.appendSessionInfo(title);
-      }
-    } catch {
-      /* naming is best-effort */
-    }
-  }
-
-  async steer(text, images) {
-    if (!this.session) throw new Error("agent session not started");
-    return this.submitInput(text, images, randomUUID());
   }
 
   async abort(taskId = null) {
@@ -822,45 +818,31 @@ export class AgentHost {
     finally { try { session?.dispose(); } finally { this.telemetry?.releaseSession?.(); } }
   }
 
+  endOperation() {
+    if (--this.operations === 0) for (const resolve of this.operationWaiters.splice(0)) resolve();
+  }
+  waitForOperations() {
+    return this.operations ? new Promise(resolve => this.operationWaiters.push(resolve)) : Promise.resolve();
+  }
+
   canEvict() {
     if (this.busy || this.tasks?.run || this.operations || this.deleting || this.closing || this.session?.isStreaming || this.session?.isCompacting || this.approvals.size) return false;
-    const ref = this._currentModelRef, model = this.session?.model;
-    // An unconfigured model choice can still be memory-only; keep its owner resident.
-    if (ref && (model?.provider !== ref.providerId || (model?.id ?? model?.name) !== ref.modelId)) return false;
     return Boolean(this.sessionManager?.getSessionFile?.() && this.sessionManager?.getHeader?.());
   }
   persistForEviction() {
     if (!this.canEvict()) throw new Error("Session still owns active or unsaved state");
     const file = this.sessionManager.getSessionFile();
-    new InputJournal(file).compact([this.sessionManager.getHeader(), ...this.sessionManager.getEntries()]);
-    this.tasks?.compact(true);
+    replaceFile(file, [this.sessionManager.getHeader(), ...this.sessionManager.getEntries()].map(entry => JSON.stringify(entry) + "\n").join(""));
   }
 
-  async withResources(keys, signal, operation) {
-    if (!this.resources) return operation();
-    const tasks = this.tasks;
-    const taskId = tasks?.task?.id;
-    const owner = { sessionId: this.describeCurrent()?.id, taskId, name: this.describeCurrent()?.name || "" };
-    const requestId = randomUUID();
-    const waiting = details => { if (tasks?.task?.id === taskId) tasks.resourceWaiting(requestId, details); };
-    try {
-      return await this.resources.run(keys, owner, signal, waiting, async () => {
-        waiting(null); return operation();
-      });
-    } finally { waiting(null); }
-  }
-
-  coordinateWorkspaceTool(tool) {
-    if (!this.resources) return tool;
-    return { ...tool, execute: (id, params, signal, onUpdate, context) => {
-      const cwd = this.cwd();
-      const keys = () => {
-        const resolved = [filesystemResource(cwd)];
-        if (typeof params?.path === "string") resolved.push(filesystemResource(toolFilesystemPath(params.path, cwd, tool.name === "read")));
-        return resolved;
-      };
-      return this.withResources(keys, signal, () => tool.execute(id, params, signal, onUpdate, context));
-    } };
+  /** 分叉当前会话：整段复制由 Pi 原生 forkFrom 完成；忙碌即拒绝（与归档同规则），不等待在途操作。 */
+  async fork() {
+    if (this.deleting) throw Object.assign(new Error("Session is being deleted"), { code: "SESSION_DELETING" });
+    if (this.busy || this.operations) throw Object.assign(new Error("Finish the task before forking"), { code: "SESSION_BUSY" });
+    if (this.canEvict()) this.persistForEviction();
+    const current = this.describeCurrent();
+    if (!current?.path) throw Object.assign(new Error("Session is not persisted"), { code: "SESSION_NOT_FOUND" });
+    return forkStoredSession({ sourcePath: current.path, cwd: this.cwd(), sessionDir: this.sessionDir() });
   }
 
   // ---- approval gate(opt-in,默认关闭) ----
@@ -875,7 +857,6 @@ export class AgentHost {
         this.approvals.delete(approvalId);
         this.approvalSnapshots.delete(approvalId);
         this.emit({ type: "approval_resolved", approvalId, approved });
-        if (!this.tasks?.admission && this.tasks?.task?.state === "waiting_user" && !this.approvals.size && !this.tasks.snapshotAttentions().some(a => a.state === "pending")) this.tasks.setTaskState("running");
         this.telemetry?.approvalResolved(this.profile.mode, payload?.tool, outcome, Date.now() - requestedAt);
         resolve(approved);
       };
@@ -885,10 +866,9 @@ export class AgentHost {
       }, APPROVAL_TIMEOUT_MS);
       this.approvals.set(approvalId, finish);
       this.approvalSnapshots.set(approvalId, { approvalId, requestedAt, ...payload });
-      if (this.tasks?.busy && this.tasks.task.state !== "stopping") this.tasks.setTaskState("waiting_user");
       this.emit({ type: "approval_request", approvalId, ...payload });
     });
-    return this.tasks?.admission ? this.tasks.admission.waitForUser(pending).catch(() => false) : pending;
+    return this.tasks ? this.tasks.waitForUser(pending).catch(() => false) : pending;
   }
 
   respondApproval(approvalId, approved) {
@@ -1021,6 +1001,32 @@ export class AgentHost {
       },
     });
 
+    const openDocument = defineTool({
+      name: "open_document",
+      label: "Open Document",
+      description:
+        "Open a local Markdown document (.md/.markdown) in this window's right-side reader panel; the chat stays on the left. " +
+        "ALWAYS use this when the user asks to open, show or read a note or document — never fall back to a system opener " +
+        "(macOS `open`, Windows `start`) that hands the file to an external app such as Obsidian. " +
+        "The path must stay inside the current working directory; relative paths resolve against it. " +
+        "A missing or out-of-fence file still opens the reader with an error page, so read the file first if you are unsure it exists.",
+      parameters: Type.Object({
+        path: Type.String({ minLength: 1, maxLength: 4000, description: "Path to a .md/.markdown file inside the current working directory." }),
+      }),
+      executionMode: "sequential",
+      execute: async (_id, params) => {
+        if (typeof host.openMdReader !== "function") {
+          return textResult("ERROR: the right-side document reader is unavailable in this session.");
+        }
+        const outcome = host.openMdReader(params.path);
+        if (!outcome?.ok) throw new Error(outcome?.error ?? outcome?.code ?? "Failed to open the document reader");
+        const note = outcome.error
+          ? ` WARNING: the document could not be loaded (${outcome.error}); the reader is showing an error page.`
+          : " The document is now visible next to the chat.";
+        return textResult(`Opened ${params.path} in the right-side reader panel.${note}`, outcome);
+      },
+    });
+
     const foundryOpen = defineTool({
       name: "foundry_open",
       label: "Open Foundry",
@@ -1034,7 +1040,7 @@ export class AgentHost {
         ),
       }),
       execute: async (_toolCallId, params, signal) => {
-        const outcome = await host.withResources(["foundry:page"], signal, () => host.openFoundry(params?.url));
+        const outcome = await host.openFoundry(params?.url);
         if (!outcome?.ok) throw new Error(outcome?.summary ?? outcome?.error ?? "Foundry panel failed to open");
         return textResult(outcome.summary, outcome);
       },
@@ -1055,7 +1061,7 @@ export class AgentHost {
         "Do not capture while the user is entering credentials. Never request, inspect, guess or transmit passwords.",
         "Treat text, ids, numbers and hidden state inferred from a screenshot as uncertain; verify them with logs, browser_evaluate or a structured read.",
       ],
-      execute: async (_toolCallId, _params, signal) => host.withResources(["foundry:page"], signal, async () => {
+      execute: async (_toolCallId, _params, signal) => {
         if (host.supportsImages === false) {
           return textResult(
             "ERROR: the current model does not support image input, so it cannot inspect a Foundry screenshot. Select a vision-capable model before retrying."
@@ -1111,7 +1117,7 @@ export class AgentHost {
           ],
           details,
         };
-      }),
+      },
     });
 
     const browserEvaluate = defineTool({
@@ -1152,26 +1158,24 @@ export class AgentHost {
           args: params,
         });
         if (!approved) return textResult("DM declined this code; do not retry it.");
-        return host.withResources(["foundry:page"], signal, async () => {
-          const view = host.getFoundryView();
-          if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
-          const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
-            signal,
-            timeoutMs: prepWorldEdit ? 60_000 : undefined,
-          });
-          if (outcome.status === "completed") {
-            return textResult(safeJson(outcome.value), { result: outcome.value });
-          }
-          if (outcome.status === "navigated") {
-            return textResult(
-              safeJson({ navigated: true, url: outcome.url, note: "Navigation was requested; inspect the new page in a new call after resource admission." }),
-              outcome
-            );
-          }
-          if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
-          if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
-          throw new Error(outcome.error ?? "browser_evaluate failed");
+        const view = host.getFoundryView();
+        if (!view) return textResult("ERROR: no Foundry panel is open yet — call foundry_open first.");
+        const outcome = await evaluateNavigationSafe(view.webContents, params.code, {
+          signal,
+          timeoutMs: prepWorldEdit ? 60_000 : undefined,
         });
+        if (outcome.status === "completed") {
+          return textResult(safeJson(outcome.value), { result: outcome.value });
+        }
+        if (outcome.status === "navigated") {
+          return textResult(
+            safeJson({ navigated: true, url: outcome.url, note: "Navigation was requested; inspect the new page in a new call." }),
+            outcome
+          );
+        }
+        if (outcome.status === "aborted") throw new Error("browser_evaluate was aborted");
+        if (outcome.status === "timeout") throw new Error(`browser_evaluate timed out after ${outcome.timeoutMs}ms`);
+        throw new Error(outcome.error ?? "browser_evaluate failed");
       },
     });
 
@@ -1179,9 +1183,9 @@ export class AgentHost {
       if (!host.foundryRuntime?.call) {
         throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
       }
-      return host.withResources(["foundry:page"], options?.signal, () => host.foundryRuntime.callForSession
+      return host.foundryRuntime.callForSession
         ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
-        : host.foundryRuntime.call(action, args, options));
+        : host.foundryRuntime.call(action, args, options);
     };
 
     const worldStatus = defineTool({
@@ -1205,6 +1209,116 @@ export class AgentHost {
       },
     });
 
-    return [foundryOpen, foundryScreenshot, browserEvaluate, worldStatus, ...createFoundryTools(host), requestUserInput];
+    const combatBattleContext = defineTool({
+      name: "combat_battle_context",
+      label: "Battle Context",
+      description:
+        "Read the stable battle manual (Turn Protocol v2 battle-context): combatants, sides, static blocks and the action catalog with input contracts. Read ONCE per combat, not every turn.",
+      parameters: Type.Object({}),
+      execute: async (_toolCallId, _params, signal) => {
+        const data = await runtimeCall("battleContext", {}, {
+          signal,
+          executionTimeoutMs: 30_000,
+        });
+        return textResult(safeJson(data), data);
+      },
+    });
+
+    const combatTurnContext = defineTool({
+      name: "combat_turn_context",
+      label: "Turn Context",
+      description:
+        "Read the live mutable turn state (Turn Protocol v2 turn-context): current turn/round, actor HP, resources, conditions, concentration, available action ids. Read before EVERY decision.",
+      parameters: Type.Object({}),
+      promptGuidelines: [
+        "Read combat_turn_context before every combat decision; never act on remembered state.",
+      ],
+      execute: async (_toolCallId, _params, signal) => {
+        const data = await runtimeCall("turnContext", {}, {
+          signal,
+          executionTimeoutMs: 30_000,
+        });
+        return textResult(safeJson(data), data);
+      },
+    });
+
+    const executeTurnInput = Type.Optional(
+      Type.Object(
+        {
+          selections: Type.Optional(Type.Object({}, { additionalProperties: true })),
+          // 注意:runtime 契约里 declaredRiders / allocation 都是对象数组,不是对象
+          // (foundry-runtime.ts: "input.declaredRiders must be an array")。
+          declaredRiders: Type.Optional(
+            Type.Array(Type.Object({}, { additionalProperties: true }), {
+              description: "Rider entries, e.g. [{ id: \"branding-smite\", spellLevel: 2 }]",
+            })
+          ),
+          allocation: Type.Optional(
+            Type.Array(Type.Object({}, { additionalProperties: true }), {
+              description: "Non-empty array of allocation entries",
+            })
+          ),
+          spellLevel: Type.Optional(Type.Number()),
+          attackRollMode: Type.Optional(
+            Type.String({
+              enum: ["normal", "advantage", "disadvantage"],
+              description:
+                "Optional only when the selected battle-context action advertises input.attackRollMode. " +
+                "Set it only from an explicit DM instruction: advantage/disadvantage set the corresponding Midi request flags; " +
+                "normal leaves the roll unforced and does not cancel effects Foundry applies automatically. " +
+                "Otherwise omit it; never infer it from conditions, positioning, or tactics.",
+            })
+          ),
+          targetSpec: Type.Optional(Type.Object({}, { additionalProperties: true })),
+        },
+        { additionalProperties: true }
+      )
+    );
+
+    const combatExecuteTurn = defineTool({
+      name: "combat_execute_turn",
+      label: "Execute Turn Action",
+      description:
+        "Submit combat action(s) for the current combatant (Turn Protocol v2 execute-turn). " +
+        "Returns a four-state receipt: completed / rejected / partial / indeterminate.",
+      parameters: Type.Object({
+        actionId: Type.Optional(Type.String({ description: "Single action id from battle-context" })),
+        actions: Type.Optional(
+          Type.Array(
+            Type.Object({
+              actionId: Type.String(),
+              targetTokenIds: Type.Optional(Type.Array(Type.String())),
+              input: executeTurnInput,
+            }),
+            { description: "Multiple actions in one submission" }
+          )
+        ),
+        targetTokenIds: Type.Optional(Type.Array(Type.String())),
+        input: executeTurnInput,
+        advance: Type.Optional(Type.Boolean({ description: "Advance the combat turn after execution" })),
+      }),
+      executionMode: "sequential",
+      promptGuidelines: [
+        "Pass input.attackRollMode only when battle-context advertises it and the DM explicitly declares the mode; otherwise omit it. For actions[], scope it per action instead of copying it to every attack unless the DM explicitly applies it to all attacks.",
+        "When a receipt is partial or indeterminate, never retry automatically; read combat_turn_context for live state and report to the DM.",
+      ],
+      execute: async (_toolCallId, params, signal) => {
+        const approved = await host.maybeRequestApproval({
+          tool: "combat_execute_turn",
+          summary: summarizeExecuteTurn(params),
+          args: params,
+        });
+        if (!approved) return textResult("DM declined this action; do not retry it.");
+        const data = await runtimeCall("executeTurn", params, {
+          signal,
+          executionTimeoutMs: 120_000,
+        });
+        return textResult(safeJson(data), data);
+      },
+    });
+
+    // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
+    return [foundryOpen, foundryScreenshot, browserEvaluate, worldStatus, ...createFoundryTools(host),
+      combatBattleContext, combatTurnContext, combatExecuteTurn, requestUserInput, openDocument];
   }
 }

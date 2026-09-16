@@ -1,6 +1,6 @@
 import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DirectFoundryRuntime } from "./direct-foundry-runtime.js";
@@ -11,16 +11,16 @@ import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
 import { ModeHostController } from "./mode-host-controller.js";
+import { SessionNavigation, projectKey } from "./conversations/session-navigation.js";
 import { SessionRegistry } from "./conversations/session-registry.js";
+import { listStoredSessions } from "./conversations/session-catalog.js";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { ActivityCenter } from "./conversations/activity-center.js";
 import { DesktopNotifications } from "./conversations/desktop-notifications.js";
 import { ExecutionScheduler } from "./scheduling/execution-scheduler.js";
-import { ResourceCoordinator } from "./scheduling/resource-coordinator.js";
-import { PanelCommands } from "./scheduling/panel-commands.js";
-import { SessionDeletions } from "./conversations/session-deletions.js";
-import { ShutdownCoordinator } from "./conversations/shutdown-coordinator.js";
+import { StartupReconciler } from "./conversations/startup-reconciler.js";
 import "../shared/i18n/messages.js";
-import { configPath, migrateLegacyConfig } from "./config-dir.js";
+import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
@@ -31,10 +31,21 @@ import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
+import { PanelSurfaceController } from "./panel-surface-controller.js";
+import { loadNotePayload, reloadNotePayload } from "./md-reader-note.js";
+import { regionConfig } from "./region.mjs";
 
 // Pi shell tools and other Arcane-owned child processes inherit process.env.
 // Establish the Windows UTF-8 contract before creating any of them.
 applyArcaneSubprocessEnvironment();
+
+// Region 默认值表（D1）：环境变量 > region 默认值。intl 构建默认值即指向 .app 域名。
+const REGION = regionConfig();
+// M3 接线点：mod-manager 以子进程方式运行，经环境变量接收索引地址；
+// 运维/联调可用 ARCANE_MOD_INDEX_URL 显式覆盖。
+if (!String(process.env.ARCANE_MOD_INDEX_URL ?? "").trim()) {
+  process.env.ARCANE_MOD_INDEX_URL = REGION.modIndexUrl;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARCANE_APP_ID = "cn.bitterbebop.arcanedesk";
@@ -49,7 +60,7 @@ const ARCANE_APP_ICON = path.join(
 const isDev = process.argv.includes("--dev");
 
 const DEFAULT_FOUNDRY_URL = process.env.ARCANE_FOUNDRY_URL || "http://localhost:30000";
-const ARCANE_WEBSITE_URL = process.env.ARCANE_WEBSITE_URL || "https://arcanedesk.bitterbebop.cn";
+const ARCANE_WEBSITE_URL = REGION.websiteUrl;
 const CHAT_WIDTH_RATIO = 0.3;
 const CHAT_MIN_WIDTH = 320;
 const CHAT_MAX_RATIO = 0.65;
@@ -81,7 +92,15 @@ if (app.isPackaged) {
 }
 
 let mainWindow = null;
-let foundryView = null; // 按需创建:agent 调 foundry_open 或用户点顶栏开关时才打开
+let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
+// 右屏两个 view(foundry / md 阅读器)的生命周期归 panel-surface 控制器(spec §8),
+// main.js 只留只读访问,不再持有可变引用——否则 readerView 可见时下面这些直摸点会静默失效。
+let panelSurfaces = null; // whenReady 里建;建好之前没有任何面板可排
+// 右屏悬浮 surface 切换器(FVTT/文档药丸):独立小 WebContentsView,
+// 与 foundry/reader 同级叠放且始终在最上——右屏原生 view 压在渲染层之上,HTML 浮层盖不住它。
+let panelSwitchView = null;
+let panelSwitchStatus = { open: false, surface: null }; // 最近一次 panel_status 的快照
+const PANEL_SWITCH_SIZE = { width: 156, height: 30 };
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
 let chatWidthPx = null; // 用户可拖;null = 按比例初始化
@@ -89,9 +108,9 @@ let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设�
 let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
-let shutdown = null, backgroundTray = null, exitPrompt = false, quitAllowed = false;
-let hasLiveWork = () => false;
+let prepareExit = null, backgroundTray = null, quitAllowed = false, exitRequested = false;
 function restoreMainWindow() {
+  if (exitRequested) return;
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show(); mainWindow.focus();
@@ -110,20 +129,14 @@ function enableBackgroundEntry() {
     return true;
   } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
 }
-async function requestExit(reason) {
-  if (!shutdown || quitAllowed) { app.quit(); return; }
-  if (exitPrompt || shutdown.state.state === "stopping") { restoreMainWindow(); return; }
-  if (!hasLiveWork()) { void shutdown.stop(); return; }
-  exitPrompt = true;
-  try {
-    const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
-    const background = reason === "close" && enableBackgroundEntry();
-    const buttons = [text("lifecycle.cancel"), text("lifecycle.stopExit"), ...(background ? [text("lifecycle.background")] : [])];
-    const answer = await dialog.showMessageBox(mainWindow, { type: "question", title: text("lifecycle.quit"),
-      message: text("lifecycle.confirm"), buttons, defaultId: 0, cancelId: 0, noLink: true });
-    if (answer.response === 2 && background) mainWindow.hide();
-    else if (answer.response === 1) { restoreMainWindow(); void shutdown.stop(); }
-  } finally { exitPrompt = false; }
+function requestExit() {
+  if (exitRequested) return;
+  exitRequested = true;
+  // The deadline also covers pending loads, stop requests and Electron unload hooks.
+  setTimeout(() => app.exit(0), 2000);
+  void Promise.resolve().then(() => prepareExit?.()).catch(error => {
+    console.error("[quit] best-effort cleanup failed", error);
+  }).finally(() => { quitAllowed = true; app.quit(); });
 }
 let desktopNotifications = null;
 
@@ -173,27 +186,35 @@ function effectiveChatWidth(winWidth) {
   return chatWidthPx;
 }
 
-function layoutViews() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+/** 右屏 Foundry 页面的只读访问。权限策略、direct-foundry-runtime 与 AgentHost 用它取页面;
+    它们绝不能拿到 readerView(spec §8 收编表末行),所以这里只暴露 foundry 那一个。 */
+const foundryView = () => panelSurfaces?.foundryView ?? null;
+
+/** 右屏区域几何:chat 居左,面板从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
+    给贯穿全窗的标题栏带(overlay 三键落在带上),面板从带下沿开始,不被压;
+    真全屏(F11)时三键与带子都消失,面板回满高。 */
+function computePanelLayout() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
   const [width, height] = mainWindow.getContentSize();
-  if (!foundryView) {
-    // 无面板:chat 全屏
-    return;
-  }
   const chatWidth = effectiveChatWidth(width);
-  // chat 居左,Foundry 主视觉从右侧弹出。Win frameless 下顶部让出 TITLEBAR_HEIGHT
-  // 给贯穿全窗的标题栏带(overlay 三键落在带上),Foundry 从带下沿开始,不被压;
-  // 真全屏(F11)时三键与带子都消失,Foundry 回满高。
   const topOffset = process.platform === "win32" && !mainWindow.isFullScreen() ? TITLEBAR_HEIGHT : 0;
-  foundryView.setBounds({
-    x: chatWidth + SPLITTER_GUTTER,
-    y: topOffset,
-    width: Math.max(0, width - chatWidth - SPLITTER_GUTTER),
-    height: Math.max(0, height - topOffset),
-  });
-  // chat 页面是整窗的,告诉 renderer 把内容让出右屏(margin-right),
-  // 否则 chat 内容被 Foundry view 直接盖住。
-  sendToRenderer({ type: "panel_layout", open: true, chatWidth, gutter: SPLITTER_GUTTER });
+  return {
+    bounds: {
+      x: chatWidth + SPLITTER_GUTTER,
+      y: topOffset,
+      width: Math.max(0, width - chatWidth - SPLITTER_GUTTER),
+      height: Math.max(0, height - topOffset),
+    },
+    chatWidth,
+    gutter: SPLITTER_GUTTER,
+  };
+}
+
+/** 重排右屏。bounds 同时发给两个 view(隐藏的那个也保持正确尺寸,切换时不闪旧布局),
+    并由控制器发一次 panel_layout 让 chat 页面 margin-right 让出右屏——事件协议不变。 */
+function layoutViews() {
+  panelSurfaces?.layout();
+  layoutPanelSwitch();
 }
 
 function sameOrigin(a, b) {
@@ -311,10 +332,188 @@ function dropIfSessionRejected(view, origin, restored) {
   }
 }
 
+/** 从主窗口摘下并关闭一个 view。两个 surface 共用,销毁时机由控制器定。 */
+function detachAndCloseView(view) {
+  try {
+    mainWindow?.contentView.removeChildView(view);
+  } catch {
+    /* view already detached */
+  }
+  try {
+    if (view.webContents && !view.webContents.isDestroyed()) view.webContents.close();
+  } catch {
+    /* view gone */
+  }
+}
+
+/** 建 foundryView 并挂全部 Foundry 专属监听(指针、F11、导航权限、崩溃、devtools)。
+    显隐、bounds 与销毁时机都不在这里——那是控制器的事(spec §8)。 */
+function createFoundryView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  mainWindow.contentView.addChildView(view);
+  const panelWebContents = view.webContents;
+  panelWebContents.on("before-mouse-event", (_event, mouse) => {
+    if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
+  });
+  if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
+  panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame === false || isInPlace) return;
+    foundryRuntime?.invalidate();
+    let sameTrustedOrigin = false;
+    try {
+      sameTrustedOrigin = Boolean(foundryPermissionOrigin) && new URL(url).origin === foundryPermissionOrigin;
+    } catch {
+      /* Invalid navigation target is never trusted. */
+    }
+    clearFoundryPermissionState("foundry-navigation", { keepSessionGrants: sameTrustedOrigin });
+  });
+  // 阅读器盖住期间 Foundry 的 renderer 可能崩溃(WebGL 页面被 Chromium 判定 occlusion 后丢弃):
+  // 崩溃后 isDestroyed() 仍是 false,不在这里作废 runtime 与权限授权的话,
+  // 它们会握着一块死黑屏;重建由控制器 isUsable() 的 isCrashed 检查在下次使用时完成(review BUG-4)。
+  panelWebContents.on("render-process-gone", (_event, details) => {
+    console.error("[panel] Foundry renderer process gone:", details?.reason ?? "unknown");
+    foundryRuntime?.invalidate();
+    clearFoundryPermissionState("foundry-render-process-gone");
+  });
+  panelWebContents.once("destroyed", () => {
+    foundryRuntime?.invalidate();
+    clearFoundryPermissionState("foundry-view-destroyed");
+  });
+  if (isDev) panelWebContents.openDevTools({ mode: "detach" });
+  keepPanelSwitchOnTop(); // foundryView 追加到了最上层,切换器要重新压回来
+  return view;
+}
+
+/** 销毁 foundryView:runtime 句柄与权限授权跟着一起作废(reason 由控制器给)。 */
+function destroyFoundryView(view, reason) {
+  foundryRuntime?.invalidate();
+  clearFoundryPermissionState(reason);
+  detachAndCloseView(view);
+}
+
+/** 建 readerView:本地 md-reader.html + 专用小 preload(spec §7/§8)。
+    内容只由 main 侧推送(§3.5 不变量 5),页面自身不读盘:F5 被 before-input-event
+    接到控制器的 reloadSurface 重读磁盘;devtools Ctrl+R / 崩溃恢复造成的整页重载,
+    由 did-finish-load → onReaderReady 重读重推,内容都必然回来。 */
+function createReaderView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload-reader.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  mainWindow.contentView.addChildView(view);
+  const contents = view.webContents;
+  // 点阅读器也要能收起覆盖式抽屉(spec §8 收编表 before-mouse-event 行)
+  contents.on("before-mouse-event", (_event, mouse) => {
+    if (mouse.type === "mouseDown") sendToRenderer({ type: "panel_pointer" });
+  });
+  if (process.platform === "win32") bindFullScreenHotkey(contents); // 焦点在阅读器里 F11 也生效
+  bindReaderReloadHotkey(contents); // 焦点在阅读器里 F5 = 重读当前笔记(spec §4.3)
+  denyWindowOpenToSystemBrowser(contents); // target="_blank" 交系统浏览器,不开裸窗口(N14)
+  // 与 foundryView 同款崩溃处理:崩溃后 isDestroyed() 仍是 false,这里记日志;
+  // 重建由控制器 isUsable() 的 isCrashed 检查在下次 F5/② 时完成(review BUG-4 同型,N5)
+  contents.on("render-process-gone", (_event, details) => {
+    console.error("[reader] renderer process gone:", details?.reason ?? "unknown");
+  });
+  contents.on("did-finish-load", () => {
+    if (contents.isDestroyed()) return;
+    panelSurfaces?.onReaderReady();
+  });
+  if (isDev) contents.openDevTools({ mode: "detach" });
+  keepPanelSwitchOnTop(); // readerView 追加到了最上层,切换器要重新压回来
+  void contents.loadFile(path.join(__dirname, "..", "renderer", "md-reader.html"), {
+    // 只传 theme / lang:阅读器页没有可拖拽 chrome(win 下 view 已从标题栏带下沿开始),
+    // 所以不需要 frameless。
+    query: { theme: resolveTheme(), lang: resolveLocale() },
+  }).catch(error => console.error("[reader] page load failed", error?.message ?? error));
+  return view;
+}
+
+// ---------- 右屏悬浮 surface 切换器(FVTT / 文档药丸) ----------
+// 右屏是原生 WebContentsView 直接盖在 chat 渲染层之上(chat.js 注释:任何 z-index 都盖不住它),
+// 所以"悬浮在面板上的切换器"只能是同级再叠一个小 view。它只遮药丸自身大小,
+// 透明区域之外的鼠标事件照常落到下层 Foundry / 阅读器。
+
+function sendToPanelSwitch(channel, payload) {
+  const contents = panelSwitchView?.webContents;
+  if (!contents || contents.isDestroyed()) return;
+  try { contents.send(channel, payload); } catch { /* view 正在销毁 */ }
+}
+
+/** 建切换器 view:透明底小窗 + 专用小 preload;位置由 layoutPanelSwitch 管。 */
+function createPanelSwitchView() {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload-panel-switch.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  view.setBackgroundColor("#00000000");
+  mainWindow.contentView.addChildView(view);
+  const contents = view.webContents;
+  contents.on("did-finish-load", () => {
+    if (contents.isDestroyed()) return;
+    // 首屏补齐状态(面板可能在页面加载前就开了),之后走 emit 包装器推送
+    sendToPanelSwitch("arcane-panel-switch:status", panelSwitchStatus);
+    layoutPanelSwitch();
+  });
+  void contents.loadFile(path.join(__dirname, "..", "renderer", "panel-switch.html"), {
+    query: { theme: resolveTheme(), lang: resolveLocale() },
+  }).catch(error => console.error("[panel-switch] page load failed", error?.message ?? error));
+  return view;
+}
+
+/** foundry/reader view 是懒建的,addChildView 永远追加到最上层;
+    切换器要始终压在这两个 view 之上,每次新建后把它重新置顶。 */
+function keepPanelSwitchOnTop() {
+  if (!panelSwitchView || panelSwitchView.webContents.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.contentView.removeChildView(panelSwitchView);
+    mainWindow.contentView.addChildView(panelSwitchView);
+  } catch { /* view 正在销毁 */ }
+}
+
+/** 切换器跟随右屏 bounds:水平居中;垂直对齐 chat 天头的中线,与天头里的模式开关
+    站在同一水平线上(天头高 --titlebar-h = TITLEBAR_HEIGHT,两边约定同步;win 下
+    药丸浮在标题栏延伸带上,mac 下 bounds.y 本就是 0)。面板关着时藏起。 */
+function layoutPanelSwitch() {
+  if (!panelSwitchView || panelSwitchView.webContents.isDestroyed()) return;
+  if (!panelSwitchStatus.open) {
+    try { panelSwitchView.setVisible(false); } catch { /* gone */ }
+    return;
+  }
+  const computed = computePanelLayout();
+  if (!computed) return;
+  const { bounds } = computed;
+  const width = Math.min(PANEL_SWITCH_SIZE.width, bounds.width);
+  const height = Math.min(PANEL_SWITCH_SIZE.height, bounds.height);
+  try {
+    panelSwitchView.setBounds({
+      x: bounds.x + Math.round((bounds.width - width) / 2),
+      y: Math.max(0, Math.round((TITLEBAR_HEIGHT - height) / 2)),
+      width,
+      height,
+    });
+    panelSwitchView.setVisible(true);
+  } catch { /* gone */ }
+}
+
 /**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
+ * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
   const target = /^https?:\/\//i.test(rawUrl ?? "") ? rawUrl : DEFAULT_FOUNDRY_URL;
@@ -329,101 +528,80 @@ async function openFoundryView(rawUrl) {
     };
   }
 
-  // 面板 renderer 可能已崩溃/被销毁:不可复用,重建
-  if (foundryView && (!foundryView.webContents || foundryView.webContents.isDestroyed())) {
-    foundryRuntime?.invalidate();
-    clearFoundryPermissionState("foundry-renderer-gone");
-    try {
-      mainWindow?.contentView.removeChildView(foundryView);
-    } catch {
-      /* view already detached */
-    }
-    foundryView = null;
-  }
+  foundryTargetUrl = target;
 
-  if (!foundryView) {
-    foundryView = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        backgroundThrottling: false,
-      },
-    });
-    mainWindow.contentView.addChildView(foundryView);
-    const panelWebContents = foundryView.webContents;
-    if (process.platform === "win32") bindFullScreenHotkey(panelWebContents); // 焦点在 Foundry 里 F11 也生效
-    panelWebContents.on("did-start-navigation", (_event, url, isInPlace, isMainFrame) => {
-      if (isMainFrame === false || isInPlace) return;
-      foundryRuntime?.invalidate();
-      let sameTrustedOrigin = false;
-      try {
-        sameTrustedOrigin = Boolean(foundryPermissionOrigin) && new URL(url).origin === foundryPermissionOrigin;
-      } catch {
-        /* Invalid navigation target is never trusted. */
-      }
-      clearFoundryPermissionState("foundry-navigation", { keepSessionGrants: sameTrustedOrigin });
-    });
-    panelWebContents.once("destroyed", () => {
-      foundryRuntime?.invalidate();
-      clearFoundryPermissionState("foundry-view-destroyed");
-    });
-    if (isDev) foundryView.webContents.openDevTools({ mode: "detach" });
-    sendToRenderer({ type: "panel_status", open: true });
-    layoutViews(); // 立刻让出左屏,不等首次 load 完成
-    // 有记住的登录态:先回填 cookie,直接进 /game,跳过 /join
-    const restored = await restoreSessionCookie(foundryView, origin);
+  // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
+  // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
+  const before = foundryView();
+  panelSurfaces.showFoundry();
+  const view = foundryView();
+
+  if (before !== view) {
+    // 全新 view(首次打开或刚重建):有记住的登录态就先回填 cookie,直接进 /game,跳过 /join
+    const restored = await restoreSessionCookie(view, origin);
     const initialUrl = restored ? new URL("/game", origin).href : target;
     const loaded = await loadFoundryPage(initialUrl);
     if (!loaded.ok) return loaded;
-    dropIfSessionRejected(foundryView, origin, restored);
-    void rememberSessionCookie(foundryView, origin);
+    dropIfSessionRejected(view, origin, restored);
+    void rememberSessionCookie(view, origin);
     return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
 
-  const current = foundryView.webContents.getURL();
+  const current = view.webContents.getURL();
   if (sameOrigin(current, target)) {
     // Same-origin idempotence only protects a real Foundry page. Chromium keeps
     // the failed URL after ERR_CONNECTION_RESET, so origin equality alone can
     // otherwise turn a blank/error page into a false-success tool result.
-    const inspected = await readFoundryPageState(foundryView.webContents);
+    const inspected = await readFoundryPageState(view.webContents);
     if (inspected.ok && inspected.state?.detected) {
       trustFoundryPermissionOrigin(current);
       return { ok: true, page: inspected.state, summary: await describePanel(current, inspected.state) };
     }
-    const retryUrl = current || target;
-    let loaded = await loadFoundryPage(retryUrl);
-    let landedUrl = retryUrl;
-    if (!loaded.ok && retryUrl !== target) {
-      // 当前页可能死在 Foundry 自己的错误页(如 /no "Critical Failure!"):
-      // 原地重载只会复现同一页面、检测永远失败。退回 target 让服务器重新
-      // 路由到 /setup、/license 或 /join。
-      loaded = await loadFoundryPage(target);
-      landedUrl = target;
-    }
+    const loaded = await loadFoundryPage(target);
     if (!loaded.ok) return loaded;
-    return { ok: true, page: loaded.page, summary: await describePanel(landedUrl, loaded.page) };
+    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
-  const restored = await restoreSessionCookie(foundryView, origin);
+  const restored = await restoreSessionCookie(view, origin);
   const navUrl = restored ? new URL("/game", origin).href : target;
   const loaded = await loadFoundryPage(navUrl);
   if (!loaded.ok) return loaded;
-  dropIfSessionRejected(foundryView, origin, restored);
-  void rememberSessionCookie(foundryView, origin);
+  dropIfSessionRejected(view, origin, restored);
+  void rememberSessionCookie(view, origin);
   return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
 }
 
 async function loadFoundryPage(url) {
+  // 与 failedPage 同款守卫:调用方(reloadFoundry 等)检查过之后到这里之间,
+  // view 仍可能被销毁/重建,无条件解引用 webContents 会抛 TypeError(review F3)。
+  const contents = foundryView()?.webContents;
+  if (!contents || contents.isDestroyed() || contents.isCrashed()) {
+    // 与其他 IPC 错误同款的 error 字段:chat 的 F5 只据 result.error 判定失败(N3)
+    return {
+      ok: false,
+      error: err("err.panel.viewGone", { url }),
+      summary: `ERROR: ${url} not loaded: the panel view is gone`,
+    };
+  }
+  foundryTargetUrl = url;
+  const failedPage = async () => {
+    if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
+    await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
+      query: { message: globalThis.ARCANE_MESSAGES[resolveLocale()]["panel.connectionFailed"], theme: resolveTheme() },
+    }).catch(() => {});
+  };
   try {
-    await foundryView.webContents.loadURL(url);
+    await contents.loadURL(url);
   } catch (error) {
+    if (error.code !== "ERR_ABORTED") await failedPage();
     return {
       ok: false,
       error: err("err.panel.loadFailed", { url, error: error.message }),
       summary: `ERROR: failed to load ${url}: ${error.message}`,
     };
   }
-  const inspected = await readFoundryPageState(foundryView.webContents);
+  const inspected = await readFoundryPageState(contents);
   if (!inspected.ok) {
+    await failedPage();
     return {
       ok: false,
       error: err("err.panel.inspectFailed", { error: inspected.error ?? inspected.status }),
@@ -431,6 +609,7 @@ async function loadFoundryPage(url) {
     };
   }
   if (!inspected.state?.detected) {
+    await failedPage();
     return {
       ok: false,
       error: err("err.panel.notFoundry", { url }),
@@ -443,7 +622,7 @@ async function loadFoundryPage(url) {
 }
 
 async function describePanel(url, knownState) {
-  const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView?.webContents);
+  const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView()?.webContents);
   const pageState = inspected.ok ? JSON.stringify(inspected.state) : `(page not ready: ${inspected.error ?? inspected.status})`;
   return `panel at ${url}; page=${pageState}. ` +
     `runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.`;
@@ -513,6 +692,26 @@ function bindFullScreenHotkey(webContents) {
   });
 }
 
+/** 阅读器里的 F5:surface 感知重载(spec §4.3),走控制器重读当前笔记,而不是整页 reload。
+    不带修饰键才接管:Ctrl+R 等组合留给 devtools,整页重载由 onReaderReady 重读兜底(N8)。 */
+function bindReaderReloadHotkey(webContents) {
+  webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || input.key !== "F5") return;
+    if (input.control || input.alt || input.shift || input.meta) return;
+    event.preventDefault();
+    void panelSurfaces?.reloadSurface();
+  });
+}
+
+/** target="_blank" / window.open 不在应用内开裸 Chromium 窗口:http(s) 交给系统浏览器,
+    其余一律拒绝(N14)。foundryView 故意不挂——Foundry 是真实 web 应用,弹窗行为归它自己。 */
+function denyWindowOpenToSystemBrowser(contents) {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+}
+
 function createWindow() {
   // mac 不能摘菜单:macOS 的 Cmd+C/V/A/Z 靠菜单 role 承载,null 菜单 = 输入框
   // 复制粘贴全废。darwin 装最小骨架(应用菜单带 Cmd+Q + 预置 Edit 菜单);
@@ -558,8 +757,11 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"), {
     query: { theme, frameless: process.platform === "win32" ? "1" : "0", lang: resolveLocale() },
   });
+  panelSwitchView = createPanelSwitchView();
   if (isDev) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (process.platform === "win32") bindFullScreenHotkey(mainWindow.webContents);
+  // chat 气泡里的 target="_blank" 链接(markdown.js 渲染)交系统浏览器打开(N14)
+  denyWindowOpenToSystemBrowser(mainWindow.webContents);
 
   const relayout = () => layoutViews();
   mainWindow.on("resize", relayout);
@@ -577,10 +779,15 @@ function createWindow() {
     foundryRuntime?.invalidate();
     clearFoundryPermissionState("main-window-closed");
     mainWindow = null;
-    foundryView = null;
+    // 窗口没了,两个 view 随之而去:只丢引用,不发任何事件(renderer 已经不在了)。
+    panelSurfaces?.dispose();
+    panelSwitchView = null;
   });
   mainWindow.on("close", event => {
-    if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("close"); }
+    if (quitAllowed) return;
+    event.preventDefault();
+    if (enableBackgroundEntry()) mainWindow.hide();
+    else requestExit();
   });
 }
 
@@ -595,13 +802,13 @@ app.whenReady().then(async () => {
   webPermissionPolicy = new WebPermissionPolicy({
     store: webPermissionStore,
     getChatWebContents: () => mainWindow?.webContents ?? null,
-    getFoundryWebContents: () => foundryView?.webContents ?? null,
+    getFoundryWebContents: () => foundryView()?.webContents ?? null,
     getFoundryOrigin: () => foundryPermissionOrigin,
     sendToRenderer,
   });
   displayMediaController = new DisplayMediaController({
     desktopCapturer,
-    getFoundryWebContents: () => foundryView?.webContents ?? null,
+    getFoundryWebContents: () => foundryView()?.webContents ?? null,
     getFoundryOrigin: () => foundryPermissionOrigin,
     sendToRenderer,
   });
@@ -618,6 +825,40 @@ app.whenReady().then(async () => {
   installDevicePermissionDenials(webSession);
 
   createWindow();
+  // 右屏 surface 状态机(spec §3/§8):两个 view 的创建、显隐、销毁与 bounds 分发全在这里。
+  // hooks 引用的 foundryRuntime / prepUiCwd / modeController 都是惰性调用(用户点击或 agent 工具),
+  // 不存在初始化时序问题。
+  panelSurfaces = new PanelSurfaceController({
+    getWindow: () => mainWindow,
+    computeLayout: computePanelLayout,
+    // panel_status 除广播给 chat 外,同步给悬浮切换器并触发它的显隐/归位
+    emit: (event) => {
+      sendToRenderer(event);
+      if (event?.type !== "panel_status") return;
+      panelSwitchStatus = { open: Boolean(event.open), surface: event.surface ?? null };
+      sendToPanelSwitch("arcane-panel-switch:status", panelSwitchStatus);
+      layoutPanelSwitch();
+    },
+    createFoundryView,
+    destroyFoundryView,
+    createReaderView,
+    destroyReaderView: detachAndCloseView,
+    // ① 重开面板要回到关闭前那个 Foundry 地址,而不是默认地址(spec §3.4 CLOSED 行"恢复关闭前内容")。
+    // foundryTargetUrl 初值就是 DEFAULT_FOUNDRY_URL,所以首次打开的行为与改造前一致;
+    // 而"关掉面板再打开就从远端 world 掉回 localhost:30000"是既有缺陷,在这里一并修掉。
+    loadFoundry: () => openFoundryView(foundryTargetUrl),
+    reloadFoundry: async () => {
+      // 崩掉的 view 先经控制器重建(N3):只查 isDestroyed 会让崩溃的 Foundry
+      // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
+      // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
+      const view = panelSurfaces.ensureFoundryView();
+      return loadFoundryPage(/^https?:/.test(view.webContents.getURL()) ? view.webContents.getURL() : foundryTargetUrl);
+    },
+    // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
+    readNote: rawPath => loadNotePayload(rawPath, noteBaseDir()),
+    // F5/① 恢复的重读:按打开时快照的 absolute + baseDir 复检,不随当前 cwd 漂移(N4)。
+    rereadNote: (absolute, baseDir) => reloadNotePayload(absolute, baseDir),
+  });
   // 遥测先于窗口内的 Agent/Foundry 初始化失败也要能安全关闭(§16.1)
   try {
     telemetry = new TelemetryClient({
@@ -632,7 +873,7 @@ app.whenReady().then(async () => {
   }
   foundryRuntime = new DirectFoundryRuntime({
     allowedActions: DESKTOP_FOUNDRY_ACTIONS,
-    getWebContents: () => foundryView?.webContents ?? null,
+    getWebContents: () => foundryView()?.webContents ?? null,
     onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
   });
 
@@ -660,11 +901,12 @@ app.whenReady().then(async () => {
   // 校验的激活副本优先于包内基线(见 skills-updater.mjs)。解析发生在每次
   // session 创建时,所以启动后刷新成功即对后续新 session 生效,无需重启。
   const skillsUpdater = new SkillsUpdater({
-    bundledSkillsDir: path.join(__dirname, "..", "..", "skills", "prep"),
+    bundledSkillsDir: path.join(__dirname, "..", "..", REGION.bundledSkillsDir),
     stateDir: path.join(app.getPath("userData"), "skills"),
     appVersion: app.getVersion(),
-    // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback)。
-    baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL,
+    // 运维联调可用 ARCANE_SKILLS_UPDATE_BASE_URL 指向本地源(仅 HTTPS 或精确 loopback);
+    // 缺省走 region 默认值(D1,见 src/main/region.mjs)。
+    baseUrl: process.env.ARCANE_SKILLS_UPDATE_BASE_URL || REGION.skillsUpdateBaseUrl,
     onActivated: (dir) => applyModManagerEnv(dir),
     // 通道自身的运维遥测:各 revision 分布/失败率/minAppVersion 拦截全靠这条。
     onRefreshResult: (report) => telemetry?.skillsUpdateCompleted(report),
@@ -715,36 +957,53 @@ app.whenReady().then(async () => {
   // 尚未选目录时也有稳定 cwd 的内部实现细节，不能冒充用户的备团项目。
   const prepUiCwd = () => prepStore.data.lastCwd ?? undefined;
 
+  /** md 阅读器相对路径的 resolve 基准(spec §4.2):当前活动会话的工作目录。
+      战斗模式下同样按此规则——一律用 prep cwd 会让战斗会话里的相对路径静默解析到
+      别的目录、落"文件不存在"错误页,而用户看不出原因。会话未启动时退回备团目录。 */
+  function noteBaseDir() {
+    try {
+      const cwd = modeController.snapshot().host?.cwd();
+      if (cwd) return cwd;
+    } catch {
+      /* host 尚未启动 */
+    }
+    return prepUiCwd();
+  }
+
   // Each mode owns a registry; command contexts capture an actual session host.
   const configuredCapacity = Number(process.env.ARCANE_TASK_CONCURRENCY ?? 2);
   const scheduler = new ExecutionScheduler({ capacity: Number.isInteger(configuredCapacity) && configuredCapacity >= 1 && configuredCapacity <= 16 ? configuredCapacity : 2 });
-  const resources = new ResourceCoordinator();
-  const deletions = new SessionDeletions({ file: configPath("session-deletions.jsonl"), tasksDir: configPath("tasks"), operationsDir: configPath("foundry-operations") });
+  const navigation = new SessionNavigation({ file: configPath("session-navigation.json"), emit: sendToRenderer });
+  const listDiskSessions = async () => (await Promise.all(["prep", "combat"].map(mode => listStoredSessions(getAgentDir(), mode)))).flat();
+  const reconciler = new StartupReconciler({ directory: configDir(), listSessions: listDiskSessions,
+    navigation, activity: () => activityCenter });
   const hosts = {
-    combat: new SessionRegistry({ deletions, createHost: () => new AgentHost({
+    combat: new SessionRegistry({ cleanup: id => reconciler.cleanup(id), navigation, listStored: () => listStoredSessions(getAgentDir(), "combat"), createHost: (directory) => new AgentHost({
       foundryRuntime,
-      getFoundryView: () => foundryView,
+      getFoundryView: () => foundryView(),
       openFoundry: openFoundryView,
+      openMdReader: rawPath => panelSurfaces ? panelSurfaces.showReader(rawPath) : { ok: false, code: "NO_WINDOW" },
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler, resources,
+      telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
       profile: {
-        getCwd: () => combatWorkspace,
+        getCwd: () => directory ?? combatWorkspace,
       },
     }) }),
-    prep: new SessionRegistry({ deletions, createHost: () => {
-      const cwd = prepStore.data.lastCwd ?? prepFallbackWorkspace;
+    prep: new SessionRegistry({ cleanup: id => reconciler.cleanup(id), navigation, listStored: () => listStoredSessions(getAgentDir(), "prep"), createHost: (directory) => {
+      const cwd = directory ?? prepStore.data.lastCwd ?? prepFallbackWorkspace;
       return new AgentHost({
       foundryRuntime,
-      getFoundryView: () => foundryView,
+      getFoundryView: () => foundryView(),
       openFoundry: openFoundryView,
+      openMdReader: rawPath => panelSurfaces ? panelSurfaces.showReader(rawPath) : { ok: false, code: "NO_WINDOW" },
       sendToRenderer,
       providerStore,
-      telemetry: telemetry?.forSession(), scheduler, resources,
+      telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
@@ -756,6 +1015,7 @@ app.whenReady().then(async () => {
         systemPrompt: "append",
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         fence: true,
+        streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },
     }); } }),
   };
@@ -767,6 +1027,8 @@ app.whenReady().then(async () => {
   const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
   activityCenter = new ActivityCenter({
     file: configPath("activity.json"),
+    foreground: id => Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()
+      && modeController.snapshot().host?.describeCurrent()?.id === id),
     describe: id => {
       const host = allSessionHosts().find(host => host.describeCurrent()?.id === id);
       return host ? { ...host.describeCurrent(), mode: host.profile.mode } : null;
@@ -778,7 +1040,7 @@ app.whenReady().then(async () => {
     },
     log: console.error,
   });
-  for (const id of deletions.snapshot().sessionIds) activityCenter.remove(id);
+  try { await reconciler.run(); } catch (error) { console.error("[startup] conversation reconciliation failed", error.message); }
   desktopNotifications = new DesktopNotifications({ file: configPath("notifications.json"),
     supported: () => Notification.isSupported(),
     foreground: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && mainWindow.isVisible() && !mainWindow.isMinimized()),
@@ -798,14 +1060,18 @@ app.whenReady().then(async () => {
   ipcMain.handle("notifications:get", event => isTrustedChatIpc(event) ? { ok: true, ...desktopNotifications.status() } : { ok: false });
   ipcMain.handle("notifications:set", (event, enabled) => isTrustedChatIpc(event) ? desktopNotifications.setEnabled(enabled) : { ok: false });
   ipcMain.handle("notifications:take-target", event => isTrustedChatIpc(event) ? desktopNotifications.takeTarget() : null);
+  // Region 派生的对外链接（官网/社区支持）：renderer 不持有任何硬编码域名。
+  ipcMain.handle("app:links", event => isTrustedChatIpc(event)
+    ? { ok: true, region: REGION.region, websiteUrl: REGION.websiteUrl, supportLinks: REGION.supportLinks }
+    : { ok: false });
   ipcMain.handle("activity:snapshot", event => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     return { ok: true, ...activityCenter.snapshot() };
   });
-  ipcMain.handle("activity:read", (event, request) => {
+  ipcMain.handle("activity:opened", (event, sessionId) => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
-    if (!request || typeof request !== "object") return { ok: false, code: "INVALID_REQUEST" };
-    return activityCenter.markRead(request, Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()));
+    if (typeof sessionId !== "string") return { ok: false, code: "INVALID_REQUEST" };
+    return activityCenter.opened(sessionId);
   });
 
   function staleModeResponse() {
@@ -884,7 +1150,6 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok || validated.context.mode !== "prep") return staleModeResponse();
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     if (!modeController.matches(context)) return staleModeResponse();
     const picked = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
     if (picked.canceled || picked.filePaths.length === 0) return { ok: false, canceled: true };
@@ -900,12 +1165,64 @@ app.whenReady().then(async () => {
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
+  // Navigation spans modes; commands resolve an owned session rather than the selected view.
+  async function navigationRows() {
+    const result = await Promise.all(["prep", "combat"].map(async mode => {
+      return (await hosts[mode].listSessions()).map(row => ({ ...row, mode, projectKey: projectKey(row.cwd), activity: activityCenter.get(row.id) }));
+    }));
+    return result.flat();
+  }
+  async function navigationTarget(id) {
+    const row = (await navigationRows()).find(row => row.id === id);
+    if (!row) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
+    const registry = hosts[row.mode];
+    if (!registry.get(id)) await registry.select(row.path, false, -1);
+    const host = registry.get(id);
+    if (!host) throw Object.assign(new Error("Session not found"), { code: "SESSION_NOT_FOUND" });
+    return { row, registry, host };
+  }
+  ipcMain.handle("sessions:navigation", async event => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try { return { ok: true, sessions: await navigationRows(), warning: navigation.error }; }
+    catch (error) { return { ok: false, code: error.code, error: error.message }; }
+  });
+  for (const [channel, action] of [["setPinned", "pin"], ["rename", "rename"], ["archive", "archive"], ["restore", "restore"]]) {
+    ipcMain.handle("sessions:" + channel, async (event, request) => {
+      if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+      try {
+        const { row, host } = await navigationTarget(request?.sessionId);
+        const metadata = navigation.mutate(row.id, action, action === "pin" ? request.pinned : request.title, host);
+        return { ok: true, sessionId: row.id, metadata };
+      } catch (error) { return { ok: false, code: error.code ?? "NAVIGATION_FAILED", error: error.message }; }
+    });
+  }
+  ipcMain.handle("sessions:deleteArchived", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try {
+      const { row, registry } = await navigationTarget(request?.sessionId);
+      const result = await registry.deleteSession(row.path);
+      return result;
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_DELETE_FAILED", error: error.message }; }
+  });
+  ipcMain.handle("sessions:fork", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    try {
+      const title = typeof request?.title === "string" ? request.title.trim() : "";
+      if (title.length > 200) throw Object.assign(new Error("Use a title between 1 and 200 characters"), { code: "INVALID_TITLE" });
+      const { row, host } = await navigationTarget(request?.sessionId);
+      if (row.archivedAt != null) throw Object.assign(new Error("Restore the session before forking it"), { code: "SESSION_ARCHIVED" });
+      const forked = await host.fork();
+      const metadata = { ...(title ? { customTitle: title } : {}), ...(row.selectedModel ? { selectedModel: row.selectedModel } : {}) };
+      if (Object.keys(metadata).length) navigation.patch(forked.id, metadata);
+      return { ok: true, sessionId: forked.id, path: forked.path };
+    } catch (error) { return { ok: false, code: error.code ?? "SESSION_FORK_FAILED", error: error.message }; }
+  });
+
   // ---- 会话管理(按活动模式路由；模式由 Pi sessionDir + JSONL marker 固有隔离) ----
   ipcMain.handle("sessions:list", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     const list = await hosts[context.mode].listSessions();
     return {
       ok: true,
@@ -927,14 +1244,23 @@ app.whenReady().then(async () => {
     try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.cwd() }; }
     catch (error) { return { ok: false, code: error.code ?? "HISTORY_LOAD_FAILED", error: error.message }; }
   });
-  ipcMain.handle("sessions:deleted", event => isTrustedChatIpc(event) ? deletions.snapshot() : { ok: false, sessionIds: [] });
+  ipcMain.handle("sessions:identities", async event => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    try { return { ok: true, sessionIds: (await listDiskSessions()).map(row => row.id) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
   ipcMain.handle("sessions:new", async (_event, request) => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
     const selection = ++hosts[context.mode].selection;
-    await modeController.ensureStarted(context.mode);
-    const nextHost = await hosts[context.mode].select(null, true, selection);
+    let directory;
+    if (request?.cwd != null) {
+      directory = String(request.cwd);
+      try { if (!path.isAbsolute(directory) || !statSync(directory).isDirectory()) throw new Error("Project directory is unavailable"); }
+      catch (error) { return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message }; }
+    }
+    const nextHost = await hosts[context.mode].select(null, true, selection, directory);
     return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
@@ -943,11 +1269,7 @@ app.whenReady().then(async () => {
     const context = validated.context;
     const selection = ++hosts[context.mode].selection;
     const sessionPath = String(request?.path ?? "");
-    await modeController.ensureStarted(context.mode);
-    const list = await hosts[context.mode].listSessions();
-    if (!list.some((s) => s.path === sessionPath)) {
-      return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
-    }
+
     try {
       const nextHost = await hosts[context.mode].select(sessionPath, false, selection);
       return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
@@ -958,16 +1280,10 @@ app.whenReady().then(async () => {
     if (!validated.ok) return validated;
     const context = validated.context;
     const sessionPath = String(request?.path ?? "");
-    await modeController.ensureStarted(context.mode);
-    const list = await hosts[context.mode].listSessions();
-    if (!list.some((s) => s.path === sessionPath)) {
-      return { ok: false, code: "SESSION_MODE_MISMATCH", error: err("err.session.modeMismatch") };
-    }
-    const result = await hosts[context.mode].deleteSession(sessionPath);
-    if (result.ok) {
-      const deleted = list.find(row => row.path === sessionPath);
-      if (deleted) activityCenter.remove(deleted.id);
-    }
+
+    let result;
+    try { result = await hosts[context.mode].deleteSession(sessionPath); }
+    catch (error) { return { ok: false, code: error.code, error: error.message }; }
     return result;
   });
 
@@ -975,8 +1291,8 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:get", async (event) => {
     if (!isTrustedChatIpc(event)) return { providers: [], defaultModel: null, models: [] };
     const settings = providerStore.toPublic();
-    await modeController.ensureStarted("combat");
-    const models = await hosts.combat.activeHost.listModels();
+    const { host } = await modeController.readySnapshot();
+    const models = await host.listModels();
     const known = new Set(models.map((model) => model.label));
     // Pi only reports models with usable auth. Settings must still show an unconfigured
     // Arcane Spark so a first-run user can select it and reach its Key field.
@@ -994,7 +1310,6 @@ app.whenReady().then(async () => {
     if (!isTrustedChatIpc(event)) return { missingKey: null };
     const validated = await validateModeRequest(request);
     if (!validated.ok) return { ...validated, missingKey: null };
-    await modeController.ensureStarted(validated.context.mode);
     const model = validated.context.host.currentModelRef();
     return { model, missingKey: validated.context.host.missingApiKeyForCurrentModel() };
   });
@@ -1071,7 +1386,6 @@ app.whenReady().then(async () => {
     const providerId = String(request?.providerId ?? "");
     const modelId = String(request?.modelId ?? "");
     if (!providerId || !modelId) return { ok: false, error: "invalid model selection" };
-    await modeController.ensureStarted(validated.context.mode);
     const result = await validated.context.host.setCurrentModel(providerId, modelId);
     if (!result?.ok) return { ...result, ...modeController.publicSnapshot(validated.context) };
     return { ...result, model: { providerId, modelId }, ...modeController.publicSnapshot(validated.context) };
@@ -1235,7 +1549,6 @@ app.whenReady().then(async () => {
     const validated = await validateModeRequest(request);
     if (!validated.ok) return validated;
     const context = validated.context;
-    await modeController.ensureStarted(context.mode);
     const { skills, templates } = context.host.listSlashCommands();
     return {
       ok: true,
@@ -1287,7 +1600,8 @@ app.whenReady().then(async () => {
     const context = validated.context;
     const { mode, host } = context;
     try {
-      await modeController.ensureStarted(mode);
+      try { if (!statSync(host.cwd()).isDirectory()) throw new Error("Missing directory"); }
+      catch { return { ok: false, code: "PROJECT_UNAVAILABLE", error: err("navigation.missingProject") }; }
       const missingKey = host.missingApiKeyForCurrentModel();
       if (missingKey) {
         return {
@@ -1320,9 +1634,13 @@ app.whenReady().then(async () => {
         }
         return text;
       };
-      const result = host.submitInput(message, images, payload?.commandId, prepare);
+      const result = host.submitInput(message, images, payload?.commandId, prepare, payload?.replacesInputId);
       if (result.ok && !result.duplicate) {
-        if (result.disposition !== "new_task") host.telemetry?.turnSteered(mode);
+        if (result.disposition !== "new_task") {
+          // delivery="followUp" 是排队(备团);null/"steer" 维持原 turnSteered 口径(见 spec §3④)。
+          if (result.delivery === "followUp") host.telemetry?.turnQueued(mode);
+          else host.telemetry?.turnSteered(mode);
+        }
         host.telemetry?.inputSubmitted(mode, telemetryInputText, images.length, typeof payload === "object" ? payload?.submitMethod : undefined);
       }
       return { ...result, ...modeController.publicSnapshot(context) };
@@ -1337,7 +1655,7 @@ app.whenReady().then(async () => {
           ...(missingKey ?? {}),
         };
       }
-      return { ok: false, error: message };
+      return { ok: false, error: message, ...(error?.code ? { code: error.code } : {}) };
     }
   });
 
@@ -1361,6 +1679,22 @@ app.whenReady().then(async () => {
     if (!validated.ok) return validated;
     return validated.context.host.taskCoordinator().respond(request);
   });
+  ipcMain.handle("chat:queued-input", async (event, request) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    const validated = await validateModeRequest(request);
+    if (!validated.ok) return validated;
+    const { host, mode } = validated.context;
+    // 队列操作仅备团:战斗的 queued 是 steer 瞬时态,无 UI 入口,只允许防御性拒绝。
+    if (mode !== "prep") return { ok: false, code: "WRONG_MODE" };
+    const inputId = typeof request?.inputId === "string" ? request.inputId : null;
+    const action = request?.action;
+    if (!inputId || !["cancel", "steer"].includes(action)) return { ok: false, code: "INVALID_REQUEST" };
+    const coordinator = host.taskCoordinator();
+    const result = action === "cancel" ? coordinator.cancelQueuedInput(inputId) : coordinator.steerQueuedInput(inputId);
+    // 排队已记 turnQueued;改道立即发送与取消排队成双,记 turnSteered。
+    if (result.ok && action === "steer") host.telemetry?.turnSteered(mode);
+    return { ...result, ...modeController.publicSnapshot(validated.context) };
+  });
 
   // 主题持久化:renderer 切换主题时写 userData/config/ui.json,
   // 下次启动 createWindow 用它决定 backgroundColor + 首屏 query。
@@ -1378,6 +1712,9 @@ app.whenReady().then(async () => {
       mainWindow.setBackgroundColor(next === "light" ? "#f0e9d6" : "#0c0f16");
       syncTitleBarOverlay();
     }
+    // 阅读器页不重读文件,只收一条主题广播(spec §7 arcaneReader.onTheme)。
+    panelSurfaces?.setTheme(next);
+    sendToPanelSwitch("arcane-panel-switch:theme", next);
     return { ok: true };
   });
 
@@ -1386,6 +1723,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("ui:locale", (_event, pref) => {
     const next = UI_LOCALES.includes(pref) ? pref : "auto";
     writeUiState({ locale: next });
+    // 与 ui:theme 对称:阅读器页也热切换语言,不必销毁重建(review M2)。
+    // auto 推解析后的值:阅读器页拿不到 ui.json,无法自己跟随系统。
+    panelSurfaces?.setLocale(next === "auto" ? resolveLocale() : next);
+    sendToPanelSwitch("arcane-panel-switch:locale", next === "auto" ? resolveLocale() : next);
     return { ok: true, pref: next };
   });
   ipcMain.handle("ui:get-locale", () => {
@@ -1393,73 +1734,48 @@ app.whenReady().then(async () => {
     return { pref: UI_LOCALES.includes(saved) ? saved : "auto", resolved: resolveLocale() };
   });
 
-  // 顶栏"面板"开关:用户手动打开/关闭 Foundry 面板,不必经过 agent。
-  const panelCommands = new PanelCommands({ resources, emit: state => sendToRenderer({ type: "panel_command", ...state }), operations: {
-    open: () => openFoundryView(),
-    close: () => {
-      if (!foundryView) return { ok: true };
-      foundryRuntime.invalidate();
-      clearFoundryPermissionState("panel-closed");
-      mainWindow?.contentView.removeChildView(foundryView);
-      if (!foundryView.webContents.isDestroyed()) foundryView.webContents.close();
-      foundryView = null;
-      sendToRenderer({ type: "panel_status", open: false });
-      sendToRenderer({ type: "panel_layout", open: false });
-      return { ok: true };
-    },
-
-    // Await navigation and inspection before reporting that reload finished.
-    reload: async () => {
-      if (!foundryView || foundryView.webContents.isDestroyed()) return { ok: false };
-      return loadFoundryPage(foundryView.webContents.getURL());
-    },
-  } });
+  // 顶栏"面板"开关:右屏唯一的 chrome 开关(spec §3.2 ①)。三个动作全部委托控制器——
+  // 它同时管 foundry 与 reader 两个 surface,重开时按 lastContent 恢复关闭前的内容(§3.4 CLOSED 行)。
+  const panelOperations = {
+    open: () => panelSurfaces.openPanel(),
+    close: () => panelSurfaces.closePanel(),
+    // F5 改为 surface 感知(spec §4.3):foundry → 等导航与巡检完成再报;reader → 重读当前文件。
+    // 于是 READER_C 下的 F5 不再静默哑掉(design-rules R5)。
+    reload: () => panelSurfaces.reloadSurface(),
+  };
   for (const action of ["open", "close", "reload"]) {
-    ipcMain.handle(`panel:${action}`, event => isTrustedChatIpc(event) ? panelCommands.request(action) : { ok: false });
+    ipcMain.handle(`panel:${action}`, async event => {
+      if (!isTrustedChatIpc(event)) return { ok: false };
+      try { return await panelOperations[action](); }
+      catch (error) { return { ok: false, error: error.message }; }
+    });
   }
-  ipcMain.handle("panel:command-state", event => isTrustedChatIpc(event) ? panelCommands.snapshot() : null);
-  ipcMain.handle("panel:cancel-command", (event, id) => isTrustedChatIpc(event) ? panelCommands.cancel(id) : { ok: false });
-  let recoveryConfirming = false;
-  ipcMain.handle("panel:recover", async event => {
-    if (!isTrustedChatIpc(event) || recoveryConfirming || panelCommands.recovering) return { ok: false, code: "RECOVERY_RUNNING" };
-    recoveryConfirming = true;
-    try {
-      const text = key => globalThis.ARCANE_MESSAGES[resolveLocale()][key];
-      const answer = await dialog.showMessageBox(mainWindow, { type: "warning", title: text("panel.recover"),
-        message: text("panel.recoveryConfirm"), buttons: [text("panel.keepWaiting"), text("panel.recover")], defaultId: 0, cancelId: 0, noLink: true });
-      if (answer.response !== 1) return { ok: true, cancelled: true };
-      const target = foundryView?.webContents?.getURL() || DEFAULT_FOUNDRY_URL;
-      return await panelCommands.recover({
-        stopOwners: owners => {
-          for (const owner of owners) {
-            if (!owner.sessionId || !owner.taskId) continue;
-            const host = Object.values(hosts).map(registry => registry.get(owner.sessionId)).find(Boolean);
-            if (!host || host.task?.id !== owner.taskId || !host.busy) continue;
-            void host.abort(owner.taskId).catch(error => console.error("[panel recovery] task stop failed", error));
-            if (host.task.state !== "stopping") throw new Error(text("panel.recoveryStopFailed"));
-          }
-        },
-        destroyPage: async () => {
-          const old = foundryView;
-          if (!old) return;
-          foundryView = null;
-          foundryRuntime.invalidate(); clearFoundryPermissionState("panel-recovery");
-          mainWindow?.contentView.removeChildView(old);
-          sendToRenderer({ type: "panel_status", open: false });
-          sendToRenderer({ type: "panel_layout", open: false });
-          if (!old.webContents.isDestroyed()) {
-            await new Promise(resolve => {
-              old.webContents.once("destroyed", resolve);
-              old.webContents.close({ waitForBeforeUnload: false });
-            });
-          }
-        },
-        reopen: () => openFoundryView(target),
-      });
-    } finally { recoveryConfirming = false; }
+  // 顶栏 FVTT/文档切换:只切已存在的内容,目标从未打开时返回 empty,提示在 chat 侧显示。
+  ipcMain.handle("panel:switch", (event, target) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    try { return panelSurfaces.switchSurface(target); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  // 右屏悬浮切换器的同款通道:调用方是切换器小 view 自己,不是 chat frame。
+  ipcMain.handle("panel-switch:switch", (event, target) => {
+    if (event.sender !== panelSwitchView?.webContents) return { ok: false };
+    try { return panelSurfaces.switchSurface(target); }
+    catch (error) { return { ok: false, error: error.message }; }
   });
 
-  // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整 Foundry view 宽度。
+  // ---- Markdown 阅读器(spec §7) ----
+  // ② chat 里点 md 路径。信任边界 ①:只认 chat 主 frame;路径规范化与围栏在
+  // md-reader-note.js 里一次做完,这里不重复校验(design-rules R1)。
+  // 读链失败也照样进阅读器——错误页渲染在阅读器里,不在 chat 弹任何东西(R5)。
+  ipcMain.handle("md-reader:open", (event, rawPath) => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    if (typeof rawPath !== "string" || !rawPath.trim()) return { ok: false, code: "INVALID_REQUEST" };
+    if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, code: "NO_WINDOW" };
+    try { return panelSurfaces.showReader(rawPath); }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+
+  // 分栏拖拽:renderer 本地先动(体感零延迟),节流同步到 main 调整右屏 view 宽度。
   ipcMain.handle("panel:set-chat-width", (_event, px) => {
     const n = Number(px);
     if (!Number.isFinite(n)) return { ok: false };
@@ -1467,55 +1783,39 @@ app.whenReady().then(async () => {
     layoutViews();
     return { ok: true };
   });
-  // 拖拽期间让 Foundry view 鼠标事件穿透到下层 chat 页面:指针划过左屏时
+  // 拖拽期间让当前可见 view 的鼠标事件穿透到下层 chat 页面:指针划过左屏时
   // chat 仍能收到 pointermove/pointerup,拖拽不会在分栏边界"断流"。
+  // 作用于 activeView():只绑 foundryView 的话,拖拽划过阅读器会在边界断流(spec §8)。
   ipcMain.handle("panel:drag-start", () => {
-    try {
-      foundryView?.webContents?.setIgnoreMouseEvents(true);
-    } catch {
-      /* view gone */
-    }
+    panelSurfaces?.setPointerPassthrough(true);
     return { ok: true };
   });
   ipcMain.handle("panel:drag-end", () => {
-    try {
-      foundryView?.webContents?.setIgnoreMouseEvents(false);
-    } catch {
-      /* view gone */
-    }
+    panelSurfaces?.setPointerPassthrough(false);
     layoutViews();
     return { ok: true };
   });
 
-  shutdown = new ShutdownCoordinator({ registries: Object.values(hosts),
-    emit: state => sendToRenderer({ type: "shutdown_state", ...state }),
-    gate: closing => {
-      for (const registry of Object.values(hosts)) {
-        registry.closing = closing;
-        for (const host of registry.allHosts()) host.closing = closing;
-      }
-      panelCommands.closing = closing;
-    },
-    quiesce: async () => {
-      if (panelCommands.state?.state === "queued") panelCommands.cancel(panelCommands.state.id);
-      await panelCommands.run;
-      await Promise.all(Object.values(hosts).flatMap(registry => [...registry.deleting.values()]));
-      while (resources.active.size) await Promise.all([...resources.active.values()].map(entry => entry.finished));
-    },
-    finish: () => {
-      activityCenter.flush();
-      for (const host of allSessionHosts()) {
-        try { host.dispose(); } catch (error) { console.error("[quit] host disposal failed after task settlement", error); }
-      }
-      quitAllowed = true; app.quit();
-    },
-  });
+  prepareExit = async () => {
+    const registries = Object.values(hosts);
+    for (const registry of registries) {
+      registry.closing = true;
+      for (const host of registry.allHosts()) host.closing = true;
+    }
+    const stopHosts = allSessionHosts().map(async host => {
+      try {
+        host.session?.abortCompaction?.();
+        await host.abort(host.task?.id);
+        await host.waitForOperations();
+        host.dispose();
+      } catch (error) { console.error("[quit] host cleanup failed", error); }
+    });
+    await Promise.allSettled([...stopHosts,
+      ...registries.flatMap(registry => [...registry.pending.values(), ...registry.deleting.values()]),
+      telemetry?.close()]);
+  };
   const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
   reclaimTimer.unref();
-  hasLiveWork = () => allSessionHosts().some(host => host.busy) || resources.active.size > 0 || Boolean(panelCommands.run) ||
-    Object.values(hosts).some(registry => registry.pending.size || registry.deleting.size);
-  ipcMain.handle("lifecycle:get", event => isTrustedChatIpc(event) ? shutdown.snapshot() : null);
-  ipcMain.handle("lifecycle:cancel-exit", event => { if (isTrustedChatIpc(event)) shutdown.cancel(); return shutdown.snapshot(); });
 
   // agent session 的首次启动(拉起子进程,慢则秒级)必须放在所有 ipcMain.handle
   // 注册之后:await 会挂起 whenReady 回调,若注册被它截断,已加载的 renderer 的
@@ -1540,9 +1840,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", event => {
-  if (!quitAllowed && shutdown) { event.preventDefault(); void requestExit("quit"); return; }
+  if (!quitAllowed) { event.preventDefault(); requestExit(); return; }
   backgroundTray?.destroy(); backgroundTray = null;
   activityCenter?.flush();
   clearFoundryPermissionState("app-quit");
-  void telemetry?.close(); // best-effort flush,最多 500ms(§4.2)
 });

@@ -142,3 +142,66 @@ test("checkSkillsRevision rejects a revision that moved backwards", async (t) =>
     /not bumped \(base r3, head r2\)/,
   );
 });
+
+const INTL_PREFIX = "apps/desktop/skills/prep-intl";
+
+test("checkSkillsRevision passes when the intl tree exists on neither ref", async (t) => {
+  const { dir, git, skillsDir, writeBundle, commitAll } = await makeRepo(t);
+  await writeBundle(3);
+  await fsp.writeFile(path.join(skillsDir, "arcane-x", "SKILL.md"), "# x\n", "utf8");
+  commitAll("base");
+  git(["checkout", "-qb", "pr"]);
+  await fsp.writeFile(path.join(dir, "README.md"), "unrelated\n", "utf8");
+  commitAll("unrelated change");
+  const result = checkSkillsRevision({ repoRoot: dir, baseRef: "main", skillsPrefix: INTL_PREFIX });
+  assert.deepEqual(result, { changedFiles: [], baseRevision: 0, headRevision: 0 });
+});
+
+test("checkSkillsRevision rejects an intl-tree content change without a revision bump", async (t) => {
+  const { dir, git, commitAll } = await makeRepo(t);
+  const intlDir = path.join(dir, "apps", "desktop", "skills", "prep-intl");
+  await fsp.mkdir(path.join(intlDir, "arcane-x"), { recursive: true });
+  await fsp.writeFile(path.join(intlDir, "bundle.json"), '{"schemaVersion":1,"revision":1}\n', "utf8");
+  await fsp.writeFile(path.join(intlDir, "arcane-x", "SKILL.md"), "# x\n", "utf8");
+  commitAll("base with intl tree");
+  git(["checkout", "-qb", "pr"]);
+  await fsp.writeFile(path.join(intlDir, "arcane-x", "SKILL.md"), "# x v2\n", "utf8");
+  commitAll("edit intl skill without bump");
+  assert.throws(
+    () => checkSkillsRevision({ repoRoot: dir, baseRef: "main", skillsPrefix: INTL_PREFIX }),
+    /not bumped \(base r1, head r1\)/,
+  );
+});
+
+test("checkSkillsRevision accepts introducing the intl tree at revision 1", async (t) => {
+  const { dir, git, skillsDir, writeBundle, commitAll } = await makeRepo(t);
+  await writeBundle(3);
+  await fsp.writeFile(path.join(skillsDir, "arcane-x", "SKILL.md"), "# x\n", "utf8");
+  commitAll("base without intl tree");
+  git(["checkout", "-qb", "pr"]);
+  const intlDir = path.join(dir, "apps", "desktop", "skills", "prep-intl");
+  await fsp.mkdir(path.join(intlDir, "arcane-x"), { recursive: true });
+  await fsp.writeFile(path.join(intlDir, "bundle.json"), '{"schemaVersion":1,"revision":1}\n', "utf8");
+  await fsp.writeFile(path.join(intlDir, "arcane-x", "SKILL.md"), "# x\n", "utf8");
+  commitAll("introduce intl tree");
+  const result = checkSkillsRevision({ repoRoot: dir, baseRef: "main", skillsPrefix: INTL_PREFIX });
+  assert.equal(result.baseRevision, 0);
+  assert.equal(result.headRevision, 1);
+  assert.equal(result.changedFiles.length, 2);
+});
+
+test("checkSkillsRevision rejects intl files added without any bundle.json", async (t) => {
+  const { dir, git, skillsDir, writeBundle, commitAll } = await makeRepo(t);
+  await writeBundle(3);
+  await fsp.writeFile(path.join(skillsDir, "arcane-x", "SKILL.md"), "# x\n", "utf8");
+  commitAll("base");
+  git(["checkout", "-qb", "pr"]);
+  const intlDir = path.join(dir, "apps", "desktop", "skills", "prep-intl", "arcane-x");
+  await fsp.mkdir(intlDir, { recursive: true });
+  await fsp.writeFile(path.join(intlDir, "SKILL.md"), "# x\n", "utf8");
+  commitAll("intl files without bundle.json");
+  assert.throws(
+    () => checkSkillsRevision({ repoRoot: dir, baseRef: "main", skillsPrefix: INTL_PREFIX }),
+    /not bumped \(base r0, head r0\)/,
+  );
+});

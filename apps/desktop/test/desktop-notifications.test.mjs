@@ -52,6 +52,15 @@ test("read, answered, removed and disabled notifications cannot redirect to stal
   h.broker.setEnabled(false); h.created[2].emit("click"); assert.equal(h.activated(), 0);
 });
 
+test("a late click on a removed session is ignored", () => {
+  const h = harness(); h.broker.setEnabled(true); h.broker.deliver(h.notice);
+  h.rows.delete("A");
+  h.broker.reconcile("A");
+  h.created[0].emit("click");
+  assert.equal(h.activated(), 0);
+  assert.equal(h.broker.takeTarget(), null);
+});
+
 test("ActivityCenter consumption suppresses historical and disabled-period notification replay", () => {
   const h = harness();
   const center = new ActivityCenter({ describe: () => ({ mode: "prep", name: "A" }),

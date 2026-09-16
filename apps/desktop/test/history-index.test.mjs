@@ -19,7 +19,7 @@ test("paged snapshots bound receipt text while preserving every accepted command
   assert.equal(latest.inputs.length, 11); assert.equal(latest.acceptedCommandIds.length, 201);
   assert.ok(latest.acceptedCommandIds.includes("command:0"));
   assert.ok(latest.inputs.some(input => input.commandId === "pending"));
-  const older = host.currentPayload({ around: "message:5", limit: 10 });
+  const older = host.currentPayload({ before: "message:10", limit: 10 });
   assert.ok(older.inputs.some(input => input.commandId === "command:0"));
   assert.equal(tasks.snapshotInputs().length, 201);
 });
@@ -40,30 +40,40 @@ test("stable cursors walk a 10000-message history without gaps or duplicates", (
   assert.deepEqual(index.page({ after: "entry:9999" }).history, []);
 });
 
-test("around restores native, legacy, thinking and tool anchors; invalid or missing cursors are explicit", () => {
-  const data = records(500);
-  data[250] = { id: "250", message: { role: "assistant", timestamp: 250, content: [{ type: "toolCall", id: "t", name: "bash", arguments: {} }] } };
-  const index = new HistoryIndex(data);
-  for (const around of ["entry:250", "assistant:250", "think:entry:250", "tool:t", "work:tool:t"]) {
-    const page = index.page({ around, limit: 20 });
-    assert.equal(page.history.length, 20); assert.equal(page.history[10].key, "entry:250");
-    assert.equal(page.historyPage.hasOlder, true); assert.equal(page.historyPage.hasNewer, true);
+test("an empty page carries no cursors and claims no neighbours", () => {
+  // 空页没有可当游标的 key:报 hasOlder/hasNewer 只会让渲染层画出 null key 的死按钮
+  const index = new HistoryIndex(records(300));
+  for (const page of [index.page({ before: "entry:0" }), index.page({ after: "entry:299" })]) {
+    assert.deepEqual(page.history, []);
+    assert.equal(page.historyPage.firstKey, null);
+    assert.equal(page.historyPage.lastKey, null);
+    assert.equal(page.historyPage.hasOlder, false);
+    assert.equal(page.historyPage.hasNewer, false);
+    assert.equal(page.historyPage.total, 300);
   }
-  for (const query of [null, [], "path", { limit: 0 }, { limit: 201 }, { limit: 1.5 }, { limit: "100" }, { before: "" }, { before: "x", after: "y" }, { path: "file" }]) {
+  // 空历史本身同理
+  const blank = new HistoryIndex([]).page({});
+  assert.equal(blank.historyPage.hasOlder, false);
+  assert.equal(blank.historyPage.hasNewer, false);
+});
+
+test("invalid and missing pagination cursors are explicit", () => {
+  const index = new HistoryIndex(records(500));
+  for (const query of [null, [], "path", { limit: 0 }, { limit: 201 }, { limit: 1.5 }, { limit: "100" }, { before: "" }, { before: "x", after: "y" }, { path: "file" }, { around: "entry:250" }]) {
     assert.throws(() => index.page(query), { code: "INVALID_HISTORY_QUERY" });
   }
-  assert.throws(() => index.page({ around: "not-on-branch" }), { code: "HISTORY_CURSOR_NOT_FOUND" });
+  assert.throws(() => index.page({ before: "not-on-branch" }), { code: "HISTORY_CURSOR_NOT_FOUND" });
 });
 
 test("tools retain results outside their page and reused IDs attach only to their preceding call", () => {
   const call = id => ({ id, message: { role: "assistant", timestamp: 1, content: [{ type: "toolCall", id: "t", name: "bash", arguments: { command: id } }] } });
   const result = text => ({ message: { role: "toolResult", toolCallId: "t", isError: false, content: [{ type: "text", text }] } });
   const index = new HistoryIndex([call("first"), result("first result"), ...records(50), call("second"), result("second result")]);
-  const first = index.page({ around: "entry:first", limit: 1 });
+  const first = index.page({ before: "entry:0", limit: 1 });
   assert.equal(first.history[0].toolCalls[0].resultText, "first result");
   assert.equal(index.page({ limit: 1 }).history[0].toolCalls[0].resultText, "second result");
   first.history[0].toolCalls[0].args.command = "mutated";
-  assert.equal(index.page({ around: "entry:first", limit: 1 }).history[0].toolCalls[0].args.command, "first");
+  assert.equal(index.page({ before: "entry:0", limit: 1 }).history[0].toolCalls[0].args.command, "first");
 });
 
 test("native host caches a branch index, refreshes on append/result and rejects a cursor removed by branching", () => {
@@ -81,6 +91,18 @@ test("native host caches a branch index, refreshes on append/result and rejects 
   assert.equal(host.currentPayload({ limit: 1 }).history[0].toolCalls[0].resultText, "done");
   assert.equal(reads, 3);
   manager.branch(first);
-  assert.throws(() => host.currentPayload({ around: `entry:${second}` }), { code: "HISTORY_CURSOR_NOT_FOUND" });
+  assert.throws(() => host.currentPayload({ before: `entry:${second}` }), { code: "HISTORY_CURSOR_NOT_FOUND" });
   assert.equal(host.currentPayload({}).historyPage.total, 1);
+});
+
+
+test("model failures survive history paging without treating a normal abort as an error message", () => {
+  const index = new HistoryIndex([
+    { id: "failed", message: { role: "assistant", timestamp: 1, content: [], errorMessage: '401: {"type":"invalid_authentication_error"}', stopReason: "error" } },
+    { id: "stopped", message: { role: "assistant", timestamp: 2, content: [], errorMessage: "This operation was aborted", stopReason: "aborted" } },
+  ]);
+  const page = index.page({ limit: 10 });
+  assert.equal(page.history.length, 1);
+  assert.equal(page.history[0].error, '401: {"type":"invalid_authentication_error"}');
+  assert.equal(page.history[0].key, "entry:failed");
 });

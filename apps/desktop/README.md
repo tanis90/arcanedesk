@@ -20,7 +20,9 @@ UI 为 agent 原生三件套,全部在顶栏:
   切换带圆形扩散动画;选择持久化于 `userData/arcane-ui.json`。
 - ⚙ **设置**:管理 LLM provider(新增/编辑/删除,apiKey 打码回显,
   存 `userData/arcane-providers.json`,运行时注册进 Pi ModelRuntime)
-  + 切换默认模型(当前会话立即生效)。
+  + 设置新会话的默认模型；已有会话保持各自选择，运行期间切换会话模型会在下一任务生效。
+
+关闭窗口会直接收起到系统托盘，任务继续运行。点击托盘图标恢复窗口；右键托盘选择“退出 ArcaneDesk”才退出，程序会先停止任务并完成收尾。
 
 ## 甜点路径
 

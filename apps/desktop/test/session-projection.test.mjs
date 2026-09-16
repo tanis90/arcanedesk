@@ -3,14 +3,13 @@ import assert from "node:assert/strict";
 import { SessionProjection } from "../src/main/sync/session-projection.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
-test("a session switch snapshot includes its own envelope and cannot replay itself", () => {
+test("a session switch snapshot includes its own envelope", () => {
   const p = new SessionProjection({ sessionId: "A" });
   p.publish({ type: "message_delta", key: "draft", text: "half" });
   const before = p.snapshot();
   const event = p.publish({ type: "session_switched", inFlight: before, history: [] });
   assert.equal(before.seq, 1);
   assert.equal(event.inFlight.seq, event.seq);
-  assert.deepEqual(p.sync({ runtimeEpoch: event.inFlight.runtimeEpoch, afterSeq: event.inFlight.seq }).events, []);
   assert.equal(event.inFlight.streaming[0].text, "half");
 });
 
@@ -19,7 +18,6 @@ test("a reloaded projection in the same process cannot reuse the previous event 
   old.publish({ type: "message", key: "old", text: "old result" });
   const next = new SessionProjection({ sessionId: "A" });
   assert.notEqual(next.runtimeEpoch, old.runtimeEpoch);
-  assert.equal(next.sync({ runtimeEpoch: old.runtimeEpoch, afterSeq: 1 }).kind, "snapshot");
 });
 
 test("snapshot restores cumulative text, thinking and a tool's original start time", () => {
@@ -60,20 +58,6 @@ test("retry discards failed draft; final message removes live duplicate", () => 
   assert.equal(p.snapshot().retry, null);
 });
 
-test("snapshot boundary supports replay; duplicates filtered and overflow requires snapshot", () => {
-  const p = new SessionProjection({ epoch: "epoch", capacity: 2 });
-  p.publish({ type: "message_delta", key: "m", text: "one" });
-  const snapshot = p.snapshot();
-  p.publish({ type: "message_delta", key: "m", text: "two" });
-  p.publish({ type: "message", key: "m", text: "three" });
-  const replay = p.sync({ runtimeEpoch: snapshot.runtimeEpoch, afterSeq: snapshot.seq });
-  assert.equal(replay.kind, "events");
-  assert.deepEqual(replay.events.map(e => e.seq), [2, 3]);
-  assert.deepEqual(p.sync({ runtimeEpoch: "epoch", afterSeq: 3 }).events, []);
-  assert.equal(p.sync({ runtimeEpoch: "epoch", afterSeq: 0 }).kind, "snapshot");
-  assert.equal(p.sync({ runtimeEpoch: "old", afterSeq: 3 }).kind, "snapshot");
-  assert.equal(p.sync({ runtimeEpoch: "epoch", afterSeq: 4 }).kind, "snapshot");
-});
 
 test("callers, delivered events and snapshot consumers cannot mutate retained state", () => {
   const p = new SessionProjection({ epoch: "epoch" });
@@ -83,8 +67,6 @@ test("callers, delivered events and snapshot consumers cannot mutate retained st
   delivered.args.command = "mutated output";
   const snapshot = p.snapshot();
   snapshot.tools[0].args.command = "mutated snapshot";
-  const replay = p.sync({ runtimeEpoch: "epoch", afterSeq: 0 });
-  replay.events[0].args.command = "mutated replay";
   assert.equal(p.snapshot().tools[0].args.command, "original");
 });
 

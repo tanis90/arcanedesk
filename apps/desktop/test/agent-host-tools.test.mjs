@@ -16,7 +16,6 @@ import {
   pinArcaneNodeForShellSpawn,
 } from "../src/main/agent-host.js";
 
-
 function buildHarness({ call, sendToRenderer = () => {} } = {}) {
   const foundryRuntime = {
     lastWorldInfo: null,
@@ -216,10 +215,67 @@ test("Agent startup fails before Pi initialization when packaged Node bootstrap 
 
 test("play activates six Foundry tools plus user input; definitions do not expose legacy aliases", () => {
   const { tools } = buildHarness();
-  assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "foundry_static_context", "foundry_play_context", "foundry_execute_action", "foundry_conditions_set", "request_user_input"]);
-  assert.equal([...tools.keys()].some(name => name.startsWith("combat_")), false);
-  for (const name of activeToolNames("combat")) assert.ok(tools.has(name));
-  assert.deepEqual(tools.get("foundry_static_context").parameters.properties, {});
+  const attackRollModeDescription =
+    "Optional only when the selected battle-context action advertises input.attackRollMode. " +
+    "Set it only from an explicit DM instruction: advantage/disadvantage set the corresponding Midi request flags; " +
+    "normal leaves the roll unforced and does not cancel effects Foundry applies automatically. " +
+    "Otherwise omit it; never infer it from conditions, positioning, or tactics.";
+  const executeTurnInputSchema = {
+    type: "object",
+    properties: {
+      selections: { type: "object", properties: {}, additionalProperties: true },
+      declaredRiders: {
+        type: "array",
+        items: { type: "object", properties: {}, additionalProperties: true },
+        description: 'Rider entries, e.g. [{ id: "branding-smite", spellLevel: 2 }]',
+      },
+      allocation: {
+        type: "array",
+        items: { type: "object", properties: {}, additionalProperties: true },
+        description: "Non-empty array of allocation entries",
+      },
+      spellLevel: { type: "number" },
+      attackRollMode: {
+        type: "string",
+        enum: ["normal", "advantage", "disadvantage"],
+        description: attackRollModeDescription,
+      },
+      targetSpec: { type: "object", properties: {}, additionalProperties: true },
+    },
+    additionalProperties: true,
+  };
+
+  assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "browser_evaluate",
+    "combat_battle_context", "combat_turn_context", "combat_execute_turn", "request_user_input", "open_document"]);
+  for (const name of activeToolNames("combat")) assert.ok(tools.has(name), name);
+  // Pool is the superset for both modes; prep-only tools stay defined but inactive in combat.
+  for (const name of ["foundry_screenshot", "foundry_actor_advance", "foundry_compendium_browse", "foundry_play_context"]) {
+    assert.ok(tools.has(name), name);
+  }
+  assert.deepEqual(tools.get("combat_battle_context").parameters, { type: "object", properties: {} });
+  assert.deepEqual(tools.get("combat_turn_context").parameters, { type: "object", properties: {} });
+  assert.deepEqual(tools.get("combat_execute_turn").parameters, {
+    type: "object",
+    properties: {
+      actionId: { type: "string", description: "Single action id from battle-context" },
+      actions: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["actionId"],
+          properties: {
+            actionId: { type: "string" },
+            targetTokenIds: { type: "array", items: { type: "string" } },
+            input: executeTurnInputSchema,
+          },
+        },
+        description: "Multiple actions in one submission",
+      },
+      targetTokenIds: { type: "array", items: { type: "string" } },
+      input: executeTurnInputSchema,
+      advance: { type: "boolean", description: "Advance the combat turn after execution" },
+    },
+  });
 });
 
 test("prep mode exposes the Foundry panel, screenshot and page eval custom tools", () => {
@@ -245,6 +301,37 @@ test("prep mode exposes the Foundry panel, screenshot and page eval custom tools
   assert.match(tools.get("browser_evaluate").description, /MAY read or change the current world/);
   assert.match(tools.get("browser_evaluate").promptGuidelines.join("\n"), /game\.ready && game\.user\.isGM/);
   assert.doesNotMatch(tools.get("browser_evaluate").description, /structured combat tools/);
+});
+
+test("open_document opens a markdown note in the right-side reader panel", async () => {
+  const opened = [];
+  const host = new AgentHost({
+    foundryRuntime: null,
+    getFoundryView: () => null,
+    openFoundry: async () => ({ ok: true, summary: "open" }),
+    openMdReader: (rawPath) => { opened.push(rawPath); return { ok: true, state: "reader", error: null }; },
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+  const tool = host.buildTools().find((candidate) => candidate.name === "open_document");
+  const result = await tool.execute("call-1", { path: "notes/a.md" });
+  assert.deepEqual(opened, ["notes/a.md"]);
+  assert.match(result.content[0].text, /right-side reader panel/);
+  assert.doesNotMatch(result.content[0].text, /WARNING/);
+});
+
+test("open_document surfaces a reader error page as a warning", async () => {
+  const host = new AgentHost({
+    foundryRuntime: null,
+    getFoundryView: () => null,
+    openFoundry: async () => ({ ok: true, summary: "open" }),
+    openMdReader: () => ({ ok: true, state: "reader", error: "missing" }),
+    sendToRenderer: () => {},
+    log: () => {},
+  });
+  const tool = host.buildTools().find((candidate) => candidate.name === "open_document");
+  const result = await tool.execute("call-1", { path: "notes/gone.md" });
+  assert.match(result.content[0].text, /WARNING: the document could not be loaded \(missing\)/);
 });
 
 test("prep screenshot returns bounded image content from the current Foundry WebContents", async () => {

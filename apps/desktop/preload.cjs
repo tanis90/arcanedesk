@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Send a user message to the agent session. images: [{ data: base64, mimeType }]. */
   prompt: (text, images, context) => ipcRenderer.invoke("chat:prompt", {
     text,
+    replacesInputId: context?.replacesInputId,
     images,
     mode: context?.mode,
     generation: context?.generation,
@@ -16,17 +17,25 @@ contextBridge.exposeInMainWorld("arcane", {
   listSlash: (context) => ipcRenderer.invoke("slash:list", context),
   /** Abort the currently running agent turn. */
   abort: (context) => ipcRenderer.invoke("chat:abort", context),
+  /** 排队输入操作(备团):action = "cancel"(删除/编辑召回) | "steer"(立即发送)。 */
+  updateQueuedInput: (context, inputId, action) => ipcRenderer.invoke("chat:queued-input", {
+    inputId,
+    action,
+    mode: context?.mode,
+    generation: context?.generation,
+    sessionId: context?.sessionId,
+    taskId: context?.taskId,
+  }),
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel: () => ipcRenderer.invoke("panel:open"),
   closePanel: () => ipcRenderer.invoke("panel:close"),
-  /** F5: reload the Foundry panel page (no-op when the panel is closed). */
+  /** F5: reload the right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel: () => ipcRenderer.invoke("panel:reload"),
-  getPanelCommand: () => ipcRenderer.invoke("panel:command-state"),
-  cancelPanelCommand: id => ipcRenderer.invoke("panel:cancel-command", id),
-  recoverPanel: () => ipcRenderer.invoke("panel:recover"),
-  deletedSessions: () => ipcRenderer.invoke("sessions:deleted"),
-  lifecycleState: () => ipcRenderer.invoke("lifecycle:get"),
-  cancelExit: () => ipcRenderer.invoke("lifecycle:cancel-exit"),
+  /** Switch the right pane between the existing Foundry page and the open note. */
+  switchPanelSurface: (target) => ipcRenderer.invoke("panel:switch", target),
+  /** Open a Markdown note in the right-pane reader. Path validation happens in main. */
+  openMdReader: (path) => ipcRenderer.invoke("md-reader:open", path),
+  sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */
   setChatWidth: (px) => ipcRenderer.invoke("panel:set-chat-width", px),
   /** While dragging the splitter, let mouse events pass through the Foundry view. */
@@ -46,13 +55,20 @@ contextBridge.exposeInMainWorld("arcane", {
   prepChooseDir: (context) => ipcRenderer.invoke("prep:choose-dir", context),
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
+  sessionNavigation: () => ipcRenderer.invoke("sessions:navigation"),
+  setSessionPinned: (sessionId, pinned) => ipcRenderer.invoke("sessions:setPinned", { sessionId, pinned }),
+  renameSession: (sessionId, title) => ipcRenderer.invoke("sessions:rename", { sessionId, title }),
+  archiveSession: sessionId => ipcRenderer.invoke("sessions:archive", { sessionId }),
+  restoreSession: sessionId => ipcRenderer.invoke("sessions:restore", { sessionId }),
+  deleteArchivedSession: sessionId => ipcRenderer.invoke("sessions:deleteArchived", { sessionId }),
+  forkSession: (sessionId, title) => ipcRenderer.invoke("sessions:fork", { sessionId, title }),
   currentSession: () => ipcRenderer.invoke("sessions:current"),
   sessionSnapshot: (sessionId, historyQuery) => ipcRenderer.invoke("sessions:snapshot", sessionId, historyQuery),
   activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),
   getDesktopNotifications: () => ipcRenderer.invoke("notifications:get"),
   setDesktopNotifications: (enabled) => ipcRenderer.invoke("notifications:set", enabled),
   takeNotificationTarget: () => ipcRenderer.invoke("notifications:take-target"),
-  markActivityRead: (request) => ipcRenderer.invoke("activity:read", request),
+  activityOpened: (sessionId) => ipcRenderer.invoke("activity:opened", sessionId),
   respondToTask: (request) => ipcRenderer.invoke("tasks:respond", request),
   newSession: (context) => ipcRenderer.invoke("sessions:new", context),
   openSession: (path, context) => ipcRenderer.invoke("sessions:open", {
@@ -100,6 +116,8 @@ contextBridge.exposeInMainWorld("arcane", {
   fetchProviderModels: (input) => ipcRenderer.invoke("providers:fetch-models", input),
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite: () => ipcRenderer.invoke("app:open-arcane-website"),
+  /** Region 派生的对外链接:{ region, websiteUrl, supportLinks }（D1，renderer 不硬编码域名）。 */
+  getAppLinks: () => ipcRenderer.invoke("app:links"),
   /** Packaged app version shown in Settings → General. */
   getAppVersion: () => ipcRenderer.invoke("app:get-version"),
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
