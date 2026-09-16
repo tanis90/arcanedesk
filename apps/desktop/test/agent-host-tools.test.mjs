@@ -246,7 +246,7 @@ test("play activates six Foundry tools plus user input; definitions do not expos
   };
 
   assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "browser_evaluate",
-    "combat_battle_context", "combat_turn_context", "combat_execute_turn", "request_user_input", "open_document"]);
+    "combat_battle_context", "combat_turn_context", "combat_execute_turn", "open_document"]);
   for (const name of activeToolNames("combat")) assert.ok(tools.has(name), name);
   // Pool is the superset for both modes; prep-only tools stay defined but inactive in combat.
   for (const name of ["foundry_screenshot", "foundry_actor_advance", "foundry_compendium_browse", "foundry_play_context"]) {
