@@ -295,6 +295,14 @@
 - 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
   的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
 
+### 跑团模式回执从简（2026-09-16）
+
+- 用户裁决：战斗回执 = exec 返回值语义一行——返回值明确给出的数值（消耗、扣血）照说，
+  没返回的（伤害/HP/状态变化）不复述，DM 在 Foundry 界面看得见，复述是噪声。
+- 配套取消"执行后必读 turn 确认 HP"的固定步骤：下一次执行前的 turn 预读天然覆盖新鲜度，
+  强制回读的唯一产出就是长回执。DM 追问具体数值时才读 turn 回答；聊天卡/提交响应仍不
+  作为伤害事实。combat.md 中英版同步。
+
 ### arcane-module-reader（2026-09-12）
 
 - 给 DM 展示库中文档一律走 open_document（右侧阅读器），禁用系统 open/start 甩给
