@@ -1,0 +1,1391 @@
+{
+  "status": "completed-not-promoted",
+  "rawReport": "benchmark-1788870358459.json",
+  "environment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "experiment": {
+    "arms": [
+      "baseline",
+      "tools"
+    ],
+    "comparison": "revision",
+    "kind": "paired tool revisions with frozen native NPC skill and 16 tools",
+    "cases": [
+      "npc_wizard"
+    ],
+    "samplesPerCase": 3,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Same native NPC routing and skill; tool revision differs",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "ae6737beb59c24d7ba5b53a5382b0e32724cda3c",
+    "promptMode": "production",
+    "baselineCommit": "f66a8b9a92967d96480c3950b63b6124e0afa1db",
+    "nativeNpc": true,
+    "suiteVersion": "prep-npc-intent-draft2",
+    "taskTimeoutMs": 180000,
+    "experienceTargetMs": 120000,
+    "thinkingOverride": "off",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785",
+    "nativeSkillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847"
+  },
+  "revisionInputs": {
+    "baseline": {
+      "commit": "f66a8b9a92967d96480c3950b63b6124e0afa1db",
+      "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+      "toolsFileSha256": "e54659750ad7a2b511ddff4e01dcba36772e7340f62d63621b0d15d22279c41f"
+    },
+    "candidate": {
+      "commit": "ae6737beb59c24d7ba5b53a5382b0e32724cda3c",
+      "runtimeSha256": "160ecec44423151f5ff1fe6b1be16a2ba0808e566521ce9c5ce516a3d7070012",
+      "toolsFileSha256": "3fbf1b59dfd4a98290abbcee9d507729ab0525f73379d2fad813c0f3500ddd38"
+    }
+  },
+  "trials": [
+    {
+      "sample": 0,
+      "arm": "baseline",
+      "ms": 67216.06229999999,
+      "success": true,
+      "withinExperienceTarget": true,
+      "calls": 11,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "[\"Fireball\", \"火球术\", \"Quarterstaff\", \"长棍\"]",
+          "itemType": "spell"
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Fireball",
+          "itemType": "spell"
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Quarterstaff",
+          "itemType": "weapon"
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "Mage",
+          "actorType": "npc"
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 0,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 887.0548999999864,
+      "toolSequence": [
+        "read",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate",
+        "foundry_actor_get",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-26-04-825Z_01a080fb-8e99-78fe-b7f9-badca733b036.jsonl",
+      "manualDataReview": {
+        "count": 1,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "human",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "Fireball",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": null,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": null,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 2,
+            "override": null,
+            "label": "3 环",
+            "level": 3,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 0,
+            "override": null,
+            "label": "4 环",
+            "level": 4,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 0,
+            "override": null,
+            "label": "5 环",
+            "level": 5,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          },
+          "spell0": {
+            "value": 0,
+            "override": null
+          }
+        }
+      }
+    },
+    {
+      "sample": 0,
+      "arm": "tools",
+      "ms": 62301.42990000002,
+      "success": false,
+      "withinExperienceTarget": false,
+      "calls": 8,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": false,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "mage",
+          "limit": 10
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "fireball",
+          "limit": 5
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "quarterstaff",
+          "limit": 5
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 0,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 505.53080000000773,
+      "toolSequence": [
+        "read",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-27-12-577Z_01a080fc-9741-7264-8de1-73561e9c1e70.jsonl",
+      "manualDataReview": {
+        "count": 1,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "human",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "Fireball",
+            "prepared": 0
+          },
+          {
+            "name": "火球术",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": 4,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": 3,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 2,
+            "override": 2,
+            "label": "3 环",
+            "level": 3,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 0,
+            "override": null,
+            "label": "4 环",
+            "level": 4,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 0,
+            "override": null,
+            "label": "5 环",
+            "level": 5,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          }
+        }
+      }
+    },
+    {
+      "sample": 1,
+      "arm": "tools",
+      "ms": 88450.9963,
+      "success": false,
+      "withinExperienceTarget": false,
+      "calls": 13,
+      "checks": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "mage",
+          "limit": 10
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "fireball",
+          "limit": 5
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "quarterstaff",
+          "limit": 5
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 0,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 202.64120000001276,
+      "toolSequence": [
+        "read",
+        "foundry_open",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-28-15-258Z_01a080fd-8c1a-73c1-ad26-e5d4e44dc498.jsonl",
+      "manualDataReview": {
+        "count": 1,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "Fireball",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": 4,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": 3,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 2,
+            "override": 2,
+            "label": "3 环",
+            "level": 3,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 0,
+            "override": 0,
+            "label": "4 环",
+            "level": 4,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 0,
+            "override": 0,
+            "label": "5 环",
+            "level": 5,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          }
+        }
+      }
+    },
+    {
+      "sample": 1,
+      "arm": "baseline",
+      "ms": 67150.87870000003,
+      "success": false,
+      "withinExperienceTarget": false,
+      "calls": 11,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": false,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "Mage",
+          "limit": 5
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "[\"Fireball\",\"Quarterstaff\"]",
+          "limit": 10
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Fireball",
+          "itemType": "spell",
+          "limit": 5
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Quarterstaff",
+          "itemType": "weapon",
+          "limit": 5
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 0,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 404.82929999995395,
+      "toolSequence": [
+        "read",
+        "world_status",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-29-44-000Z_01a080fe-e6c0-73e0-93af-5b72e6cea947.jsonl",
+      "manualDataReview": {
+        "count": 1,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "人类",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "Fireball",
+            "prepared": 1
+          },
+          {
+            "name": "火球术",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": 4,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": 3,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 3,
+            "override": 3,
+            "label": "3 环",
+            "level": 3,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 2,
+            "override": 2,
+            "label": "4 环",
+            "level": 4,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 1,
+            "override": 1,
+            "label": "5 环",
+            "level": 5,
+            "max": 1,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          },
+          "spell0": {
+            "value": 0,
+            "override": null
+          }
+        }
+      }
+    },
+    {
+      "sample": 2,
+      "arm": "baseline",
+      "ms": 165373.3566,
+      "success": false,
+      "withinExperienceTarget": false,
+      "calls": 19,
+      "checks": {
+        "singleNpc": false,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "Mage",
+          "limit": 10
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "[\"Fireball\", \"Quarterstaff\"]",
+          "limit": 20
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "[\"火球术\", \"长棍\"]",
+          "limit": 20
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 1,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 1120.9249000000418,
+      "toolSequence": [
+        "read",
+        "foundry_content_search",
+        "foundry_content_search",
+        "world_status",
+        "foundry_content_search",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-30-51-524Z_01a080ff-ee84-7702-900c-80df4bc19ccc.jsonl",
+      "manualDataReview": {
+        "count": 2,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "human",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "火球术",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": null,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": null,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 3,
+            "override": null,
+            "label": "3 环",
+            "level": 3,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 2,
+            "override": null,
+            "label": "4 环",
+            "level": 4,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 1,
+            "override": null,
+            "label": "5 环",
+            "level": 5,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          }
+        }
+      }
+    },
+    {
+      "sample": 2,
+      "arm": "tools",
+      "ms": 33562.955799999996,
+      "success": false,
+      "withinExperienceTarget": false,
+      "calls": 5,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": false,
+        "staff": true,
+        "noShield": true
+      },
+      "queryCalls": [
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Fireball"
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Item",
+          "query": "Quarterstaff"
+        },
+        {
+          "scope": "compendium",
+          "documentType": "Actor",
+          "query": "Mage"
+        }
+      ],
+      "realBatchCalls": 0,
+      "reportedToolErrors": 0,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "modelConfiguration": {
+        "reasoning": true,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsReasoningEffort": false,
+          "supportsDeveloperRole": false
+        }
+      },
+      "requestModes": [
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        },
+        {
+          "enable_thinking": false,
+          "reasoning_effort": "omitted"
+        }
+      ],
+      "reasoningTokens": 0,
+      "toolDurationSumMs": 490.19940000004135,
+      "toolSequence": [
+        "read",
+        "foundry_content_search",
+        "foundry_content_search",
+        "foundry_content_search",
+        "browser_evaluate"
+      ],
+      "session": "2026-09-08T12-33-37-211Z_01a08102-75bb-7abb-96c4-f2ebb29c3c4a.jsonl",
+      "manualDataReview": {
+        "count": 1,
+        "identity": {
+          "value": "humanoid",
+          "subtype": "human",
+          "swarm": "",
+          "custom": ""
+        },
+        "fireballs": [
+          {
+            "name": "Fireball",
+            "prepared": 1
+          },
+          {
+            "name": "火球术",
+            "prepared": 1
+          }
+        ],
+        "slots": {
+          "spell1": {
+            "value": 4,
+            "override": null,
+            "label": "1 环",
+            "level": 1,
+            "max": 4,
+            "type": "spell"
+          },
+          "spell2": {
+            "value": 3,
+            "override": null,
+            "label": "2 环",
+            "level": 2,
+            "max": 3,
+            "type": "spell"
+          },
+          "spell3": {
+            "value": 3,
+            "override": null,
+            "label": "3 环",
+            "level": 3,
+            "max": 2,
+            "type": "spell"
+          },
+          "spell4": {
+            "value": 3,
+            "override": null,
+            "label": "4 环",
+            "level": 4,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell5": {
+            "value": 1,
+            "override": null,
+            "label": "5 环",
+            "level": 5,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell6": {
+            "value": 0,
+            "override": null,
+            "label": "6 环",
+            "level": 6,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell7": {
+            "value": 0,
+            "override": null,
+            "label": "7 环",
+            "level": 7,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell8": {
+            "value": 0,
+            "override": null,
+            "label": "8 环",
+            "level": 8,
+            "max": 0,
+            "type": "spell"
+          },
+          "spell9": {
+            "value": 0,
+            "override": null,
+            "label": "9 环",
+            "level": 9,
+            "max": 0,
+            "type": "spell"
+          },
+          "pact": {
+            "value": 0,
+            "override": null,
+            "type": "pact",
+            "label": "契约魔法"
+          },
+          "spell0": {
+            "value": 0,
+            "override": null
+          }
+        }
+      }
+    }
+  ],
+  "summary": {
+    "controlSuccess": 1,
+    "candidateSuccess": 0,
+    "nPerArm": 3,
+    "controlWithin120": 1,
+    "candidateWithin120": 0,
+    "timeouts": 0,
+    "candidateRealBatchCalls": 0
+  },
+  "decision": "Stop search parameter iteration. No successful candidate tasks and no demonstrated batch use; revert experimental batch surface and runtime to identifier-only single query. Keep frozen guide for migration assessment, not product promotion.",
+  "caveats": [
+    "All six used verified server thinking off; do not pool with historical server-default thinking runs.",
+    "Small sample; no evidence of stable speed improvement.",
+    "Tool-duration sums may overlap and do not measure exclusive model thinking time.",
+    "Posthoc review preserves preregistered failures."
+  ],
+  "migrationVerifierProbe": {
+    "task": "2014 level-3 elf cleric NPC with Bless and light hammer",
+    "realInMemoryFoundry": true,
+    "checksPassed": 8,
+    "worldWrites": 0,
+    "modelRun": false
+  }
+}

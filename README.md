@@ -96,6 +96,9 @@ Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 ## Project policies
 
+The [Prep Agent benchmark](apps/desktop/docs/prep-benchmark.md) documents repeatable
+QA-A model/tool evaluation, fixed preparation tasks, and baseline design principles.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md),
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The repository migration and

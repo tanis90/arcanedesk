@@ -761,6 +761,20 @@ async function main(): Promise<void> {
     });
 
   program
+    .command("actor-create")
+    .description("Create an empty (blank) or compendium-sourced Actor with an explicit name and optional initial compendium Items")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "60000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorCreate", args, { timeoutMs: parseTimeout(opts.timeout, 60000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorCreate", directCdp: true, write: true } });
+    });
+
+  program
     .command("actor-create-from-compendium")
     .description("Clone one Actor from a compendium entry and optionally patch it")
     .requiredOption("--json <json>", "JSON object args or @file path")
@@ -786,6 +800,34 @@ async function main(): Promise<void> {
         runtime.direct("actorUpdate", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
       );
       writeJson({ ok: true, data, meta: { action: "actorUpdate", directCdp: true, write: true } });
+    });
+
+  program
+    .command("actor-edit")
+    .description("Update bounded Actor fields (name, folder, prototype Token, HP, flat AC, base abilities) with a readState from actor-read")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorEdit", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorEdit", directCdp: true, write: true } });
+    });
+
+  program
+    .command("actor-grant-items")
+    .description("Grant exact compendium Items to an Actor by source reference, skipping existing sources (readState from actor-read required)")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "60000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorGrantItems", args, { timeoutMs: parseTimeout(opts.timeout, 60000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorGrantItems", directCdp: true, write: true } });
     });
 
   program
@@ -942,6 +984,62 @@ async function main(): Promise<void> {
         runtime.direct("actorAddItemsFromCompendium", args, { timeoutMs: parseTimeout(opts.timeout, 60000) })
       );
       writeJson({ ok: true, data, meta: { action: "actorAddItemsFromCompendium", directCdp: true, write: true } });
+    });
+
+  program
+    .command("advancement-plan")
+    .description("Compute a class's native advancement plan read-only: automatic steps, required choices with candidate pools, spellBudget, and actorAdvanceArgs for actor-advance")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("advancementPlan", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "advancementPlan", directCdp: true } });
+    });
+
+  program
+    .command("compendium-browse")
+    .description("Enumerate compendium candidates read-only: class/subclass/race discovery catalogs, paged spell/item candidates, or full documents by uuids")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("compendiumBrowse", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "compendiumBrowse", directCdp: true } });
+    });
+
+  program
+    .command("actor-read")
+    .description("Read one world actor's compact summary and editing projections, returning the readState required by write actions")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "30000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorRead", args, { timeoutMs: parseTimeout(opts.timeout, 30000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorRead", directCdp: true } });
+    });
+
+  program
+    .command("actor-advance")
+    .description("Advance a dnd5e Character through native class/race advancement with explicit choices")
+    .requiredOption("--json <json>", "JSON object args or @file path")
+    .option("--timeout <ms>", "Runtime call timeout in milliseconds", "60000")
+    .action(async function (this: Command) {
+      const opts = this.opts<{ timeout?: string }>();
+      const args = await readJsonOption(this);
+      const data = await withRuntime(this, runtime =>
+        runtime.direct("actorAdvance", args, { timeoutMs: parseTimeout(opts.timeout, 60000) })
+      );
+      writeJson({ ok: true, data, meta: { action: "actorAdvance", directCdp: true, write: true } });
     });
 
   program

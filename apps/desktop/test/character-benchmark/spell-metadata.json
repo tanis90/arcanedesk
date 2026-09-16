@@ -1,0 +1,2379 @@
+{
+  "source": "Local 5thSRD / SRD 5.1 CC BY 4.0 snapshot; metadata only, not injected into model prompts",
+  "sourceFilesSha256": "87112b62d581fe981a91109bea94e8a825da8d7e9cca9a9f477986dbbe83a0bd",
+  "spells": {
+    "acid-arrow": {
+      "level": 2,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "acid-splash": {
+      "level": 0,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "aid": {
+      "level": 2,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "alarm": {
+      "level": 1,
+      "classes": [
+        "ranger",
+        "wizard"
+      ]
+    },
+    "alter-self": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "animal-friendship": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "animal-messenger": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "animal-shapes": {
+      "level": 8,
+      "classes": [
+        "druid"
+      ]
+    },
+    "animate-dead": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "wizard"
+      ]
+    },
+    "animate-objects": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "antilife-shell": {
+      "level": 5,
+      "classes": [
+        "druid"
+      ]
+    },
+    "antimagic-field": {
+      "level": 8,
+      "classes": [
+        "cleric",
+        "wizard"
+      ]
+    },
+    "antipathysympathy": {
+      "level": 8,
+      "classes": [
+        "druid",
+        "wizard"
+      ]
+    },
+    "arcane-eye": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "arcane-hand": {
+      "level": 5,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "arcane-lock": {
+      "level": 2,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "arcane-sword": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "arcanists-magic-aura": {
+      "level": 2,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "astral-projection": {
+      "level": 9,
+      "classes": [
+        "cleric",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "augury": {
+      "level": 2,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "awaken": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "druid"
+      ]
+    },
+    "bane": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "cleric"
+      ]
+    },
+    "banishment": {
+      "level": 4,
+      "classes": [
+        "paladin",
+        "cleric",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "barkskin": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "beacon-of-hope": {
+      "level": 3,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "bestow-curse": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "wizard"
+      ]
+    },
+    "black-tentacles": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "blade-barrier": {
+      "level": 6,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "bless": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "blight": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "blindnessdeafness": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "blink": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "blur": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "branding-smite": {
+      "level": 2,
+      "classes": [
+        "paladin"
+      ]
+    },
+    "burning-hands": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "call-lightning": {
+      "level": 3,
+      "classes": [
+        "druid"
+      ]
+    },
+    "calm-emotions": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric"
+      ]
+    },
+    "chain-lightning": {
+      "level": 6,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "charm-person": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "chill-touch": {
+      "level": 0,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "circle-of-death": {
+      "level": 6,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "clairvoyance": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "clone": {
+      "level": 8,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "cloudkill": {
+      "level": 5,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "color-spray": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "command": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "commune": {
+      "level": 5,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "commune-with-nature": {
+      "level": 5,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "comprehend-languages": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "compulsion": {
+      "level": 4,
+      "classes": [
+        "bard"
+      ]
+    },
+    "cone-of-cold": {
+      "level": 5,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "confusion": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "conjure-animals": {
+      "level": 3,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "conjure-celestial": {
+      "level": 7,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "conjure-elemental": {
+      "level": 5,
+      "classes": [
+        "druid",
+        "wizard"
+      ]
+    },
+    "conjure-fey": {
+      "level": 6,
+      "classes": [
+        "druid",
+        "warlock"
+      ]
+    },
+    "conjure-minor-elementals": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "wizard"
+      ]
+    },
+    "conjure-woodland-beings": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "contact-other-plane": {
+      "level": 5,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "contagion": {
+      "level": 5,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "contingency": {
+      "level": 6,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "continual-flame": {
+      "level": 2,
+      "classes": [
+        "cleric",
+        "wizard"
+      ]
+    },
+    "control-water": {
+      "level": 4,
+      "classes": [
+        "cleric",
+        "druid",
+        "wizard"
+      ]
+    },
+    "control-weather": {
+      "level": 8,
+      "classes": [
+        "cleric",
+        "druid",
+        "wizard"
+      ]
+    },
+    "counterspell": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "create-food-and-water": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "create-or-destroy-water": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "create-undead": {
+      "level": 6,
+      "classes": [
+        "cleric",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "creation": {
+      "level": 5,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "cure-wounds": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger"
+      ]
+    },
+    "dancing-lights": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "darkness": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "darkvision": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "daylight": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger",
+        "sorcerer"
+      ]
+    },
+    "death-ward": {
+      "level": 4,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "delayed-blast-fireball": {
+      "level": 7,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "demiplane": {
+      "level": 8,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "detect-evil-and-good": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "detect-magic": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "detect-poison-and-disease": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger"
+      ]
+    },
+    "detect-thoughts": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "dimension-door": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "disguise-self": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "disintegrate": {
+      "level": 6,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "dispel-evil-and-good": {
+      "level": 5,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "dispel-magic": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "divination": {
+      "level": 4,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "divine-favor": {
+      "level": 1,
+      "classes": [
+        "paladin"
+      ]
+    },
+    "divine-word": {
+      "level": 7,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "dominate-beast": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "sorcerer"
+      ]
+    },
+    "dominate-monster": {
+      "level": 8,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "dominate-person": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "dream": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "druidcraft": {
+      "level": 0,
+      "classes": [
+        "druid"
+      ]
+    },
+    "earthquake": {
+      "level": 8,
+      "classes": [
+        "cleric",
+        "druid",
+        "sorcerer"
+      ]
+    },
+    "eldritch-blast": {
+      "level": 0,
+      "classes": [
+        "warlock"
+      ]
+    },
+    "enhance-ability": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "sorcerer"
+      ]
+    },
+    "enlargereduce": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "entangle": {
+      "level": 1,
+      "classes": [
+        "druid"
+      ]
+    },
+    "enthrall": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "warlock"
+      ]
+    },
+    "etherealness": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "expeditious-retreat": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "eyebite": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "fabricate": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "faerie-fire": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid"
+      ]
+    },
+    "faithful-hound": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "false-life": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "fear": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "feather-fall": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "feeblemind": {
+      "level": 8,
+      "classes": [
+        "bard",
+        "druid",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "find-familiar": {
+      "level": 1,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "find-steed": {
+      "level": 2,
+      "classes": [
+        "paladin"
+      ]
+    },
+    "find-the-path": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid"
+      ]
+    },
+    "find-traps": {
+      "level": 2,
+      "classes": [
+        "cleric",
+        "druid",
+        "ranger"
+      ]
+    },
+    "finger-of-death": {
+      "level": 7,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "fire-bolt": {
+      "level": 0,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "fire-shield": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "fire-storm": {
+      "level": 7,
+      "classes": [
+        "cleric",
+        "druid",
+        "sorcerer"
+      ]
+    },
+    "fireball": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "flame-blade": {
+      "level": 2,
+      "classes": [
+        "druid"
+      ]
+    },
+    "flame-strike": {
+      "level": 5,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "flaming-sphere": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "wizard"
+      ]
+    },
+    "flesh-to-stone": {
+      "level": 6,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "floating-disk": {
+      "level": 1,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "fly": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "fog-cloud": {
+      "level": 1,
+      "classes": [
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "forbiddance": {
+      "level": 6,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "forcecage": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "foresight": {
+      "level": 9,
+      "classes": [
+        "bard",
+        "druid",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "freedom-of-movement": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "ranger"
+      ]
+    },
+    "freezing-sphere": {
+      "level": 6,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "gaseous-form": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "gate": {
+      "level": 9,
+      "classes": [
+        "cleric",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "geas": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "wizard"
+      ]
+    },
+    "gentle-repose": {
+      "level": 2,
+      "classes": [
+        "cleric",
+        "wizard"
+      ]
+    },
+    "giant-insect": {
+      "level": 4,
+      "classes": [
+        "druid"
+      ]
+    },
+    "glibness": {
+      "level": 8,
+      "classes": [
+        "bard",
+        "warlock"
+      ]
+    },
+    "globe-of-invulnerability": {
+      "level": 6,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "glyph-of-warding": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "wizard"
+      ]
+    },
+    "goodberry": {
+      "level": 1,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "grease": {
+      "level": 1,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "greater-invisibility": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "greater-restoration": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid"
+      ]
+    },
+    "guardian-of-faith": {
+      "level": 4,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "guards-and-wards": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "guidance": {
+      "level": 0,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "guiding-bolt": {
+      "level": 1,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "gust-of-wind": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "hallow": {
+      "level": 5,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "hallucinatory-terrain": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "druid",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "harm": {
+      "level": 6,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "haste": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "heal": {
+      "level": 6,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "healing-word": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid"
+      ]
+    },
+    "heat-metal": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "druid"
+      ]
+    },
+    "hellish-rebuke": {
+      "level": 1,
+      "classes": [
+        "warlock"
+      ]
+    },
+    "heroes-feast": {
+      "level": 6,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "heroism": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "paladin"
+      ]
+    },
+    "hideous-laughter": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "hold-monster": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "hold-person": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "holy-aura": {
+      "level": 8,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "hunters-mark": {
+      "level": 1,
+      "classes": [
+        "ranger"
+      ]
+    },
+    "hypnotic-pattern": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "ice-storm": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "identify": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "illusory-script": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "imprisonment": {
+      "level": 9,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "incendiary-cloud": {
+      "level": 8,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "inflict-wounds": {
+      "level": 1,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "insect-plague": {
+      "level": 5,
+      "classes": [
+        "cleric",
+        "druid",
+        "sorcerer"
+      ]
+    },
+    "instant-summons": {
+      "level": 6,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "invisibility": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "irresistible-dance": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "jump": {
+      "level": 1,
+      "classes": [
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "knock": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "legend-lore": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "wizard"
+      ]
+    },
+    "lesser-restoration": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger"
+      ]
+    },
+    "levitate": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "light": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "lightning-bolt": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "locate-animals-or-plants": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "locate-creature": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger",
+        "wizard"
+      ]
+    },
+    "locate-object": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger",
+        "wizard"
+      ]
+    },
+    "longstrider": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger",
+        "wizard"
+      ]
+    },
+    "mage-armor": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "mage-hand": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "magic-circle": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "paladin",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "magic-jar": {
+      "level": 6,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "magic-missile": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "magic-mouth": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "magic-weapon": {
+      "level": 2,
+      "classes": [
+        "paladin",
+        "wizard"
+      ]
+    },
+    "magnificent-mansion": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "major-image": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "mass-cure-wounds": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid"
+      ]
+    },
+    "mass-heal": {
+      "level": 9,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "mass-healing-word": {
+      "level": 3,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "mass-suggestion": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "maze": {
+      "level": 8,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "meld-into-stone": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "mending": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "message": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "meteor-swarm": {
+      "level": 9,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "mind-blank": {
+      "level": 8,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "minor-illusion": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "mirage-arcane": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "druid",
+        "wizard"
+      ]
+    },
+    "mirror-image": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "mislead": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "misty-step": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "modify-memory": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "moonbeam": {
+      "level": 2,
+      "classes": [
+        "druid"
+      ]
+    },
+    "move-earth": {
+      "level": 6,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "nondetection": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "ranger",
+        "wizard"
+      ]
+    },
+    "pass-without-trace": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "passwall": {
+      "level": 5,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "phantasmal-killer": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "phantom-steed": {
+      "level": 3,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "planar-ally": {
+      "level": 6,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "planar-binding": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "wizard"
+      ]
+    },
+    "plane-shift": {
+      "level": 7,
+      "classes": [
+        "cleric",
+        "sorcerer",
+        "warlock",
+        "wizard",
+        "druid"
+      ]
+    },
+    "plant-growth": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "poison-spray": {
+      "level": 0,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "polymorph": {
+      "level": 4,
+      "classes": [
+        "bard",
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "power-word-kill": {
+      "level": 9,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "power-word-stun": {
+      "level": 8,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "prayer-of-healing": {
+      "level": 2,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "prestidigitation": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "prismatic-spray": {
+      "level": 7,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "prismatic-wall": {
+      "level": 9,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "private-sanctum": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "produce-flame": {
+      "level": 0,
+      "classes": [
+        "druid"
+      ]
+    },
+    "programmed-illusion": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "project-image": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "protection-from-energy": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "protection-from-evil-and-good": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "paladin",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "protection-from-poison": {
+      "level": 2,
+      "classes": [
+        "cleric",
+        "druid",
+        "paladin",
+        "ranger"
+      ]
+    },
+    "purify-food-and-drink": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "druid",
+        "paladin"
+      ]
+    },
+    "raise-dead": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "paladin"
+      ]
+    },
+    "ray-of-enfeeblement": {
+      "level": 2,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "ray-of-frost": {
+      "level": 0,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "regenerate": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid"
+      ]
+    },
+    "reincarnate": {
+      "level": 5,
+      "classes": [
+        "druid"
+      ]
+    },
+    "remove-curse": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "paladin",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "resilient-sphere": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "resistance": {
+      "level": 0,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "resurrection": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "cleric"
+      ]
+    },
+    "reverse-gravity": {
+      "level": 7,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "revivify": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "rope-trick": {
+      "level": 2,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "sacred-flame": {
+      "level": 0,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "sanctuary": {
+      "level": 1,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "scorching-ray": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "scrying": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "cleric",
+        "druid",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "secret-chest": {
+      "level": 4,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "see-invisibility": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "seeming": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "sending": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "wizard"
+      ]
+    },
+    "sequester": {
+      "level": 7,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "shapechange": {
+      "level": 9,
+      "classes": [
+        "druid",
+        "wizard"
+      ]
+    },
+    "shatter": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "shield": {
+      "level": 1,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "shield-of-faith": {
+      "level": 1,
+      "classes": [
+        "cleric",
+        "paladin"
+      ]
+    },
+    "shillelagh": {
+      "level": 0,
+      "classes": [
+        "druid"
+      ]
+    },
+    "shocking-grasp": {
+      "level": 0,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "silence": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "ranger"
+      ]
+    },
+    "silent-image": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "simulacrum": {
+      "level": 7,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "sleep": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "sleet-storm": {
+      "level": 3,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "slow": {
+      "level": 3,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "spare-the-dying": {
+      "level": 0,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "speak-with-animals": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "speak-with-dead": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric"
+      ]
+    },
+    "speak-with-plants": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "druid",
+        "ranger"
+      ]
+    },
+    "spider-climb": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "spike-growth": {
+      "level": 2,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "spirit-guardians": {
+      "level": 3,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "spiritual-weapon": {
+      "level": 2,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "stinking-cloud": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "stone-shape": {
+      "level": 4,
+      "classes": [
+        "cleric",
+        "druid",
+        "wizard"
+      ]
+    },
+    "stoneskin": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "storm-of-vengeance": {
+      "level": 9,
+      "classes": [
+        "druid"
+      ]
+    },
+    "suggestion": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "sunbeam": {
+      "level": 6,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "sunburst": {
+      "level": 8,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "symbol": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "cleric",
+        "wizard"
+      ]
+    },
+    "telekinesis": {
+      "level": 5,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "telepathic-bond": {
+      "level": 5,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "teleport": {
+      "level": 7,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "teleportation-circle": {
+      "level": 5,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "thaumaturgy": {
+      "level": 0,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "thunderwave": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "time-stop": {
+      "level": 9,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "tiny-hut": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "wizard"
+      ]
+    },
+    "tongues": {
+      "level": 3,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "transport-via-plants": {
+      "level": 6,
+      "classes": [
+        "druid"
+      ]
+    },
+    "tree-stride": {
+      "level": 5,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "true-polymorph": {
+      "level": 9,
+      "classes": [
+        "bard",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "true-resurrection": {
+      "level": 9,
+      "classes": [
+        "cleric",
+        "druid"
+      ]
+    },
+    "true-seeing": {
+      "level": 6,
+      "classes": [
+        "bard",
+        "cleric",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "true-strike": {
+      "level": 0,
+      "classes": [
+        "bard",
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "unseen-servant": {
+      "level": 1,
+      "classes": [
+        "bard",
+        "warlock",
+        "wizard"
+      ]
+    },
+    "vampiric-touch": {
+      "level": 3,
+      "classes": [
+        "warlock",
+        "wizard"
+      ]
+    },
+    "vicious-mockery": {
+      "level": 0,
+      "classes": [
+        "bard"
+      ]
+    },
+    "wall-of-fire": {
+      "level": 4,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "wall-of-force": {
+      "level": 5,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "wall-of-ice": {
+      "level": 6,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "wall-of-stone": {
+      "level": 5,
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "wall-of-thorns": {
+      "level": 6,
+      "classes": [
+        "druid"
+      ]
+    },
+    "warding-bond": {
+      "level": 2,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "water-breathing": {
+      "level": 3,
+      "classes": [
+        "druid",
+        "ranger",
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "water-walk": {
+      "level": 3,
+      "classes": [
+        "cleric",
+        "druid",
+        "ranger",
+        "sorcerer"
+      ]
+    },
+    "web": {
+      "level": 2,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "weird": {
+      "level": 9,
+      "classes": [
+        "wizard"
+      ]
+    },
+    "wind-walk": {
+      "level": 6,
+      "classes": [
+        "druid"
+      ]
+    },
+    "wind-wall": {
+      "level": 3,
+      "classes": [
+        "druid",
+        "ranger"
+      ]
+    },
+    "wish": {
+      "level": 9,
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ]
+    },
+    "word-of-recall": {
+      "level": 6,
+      "classes": [
+        "cleric"
+      ]
+    },
+    "zone-of-truth": {
+      "level": 2,
+      "classes": [
+        "bard",
+        "cleric",
+        "paladin"
+      ]
+    }
+  }
+}

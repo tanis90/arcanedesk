@@ -1,0 +1,697 @@
+{
+  "status": "completed",
+  "date": "2026-09-09",
+  "provider": "qa-aliyun-token-plan",
+  "model": "qwen3.7-plus",
+  "thinking": "high; actual enable_thinking=true, reasoning_effort omitted",
+  "comparison": "NPC + pack guides versus same plus SRD rules skill and explicit reading instruction",
+  "taskTimeoutMs": 180000,
+  "experienceTargetMs": 120000,
+  "plannedOrder": [
+    "without",
+    "with",
+    "with",
+    "without",
+    "without",
+    "with"
+  ],
+  "rawProfile": "C:\\Users\\yangqi\\AppData\\Local\\Temp/arcane-prep-play-aliyun-qa",
+  "rawReports": [
+    "benchmark-1788929938295.json",
+    "benchmark-1788930309463.json",
+    "benchmark-1788930631095.json",
+    "benchmark-1788930803279.json"
+  ],
+  "revisionInputs": {
+    "baseline": {
+      "commit": "a619442c37768b64daefe84e24ca3208af91d1c2",
+      "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+      "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+    },
+    "candidate": {
+      "commit": "a619442c37768b64daefe84e24ca3208af91d1c2",
+      "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+      "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+    }
+  },
+  "environment": {
+    "foundry": "13.351",
+    "system": "5.3.3",
+    "world": "COS",
+    "modules": [
+      {
+        "id": "5e_chn",
+        "version": "5.3.0"
+      },
+      {
+        "id": "ActiveAuras",
+        "version": "0.12.7"
+      },
+      {
+        "id": "arcane-agent-bridge",
+        "version": "0.1.0"
+      },
+      {
+        "id": "arcane-dice-so-nice-dnd5e-fix",
+        "version": "0.1.0"
+      },
+      {
+        "id": "arcane-dnd5e-2014-automation",
+        "version": "0.3.20"
+      },
+      {
+        "id": "ATL",
+        "version": "v1.1.1"
+      },
+      {
+        "id": "auraeffects",
+        "version": "1.5.2"
+      },
+      {
+        "id": "autoanimations",
+        "version": "6.8.5"
+      },
+      {
+        "id": "babele",
+        "version": "2.9.1"
+      },
+      {
+        "id": "combat-tracker-dock",
+        "version": "4.1.8"
+      },
+      {
+        "id": "dae",
+        "version": "13.0.28"
+      },
+      {
+        "id": "dfreds-convenient-effects",
+        "version": "8.2.5"
+      },
+      {
+        "id": "dice-so-nice",
+        "version": "5.2.5"
+      },
+      {
+        "id": "foundry-mcp-bridge",
+        "version": "0.8.1"
+      },
+      {
+        "id": "foundryvtt-actor-studio",
+        "version": "2.9.8"
+      },
+      {
+        "id": "foundry_chn",
+        "version": "13.350"
+      },
+      {
+        "id": "itemacro",
+        "version": "3.0.1"
+      },
+      {
+        "id": "JB2A_DnD5e",
+        "version": "0.8.8"
+      },
+      {
+        "id": "lib-dfreds-migrations",
+        "version": "1.0.2"
+      },
+      {
+        "id": "lib-dfreds-ui-extender",
+        "version": "2.2.0"
+      },
+      {
+        "id": "lib-wrapper",
+        "version": "1.13.5.1"
+      },
+      {
+        "id": "midi-qol",
+        "version": "13.0.63"
+      },
+      {
+        "id": "monks-common-display",
+        "version": "13.01"
+      },
+      {
+        "id": "sequencer",
+        "version": "3.6.11"
+      },
+      {
+        "id": "sheet-export",
+        "version": "0.14.6"
+      },
+      {
+        "id": "sheetshare-mobile",
+        "version": "0.2.0"
+      },
+      {
+        "id": "socketlib",
+        "version": "1.1.3"
+      },
+      {
+        "id": "spotlight-omnisearch",
+        "version": "3.1.5"
+      },
+      {
+        "id": "tidy5e-sheet",
+        "version": "13.3.0"
+      },
+      {
+        "id": "times-up",
+        "version": "13.1.9"
+      },
+      {
+        "id": "token-action-hud-core",
+        "version": "2.1.1"
+      },
+      {
+        "id": "token-action-hud-dnd5e",
+        "version": "2.1.0"
+      },
+      {
+        "id": "zzzz_arcane_dnd5e_cn",
+        "version": "0.1.3"
+      },
+      {
+        "id": "zzz_mod_chn",
+        "version": "13.92"
+      }
+    ]
+  },
+  "fixedInputsVerified": true,
+  "summaries": [
+    {
+      "arm": "native_skill_pack",
+      "n": 3,
+      "completedAndPassed": 3,
+      "timeouts": 0,
+      "observedArtifactPass": 3,
+      "passedWithin120s": 1,
+      "cappedObservedMeanMs": 141062.34703333332,
+      "meanToolCalls": 10.333333333333334
+    },
+    {
+      "arm": "native_skill_rules",
+      "n": 3,
+      "completedAndPassed": 1,
+      "timeouts": 2,
+      "observedArtifactPass": 3,
+      "passedWithin120s": 0,
+      "cappedObservedMeanMs": 165065.15083333335,
+      "meanToolCalls": 17
+    }
+  ],
+  "trials": [
+    {
+      "rawReport": "benchmark-1788929938295.json",
+      "session": "2026-09-09T04-59-04-201Z_01a08488-aa89-76a1-bf3f-23081a4a12d5.jsonl",
+      "arm": "native_skill_pack",
+      "ms": 117595.947,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 8,
+      "toolExecutionMs": 949.2002000000102,
+      "allToolsSettled": true,
+      "toolErrors": [],
+      "modelToolRounds": 7,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md"
+      ],
+      "usage": {
+        "input": 27347,
+        "output": 6376,
+        "reasoning": 1472,
+        "cacheRead": 87040
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "3f0a7af0392806afbec528d3bdf57348fcb0db20eb7b81f2cdf606ad23f50b12",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "VSHHy5wDNrNbBBK8",
+          "oReG2B0N0LrVBlB5",
+          "z67R3FYWfFS1AlZW"
+        ],
+        "sceneId": "kYggf6Q0S2yRXMum",
+        "label": "PB1788929938295-0-npc_wizard-native_skill_pack",
+        "newName": "PB1788929938295-0-npc_wizard-native_skill_pack 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 1,
+      "pair": 1,
+      "withinExperienceTarget": true
+    },
+    {
+      "rawReport": "benchmark-1788929938295.json",
+      "session": "2026-09-09T05-01-04-308Z_01a0848a-7fb4-788b-9a70-852c653af710.jsonl",
+      "arm": "native_skill_rules",
+      "ms": 180014.2083,
+      "success": false,
+      "timedOut": true,
+      "taskState": "stopped",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": true,
+      "actorCount": 1,
+      "toolCount": 13,
+      "toolExecutionMs": 1107.386999999988,
+      "allToolsSettled": true,
+      "toolErrors": [],
+      "modelToolRounds": 7,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md",
+        "arcane-dnd5e-rules/SKILL.md",
+        "arcane-dnd5e-rules/references/character/classes/wizard.md",
+        "arcane-dnd5e-rules/references/character/races/human.md",
+        "arcane-dnd5e-rules/references/spellcasting/spells/fireball.md",
+        "arcane-dnd5e-rules/references/adventuring/equipment/weapons.md"
+      ],
+      "usage": {
+        "input": 30167,
+        "output": 7504,
+        "reasoning": 1810,
+        "cacheRead": 124032
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "rulesSkill": "f71cc8957d8c150a2fc1ee5226bd3fd106082401655ba04d59659bc7ef5615b0",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "f96d444a5854df9aee77a647bba50a60ae95faca320955664dd7f6a3dbabaaa4",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "H41VUmn1wrAqeN8O",
+          "i62jTkDdXPFWKieb",
+          "cVQDZvMOEd6b72d2"
+        ],
+        "sceneId": "ihOM8NrXB5AM8zNE",
+        "label": "PB1788929938295-0-npc_wizard-native_skill_rules",
+        "newName": "PB1788929938295-0-npc_wizard-native_skill_rules 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 2,
+      "pair": 1,
+      "withinExperienceTarget": false
+    },
+    {
+      "rawReport": "benchmark-1788930309463.json",
+      "session": "2026-09-09T05-05-15-692Z_01a0848e-55ac-7058-8e77-316679b5126b.jsonl",
+      "arm": "native_skill_rules",
+      "ms": 180020.59840000002,
+      "success": false,
+      "timedOut": true,
+      "taskState": "stopped",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": true,
+      "actorCount": 1,
+      "toolCount": 24,
+      "toolExecutionMs": 1107.1722000000045,
+      "allToolsSettled": true,
+      "toolErrors": [
+        "browser_evaluate"
+      ],
+      "modelToolRounds": 21,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md",
+        "arcane-dnd5e-rules/SKILL.md",
+        "arcane-dnd5e-rules/references/character/classes/wizard.md",
+        "arcane-dnd5e-rules/references/character/races/human.md",
+        "arcane-dnd5e-rules/references/spellcasting/spells/fireball.md"
+      ],
+      "usage": {
+        "input": 49193,
+        "output": 9160,
+        "reasoning": 2049,
+        "cacheRead": 424320
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "rulesSkill": "f71cc8957d8c150a2fc1ee5226bd3fd106082401655ba04d59659bc7ef5615b0",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "f96d444a5854df9aee77a647bba50a60ae95faca320955664dd7f6a3dbabaaa4",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "ERzlPZgbUSS4yGaw",
+          "j82vM6X5blwFKxma",
+          "XpWJKjUcPgXKk14I"
+        ],
+        "sceneId": "nWFIeZOS40t6B0R3",
+        "label": "PB1788930309463-0-npc_wizard-native_skill_rules",
+        "newName": "PB1788930309463-0-npc_wizard-native_skill_rules 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 3,
+      "pair": 2,
+      "withinExperienceTarget": false
+    },
+    {
+      "rawReport": "benchmark-1788930631095.json",
+      "session": "2026-09-09T05-10-35-409Z_01a08493-3691-76eb-ba4f-46428b8baa02.jsonl",
+      "arm": "native_skill_pack",
+      "ms": 154048.29789999998,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 14,
+      "toolExecutionMs": 1135.315099999998,
+      "allToolsSettled": true,
+      "toolErrors": [],
+      "modelToolRounds": 10,
+      "readPaths": [
+        "arcane-actor-update/SKILL.md",
+        "fvtt-native-npc/SKILL.md"
+      ],
+      "usage": {
+        "input": 34093,
+        "output": 8464,
+        "reasoning": 3955,
+        "cacheRead": 152320
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "3f0a7af0392806afbec528d3bdf57348fcb0db20eb7b81f2cdf606ad23f50b12",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "osznZMlzqqt2iWNA",
+          "wZgYA9F1UzTu6Qoj",
+          "SeqHDTVynUD9K6Xb"
+        ],
+        "sceneId": "CqeDsJwxwHFMNpxe",
+        "label": "PB1788930631095-0-npc_wizard-native_skill_pack",
+        "newName": "PB1788930631095-0-npc_wizard-native_skill_pack 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 4,
+      "pair": 2,
+      "withinExperienceTarget": false
+    },
+    {
+      "rawReport": "benchmark-1788930803279.json",
+      "session": "2026-09-09T05-13-27-153Z_01a08495-d571-7a14-9c9e-25b45f0c9b4b.jsonl",
+      "arm": "native_skill_pack",
+      "ms": 151542.79619999998,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 9,
+      "toolExecutionMs": 355.8247000000156,
+      "allToolsSettled": true,
+      "toolErrors": [],
+      "modelToolRounds": 8,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md"
+      ],
+      "usage": {
+        "input": 24632,
+        "output": 8351,
+        "reasoning": 4385,
+        "cacheRead": 115328
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "3f0a7af0392806afbec528d3bdf57348fcb0db20eb7b81f2cdf606ad23f50b12",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "TXrXRRUE24GFaxqH",
+          "NU5mCnptUh1zawGr",
+          "3NpSRQfbKfOhqZtk"
+        ],
+        "sceneId": "JUQ8SJsNLRLtXkpy",
+        "label": "PB1788930803279-0-npc_wizard-native_skill_pack",
+        "newName": "PB1788930803279-0-npc_wizard-native_skill_pack 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 5,
+      "pair": 3,
+      "withinExperienceTarget": false
+    },
+    {
+      "rawReport": "benchmark-1788930803279.json",
+      "session": "2026-09-09T05-16-00-560Z_01a08498-2cb0-7111-bfd3-7ce4fed5cf00.jsonl",
+      "arm": "native_skill_rules",
+      "ms": 135160.64580000003,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 14,
+      "toolExecutionMs": 396.28189999997267,
+      "allToolsSettled": true,
+      "toolErrors": [
+        "foundry_screenshot"
+      ],
+      "modelToolRounds": 8,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md",
+        "arcane-dnd5e-rules/SKILL.md",
+        "arcane-dnd5e-rules/references/character/classes/wizard.md",
+        "arcane-dnd5e-rules/references/character/races/human.md",
+        "arcane-dnd5e-rules/references/spellcasting/spells/fireball.md",
+        "arcane-dnd5e-rules/references/adventuring/equipment/weapons.md"
+      ],
+      "usage": {
+        "input": 67168,
+        "output": 7405,
+        "reasoning": 2401,
+        "cacheRead": 147968
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "rulesSkill": "f71cc8957d8c150a2fc1ee5226bd3fd106082401655ba04d59659bc7ef5615b0",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "f96d444a5854df9aee77a647bba50a60ae95faca320955664dd7f6a3dbabaaa4",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "VkHmBlQgoen5uFEE",
+          "SRkUYTSg4GYlNpMS",
+          "PyBKT4dNAxJLq9Md"
+        ],
+        "sceneId": "eXx5rQqIuvYnf5Pi",
+        "label": "PB1788930803279-0-npc_wizard-native_skill_rules",
+        "newName": "PB1788930803279-0-npc_wizard-native_skill_rules 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 6,
+      "pair": 3,
+      "withinExperienceTarget": false
+    }
+  ],
+  "limitations": [
+    "Three pairs, one task; no statistical proof or generalization to all rule tasks.",
+    "Timeout artifacts checked after stop; all checks passing does not change timeout failures.",
+    "Observed time is capped at timeout, not uncensored successful completion latency.",
+    "Nine data checks do not certify full character rules or actual casting.",
+    "Source and tool hashes fixed; provider latency, cache and retained world objects not reset.",
+    "Candidate includes explicit skill routing: cannot isolate rules text from instruction/reading effect.",
+    "Last candidate screenshot unavailable in benchmark panel; task still completed and data passed."
+  ]
+}

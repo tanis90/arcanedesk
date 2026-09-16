@@ -1,0 +1,5 @@
+// Rebuild grader metadata from the pinned local SRD snapshot. No model input changes.
+import fs from 'node:fs';import crypto from 'node:crypto';
+const root=new URL('../../skills/prep/arcane-dnd5e-rules/references/spellcasting/spells/',import.meta.url),spells={},digest=crypto.createHash('sha256');
+for(const file of fs.readdirSync(root).filter(f=>f.endsWith('.md')).sort()){const bytes=fs.readFileSync(new URL(file,root));digest.update(file).update(bytes);const head=bytes.toString('utf8').replace(/^\uFEFF/,'').split(/\r?\n\r?\n/)[0],name=head.match(/^name: (.+)$/m),level=head.match(/^level: (\d+)/m),classes=head.match(/^classes: ([\s\S]+)/m);if(name&&level&&classes)spells[file.slice(0,-3).replaceAll('_','-')]={level:Number(level[1]),classes:classes[1].trim().split(/\s+/)};}
+fs.writeFileSync(new URL('./spell-metadata.json',import.meta.url),JSON.stringify({source:'Local 5thSRD / SRD 5.1 CC BY 4.0 snapshot; metadata only, not injected into model prompts',sourceFilesSha256:digest.digest('hex'),spells},null,2)+'\n');console.log(`${Object.keys(spells).length} spell records generated`);

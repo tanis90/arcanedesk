@@ -22,6 +22,13 @@ export type SafeDirectAction = (typeof SAFE_DIRECT_ACTIONS)[number];
  * their own allowlist. The SDK client defaults to SAFE_DIRECT_ACTIONS.
  */
 export const ALL_DIRECT_ACTIONS = [
+  "sceneRead", "sceneApply",
+  "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "imageApply",
+  "contentSearch", "advancementPlan", "compendiumBrowse",
+  "staticContext",
+  "playContext",
+  "conditionsSet",
+  "executeAction",
   "doctor",
   "worldInfo",
   "sceneSnapshot",
@@ -62,6 +69,13 @@ export type DirectActionEffect = "read" | "write";
  * writes, including maintenance actions that also expose a dry-run mode.
  */
 export const DIRECT_ACTION_EFFECTS = {
+  sceneRead: "read", sceneApply: "write",
+  actorRead: "read", actorCreate: "write", actorEdit: "write", actorGrantItems: "write", actorAdvance: "write", imageApply: "write",
+  contentSearch: "read", advancementPlan: "read", compendiumBrowse: "read",
+  staticContext: "read",
+  playContext: "read",
+  conditionsSet: "write",
+  executeAction: "write",
   doctor: "read",
   worldInfo: "read",
   sceneSnapshot: "read",
@@ -115,6 +129,13 @@ export interface WorldInfo {
   foundryVersion: string | null;
   user: { id: string; name: string; isGM: boolean };
   modules: Record<string, boolean>;
+  ready?: boolean;
+  moduleVersions?: Record<string, string | null>;
+  capabilities?: {
+    nativeActionEntryAvailable: boolean; narrativeSpellConsumption: boolean; conditionSetEntryAvailable: boolean;
+    prepActorDocuments: boolean; prepSceneDocuments: boolean; imageUploadEntryAvailable: boolean;
+    summonPlacement: false; summonDependency: "AUTO-001";
+  };
 }
 
 export type CombatantSide = "party" | "hostile" | "neutral";
@@ -310,16 +331,322 @@ export interface FoundryActionContract<Input, Output> {
 }
 
 export interface FoundryActionMap {
+  sceneRead: FoundryActionContract<SceneReadInput, SceneReadResult>;
+  imageApply: FoundryActionContract<{ image: FoundryDataImage; targetUuid?: string; syncPlacedTokens?: boolean; world: { origin: string; id: string }; requestId?: string }, PlayWriteReceipt & { dataPath?: string }>;
+  sceneApply: FoundryActionContract<SceneApplyInput, PlayWriteReceipt>;
+  actorRead: FoundryActionContract<ActorReadInput, ActorReadResult>;
+  actorCreate: FoundryActionContract<ActorCreateInput, PlayWriteReceipt>;
+  actorEdit: FoundryActionContract<ActorEditInput, PlayWriteReceipt>;
+  actorGrantItems: FoundryActionContract<ActorGrantInput, PlayWriteReceipt>;
+  actorAdvance: FoundryActionContract<ActorAdvanceInput, PlayWriteReceipt>;
+  contentSearch: FoundryActionContract<ContentSearchInput, ContentSearchResult>;
+  advancementPlan: FoundryActionContract<AdvancementPlanInput, AdvancementPlanResult>;
+  compendiumBrowse: FoundryActionContract<CompendiumBrowseInput, CompendiumBrowseResult>;
+  executeAction: FoundryActionContract<PlayExecuteInput, PlayWriteReceipt | ExecuteTurnReceipt>;
+  conditionsSet: FoundryActionContract<ConditionsSetInput, PlayWriteReceipt>;
+  staticContext: FoundryActionContract<Record<string, never>, PlayStaticContext>;
+  playContext: FoundryActionContract<Record<string, never>, PlayDynamicContext>;
   worldInfo: FoundryActionContract<Record<string, never>, WorldInfo>;
   battleContext: FoundryActionContract<Record<string, never>, BattleContext>;
   turnContext: FoundryActionContract<Record<string, never>, TurnContext>;
   executeTurn: FoundryActionContract<ExecuteTurnInput, ExecuteTurnReceipt>;
 }
 
-export type FoundryActionInput<Action extends SafeDirectAction> =
+export type TypedDirectAction = keyof FoundryActionMap;
+
+export interface SceneReadInput {
+  sceneUuid: string; include?: Array<"tokens" | "walls" | "lights" | "tiles" | "notes" | "sounds">;
+  limit?: number; cursor?: string;
+}
+export interface SceneReadState {
+  sceneUuid: string; world: { origin: string; id: string }; fields: RuntimeArguments;
+  include: NonNullable<SceneReadInput["include"]>;
+  tokens?: Array<{ id: string; uuid: string; fields: RuntimeArguments; fingerprint: string }>;
+}
+export interface SceneReadResult {
+  sceneUuid: string; name: string; active: boolean; width: number; height: number;
+  placeables: Record<string, RuntimeArguments[]>; nextCursors: Record<string, string | null>; readState: SceneReadState;
+}
+export interface TokenPlacementFields {
+  x?: number; y?: number; name?: string; hidden?: boolean; disposition?: -1 | 0 | 1;
+  width?: number; height?: number; elevation?: number;
+}
+export interface TokenPlacement extends TokenPlacementFields { actorUuid: string; x: number; y: number; actorLink?: boolean }
+export interface TokenLayout {
+  create?: TokenPlacement[]; update?: Array<{ tokenId: string; changes: TokenPlacementFields }>; deleteIds?: string[];
+}
+export interface SceneChanges {
+  name?: string; active?: boolean; background?: Omit<ActorDataImage, "syncPlacedTokens">;
+  width?: number; height?: number; grid?: { type?: number; size?: number; distance?: number; units?: string };
+}
+export type SceneApplyInput = PrepWriteIdentity & { tokens?: TokenLayout } & (
+  { operation: "create"; scene: SceneChanges & { name: string } }
+  | { operation: "update"; sceneUuid: string; readState: SceneReadState; scene?: SceneChanges }
+);
+
+export interface ActorReadInput {
+  actorUuid: string;
+  include?: Array<"items" | "resources" | "prototypeToken" | "sceneTokens">;
+  limit?: number;
+  cursor?: string;
+}
+export interface PrepItemIdentity { id: string; uuid: string; name: string; type: string; sourceUuid: string | null }
+export interface PrepItemProjection extends PrepItemIdentity { quantity: number | null; equipped: boolean | null }
+export interface ActorReadState {
+  actorUuid: string;
+  world: { origin: string; id: string };
+  include: NonNullable<ActorReadInput["include"]>;
+  fields: RuntimeArguments;
+  items?: PrepItemIdentity[];
+  sceneTokens?: RuntimeArguments[];
+}
+export interface ActorReadResult {
+  actorUuid: string; name: string; type: string; folderId: string | null; img: string | null;
+  hp: { value: number | null; max: number | null; temp: number | null }; ac: number | null;
+  items?: PrepItemProjection[]; resources?: Record<string, number>; prototypeToken?: RuntimeArguments;
+  sceneTokens?: RuntimeArguments[]; nextCursor: string | null; readState: ActorReadState;
+}
+export interface CompendiumGrant {
+  uuid?: string; packId?: string; entryId?: string; expectedName?: string; expectedType?: string; quantity?: number; equipped?: boolean;
+}
+export interface PrepWriteIdentity { world: { origin: string; id: string }; requestId: string }
+/** Internal upload bytes are prepared by the host, never supplied by the model. */
+export interface FoundryDataImage {
+  dataPath: string;
+  upload?: { base64: string; hash: string; mimeType: string; extension: "png" | "jpg" | "webp" };
+}
+/** Compatibility name for existing Actor callers. */
+export interface ActorDataImage extends FoundryDataImage { syncPlacedTokens?: boolean }
+export type Dnd5eAbilityScores = Partial<Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>>;
+export interface ActorCreateInput extends PrepWriteIdentity {
+  source: { kind: "blank"; actorType: "character" | "npc" } | { kind: "compendium"; packId: string; entryId: string };
+  name: string; folderId?: string; initialItems?: CompendiumGrant[]; image?: ActorDataImage;
+  prototypeToken?: { name: string };
+  dnd5e?: { abilities?: Dnd5eAbilityScores };
+}
+export interface ActorChanges {
+  name?: string; folderId?: string | null;
+  image?: ActorDataImage;
+  prototypeToken?: { name?: string; width?: number; height?: number; disposition?: -1 | 0 | 1 };
+  dnd5e?: { hp?: { value?: number; max?: number; temp?: number }; ac?: { flat: number }; abilities?: Dnd5eAbilityScores };
+}
+export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
+export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
+export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number>; languages?: string[] }
+/** fullSpellList: when true and the class is a prepared-list caster (its advancement_plan spellBudget
+ *  carries fullList), the runtime grants the whole annotated class spell list up to the target
+ *  level's highest slot level after advancement, chunked and deduplicated by source UUID.
+ *  Rejected with INPUT_INVALID for other classes before any write. */
+export interface ActorAdvanceInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number; choices?: ActorAdvanceChoices; additionalItems?: CompendiumGrant[]; fullSpellList?: boolean }
+
+export interface ContentSearchInput {
+  scope: "world" | "compendium";
+  documentType: "Actor" | "Item" | "Scene";
+  query: string;
+  packIds?: string[];
+  actorType?: string;
+  itemType?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ContentSearchResult {
+  entries: Array<{ uuid: string; id: string; name: string; type: string; documentType: string;
+    entryId?: string; packId?: string; package?: string }>;
+  total: number;
+  nextCursor: string | null;
+}
+/** advancement_plan: the level-up plan for an existing character taking a class (with optional
+ *  subclass/race) to characterLevel. rules is derived from the class document, never supplied. */
+export interface AdvancementPlanInput {
+  world?: { origin: string; id: string };
+  actorUuid: string;
+  classUuid: string;
+  subclassUuid?: string;
+  raceUuid?: string;
+  characterLevel: number;
+}
+/** compendium_browse: conditional enumeration of compendium candidates, plus a uuids mode
+ *  (absorbed content_detail) returning full documents for semantic selection or reconciliation.
+ *  type is required unless uuids is given. rules defaults to returning both versions for the
+ *  class/subclass/race catalogs (each entry labelled); spell/item filter only when supplied. */
+export interface CompendiumBrowseInput {
+  world?: { origin: string; id: string };
+  scope: "compendium";
+  type?: "spell" | "item" | "class" | "subclass" | "race";
+  rules?: "2014" | "2024";
+  classUuid?: string;
+  maxLevel?: number;
+  itemType?: "weapon" | "equipment" | "consumable" | "tool" | "loot" | "container" | "ammo";
+  query?: string;
+  /** Batch name resolution (spell/item only): each entry resolves independently with the same
+   *  single-language substring/identifier matching as query — never combine languages in one
+   *  string. Mutually exclusive with query; pagination does not apply. */
+  names?: string[];
+  page?: number;
+  pageSize?: number;
+  uuids?: string[];
+}
+export interface ContentListStepSummary { slot: string; level: number; kind: string; label: string; summary?: string }
+export interface ContentListChoiceRequirement {
+  slot: string; level: number; kind: string; label: string; count: number;
+  valueFormat: string; fill: string[]; candidates?: string[]; candidateNames?: Record<string, string>; cap?: number; required: boolean;
+}
+export interface ContentListCandidate {
+  uuid: string; name: string; identifier?: string | null; type: string | null; level: number | null;
+  packId: string; entryId: string; eligibility?: "legal" | "auto-grant" | "name-match";
+}
+/** Discovery-catalog entry for type class/subclass/race: the bootstrap listing that hands the model
+ * classUuid/raceUuid (and subclass candidates filterable by classUuid) without fuzzy search. Deduped
+ * by rules+identifier, arcane module packs preferred; rules is explicit source rules, else inferred
+ * from the pack name (trailing "24" = 2024), else 2014. */
+export interface ContentListCatalogEntry {
+  uuid: string; name: string; identifier: string | null;
+  packId: string; rules: "2014" | "2024" | null; classIdentifier?: string;
+}
+export interface ContentListFullSpellList {
+  maxLevel: number; count: number;
+  candidates: Array<{ uuid: string; name: string; level: number }>;
+}
+/** Advisory spellcasting budget from hardcoded SRD rules tables. Preparation counts/state and
+ *  slot counts are deliberately absent: preparation is a sheet marker we do not manage, and dnd5e
+ *  computes slots. Prepared-list casters (2014 cleric/druid/paladin/artificer) instead receive
+ *  fullList — every class spell up to their highest slot level, enumerated from module-annotated
+ *  spell packs (flags.<moduleId>.spellClasses) — because they "know" their whole class list and
+ *  preparation is left to the DM and players. Null for non-spellcasting classes. */
+export interface ContentListSpellBudget {
+  ability: string | null;
+  progression: string;
+  cantrips?: number;
+  known?: number;
+  book?: number;
+  fullList?: ContentListFullSpellList;
+}
+export interface AdvancementPlanResult {
+  status: "completed" | "rejected"; code?: string; message?: string;
+  actorAdvanceArgs?: { classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number };
+  /** Race-side facts the advancement steps cannot express (race items carry movement directly,
+   *  not as advancement steps): surfaced so the model never reads race source for speed. */
+  race?: { uuid: string; name: string | null; movement: Record<string, string | number> | null };
+  automaticSteps?: ContentListStepSummary[];
+  choiceRequirements?: ContentListChoiceRequirement[];
+  /** Aggregate per single-fill choices key: total values needed and the consuming slots in order.
+   *  Shared keys (rogue skills 4+1+2) otherwise read as independent requirements. */
+  fillAllocation?: Array<{ fill: string; total: number; slots: Array<{ slot: string; label: string; count: number }>; note?: string }>;
+  spellBudget?: ContentListSpellBudget | null;
+  coverage?: { nativeStepCount: number; automaticStepCount: number; choiceStepCount: number; uncoveredRequiredSteps: string[] };
+  warnings?: Array<RuntimeArguments>;
+}
+/** uuids-mode document: summary carries normalized fields for quick use, document the native
+ *  full-fidelity data. Reading details never re-judges class eligibility; the plan owns that. */
+export interface CompendiumBrowseDocument {
+  uuid: string; name: string; type: string; packId: string | null;
+  summary: { identifier: string | null; level: number | null; classIdentifier?: string };
+  document: RuntimeArguments;
+}
+/** Per-name batch resolution result (names mode): exact name/identifier hits rank first in
+ *  candidates (capped at 10); unique = exactly one deduped row, miss = none, ambiguous otherwise
+ *  (cross-rules duplicates are the common ambiguous case — pass rules to narrow). */
+export interface ContentListNameResolution {
+  query: string; status: "unique" | "ambiguous" | "miss"; total: number; candidates: ContentListCandidate[];
+}
+export interface CompendiumBrowseResult {
+  status: "completed" | "rejected"; code?: string; message?: string;
+  candidates?: ContentListCandidate[] | ContentListCatalogEntry[];
+  resolutions?: ContentListNameResolution[];
+  documents?: CompendiumBrowseDocument[];
+  total?: number; page?: number; nextPage?: number | null;
+  warnings?: Array<RuntimeArguments>;
+}
+
+/** Resolved from the host's static snapshot, never supplied as a second model source selector. */
+export interface PlayResolvedAction {
+  actionRef: string;
+  actionId: string;
+  sourceTokenUuid: string;
+  actorUuid: string;
+  itemId: string;
+  activityId: string | null;
+  targetTokenUuids?: string[];
+  input?: ExecuteTurnActionInput;
+}
+
+export interface PlayExecuteInput {
+  world: { origin: string; id: string };
+  contextRef: string;
+  turn?: PlayContextBase["turn"];
+  resolvedActions: PlayResolvedAction[];
+  resolution?: "auto" | "narrative";
+  advance?: boolean;
+}
+
+export type FoundrySource =
+  | { kind: "actor"; actorUuid: string }
+  | { kind: "token"; tokenUuid: string }
+  | { kind: "selected" }
+  | { kind: "name"; name: string; scope: "focus" | "actors" };
+
+/** Host binds world, mode and the submitted selection; Runtime resolves actual Actors. */
+export interface ConditionsSetInput {
+  targets: FoundrySource[];
+  selectedTokenUuids?: string[];
+  conditions: Array<{ key: string; active: boolean }>;
+  world: { origin: string; id: string };
+  mode: "prep" | "combat";
+}
+
+export type PlayWriteReceipt =
+  | { status: "rejected"; code: string; message: string }
+  | { status: "completed"; steps: RuntimeArguments[]; verification: RuntimeArguments[]; warnings: string[] }
+  | { status: "partial" | "indeterminate"; retry: false; steps: RuntimeArguments[]; message: string };
+
+export interface PlayScope {
+  world: { origin: string | null; id: string | null };
+  sceneUuid: string | null;
+  combatId: string | null;
+}
+
+export interface PlayTokenIdentity {
+  tokenUuid: string;
+  tokenId: string;
+  actorUuid: string | null;
+  actorId: string | null;
+  name: string | null;
+}
+
+export interface PlayContextBase {
+  schema: "arcane.play.v1";
+  scope: PlayScope;
+  contextRef: string;
+  turn: { round: number; index: number | null; tokenId: string | null; actorId: string | null } | null;
+}
+
+export interface PlayStaticContext extends PlayContextBase {
+  combatants: Array<PlayTokenIdentity & {
+    side: CombatantSide;
+    static: BattleCombatant["static"] | null;
+    actions: Array<BattleActionDefinition & { actionRef: string; activityId: string | null; resolution: "auto" | "narrative" }>;
+    warnings?: string[];
+  }>;
+}
+
+export interface PlayDynamicContext extends PlayContextBase {
+  combatants: Array<PlayTokenIdentity & {
+    hp: { value: number | null; temp: number };
+    resources: Record<string, number>;
+    conditions: string[];
+    concentration: string | null;
+    visible: boolean;
+    defeated: boolean;
+    availableActionIds: string[];
+    activeBuffRiderIds: string[];
+  }>;
+}
+
+export type FoundryActionInput<Action extends TypedDirectAction> =
   FoundryActionMap[Action]["input"];
 
-export type FoundryActionOutput<Action extends SafeDirectAction> =
+export type FoundryActionOutput<Action extends TypedDirectAction> =
   FoundryActionMap[Action]["output"];
 
 export const FOUNDRY_SDK_ERROR_CODES = {

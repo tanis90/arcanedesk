@@ -18,7 +18,7 @@ export class StartupReconciler {
   async cleanup(id) {
     this.activity()?.remove(id);
     this.navigation.patch(id, null);
-    for (const folder of ["tasks", "pending-inputs"]) {
+    for (const folder of ["tasks", "pending-inputs", "foundry-operations"]) {
       const directory = path.join(this.directory, folder);
       for (const name of await names(directory)) {
         if (name.match(/^([\w-]+)\.jsonl?(?:\..+)?$/)?.[1] === id) await remove(path.join(directory, name));
@@ -30,7 +30,7 @@ export class StartupReconciler {
     const rows = await this.listSessions();
     const existing = new Set(rows.map(row => row.id));
     const candidates = new Set([...Object.keys(this.navigation.rows), ...(this.activity()?.rows.keys() ?? [])]);
-    for (const folder of ["tasks", "pending-inputs"]) {
+    for (const folder of ["tasks", "pending-inputs", "foundry-operations"]) {
       for (const name of await names(path.join(this.directory, folder))) {
         const id = name.match(/^([\w-]+)\.jsonl?(?:\..+)?$/)?.[1];
         if (id) candidates.add(id);

@@ -1,0 +1,1338 @@
+{
+  "sourceReport": "benchmark-1788860540293.json",
+  "baselineCommit": "51bb226",
+  "experiment": {
+    "arms": [
+      "native_skill_baseline",
+      "native_skill"
+    ],
+    "comparison": "skill-revision",
+    "kind": "paired skill revisions; identical 16 tools and native routing",
+    "cases": [
+      "npc_wizard"
+    ],
+    "samplesPerCase": 2,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Same native skill routing; only skill body differs",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "51bb2268174a64b3d50cbcd3872d5dc68f20ae12",
+    "promptMode": "production",
+    "suiteVersion": "prep-npc-intent-draft1",
+    "taskTimeoutMs": 300000,
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "status": "prep-benchmark-completed",
+  "decision": "Retain as experimental organization guidance only. Fewer calls observed, but both skill versions pass only 1/2; not stable or production-promoted.",
+  "caveats": [
+    "Two pairs, same seen task; not a general speed claim.",
+    "Both sides have identical 16 tools and routing template; skill body differs, task/session paths naturally differ.",
+    "Preparation remains data-level acceptance; no actual cast or full-world side-effect audit.",
+    "Failed attempts retained in latency observations, not counted as successful speedups.",
+    "All four NPCs and fixtures retained for review."
+  ],
+  "trials": [
+    {
+      "sample": 0,
+      "arm": "native_skill_baseline",
+      "ms": 196314.8655,
+      "taskState": "completed",
+      "automatedSuccess": true,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.qGWjHw8OaCLV8wzE",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "zev9zMVsbfgnU4oo",
+          "SlXflWkahmrooRWh",
+          "m3vc8rD9g1Fd5Q9d"
+        ],
+        "sceneId": "9CG8hc3emONVh4nZ",
+        "label": "PB1788860540293-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788860540293-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "retainedForReview": true,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "skillHash": "c682b76f29d81dfdc8003d570f27c64976eec7b092dc9d60558babe98fd952fe",
+      "systemPromptHash": "a16455c497a4966f97e204f182846d67f64a386c0bc953938f9c1823b52f3452",
+      "thinking": "off",
+      "modelError": null,
+      "modelResponses": 16,
+      "toolDurationSumMs": 1165.1872000000367,
+      "session": "2026-09-08T09-42-27-502Z_01a08065-c1ae-73c8-b8f6-c4996cdda5ba.jsonl",
+      "skillReadSucceeded": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 16.721800000001167,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 63.901700000000346,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 51.78429999999935,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 80.01459999999861,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 102.46229999999923,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.25970000000234,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.540400000001682,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.343800000002375,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 27.78310000000056,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 4.71310000000085,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.7727000000013504,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.6328000000066822,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.0036999999865657,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.9787999999971362,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.8742000000056578,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 37.35340000002179,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 598.3263000000152,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 50.14110000000801,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.1120999999984633,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 67.46729999998934,
+          "isError": false
+        }
+      ],
+      "identity": {
+        "type": {
+          "value": "humanoid",
+          "subtype": "Human"
+        },
+        "cr": 3,
+        "biography": {
+          "value": "",
+          "public": ""
+        },
+        "alignment": "",
+        "ideal": "",
+        "bond": "",
+        "flaw": "",
+        "race": null,
+        "habitat": {
+          "value": [],
+          "custom": ""
+        },
+        "treasure": {
+          "value": []
+        }
+      },
+      "abilities": {
+        "str": 8,
+        "dex": 14,
+        "con": 14,
+        "int": 18,
+        "wis": 12,
+        "cha": 10
+      },
+      "hp": {
+        "value": 32,
+        "max": 32,
+        "temp": 0,
+        "tempmax": 0,
+        "formula": ""
+      },
+      "slots": {
+        "spell1": {
+          "value": 4,
+          "override": null,
+          "label": "1 环",
+          "level": 1,
+          "max": 4,
+          "type": "spell"
+        },
+        "spell2": {
+          "value": 3,
+          "override": null,
+          "label": "2 环",
+          "level": 2,
+          "max": 3,
+          "type": "spell"
+        },
+        "spell3": {
+          "value": 2,
+          "override": null,
+          "label": "3 环",
+          "level": 3,
+          "max": 2,
+          "type": "spell"
+        },
+        "pact": {
+          "value": 0,
+          "type": "pact",
+          "label": "契约魔法"
+        },
+        "spell4": {
+          "value": 0,
+          "label": "4 环",
+          "level": 4,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell5": {
+          "value": 0,
+          "label": "5 环",
+          "level": 5,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell6": {
+          "value": 0,
+          "label": "6 环",
+          "level": 6,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell7": {
+          "value": 0,
+          "label": "7 环",
+          "level": 7,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell8": {
+          "value": 0,
+          "label": "8 环",
+          "level": 8,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell9": {
+          "value": 0,
+          "label": "9 环",
+          "level": 9,
+          "max": 0,
+          "type": "spell"
+        }
+      },
+      "items": [
+        {
+          "name": "光亮术",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "火焰箭",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "法师之手",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "魔法飞弹",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "魔法伎俩",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "护盾术",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "法师护甲",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "侦测魔法",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "迷踪步",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "灼热射线",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "隐形术",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "火球术",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "法术反制",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "长棍 Quarterstaff",
+          "type": "weapon",
+          "equipped": true
+        }
+      ],
+      "scriptLengths": [
+        326,
+        337,
+        592,
+        225,
+        217,
+        524,
+        536,
+        1068,
+        1581,
+        938,
+        1388,
+        901
+      ]
+    },
+    {
+      "sample": 0,
+      "arm": "native_skill",
+      "ms": 66141.88319999998,
+      "taskState": "completed",
+      "automatedSuccess": true,
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.xWLffBIES0ce84rE",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "lFd87svBz9H0nTPE",
+          "O0SG75CRJCKqpjPx",
+          "6ApfgUWTe5FxNcKE"
+        ],
+        "sceneId": "qalyiZHthuMfylv3",
+        "label": "PB1788860540293-0-npc_wizard-native_skill",
+        "newName": "PB1788860540293-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "retainedForReview": true,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "systemPromptHash": "2f40a5639fb3be399f7cffe3494432f615e243fd6653ad3e79b3bb0f8c7b1bae",
+      "thinking": "off",
+      "modelError": null,
+      "modelResponses": 7,
+      "toolDurationSumMs": 815.0943999999145,
+      "session": "2026-09-08T09-45-44-450Z_01a08068-c302-700d-aeaa-a9342fe50564.jsonl",
+      "skillReadSucceeded": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 5.0719999999855645,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 23.03159999998752,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 35.82839999999851,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 44.992499999993015,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 18.427700000000186,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.4622999999846797,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.230299999995623,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 682.0495999999694,
+          "isError": false
+        }
+      ],
+      "identity": {
+        "type": {
+          "value": "humanoid",
+          "subtype": "Human"
+        },
+        "cr": 6,
+        "biography": {
+          "value": "",
+          "public": ""
+        },
+        "alignment": "",
+        "ideal": "",
+        "bond": "",
+        "flaw": "",
+        "race": null,
+        "habitat": {
+          "value": [],
+          "custom": ""
+        },
+        "treasure": {
+          "value": []
+        }
+      },
+      "abilities": {
+        "str": 8,
+        "dex": 14,
+        "con": 13,
+        "int": 18,
+        "wis": 12,
+        "cha": 10
+      },
+      "hp": {
+        "value": 27,
+        "max": 27,
+        "temp": 0,
+        "tempmax": 0,
+        "formula": ""
+      },
+      "slots": {
+        "spell1": {
+          "value": 4,
+          "label": "1 环",
+          "level": 1,
+          "max": 4,
+          "type": "spell"
+        },
+        "spell2": {
+          "value": 3,
+          "label": "2 环",
+          "level": 2,
+          "max": 3,
+          "type": "spell"
+        },
+        "spell3": {
+          "value": 2,
+          "label": "3 环",
+          "level": 3,
+          "max": 2,
+          "type": "spell"
+        },
+        "pact": {
+          "value": 0,
+          "type": "pact",
+          "label": "契约魔法"
+        },
+        "spell4": {
+          "value": 0,
+          "label": "4 环",
+          "level": 4,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell5": {
+          "value": 0,
+          "label": "5 环",
+          "level": 5,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell6": {
+          "value": 0,
+          "label": "6 环",
+          "level": 6,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell7": {
+          "value": 0,
+          "label": "7 环",
+          "level": 7,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell8": {
+          "value": 0,
+          "label": "8 环",
+          "level": 8,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell9": {
+          "value": 0,
+          "label": "9 环",
+          "level": 9,
+          "max": 0,
+          "type": "spell"
+        }
+      },
+      "items": [
+        {
+          "name": "火焰箭 Fire Bolt",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "法师之手 Mage Hand",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "侦测魔法 Detect Magic",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "法师护甲 Mage Armor",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "魔法飞弹 Magic Missile",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "护盾术 Shield",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "迷踪步 Misty Step",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "火球术",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "长棍 Quarterstaff",
+          "type": "weapon",
+          "equipped": true
+        }
+      ],
+      "scriptLengths": [
+        663,
+        391,
+        3732
+      ]
+    },
+    {
+      "sample": 1,
+      "arm": "native_skill",
+      "ms": 132772.2954,
+      "taskState": "completed",
+      "automatedSuccess": false,
+      "checks": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.8Ki4Jm11zvlkSTcz",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "DFJ8ja4q4t79V584",
+          "ypomt4cxWTdYtJrN",
+          "CE3GfuC1wOltmOhq"
+        ],
+        "sceneId": "qNxq7JVJLg98WTwA",
+        "label": "PB1788860540293-1-npc_wizard-native_skill",
+        "newName": "PB1788860540293-1-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "retainedForReview": true,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "systemPromptHash": "13a3ae64cab4abf44d0071f35000369c4dd9024b25d0ec22f6ba7e2b9ca0c1b8",
+      "thinking": "off",
+      "modelError": null,
+      "modelResponses": 7,
+      "toolDurationSumMs": 789.6137999999919,
+      "session": "2026-09-08T09-46-51-013Z_01a08069-c704-764f-94d5-74f0fba70fad.jsonl",
+      "skillReadSucceeded": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 4.932399999990594,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 19.415899999963585,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.49830000003567,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 46.946100000001024,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 28.07550000003539,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 41.69650000002002,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 4.89159999997355,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 489.41499999997905,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 119.74249999999302,
+          "isError": false
+        }
+      ],
+      "identity": {
+        "type": {
+          "value": "humanoid"
+        },
+        "cr": 6,
+        "biography": {
+          "value": "",
+          "public": ""
+        },
+        "alignment": "",
+        "ideal": "",
+        "bond": "",
+        "flaw": "",
+        "race": null,
+        "habitat": {
+          "value": [],
+          "custom": ""
+        },
+        "treasure": {
+          "value": []
+        }
+      },
+      "abilities": {
+        "str": 9,
+        "dex": 14,
+        "con": 13,
+        "int": 18,
+        "wis": 12,
+        "cha": 10
+      },
+      "hp": {
+        "formula": "5d6+5",
+        "max": 25,
+        "temp": 0,
+        "tempmax": 0,
+        "value": 25
+      },
+      "slots": {
+        "spell1": {
+          "value": 4,
+          "override": null,
+          "label": "1 环",
+          "level": 1,
+          "max": 4,
+          "type": "spell"
+        },
+        "spell2": {
+          "value": 3,
+          "override": null,
+          "label": "2 环",
+          "level": 2,
+          "max": 3,
+          "type": "spell"
+        },
+        "spell3": {
+          "value": 2,
+          "override": null,
+          "label": "3 环",
+          "level": 3,
+          "max": 2,
+          "type": "spell"
+        },
+        "pact": {
+          "value": 0,
+          "type": "pact",
+          "label": "契约魔法"
+        },
+        "spell4": {
+          "value": 0,
+          "label": "4 环",
+          "level": 4,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell5": {
+          "value": 0,
+          "label": "5 环",
+          "level": 5,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell6": {
+          "value": 0,
+          "label": "6 环",
+          "level": 6,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell7": {
+          "value": 0,
+          "label": "7 环",
+          "level": 7,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell8": {
+          "value": 0,
+          "label": "8 环",
+          "level": 8,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell9": {
+          "value": 0,
+          "label": "9 环",
+          "level": 9,
+          "max": 0,
+          "type": "spell"
+        }
+      },
+      "items": [
+        {
+          "name": "火焰箭 Fire Bolt",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "魔法伎俩 Prestidigitation",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "次级幻象 Minor Illusion",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "法师之手 Mage Hand",
+          "type": "spell",
+          "level": 0,
+          "prepared": 2
+        },
+        {
+          "name": "魔法飞弹 Magic Missile",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "护盾术 Shield",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "睡眠术 Sleep",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "魅惑类人 Charm Person",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "迷踪步 Misty Step",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "镜影术 Mirror Image",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "法术反制 Counterspell",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "火球术",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "闪电束 Lightning Bolt",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "长棍 Quarterstaff",
+          "type": "weapon",
+          "equipped": true
+        }
+      ],
+      "scriptLengths": [
+        1046,
+        5329,
+        2307
+      ]
+    },
+    {
+      "sample": 1,
+      "arm": "native_skill_baseline",
+      "ms": 144137.61810000002,
+      "taskState": "completed",
+      "automatedSuccess": false,
+      "checks": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.hmNBcJy3Whw1r5hl",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "D16mc4SHExdbFodt",
+          "Hh0g1Su6oBqivWBI",
+          "j3uOx1FrYnXsARWm"
+        ],
+        "sceneId": "fs6mZHkVjtjkvbcY",
+        "label": "PB1788860540293-1-npc_wizard-native_skill_baseline",
+        "newName": "PB1788860540293-1-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "retainedForReview": true,
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "skillHash": "c682b76f29d81dfdc8003d570f27c64976eec7b092dc9d60558babe98fd952fe",
+      "systemPromptHash": "dbc25b07f2eaf1eb46d344a72c0a48ae4f4a90f179795aef6ef79695c6bd138f",
+      "thinking": "off",
+      "modelError": null,
+      "modelResponses": 12,
+      "toolDurationSumMs": 733.1036000000313,
+      "session": "2026-09-08T09-49-04-204Z_01a0806b-cf4c-7779-9bc7-7564e203f6be.jsonl",
+      "skillReadSucceeded": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 6.837200000009034,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 19.31010000000242,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.6767000000109,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 46.957700000028126,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 17.67479999997886,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.32860000000801,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 51.09110000001965,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 4.650099999969825,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.494000000006054,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 17.61329999996815,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 16.221799999999348,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_grant_items",
+          "ms": 396.4943000000203,
+          "isError": false,
+          "status": "completed"
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 51.34360000002198,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.4102999999886379,
+          "isError": false
+        }
+      ],
+      "identity": {
+        "type": {
+          "value": "humanoid"
+        },
+        "cr": 3,
+        "biography": {
+          "value": "",
+          "public": ""
+        },
+        "alignment": "",
+        "ideal": "",
+        "bond": "",
+        "flaw": "",
+        "race": null,
+        "habitat": {
+          "value": [],
+          "custom": ""
+        },
+        "treasure": {
+          "value": []
+        }
+      },
+      "abilities": {
+        "str": 8,
+        "dex": 14,
+        "con": 14,
+        "int": 18,
+        "wis": 12,
+        "cha": 10
+      },
+      "hp": {
+        "value": 33,
+        "max": 33,
+        "temp": 0,
+        "tempmax": 0,
+        "formula": ""
+      },
+      "slots": {
+        "spell1": {
+          "value": 0,
+          "label": "1 环",
+          "level": 1,
+          "max": 4,
+          "type": "spell"
+        },
+        "spell2": {
+          "value": 0,
+          "label": "2 环",
+          "level": 2,
+          "max": 3,
+          "type": "spell"
+        },
+        "spell3": {
+          "value": 0,
+          "label": "3 环",
+          "level": 3,
+          "max": 2,
+          "type": "spell"
+        },
+        "spell4": {
+          "value": 0,
+          "label": "4 环",
+          "level": 4,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell5": {
+          "value": 0,
+          "label": "5 环",
+          "level": 5,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell6": {
+          "value": 0,
+          "label": "6 环",
+          "level": 6,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell7": {
+          "value": 0,
+          "label": "7 环",
+          "level": 7,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell8": {
+          "value": 0,
+          "label": "8 环",
+          "level": 8,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell9": {
+          "value": 0,
+          "label": "9 环",
+          "level": 9,
+          "max": 0,
+          "type": "spell"
+        },
+        "pact": {
+          "value": 0,
+          "type": "pact",
+          "label": "契约魔法"
+        }
+      },
+      "items": [
+        {
+          "name": "火焰箭 Fire Bolt",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "魔法伎俩 Prestidigitation",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "法师之手 Mage Hand",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "次级幻象 Minor Illusion",
+          "type": "spell",
+          "level": 0,
+          "prepared": 0
+        },
+        {
+          "name": "魔法飞弹 Magic Missile",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "护盾术 Shield",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "法师护甲 Mage Armor",
+          "type": "spell",
+          "level": 1,
+          "prepared": 0
+        },
+        {
+          "name": "侦测魔法 Detect Magic",
+          "type": "spell",
+          "level": 1,
+          "prepared": 0
+        },
+        {
+          "name": "寻获魔宠 Find Familiar",
+          "type": "spell",
+          "level": 1,
+          "prepared": 1
+        },
+        {
+          "name": "迷踪步 Misty Step",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "灼热射线 Scorching Ray",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "镜影术 Mirror Image",
+          "type": "spell",
+          "level": 2,
+          "prepared": 1
+        },
+        {
+          "name": "火球术",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "法术反制 Counterspell",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "飞行术 Fly",
+          "type": "spell",
+          "level": 3,
+          "prepared": 1
+        },
+        {
+          "name": "长棍 Quarterstaff",
+          "type": "weapon",
+          "equipped": true
+        }
+      ],
+      "scriptLengths": [
+        1023,
+        1422,
+        1820,
+        1243
+      ]
+    }
+  ]
+}

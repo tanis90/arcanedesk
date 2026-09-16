@@ -1,0 +1,1009 @@
+{
+  "model": "kimi-for-coding-highspeed",
+  "experiment": {
+    "kind": "same-code tool ablation",
+    "cases": [
+      "create_npc",
+      "grant_items",
+      "edit_image",
+      "scene_layout",
+      "conditions"
+    ],
+    "samplesPerCase": 10,
+    "model": "kimi-for-coding-highspeed",
+    "promptPolicy": "same neutral Prep instructions; arm-specific route; Pi generates the matching active-tool preamble",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated QA-A",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "dc203adb9e76cfdc2d8389707d8cd4912c41f827"
+  },
+  "thinkingLevels": [
+    "off"
+  ],
+  "groups": [
+    {
+      "caseId": "create_npc",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 6911.611300000004,
+          "p95": 8260.998499999987,
+          "mean": 6880.02188
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 6911.611300000004,
+          "p95": 8260.998499999987,
+          "mean": 6880.02188
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1317.2432999999728,
+          "p95": 1858.7604999999999,
+          "mean": 1429.3712099999939
+        },
+        "calls": {
+          "n": 10,
+          "p50": 2,
+          "p95": 3,
+          "mean": 2.2
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 11032,
+          "p95": 14949,
+          "mean": 11657.3
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 3,
+          "p95": 4,
+          "mean": 3.2
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 909,
+          "p95": 1207,
+          "mean": 866.4
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 1194,
+          "p95": 1803,
+          "mean": 1198.8
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 231,
+          "p95": 773,
+          "mean": 370.6
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 9708.822499999951,
+          "p95": 13936.770599999989,
+          "mean": 10429.22178999999
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9708.822499999951,
+          "p95": 13936.770599999989,
+          "mean": 10429.22178999999
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1424.5733999999939,
+          "p95": 1653.3447000000015,
+          "mean": 1452.523339999997
+        },
+        "calls": {
+          "n": 10,
+          "p50": 5,
+          "p95": 7,
+          "mean": 5.4
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 43572,
+          "p95": 55823,
+          "mean": 44569
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 6,
+          "p95": 7,
+          "mean": 6.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 854,
+          "p95": 1312,
+          "mean": 856.7
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 425,
+          "p95": 843,
+          "mean": 441.9
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 17.920899999997346,
+          "mean": 4.754969999997411
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "p50ChangePercent": 40.471187955838104,
+      "p95ChangePercent": 68.70564254430032,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": 51.46355953668069,
+        "p95": 133.55714152389626,
+        "mean": 54.683722475807485
+      },
+      "pairedWins": 1,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 60.59191488723994
+        },
+        {
+          "sample": 1,
+          "changePercent": 67.70826862863863
+        },
+        {
+          "sample": 2,
+          "changePercent": 45.16790641863226
+        },
+        {
+          "sample": 3,
+          "changePercent": 37.131306387378075
+        },
+        {
+          "sample": 4,
+          "changePercent": 133.55714152389626
+        },
+        {
+          "sample": 5,
+          "changePercent": 51.68854627972244
+        },
+        {
+          "sample": 6,
+          "changePercent": 51.46355953668069
+        },
+        {
+          "sample": 7,
+          "changePercent": 76.57544051992618
+        },
+        {
+          "sample": 8,
+          "changePercent": -4.083808997180826
+        },
+        {
+          "sample": 9,
+          "changePercent": 27.03694957314122
+        }
+      ]
+    },
+    {
+      "caseId": "grant_items",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 18098.692900000024,
+          "p95": 29413.632699999995,
+          "mean": 19701.395660000002
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 18098.692900000024,
+          "p95": 29413.632699999995,
+          "mean": 19701.395660000002
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1410.5521000000008,
+          "p95": 1532.007500000007,
+          "mean": 1413.4909400000058
+        },
+        "calls": {
+          "n": 10,
+          "p50": 7,
+          "p95": 10,
+          "mean": 7.1
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 44909,
+          "p95": 71608,
+          "mean": 46195.4
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 8,
+          "p95": 11,
+          "mean": 8.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 2663,
+          "p95": 3803,
+          "mean": 2650.5
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 4249,
+          "p95": 7048,
+          "mean": 4478.8
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 833,
+          "p95": 1885,
+          "mean": 994.3
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 8937.02429999999,
+          "p95": 10196.324000000022,
+          "mean": 9135.775779999987
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8937.02429999999,
+          "p95": 10196.324000000022,
+          "mean": 9135.775779999987
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1405.3055000000022,
+          "p95": 1667.9798999999985,
+          "mean": 1469.8827399999936
+        },
+        "calls": {
+          "n": 10,
+          "p50": 6,
+          "p95": 7,
+          "mean": 6.4
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 35496,
+          "p95": 42157,
+          "mean": 36323
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 6,
+          "mean": 5.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 820,
+          "p95": 1044,
+          "mean": 840.5
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 315,
+          "p95": 523,
+          "mean": 351.2
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 62.877700000070035,
+          "p95": 103.22520000000804,
+          "mean": 68.6496800000059
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "p50ChangePercent": -50.620609182224555,
+      "p95ChangePercent": -65.33470005559693,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -56.14900527895337,
+        "p95": -17.8136507768594,
+        "mean": -50.94970096153453
+      },
+      "pairedWins": 10,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": -56.14900527895337
+        },
+        {
+          "sample": 1,
+          "changePercent": -43.89620757769126
+        },
+        {
+          "sample": 2,
+          "changePercent": -57.844257014503
+        },
+        {
+          "sample": 3,
+          "changePercent": -44.31862203706445
+        },
+        {
+          "sample": 4,
+          "changePercent": -63.14786278614142
+        },
+        {
+          "sample": 5,
+          "changePercent": -51.77416718881349
+        },
+        {
+          "sample": 6,
+          "changePercent": -47.14976351982494
+        },
+        {
+          "sample": 7,
+          "changePercent": -69.21634640525039
+        },
+        {
+          "sample": 8,
+          "changePercent": -17.8136507768594
+        },
+        {
+          "sample": 9,
+          "changePercent": -58.18712703024356
+        }
+      ]
+    },
+    {
+      "caseId": "edit_image",
+      "js": {
+        "n": 10,
+        "success": 9,
+        "successRate": 0.9,
+        "failed": [
+          1
+        ],
+        "latencyMs": {
+          "n": 9,
+          "p50": 10203.132900000026,
+          "p95": 16411.867100000032,
+          "mean": 10327.396544444451
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8976.7451,
+          "p95": 16411.867100000032,
+          "mean": 10123.364840000006
+        },
+        "firstEventMs": {
+          "n": 9,
+          "p50": 1440.5450999999957,
+          "p95": 1509.4407999999821,
+          "mean": 1433.4706222222246
+        },
+        "calls": {
+          "n": 9,
+          "p50": 3,
+          "p95": 4,
+          "mean": 2.888888888888889
+        },
+        "inputTokens": {
+          "n": 9,
+          "p50": 16605,
+          "p95": 32563,
+          "mean": 17918.222222222223
+        },
+        "modelResponses": {
+          "n": 9,
+          "p50": 4,
+          "p95": 5,
+          "mean": 3.888888888888889
+        },
+        "outputTokens": {
+          "n": 9,
+          "p50": 1379,
+          "p95": 2712,
+          "mean": 1456.4444444444443
+        },
+        "javascriptChars": {
+          "n": 9,
+          "p50": 2295,
+          "p95": 3661,
+          "mean": 2165.4444444444443
+        },
+        "reasoningTokens": {
+          "n": 9,
+          "p50": 597,
+          "p95": 1715,
+          "mean": 611.6666666666666
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 17366.954399999988,
+          "p95": 26604.491099999985,
+          "mean": 16996.944950000005
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 17366.954399999988,
+          "p95": 26604.491099999985,
+          "mean": 16996.944950000005
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1497.7399000000005,
+          "p95": 1624.3966000000364,
+          "mean": 1478.1795300000072
+        },
+        "calls": {
+          "n": 10,
+          "p50": 7,
+          "p95": 12,
+          "mean": 7.6
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 55886,
+          "p95": 96247,
+          "mean": 64496.7
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 7,
+          "p95": 12,
+          "mean": 8.2
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 1578,
+          "p95": 3002,
+          "mean": 1691.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 2763,
+          "mean": 698.9
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 888,
+          "p95": 1951,
+          "mean": 954.7
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 14.967799999983981,
+          "mean": 4.234390000003623
+        },
+        "jsFallbacks": 4,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "p50ChangePercent": 70.21197871489005,
+      "p95ChangePercent": 62.10520678661804,
+      "pairedChangePercent": {
+        "n": 9,
+        "p50": 119.28605426466694,
+        "p95": 391.2607787739066,
+        "mean": 101.77327808694511
+      },
+      "pairedWins": 3,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 391.2607787739066
+        },
+        {
+          "sample": 2,
+          "changePercent": -40.23892391993997
+        },
+        {
+          "sample": 3,
+          "changePercent": 134.56314026339032
+        },
+        {
+          "sample": 4,
+          "changePercent": -5.399858496294874
+        },
+        {
+          "sample": 5,
+          "changePercent": 48.344990669309794
+        },
+        {
+          "sample": 6,
+          "changePercent": 151.41673128234987
+        },
+        {
+          "sample": 7,
+          "changePercent": 119.28605426466694
+        },
+        {
+          "sample": 8,
+          "changePercent": -44.02166611258753
+        },
+        {
+          "sample": 9,
+          "changePercent": 160.74825605770476
+        }
+      ]
+    },
+    {
+      "caseId": "scene_layout",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 10523.443100000004,
+          "p95": 15580.52409999998,
+          "mean": 11260.52546999998
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 10523.443100000004,
+          "p95": 15580.52409999998,
+          "mean": 11260.52546999998
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1394.7992999999988,
+          "p95": 1508.2537000000011,
+          "mean": 1393.2594999999856
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 8,
+          "mean": 3.5
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 16484,
+          "p95": 39777,
+          "mean": 19170
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 9,
+          "mean": 4.5
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 1508,
+          "p95": 2088,
+          "mean": 1575.3
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 2052,
+          "p95": 2905,
+          "mean": 2130.6
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 592,
+          "p95": 1076,
+          "mean": 649.5
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 9654.322700000004,
+          "p95": 20323.378399999987,
+          "mean": 12163.708999999999
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9654.322700000004,
+          "p95": 20323.378399999987,
+          "mean": 12163.708999999999
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1361.9380999999703,
+          "p95": 1507.806899999996,
+          "mean": 1374.7143899999996
+        },
+        "calls": {
+          "n": 10,
+          "p50": 6,
+          "p95": 10,
+          "mean": 6.8
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 36103,
+          "p95": 72743,
+          "mean": 47332.2
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 9,
+          "mean": 6.2
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 1046,
+          "p95": 2608,
+          "mean": 1281.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 363,
+          "p95": 1593,
+          "mean": 620.4
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 23.066700000010314,
+          "p95": 68.40190000002622,
+          "mean": 29.55749000000069
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 2,
+        "reviewedAfterPause": 2
+      },
+      "p50ChangePercent": -8.258897698605882,
+      "p95ChangePercent": 30.440916297546195,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -8.330704899077046,
+        "p95": 93.1247996200025,
+        "mean": 15.49613817846436
+      },
+      "pairedWins": 5,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 29.38675595653728
+        },
+        {
+          "sample": 1,
+          "changePercent": -8.330704899077046
+        },
+        {
+          "sample": 2,
+          "changePercent": -34.8209252902941
+        },
+        {
+          "sample": 3,
+          "changePercent": -22.431038118929404
+        },
+        {
+          "sample": 4,
+          "changePercent": 74.96408666903285
+        },
+        {
+          "sample": 5,
+          "changePercent": 69.04077320915998
+        },
+        {
+          "sample": 6,
+          "changePercent": 25.5072115337152
+        },
+        {
+          "sample": 7,
+          "changePercent": -42.67481026291951
+        },
+        {
+          "sample": 8,
+          "changePercent": 93.1247996200025
+        },
+        {
+          "sample": 9,
+          "changePercent": -28.804766632584176
+        }
+      ]
+    },
+    {
+      "caseId": "conditions",
+      "js": {
+        "n": 10,
+        "success": 9,
+        "successRate": 0.9,
+        "failed": [
+          1
+        ],
+        "latencyMs": {
+          "n": 9,
+          "p50": 8729.895300000004,
+          "p95": 22036.2763,
+          "mean": 9940.825599999987
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8729.895300000004,
+          "p95": 22036.2763,
+          "mean": 10883.430399999987
+        },
+        "firstEventMs": {
+          "n": 9,
+          "p50": 1428.7185999999638,
+          "p95": 1835.8396999999995,
+          "mean": 1520.1401999999898
+        },
+        "calls": {
+          "n": 9,
+          "p50": 3,
+          "p95": 8,
+          "mean": 3.6666666666666665
+        },
+        "inputTokens": {
+          "n": 9,
+          "p50": 17334,
+          "p95": 48510,
+          "mean": 20685.555555555555
+        },
+        "modelResponses": {
+          "n": 9,
+          "p50": 4,
+          "p95": 9,
+          "mean": 4.666666666666667
+        },
+        "outputTokens": {
+          "n": 9,
+          "p50": 845,
+          "p95": 2975,
+          "mean": 1097.4444444444443
+        },
+        "javascriptChars": {
+          "n": 9,
+          "p50": 967,
+          "p95": 4309,
+          "mean": 1479.6666666666667
+        },
+        "reasoningTokens": {
+          "n": 9,
+          "p50": 356,
+          "p95": 1340,
+          "mean": 481
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 4950.496199999994,
+          "p95": 46072.3484,
+          "mean": 12624.529599999996
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 4950.496199999994,
+          "p95": 46072.3484,
+          "mean": 12624.529599999996
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1418.2433999999776,
+          "p95": 1700.4157000000123,
+          "mean": 1477.1593799999941
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 15,
+          "mean": 5.3
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 20222,
+          "p95": 158018,
+          "mean": 44942.9
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 3,
+          "p95": 16,
+          "mean": 5.7
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 475,
+          "p95": 5197,
+          "mean": 1259.6
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 5382,
+          "mean": 697.6
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 236,
+          "p95": 3095,
+          "mean": 726.2
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 87.71610000001965,
+          "mean": 18.542300000000978
+        },
+        "jsFallbacks": 4,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0
+      },
+      "p50ChangePercent": -43.29260512437083,
+      "p95ChangePercent": 109.07501690746182,
+      "pairedChangePercent": {
+        "n": 9,
+        "p50": -39.094802015397136,
+        "p95": 427.7537337704381,
+        "mean": 57.493557755894955
+      },
+      "pairedWins": 5,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 427.7537337704381
+        },
+        {
+          "sample": 2,
+          "changePercent": 14.382529044321423
+        },
+        {
+          "sample": 3,
+          "changePercent": -44.75215484441589
+        },
+        {
+          "sample": 4,
+          "changePercent": -39.094802015397136
+        },
+        {
+          "sample": 5,
+          "changePercent": 191.50148591319513
+        },
+        {
+          "sample": 6,
+          "changePercent": -77.61413392697388
+        },
+        {
+          "sample": 7,
+          "changePercent": 159.7334057533629
+        },
+        {
+          "sample": 8,
+          "changePercent": -49.58396992043208
+        },
+        {
+          "sample": 9,
+          "changePercent": -64.88407397104406
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Same-code controlled ablation, not an old-release/new-release product comparison.",
+    "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+    "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+    "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+    "Local-file upload and open-ended creative preparation are outside this suite."
+  ]
+}

@@ -1,0 +1,312 @@
+{
+  "date": "2026-09-09",
+  "scope": "Read-only repository inspection and limited cross-source checks; not a complete SRD correctness audit or model benchmark",
+  "repositories": {
+    "5thsrd": {
+      "commit": "e1a79135cef95245102aeaef9ee910ea4ad1207f"
+    },
+    "5e-database": {
+      "commit": "0b171af231d8325e1567c431ae6176a5b8866e7e"
+    },
+    "cc-srd": {
+      "commit": "c05c0438ea6c638bb7cb25224d97c9bd0e187c49"
+    },
+    "srd-builder": {
+      "commit": "dba54b3289221345937c55308f66f73117bada20"
+    }
+  },
+  "markdown": {
+    "files": 976,
+    "bytes": 1619926,
+    "directories": {
+      "character/classes": 13,
+      "spellcasting/spells": 320,
+      "gamemaster_rules/monsters": 318
+    },
+    "samples": [
+      {
+        "path": "character/classes/wizard.md",
+        "bytes": 14873,
+        "words": 2613,
+        "markdownLinks": 0,
+        "sha256": "49c830e50e1224541b1deb7be3da46f6406551b372d44197ce4e4597cc5e6072"
+      },
+      {
+        "path": "character/classes/warlock.md",
+        "bytes": 22554,
+        "words": 3645,
+        "markdownLinks": 0,
+        "sha256": "ea482afe1386410e645a243dd7734e0b2554d69e106229a811e819c703b2d3c6"
+      },
+      {
+        "path": "spellcasting/what_is_a_spell.md",
+        "bytes": 5514,
+        "words": 955,
+        "markdownLinks": 0,
+        "sha256": "e86255188d8719489de9aba4154afbb071bdeea9e2eada383cf320e99b9a6ea3"
+      },
+      {
+        "path": "spellcasting/casting_a_spell.md",
+        "bytes": 13640,
+        "words": 2309,
+        "markdownLinks": 0,
+        "sha256": "08dca815f2b7636c4792675e15b5ecfdeff33549e207ea8903dc36d28c632863"
+      },
+      {
+        "path": "spellcasting/spells/fireball.md",
+        "bytes": 885,
+        "words": 142,
+        "markdownLinks": 0,
+        "sha256": "6e44872d0cea5bc7826e024a1f8e9304e41fc91a170af2db70c8400c91f717df"
+      },
+      {
+        "path": "gamemaster_rules/monsters/mage.md",
+        "bytes": 1553,
+        "words": 228,
+        "markdownLinks": 0,
+        "sha256": "885ab4afddaa995e9eb9cbe8b6654a6dad9ed002f32482a62cf46c86a1c73c5c"
+      }
+    ]
+  },
+  "database": {
+    "counts": {
+      "Classes": 12,
+      "Levels": 290,
+      "Spells": 319,
+      "Monsters": 334,
+      "Rules": 6,
+      "Rule-Sections": 33,
+      "Equipment": 237,
+      "Features": 407
+    },
+    "wizard5": {
+      "level": 5,
+      "ability_score_bonuses": 1,
+      "prof_bonus": 3,
+      "features": [],
+      "spellcasting": {
+        "cantrips_known": 4,
+        "spell_slots_level_1": 4,
+        "spell_slots_level_2": 3,
+        "spell_slots_level_3": 2,
+        "spell_slots_level_4": 0,
+        "spell_slots_level_5": 0,
+        "spell_slots_level_6": 0,
+        "spell_slots_level_7": 0,
+        "spell_slots_level_8": 0,
+        "spell_slots_level_9": 0
+      },
+      "class_specific": {
+        "arcane_recovery_levels": 3
+      },
+      "index": "wizard-5",
+      "class": {
+        "index": "wizard",
+        "name": "Wizard",
+        "url": "/api/2014/classes/wizard"
+      },
+      "url": "/api/2014/classes/wizard/levels/5"
+    },
+    "warlock5": {
+      "level": 5,
+      "ability_score_bonuses": 1,
+      "prof_bonus": 3,
+      "features": [],
+      "spellcasting": {
+        "cantrips_known": 3,
+        "spells_known": 6,
+        "spell_slots_level_1": 0,
+        "spell_slots_level_2": 0,
+        "spell_slots_level_3": 2,
+        "spell_slots_level_4": 0,
+        "spell_slots_level_5": 0,
+        "spell_slots_level_6": 0,
+        "spell_slots_level_7": 0,
+        "spell_slots_level_8": 0,
+        "spell_slots_level_9": 0
+      },
+      "class_specific": {
+        "invocations_known": 3,
+        "mystic_arcanum_level_6": 0,
+        "mystic_arcanum_level_7": 0,
+        "mystic_arcanum_level_8": 0,
+        "mystic_arcanum_level_9": 0
+      },
+      "index": "warlock-5",
+      "class": {
+        "index": "warlock",
+        "name": "Warlock",
+        "url": "/api/2014/classes/warlock"
+      },
+      "url": "/api/2014/classes/warlock/levels/5"
+    },
+    "mage": {
+      "index": "mage",
+      "challenge_rating": 6,
+      "spellcasting": {
+        "level": 9,
+        "ability": {
+          "index": "int",
+          "name": "INT",
+          "url": "/api/2014/ability-scores/int"
+        },
+        "dc": 14,
+        "modifier": 6,
+        "components_required": [
+          "V",
+          "S",
+          "M"
+        ],
+        "school": "wizard",
+        "slots": {
+          "1": 4,
+          "2": 3,
+          "3": 3,
+          "4": 3,
+          "5": 1
+        },
+        "spells": [
+          {
+            "name": "Fire Bolt",
+            "level": 0,
+            "url": "/api/2014/spells/fire-bolt"
+          },
+          {
+            "name": "Light",
+            "level": 0,
+            "url": "/api/2014/spells/light"
+          },
+          {
+            "name": "Mage Hand",
+            "level": 0,
+            "url": "/api/2014/spells/mage-hand"
+          },
+          {
+            "name": "Prestidigitation",
+            "level": 0,
+            "url": "/api/2014/spells/prestidigitation"
+          },
+          {
+            "name": "Detect Magic",
+            "level": 1,
+            "url": "/api/2014/spells/detect-magic"
+          },
+          {
+            "name": "Mage Armor",
+            "level": 1,
+            "url": "/api/2014/spells/mage-armor"
+          },
+          {
+            "name": "Magic Missile",
+            "level": 1,
+            "url": "/api/2014/spells/magic-missile"
+          },
+          {
+            "name": "Shield",
+            "level": 1,
+            "url": "/api/2014/spells/shield"
+          },
+          {
+            "name": "Misty Step",
+            "level": 2,
+            "url": "/api/2014/spells/misty-step"
+          },
+          {
+            "name": "Suggestion",
+            "level": 2,
+            "url": "/api/2014/spells/suggestion"
+          },
+          {
+            "name": "Counterspell",
+            "level": 3,
+            "url": "/api/2014/spells/counterspell"
+          },
+          {
+            "name": "Fireball",
+            "level": 3,
+            "url": "/api/2014/spells/fireball"
+          },
+          {
+            "name": "Fly",
+            "level": 3,
+            "url": "/api/2014/spells/fly"
+          },
+          {
+            "name": "Greater Invisibility",
+            "level": 4,
+            "url": "/api/2014/spells/greater-invisibility"
+          },
+          {
+            "name": "Ice Storm",
+            "level": 4,
+            "url": "/api/2014/spells/ice-storm"
+          },
+          {
+            "name": "Cone of Cold",
+            "level": 5,
+            "url": "/api/2014/spells/cone-of-cold"
+          }
+        ]
+      }
+    }
+  },
+  "slotComparisons": [
+    {
+      "class": "bard",
+      "checkedCells": 180,
+      "differences": []
+    },
+    {
+      "class": "cleric",
+      "checkedCells": 180,
+      "differences": []
+    },
+    {
+      "class": "druid",
+      "checkedCells": 180,
+      "differences": []
+    },
+    {
+      "class": "paladin",
+      "checkedCells": 100,
+      "differences": []
+    },
+    {
+      "class": "ranger",
+      "checkedCells": 100,
+      "differences": []
+    },
+    {
+      "class": "sorcerer",
+      "checkedCells": 180,
+      "differences": []
+    },
+    {
+      "class": "wizard",
+      "checkedCells": 180,
+      "differences": []
+    }
+  ],
+  "ccSrd": {
+    "blocks": 13353,
+    "types": {
+      "License": 1,
+      "paragraph": 10722,
+      "h1": 25,
+      "h3": 306,
+      "h4": 1749,
+      "h2": 104,
+      "table": 446
+    },
+    "licenseField": "CC-BY-SA-4.0",
+    "attributionLicense": "CC-BY-4.0",
+    "note": "License field conflicts with attribution; blocks are layout-oriented, not entity records."
+  },
+  "limitations": [
+    "Cross-source agreement does not prove official-source correctness or independent provenance.",
+    "Directory counts include index.md files; Markdown total includes website support pages.",
+    "Missing level spellcasting values treated as zero in slot comparison; only columns present in Markdown compared.",
+    "Warlock and multiclass progression not included in ordinary slot comparisons.",
+    "No full PDF parse, database installation, upstream script execution, or model experiment performed."
+  ]
+}

@@ -1,0 +1,467 @@
+{
+  "status": "complete-experimental-only",
+  "taskTimeoutMs": 180000,
+  "experienceThresholdMs": 120000,
+  "sourceReport": "benchmark-1788864540236.json",
+  "experiment": {
+    "arms": [
+      "native_skill_baseline",
+      "native_skill"
+    ],
+    "comparison": "skill-revision",
+    "kind": "paired skill revisions; identical 16 tools and native routing",
+    "cases": [
+      "npc_wizard"
+    ],
+    "samplesPerCase": 2,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Same native skill routing; only skill body differs",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "441106c30a88c6be5fb03e971091cc54d5b9dbe0",
+    "promptMode": "production",
+    "suiteVersion": "prep-npc-intent-draft2",
+    "taskTimeoutMs": 180000,
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "trials": [
+    {
+      "sample": 0,
+      "arm": "native_skill_baseline",
+      "ms": 125662.9061,
+      "success": false,
+      "taskState": "completed",
+      "timedOut": false,
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 9.463599999999133,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 73.03000000000247,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 100.90929999999935,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 120.68449999999939,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 29.491000000001804,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 61.393599999995786,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 60.78009999999631,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 92.88590000000113,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 123.85009999999602,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 152.58559999999852,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 181.97099999999773,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 208.07459999999992,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 232.64160000000265,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 251.1198000000004,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 33.97520000000077,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 57.25879999999597,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 77.22400000000198,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 612.9124000000011,
+          "isError": false
+        }
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.NxUkAonOS7VTDQPK",
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "oIQ7w5gLie9olJNg",
+          "MTnVFNBwdJm1kuyk",
+          "hQQuakjsuXvEgomb"
+        ],
+        "sceneId": "KpIvqEXGqQejT7cc",
+        "label": "PB1788864540236-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788864540236-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sample": 0,
+      "arm": "native_skill",
+      "ms": 71856.33659999998,
+      "success": true,
+      "taskState": "completed",
+      "timedOut": false,
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 3.6736999999848194,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 21.87380000000121,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.921100000006845,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 41.990600000019185,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 10.193999999988591,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.65789999999106,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 81.55120000001625,
+          "isError": false
+        }
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.49kNNrNuSMUgUWJz",
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "PoWPxGU6i4Qfbfnu",
+          "NfQbjm29kp6qzVt9",
+          "s94z9yQ5zmbgjE7f"
+        ],
+        "sceneId": "BD7WW6Xtli8dfcbL",
+        "label": "PB1788864540236-0-npc_wizard-native_skill",
+        "newName": "PB1788864540236-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sample": 1,
+      "arm": "native_skill",
+      "ms": 180022.7356,
+      "success": false,
+      "taskState": "stopped",
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 5.811900000000605,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 20.442199999990407,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 35.7158000000054,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 44.329799999977695,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 49.225900000019465,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 82.34090000001015,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 110.0616999999911,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 137.12760000000708,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 164.15320000000065,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 186.5005999999994,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 210.82660000000033,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 231.32680000000983,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 248.91819999998552,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 264.1861000000208,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 20.718399999954272,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 39.42229999997653,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 21.103100000007544,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 34.82739999995101,
+          "isError": false
+        }
+      ],
+      "checksAfterTimeout": {
+        "singleNpc": false
+      },
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "ooi7kyqVIjULZywI",
+          "AIm4UTtEUjAzM5So",
+          "4bAEsL447CUAnrFo"
+        ],
+        "sceneId": "tqiq9wJMD3ucVuxK",
+        "label": "PB1788864540236-1-npc_wizard-native_skill",
+        "newName": "PB1788864540236-1-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788864949430.json",
+      "sample": 1,
+      "arm": "native_skill_baseline",
+      "ms": 125931.3759,
+      "success": true,
+      "taskState": "completed",
+      "timedOut": false,
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 6.405299999998533,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 30.778199999998833,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 45.27390000000014,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 62.08700000000135,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 9.418900000000576,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 20.260699999998906,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.8022000000019034,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.6180999999996857,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 921.1824000000051,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 61.97559999999066,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 36.812899999989895,
+          "isError": false
+        }
+      ],
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.y8wWWZRjFgKEPqXZ",
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "lOsTw36i9Z4C3vso",
+          "o9fivfRW8dRhtMKW",
+          "TpIgPJoZnjkdmASe"
+        ],
+        "sceneId": "QcuFwxLy3Hquk3no",
+        "label": "PB1788864949430-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788864949430-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    }
+  ],
+  "caveats": [
+    "180 seconds is a separate diagnostic block; all earlier 120-second failures remain.",
+    "Last baseline is a separate unexecuted arm after timeout paused the batch.",
+    "Data acceptance still requires manual review; not automation execution acceptance."
+  ],
+  "decision": "Two pairs insufficient for promotion; candidate one pass and one timeout, baseline results recorded below. Continue frozen unseen transfer, no further skill expansion yet.",
+  "traceFinding": {
+    "source": "benchmark-1788864540236 sample1 native_skill exact-name session",
+    "executedTools": 18,
+    "executedSearches": 16,
+    "observation": "Repeated per-spell searches, including discretionary spell list and repeated Shield/Fireball searches; a large final script was still present as an incomplete assistant tool-call argument at timeout. It was not an executed browser_evaluate call.",
+    "limit": "Tool calls may be parallel within a single response; count is not model round-trip count or thinking duration."
+  }
+}

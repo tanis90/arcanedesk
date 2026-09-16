@@ -1,0 +1,552 @@
+{
+  "sourceReport": "benchmark-1788854062369.json",
+  "status": "prep-benchmark-completed",
+  "purpose": "Six-case connectivity and acceptance pilot; one pair per case, not a performance baseline.",
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "experiment": {
+    "arms": [
+      "baseline",
+      "tools"
+    ],
+    "comparison": "revision",
+    "kind": "paired tool revisions, fixed production prompt",
+    "cases": [
+      "create_npc",
+      "grant_items",
+      "edit_image",
+      "scene_layout",
+      "conditions",
+      "upload_image"
+    ],
+    "samplesPerCase": 1,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "cc8f470da419c04972a035d1cd6b82f277e407ba",
+    "promptMode": "production",
+    "baselineCommit": "d65eeb33e93769caa4634e8ce2f8ee3e0e882bbe",
+    "suiteVersion": "prep-v1-draft2",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "caveats": [
+    "Both arms use the production prompt and old versus new tools, not bare JavaScript.",
+    "Harness has uncommitted provider-parameterization changes atop candidateCommit; hashes recorded below.",
+    "Client model declaration uses reasoning=true, vision=true, contextWindow=262144, maxTokens=8192; these are configured values, not verified server limits.",
+    "Effective thinking is recorded per trial; no speed conclusion from one pair.",
+    "Initial authentication failure was an operator transcription error, corrected before this run."
+  ],
+  "harnessHashes": {
+    "apps/desktop/test/fixtures/prep-play-model-benchmark.cjs": "142a81eae2f67aea4d7159a2462053380dd06c4dbfa662a2f6edf2080dd1244b",
+    "apps/desktop/test/fixtures/prep-play-model-config.cjs": "848280366012d63039e6ba8680c8dd7b1c4bb886b61a6a33c6c05dffd4926c53"
+  },
+  "trials": [
+    {
+      "sample": 0,
+      "caseId": "create_npc",
+      "arm": "baseline",
+      "ms": 35334.382699999995,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "4e28f9badf7513b9dba5651c2149ea56be438bdb8c09691c8b6d0c08fcf494d5",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 64.09839999999895
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 86.44310000000041
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 6.72439999999915
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 0.5847000000030675
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 0.6732000000010885
+        },
+        {
+          "name": "browser_evaluate",
+          "isError": false,
+          "ms": 214.0312000000049
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 21.8070000000007
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "create_npc",
+      "arm": "tools",
+      "ms": 41218.64949999999,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "792e195191e252f0f253c209be791d63dbf491065c4d48d9827d017b414facd4",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": true,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 25.934800000002724
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 44.889900000001944
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 2.474000000001979
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 1.3646000000007916
+        },
+        {
+          "name": "foundry_actor_create",
+          "isError": true,
+          "ms": 0.5403000000005704
+        },
+        {
+          "name": "foundry_open",
+          "isError": false,
+          "ms": 1.1886999999987893
+        },
+        {
+          "name": "browser_evaluate",
+          "isError": false,
+          "ms": 49.00879999999597
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 17.14890000000014
+        },
+        {
+          "name": "foundry_actor_update",
+          "isError": false,
+          "status": "completed",
+          "ms": 58.19449999999779
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "grant_items",
+      "arm": "baseline",
+      "ms": 29144.493000000002,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "be69aa341143c2ffa6456762f49154916b2ba82767e87ff91c46357cd4ae1c0f",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 49.42509999999311
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 68.4938000000111
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 84.29940000000352
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 15.534299999999348
+        },
+        {
+          "name": "foundry_actor_grant_items",
+          "isError": false,
+          "status": "completed",
+          "ms": 61.981500000008964
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 9.879400000005262
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "grant_items",
+      "arm": "tools",
+      "ms": 28771.4488,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "f637a9f65874300b1527bbf4eed315b24ffc18e23699a8a651b1839980ea0aa9",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 30.0850999999966
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 45.79469999999856
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 58.90439999999944
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 22.268700000000536
+        },
+        {
+          "name": "foundry_actor_grant_items",
+          "isError": false,
+          "status": "completed",
+          "ms": 46.27479999998468
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 9.933699999994133
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "edit_image",
+      "arm": "baseline",
+      "ms": 29393.904900000023,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "1e4d5d5e33ccfaf35031088d07ea88a8050d98b479006398ce8fb48700671242",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "isError": false,
+          "ms": 0.927800000004936
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 23.172999999980675
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 17.98320000001695
+        },
+        {
+          "name": "foundry_actor_update",
+          "isError": false,
+          "status": "completed",
+          "ms": 78.6820000000007
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "edit_image",
+      "arm": "tools",
+      "ms": 26366.041200000007,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "dd698e9de91a9eb5a8e88faddd721e1289a0c7d63077aadd994819ac595f0e57",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 20.63279999999213
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 18.767600000021048
+        },
+        {
+          "name": "foundry_actor_update",
+          "isError": false,
+          "status": "completed",
+          "ms": 70.30580000000191
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "scene_layout",
+      "arm": "baseline",
+      "ms": 29250.45749999999,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "b3da393fad556f954196b86da7ebba054e87d48c2e2b4f6d669a2ada828032ef",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 38.08450000002631
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 55.74800000002142
+        },
+        {
+          "name": "foundry_scene_get",
+          "isError": false,
+          "ms": 22.10150000001886
+        },
+        {
+          "name": "foundry_scene_apply",
+          "isError": false,
+          "status": "completed",
+          "ms": 66.81239999999525
+        },
+        {
+          "name": "foundry_scene_get",
+          "isError": false,
+          "ms": 14.217299999989336
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "scene_layout",
+      "arm": "tools",
+      "ms": 26994.594099999988,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "fa3efc970bf2eb6b365204e6918fd39c7e1e35ed70b325b5e95493a7caf154b1",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 40.010599999979604
+        },
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 61.646100000012666
+        },
+        {
+          "name": "foundry_scene_get",
+          "isError": false,
+          "ms": 16.842700000008335
+        },
+        {
+          "name": "foundry_scene_apply",
+          "isError": false,
+          "status": "completed",
+          "ms": 80.8123000000196
+        },
+        {
+          "name": "foundry_scene_get",
+          "isError": false,
+          "ms": 15.423500000004424
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "conditions",
+      "arm": "baseline",
+      "ms": 9845.869999999995,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "feaf6a124aea2106a86af5d2864dbd4d56462918edfae8f682d8ccace184655b",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 14.004300000000512
+        },
+        {
+          "name": "foundry_conditions_set",
+          "isError": false,
+          "status": "completed",
+          "ms": 78.71679999999469
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "conditions",
+      "arm": "tools",
+      "ms": 9672.07269999996,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "17b34f61e3de746ba34a6c3758db7077eebc4e9876adc048cdf8ec156dcc89fe",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 20.232199999969453
+        },
+        {
+          "name": "foundry_conditions_set",
+          "isError": false,
+          "status": "completed",
+          "ms": 76.29200000001583
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "upload_image",
+      "arm": "baseline",
+      "ms": 16564.45040000003,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "b8a10d98731a3207708bdc8e35f8b0d025ba36dca7946e362a0820027398d1e7",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 24.148400000005495
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 21.167699999990873
+        },
+        {
+          "name": "foundry_actor_update",
+          "isError": false,
+          "status": "completed",
+          "ms": 86.80319999996573
+        }
+      ]
+    },
+    {
+      "sample": 0,
+      "caseId": "upload_image",
+      "arm": "tools",
+      "ms": 19981.80170000001,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "thinking": "off",
+      "systemPromptHash": "c623bdac11329aaec642e53434a5b4df99eb56fa1c3375987e5db9022e5d5f9d",
+      "providerFailure": null,
+      "modelError": null,
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "isError": false,
+          "ms": 23.82530000002589
+        },
+        {
+          "name": "foundry_actor_get",
+          "isError": false,
+          "ms": 18.65260000003036
+        },
+        {
+          "name": "foundry_actor_update",
+          "isError": false,
+          "status": "completed",
+          "ms": 110.40590000001248
+        }
+      ]
+    }
+  ]
+}

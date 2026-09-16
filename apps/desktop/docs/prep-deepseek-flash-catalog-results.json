@@ -1,0 +1,190 @@
+{
+  "manifest": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\deepseek-flash-catalog-1789044914827\\manifest.json",
+  "inputs": {
+    "fixtures/prep-build-query.cjs": "32c767fcfb5e73db8102f40efc17a4ea64ae155557649f98d779610203c4caf6",
+    "fixtures/prep-build-query-skill/SKILL.md": "40a9dede44490f055c888f7aa82d52777d48026052fd4d19e50ab969c2b4d3b5",
+    "fixtures/prep-native-npc-skill/SKILL.md": "53a4e9d25ec4fbb758b35af67073d70f012ab477aab3ff13fc8fd453f07f6eac",
+    "character-benchmark/skill/SKILL.md": "97db25c93c15c24131ee4a26fb45a109ff34eb2448d166649affe246b4b1772d",
+    "character-benchmark/cases.cjs": "99e37a53c8bd9f57ecdd23e33658a05aa5bfc217234a87f40c189e670fe7466c",
+    "fixtures/prep-prompt-benchmark.cjs": "b9850c27a8d4e9e0c46fae3c8cc200379e97043d71699676bd10c673b5d4dc47",
+    "character-benchmark/verify-v4.cjs": "85ab30199e22993236d027af22f3743fbd7218eed9ee75ddcb3aebd36ba836dc",
+    "character-benchmark/verify-v3.cjs": "031b1079ff07a2b5aa62eb4a41ae807034960b9097e754d44fb7f08cfc91ba1f",
+    "character-benchmark/model-adapter.cjs": "1f1afcee68cf1eb8343d7b5b0cd76ded79839fda6363999fbbc06af2e9c7697d",
+    "character-benchmark/verifier.cjs": "9b77415d85d2490796021fcdc12a4517febaa8de5a754f38b5a570c185a278d4",
+    "character-benchmark/policy.cjs": "282195da7186a0e331f3385ccfd7646cebefaa966d675fbe3bb28f8260eff639",
+    "character-benchmark/source-aliases-v3.json": "6b7c2c93cfd6499ba7278e5d9ee3314b3fdc6eb3a589540a0587f5b7daba6cfb",
+    "character-benchmark/spell-metadata.json": "330c81baf10dce21b8cfef528b53c910129d5bdd99825cc290692199d2e1ef3a",
+    "../skills/prep/arcane-actor-update/SKILL.md": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+    "fixtures/prep-content-catalog.cjs": "b8dd1f4a519a42e8e1b68edca1a55c5c08097bff4fe14b4911a4894142caf0a4",
+    "character-benchmark/catalog-model-adapter.cjs": "923546614ec51005c884140e971ce69ee7cb94b9f848355723d9fbb7d92b8ea1",
+    "fixtures/prep-benchmark-target.cjs": "7de1bc6fc4f1abe5104c430404dee86c1cca13da653ec990c81d4689276bb01e",
+    "fixtures/prep-play-model-benchmark.cjs": "2aed8dadbd2c7be82faeb233baed12942ad336b9fde9c6fb87776ca8a43fdec2",
+    "character-benchmark/runtime.cjs": "e294da8fee7653cd480ef02d11749b5a1f8686232f1b2d1c336e44d5c2f776cc",
+    "character-benchmark/sources.json": "30dbc431e62541440d2c9018b64cd799cf949aa91c251bd40490b684ab56b7bc",
+    "character-benchmark/audit-model.mjs": "5d196edad2fa1ef727a32b51985b90562116a02060335fbcfda33a4c4d309932",
+    "character-benchmark/run-suite.mjs": "7c9884a2032aed8f7ea802a0e922a351102e2ee8cf1a095989c7271abb3612fa"
+  },
+  "rows": [
+    {
+      "case": "A1",
+      "arm": "native_skill_catalog_js",
+      "seconds": 113.554,
+      "pass_": false,
+      "timeout": false,
+      "calls": 28,
+      "catalogCalls": {},
+      "failed": [
+        "race.source",
+        "movement.walk",
+        "spells.book"
+      ],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789044921940-audit.json",
+      "auditSha256": "4e6a56116dc643e2116d72ddd9df7e71431e4487ce0345bf1f43539a7b0f4a08"
+    },
+    {
+      "case": "A1",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 100.696,
+      "pass_": true,
+      "timeout": false,
+      "calls": 18,
+      "catalogCalls": {
+        "foundry_content_list": 2
+      },
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789045052516-audit.json",
+      "auditSha256": "092397a9713745882fe02337972ea5bae0faf68f2677b810a2b0d390e5f88097"
+    },
+    {
+      "case": "A2",
+      "arm": "native_skill_catalog_js",
+      "seconds": 118.599,
+      "pass_": true,
+      "timeout": false,
+      "calls": 24,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789045161052-audit.json",
+      "auditSha256": "c861e5fc832453dec53bb843b479eecbc96057a293d0a6aaefe844ef877c7f78"
+    },
+    {
+      "case": "A2",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 300.018,
+      "pass_": false,
+      "timeout": true,
+      "calls": 44,
+      "catalogCalls": {
+        "foundry_content_search": 3
+      },
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789045290831-audit.json",
+      "auditSha256": "895f3027aac6ef96c78cf8634acf560e8c833a4348176f80d669f31ac1e7ff3b"
+    },
+    {
+      "case": "A3",
+      "arm": "native_skill_catalog_js",
+      "seconds": 193.463,
+      "pass_": false,
+      "timeout": false,
+      "calls": 27,
+      "catalogCalls": {},
+      "failed": [
+        "movement.walk"
+      ],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789045604168-audit.json",
+      "auditSha256": "e7b4ef09e855c09b38c8d26f37c85141d3710dbfc2c56449d579a55faa586201"
+    },
+    {
+      "case": "A3",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 213.895,
+      "pass_": false,
+      "timeout": false,
+      "calls": 36,
+      "catalogCalls": {
+        "foundry_content_list": 2
+      },
+      "failed": [
+        "race.source",
+        "movement.walk"
+      ],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789045813165-audit.json",
+      "auditSha256": "c6123609e27b4df0e3bc2805fa24a7b2fe1fbcf3b67bbac35eeeea0816e059c4"
+    },
+    {
+      "case": "B1",
+      "arm": "native_skill_catalog_js",
+      "seconds": 145.415,
+      "pass_": true,
+      "timeout": false,
+      "calls": 25,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046038026-audit.json",
+      "auditSha256": "59d856194397ca5aa3e5a21d6ffe6c810e9de7b5fe8d352f8c7686717e450a33"
+    },
+    {
+      "case": "B1",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 111.234,
+      "pass_": true,
+      "timeout": false,
+      "calls": 18,
+      "catalogCalls": {
+        "foundry_content_search": 2
+      },
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046192056-audit.json",
+      "auditSha256": "19d553e0f386f5333dbef3d86fa8db2d8b5f9b351097753f9a87d426493b7ac1"
+    },
+    {
+      "case": "B2",
+      "arm": "native_skill_catalog_js",
+      "seconds": 100.448,
+      "pass_": true,
+      "timeout": false,
+      "calls": 17,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046311693-audit.json",
+      "auditSha256": "d0f93071c69e2bbfa727ee1e13705abc050c1448f0dd5c5724731435c32013d3"
+    },
+    {
+      "case": "B2",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 141.282,
+      "pass_": true,
+      "timeout": false,
+      "calls": 19,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046420438-audit.json",
+      "auditSha256": "9553f1f098e22a4e3d8d8ea96547f70896ef64255536ed0273cfb2f252a598b4"
+    },
+    {
+      "case": "B3",
+      "arm": "native_skill_catalog_js",
+      "seconds": 200.883,
+      "pass_": true,
+      "timeout": false,
+      "calls": 32,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046569418-audit.json",
+      "auditSha256": "df91bf06077f56707747f394d1b9922a21a0ebda21624c6fd6b25be83a42ac5a"
+    },
+    {
+      "case": "B3",
+      "arm": "native_skill_catalog_tool",
+      "seconds": 139.643,
+      "pass_": true,
+      "timeout": false,
+      "calls": 24,
+      "catalogCalls": {},
+      "failed": [],
+      "audit": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\arcane-prep-play-deepseek-flash-qa\\benchmark-1789046779318-audit.json",
+      "auditSha256": "3959ba63ae8e579d1ad595bf68851d77ff9530708ae7f1cb06dd8e9ba7841982"
+    }
+  ]
+}

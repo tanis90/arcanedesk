@@ -1,0 +1,529 @@
+{
+  "status": "completed",
+  "scope": "conditions, scene read/apply, grants, independent image tool",
+  "smoke": [
+    {
+      "report": "C:/Users/yangqi/AppData/Local/Temp/image-smoke-1788922014934nLfSY3/report.json",
+      "runId": "image-smoke-1788922014934",
+      "status": "completed",
+      "upload": {
+        "status": "completed",
+        "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+        "steps": [
+          {
+            "step": "upload-image",
+            "state": "completed",
+            "targets": [],
+            "reused": true,
+            "summary": "upload-image: completed",
+            "dataPaths": [
+              "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg"
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+            "targetUuid": null
+          }
+        ],
+        "warnings": [],
+        "operationRef": "1e9900cc-ecb6-4470-b396-b7663daec23c"
+      },
+      "verified": {
+        "hash": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785",
+        "actor": true,
+        "item": true,
+        "embedded": true,
+        "journal": true,
+        "textPreserved": true,
+        "tokens": true,
+        "sceneUnchanged": true
+      },
+      "cleaned": true,
+      "applied": [
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+          "steps": [
+            {
+              "step": "img",
+              "targets": [
+                "Actor.HsR3X4otXNSVxJIJ"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/actors/npc.svg",
+              "after": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+              "summary": "img: completed"
+            },
+            {
+              "step": "prototypeToken.texture.src",
+              "targets": [
+                "Actor.HsR3X4otXNSVxJIJ"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/actors/npc.svg",
+              "after": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+              "summary": "prototypeToken.texture.src: completed"
+            },
+            {
+              "step": "token-image",
+              "targets": [
+                "Scene.cJeeIaFZzDiVpTf3.Token.sHkLmO3JxPALneNu"
+              ],
+              "state": "completed",
+              "summary": "token-image: completed"
+            },
+            {
+              "step": "token-image",
+              "targets": [
+                "Scene.cJeeIaFZzDiVpTf3.Token.qdYT2kmgGls8Fg4a"
+              ],
+              "state": "completed",
+              "summary": "token-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "Item.7w184Nu81xdSWEsm"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/items/weapon.svg",
+              "after": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+              "summary": "document-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "Actor.HsR3X4otXNSVxJIJ.Item.OG8UkKlmKihfqpaQ"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/items/weapon.svg",
+              "after": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+              "summary": "document-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "JournalEntry.MiDrPpAaGtIMPDSY.JournalEntryPage.IgXMeUyJYCkJ5MZF"
+              ],
+              "state": "completed",
+              "before": null,
+              "after": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+              "summary": "document-image: completed"
+            }
+          ]
+        }
+      ],
+      "textPage": {
+        "status": "rejected",
+        "code": "IMAGE_TARGET_UNSUPPORTED",
+        "message": "IMAGE_TARGET_UNSUPPORTED: target an image page; text pages can embed the uploaded dataPath",
+        "operationRef": "0f4509a4-9f75-47eb-ab63-8a63460b6069"
+      }
+    },
+    {
+      "report": "C:/Users/yangqi/AppData/Local/Temp/image-smoke-1788922314688rvcq4G/report.json",
+      "runId": "image-smoke-1788922314688",
+      "status": "completed",
+      "upload": {
+        "status": "completed",
+        "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+        "steps": [
+          {
+            "step": "upload-image",
+            "state": "completed",
+            "targets": [],
+            "summary": "upload-image: completed",
+            "dataPaths": [
+              "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png"
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+            "targetUuid": null
+          }
+        ],
+        "warnings": [],
+        "operationRef": "79d1b45c-e2ea-4be2-a5d3-50a257bd7180"
+      },
+      "verified": {
+        "hash": "685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778",
+        "actor": true,
+        "item": true,
+        "embedded": true,
+        "journal": true,
+        "textPreserved": true,
+        "tokens": true,
+        "sceneUnchanged": true
+      },
+      "cleaned": true,
+      "applied": [
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+          "steps": [
+            {
+              "step": "img",
+              "targets": [
+                "Actor.HHgSs7i3JHf4USPA"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/actors/npc.svg",
+              "after": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+              "summary": "img: completed"
+            },
+            {
+              "step": "prototypeToken.texture.src",
+              "targets": [
+                "Actor.HHgSs7i3JHf4USPA"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/actors/npc.svg",
+              "after": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+              "summary": "prototypeToken.texture.src: completed"
+            },
+            {
+              "step": "token-image",
+              "targets": [
+                "Scene.HPLGthveBqr8fMd4.Token.pghtMjPXiW5p4hAK"
+              ],
+              "state": "completed",
+              "summary": "token-image: completed"
+            },
+            {
+              "step": "token-image",
+              "targets": [
+                "Scene.HPLGthveBqr8fMd4.Token.A0D8usmOWIZdk1SV"
+              ],
+              "state": "completed",
+              "summary": "token-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "Item.OThg7nU2B3VQHE07"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/items/weapon.svg",
+              "after": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+              "summary": "document-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "Actor.HHgSs7i3JHf4USPA.Item.CE4lgpSTlCQ5dCDd"
+              ],
+              "state": "completed",
+              "before": "systems/dnd5e/icons/svg/items/weapon.svg",
+              "after": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+              "summary": "document-image: completed"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "dataPath": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+          "steps": [
+            {
+              "step": "document-image",
+              "targets": [
+                "JournalEntry.c4dQSM7CBYuyzHF9.JournalEntryPage.AbmqePMALNkhte91"
+              ],
+              "state": "completed",
+              "before": null,
+              "after": "arcanedesk/assets/685630725425398137bcbc8eb31ac486b74af07ab77a60ec37a777f40a3c2778.png",
+              "summary": "document-image: completed"
+            }
+          ]
+        }
+      ],
+      "textPage": {
+        "status": "rejected",
+        "code": "IMAGE_TARGET_UNSUPPORTED",
+        "message": "IMAGE_TARGET_UNSUPPORTED: target an image page; text pages can embed the uploaded dataPath",
+        "operationRef": "e37e8a27-3a99-49af-a576-1653ddff0b17"
+      }
+    }
+  ],
+  "initialSmoke": {
+    "report": "image-smoke-17889219498789uogZc/report.json",
+    "status": "verification-script-error",
+    "cause": "Collection.every is unavailable; corrected to contents.every",
+    "posthoc": "Original writes independently verified; only owned fixtures cleaned"
+  },
+  "model": {
+    "report": "benchmark-1788922147407.json",
+    "provider": {
+      "providerId": "qa-aliyun-token-plan",
+      "model": "qwen3.7-plus",
+      "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "serverRevision": "unknown"
+    },
+    "experiment": {
+      "arms": [
+        "tools"
+      ],
+      "comparison": "js",
+      "kind": "same-code production tools versus native JS",
+      "cases": [
+        "grant_items",
+        "scene_layout",
+        "conditions",
+        "upload_image",
+        "edit_image"
+      ],
+      "samplesPerCase": 1,
+      "model": "qwen3.7-plus",
+      "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+      "newTools": [
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_create",
+        "foundry_actor_update",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image"
+      ],
+      "connection": "warm authenticated target world",
+      "humanWait": "recorded; no automatic answers",
+      "candidateCommit": "acc7c9dc6c3fcce040536997e5019b807dd13879",
+      "promptMode": "production",
+      "suiteVersion": "prep-v1-draft2",
+      "taskTimeoutMs": 180000,
+      "experienceTargetMs": 120000,
+      "thinkingOverride": "off",
+      "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+    },
+    "trials": [
+      {
+        "caseId": "grant_items",
+        "ms": 19808.647899999996,
+        "success": true,
+        "calls": 5,
+        "tools": [
+          "foundry_content_search",
+          "foundry_actor_get",
+          "foundry_content_search",
+          "foundry_content_search",
+          "foundry_actor_grant_items"
+        ],
+        "toolErrors": 0,
+        "verification": {
+          "ok": true,
+          "details": {
+            "rapiers": 1,
+            "bows": 1,
+            "rapierEquipped": false,
+            "bowEquipped": true,
+            "bowQuantity": 1
+          }
+        },
+        "cleaned": true
+      },
+      {
+        "caseId": "scene_layout",
+        "ms": 23378.661300000003,
+        "success": true,
+        "calls": 4,
+        "tools": [
+          "foundry_content_search",
+          "foundry_scene_get",
+          "foundry_content_search",
+          "foundry_scene_apply"
+        ],
+        "toolErrors": 0,
+        "verification": {
+          "ok": true,
+          "details": {
+            "tokens": [
+              {
+                "name": "PB1788922147407-0-scene_layout Token2",
+                "x": 500,
+                "y": 400,
+                "actorId": "vwVa2rLPY8wb173G"
+              },
+              {
+                "name": "PB1788922147407-0-scene_layout Token1",
+                "x": 300,
+                "y": 400,
+                "actorId": "rzxKPXnIT7sPHfCM"
+              },
+              {
+                "name": "新守卫A",
+                "x": 700,
+                "y": 400,
+                "actorId": "rzxKPXnIT7sPHfCM"
+              },
+              {
+                "name": "新守卫B",
+                "x": 900,
+                "y": 400,
+                "actorId": "rzxKPXnIT7sPHfCM"
+              }
+            ],
+            "active": false,
+            "current": "A6V8lDKFVtg36CDP"
+          }
+        },
+        "cleaned": true
+      },
+      {
+        "caseId": "conditions",
+        "ms": 14714.524200000007,
+        "success": true,
+        "calls": 4,
+        "tools": [
+          "foundry_content_search",
+          "foundry_content_search",
+          "foundry_content_search",
+          "foundry_conditions_set"
+        ],
+        "toolErrors": 0,
+        "verification": {
+          "ok": true,
+          "details": {
+            "actors": [
+              {
+                "id": "kDxBxPBox0NCopMM",
+                "statuses": [
+                  "prone",
+                  "poisoned"
+                ]
+              },
+              {
+                "id": "7S0uQyzhteQe2gSR",
+                "statuses": [
+                  "prone",
+                  "poisoned"
+                ]
+              },
+              {
+                "id": "8E94cabIv8zB39Bq",
+                "statuses": []
+              }
+            ],
+            "protectedIntact": true,
+            "uniqueStatuses": true
+          }
+        },
+        "cleaned": true
+      },
+      {
+        "caseId": "upload_image",
+        "ms": 10246.513699999996,
+        "success": true,
+        "calls": 2,
+        "tools": [
+          "foundry_content_search",
+          "foundry_image"
+        ],
+        "toolErrors": 0,
+        "verification": {
+          "ok": true,
+          "details": {
+            "imagePath": "arcanedesk/assets/b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785.jpg",
+            "hash": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785",
+            "loadable": true,
+            "untouched": true,
+            "imageError": null
+          }
+        },
+        "cleaned": true
+      },
+      {
+        "caseId": "edit_image",
+        "ms": 19161.987500000003,
+        "success": true,
+        "calls": 6,
+        "tools": [
+          "foundry_open",
+          "foundry_content_search",
+          "foundry_actor_get",
+          "foundry_image",
+          "foundry_actor_update",
+          "foundry_actor_get"
+        ],
+        "toolErrors": 0,
+        "verification": {
+          "ok": true,
+          "details": {
+            "name": "PB1788922147407-0-edit_image 队长",
+            "hp": {
+              "max": 18,
+              "temp": 0,
+              "tempmax": 0,
+              "value": 8,
+              "formula": "",
+              "effectiveMax": 18,
+              "damage": 10,
+              "pct": 44.44444444444444
+            },
+            "ac": 14,
+            "img": "systems/dnd5e/tokens/beast/Wolf.webp",
+            "prototype": "systems/dnd5e/tokens/beast/Wolf.webp",
+            "token": {
+              "name": "PB1788922147407-0-edit_image Token1",
+              "x": 200,
+              "y": 200,
+              "width": 1,
+              "height": 1,
+              "img": "systems/dnd5e/tokens/beast/Wolf.webp"
+            }
+          }
+        },
+        "cleaned": true
+      }
+    ],
+    "revisionInputs": {
+      "baseline": {
+        "commit": "acc7c9dc6c3fcce040536997e5019b807dd13879",
+        "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+        "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+      },
+      "candidate": {
+        "commit": "acc7c9dc6c3fcce040536997e5019b807dd13879",
+        "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+        "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+      }
+    },
+    "uncommittedCandidateDuringRun": true
+  },
+  "caveat": "Single model sample per case verifies adoption and behavior, not a stable latency claim. No auto-pack changes."
+}

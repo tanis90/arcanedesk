@@ -1,0 +1,599 @@
+{
+  "A1": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.wZK2Q0rXB0AQo8h3",
+      "type": "class",
+      "identifier": "wizard"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.Ye5f3FReEnuXfi0y",
+      "type": "subclass",
+      "identifier": "school-of-evocation"
+    },
+    {
+      "uuid": "Compendium.dnd5e.races.Item.ydP3QzCmur55mtY2",
+      "type": "race",
+      "identifier": "human"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+      "type": "feat",
+      "identifier": "spellcasting"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+      "type": "feat",
+      "identifier": "arcane-recovery"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+      "type": "feat",
+      "identifier": "arcane-tradition"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+      "type": "feat",
+      "identifier": "evocation-savant"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+      "type": "feat",
+      "identifier": "sculpt-spells"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.F567808128333146",
+      "type": "weapon",
+      "identifier": "quarterstaff"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.78342EC246D19CE6",
+      "type": "weapon",
+      "identifier": "dagger"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.eZGmdOhaTWMicXPW",
+      "type": "container",
+      "identifier": "component-pouch"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.LBajgahniRJbAgDr",
+      "type": "loot",
+      "identifier": "spellbook"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio",
+      "type": "spell",
+      "identifier": "fire-bolt"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+      "type": "spell",
+      "identifier": "mage-hand"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ",
+      "type": "spell",
+      "identifier": "prestidigitation"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ctW81uiX56xZR2c5",
+      "type": "spell",
+      "identifier": "ray-of-frost"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H",
+      "type": "spell",
+      "identifier": "mage-armor"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7",
+      "type": "spell",
+      "identifier": "shield"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+      "type": "spell",
+      "identifier": "magic-missile"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+      "type": "spell",
+      "identifier": "detect-magic"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.3OZnNhunvRtPOQmH",
+      "type": "spell",
+      "identifier": "identify"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz",
+      "type": "spell",
+      "identifier": "find-familiar"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.pub0OWVEB71XQx1n",
+      "type": "spell",
+      "identifier": "feather-fall"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku",
+      "type": "spell",
+      "identifier": "sleep"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.1N8dDMMgZ1h1YJ3B",
+      "type": "spell",
+      "identifier": "invisibility"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL",
+      "type": "spell",
+      "identifier": "misty-step"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz",
+      "type": "spell",
+      "identifier": "mirror-image"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP",
+      "type": "spell",
+      "identifier": "web"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+      "type": "spell",
+      "identifier": "fireball"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy",
+      "type": "spell",
+      "identifier": "counterspell"
+    }
+  ],
+  "A2": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.ABEBgWyRhVlDUIfq",
+      "type": "class",
+      "identifier": "fighter"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.sprHbe7cRg9osTzf",
+      "type": "subclass",
+      "identifier": "champion"
+    },
+    {
+      "uuid": "Compendium.dnd5e.races.Item.ydP3QzCmur55mtY2",
+      "type": "race",
+      "identifier": "human"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+      "type": "feat",
+      "identifier": "fighting-style"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+      "type": "feat",
+      "identifier": "second-wind"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+      "type": "feat",
+      "identifier": "action-surge"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+      "type": "feat",
+      "identifier": "martial-archetype"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+      "type": "feat",
+      "identifier": "extra-attack"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+      "type": "feat",
+      "identifier": "improved-critical"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+      "type": "feat",
+      "identifier": "dueling"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.ACF6564A64EEDF3D",
+      "type": "weapon",
+      "identifier": "longsword"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.sSs3hSzkKBMNBgTs",
+      "type": "equipment",
+      "identifier": "shield"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.rLMflzmxpe8JGTOA",
+      "type": "equipment",
+      "identifier": "chain-mail"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.5680E5DF807D71EA",
+      "type": "weapon",
+      "identifier": "handaxe"
+    }
+  ],
+  "A3": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.tlwBnN8GmqJcTgub",
+      "type": "class",
+      "identifier": "cleric"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.H3RYLGqCiqm8BP3q",
+      "type": "subclass",
+      "identifier": "life-domain"
+    },
+    {
+      "uuid": "Compendium.dnd5e.races.Item.UQiRQUTBcsz8gZU1",
+      "type": "race",
+      "identifier": "hill-dwarf"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7",
+      "type": "feat",
+      "identifier": "spellcasting"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.x637K2Icp2ZFM1TB",
+      "type": "feat",
+      "identifier": "divine-domain"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.YpiLQEKGalROn7iJ",
+      "type": "feat",
+      "identifier": "channel-divinity"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.r91UIgwFdHwkXdia",
+      "type": "feat",
+      "identifier": "channel-divinity-turn-undead"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW",
+      "type": "feat",
+      "identifier": "bonus-proficiency"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.jF8AFfEMICIJnAkR",
+      "type": "feat",
+      "identifier": "disciple-of-life"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.hEymt45rICi4f9eL",
+      "type": "feat",
+      "identifier": "channel-divinity-preserve-life"
+    },
+    {
+      "uuid": "Compendium.dnd5e.races.Item.ufysTkqet2Ctmtyi",
+      "type": "feat",
+      "identifier": "dwarven-resilience"
+    },
+    {
+      "uuid": "Compendium.dnd5e.races.Item.mQPZDRbUhgYTbXKa",
+      "type": "feat",
+      "identifier": "stonecunning"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.6007BDFC48583052",
+      "type": "weapon",
+      "identifier": "light-hammer"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.FA55F1F44608ED67",
+      "type": "weapon",
+      "identifier": "mace"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.sSs3hSzkKBMNBgTs",
+      "type": "equipment",
+      "identifier": "shield"
+    },
+    {
+      "uuid": "Compendium.dnd5e.items.Item.rLMflzmxpe8JGTOA",
+      "type": "equipment",
+      "identifier": "chain-mail"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.15A3A6D6FEF0A465",
+      "type": "weapon",
+      "identifier": "light-crossbow"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.P7mF2MxSuVJwHRRY",
+      "type": "spell",
+      "identifier": "guidance"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.n9pJzTDsAwQxJVRl",
+      "type": "spell",
+      "identifier": "sacred-flame"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.MUO1uYN7JR1hm4dR",
+      "type": "spell",
+      "identifier": "thaumaturgy"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.o8Dh7fblk1d16tnO",
+      "type": "spell",
+      "identifier": "healing-word"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.gvdA9nPuWLck4tBl",
+      "type": "spell",
+      "identifier": "sanctuary"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.arzCrMRgcNiQuh43",
+      "type": "spell",
+      "identifier": "command"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+      "type": "spell",
+      "identifier": "detect-magic"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.7buEm5KhI5lP8m1z",
+      "type": "spell",
+      "identifier": "guiding-bolt"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Opwh2PdX4runSBlm",
+      "type": "spell",
+      "identifier": "aid"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.8dzaICjGy6mTUaUr",
+      "type": "spell",
+      "identifier": "bless"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.uUWb1wZgtMou0TVP",
+      "type": "spell",
+      "identifier": "cure-wounds"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.F0GsG0SJzsIOacwV",
+      "type": "spell",
+      "identifier": "lesser-restoration"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JbxsYXxSOTZbf9I0",
+      "type": "spell",
+      "identifier": "spiritual-weapon"
+    }
+  ],
+  "B1": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.ABEBgWyRhVlDUIfq",
+      "type": "class",
+      "identifier": "fighter"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.sprHbe7cRg9osTzf",
+      "type": "subclass",
+      "identifier": "champion"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.fbExzwNwEAl2kW9c",
+      "type": "feat",
+      "identifier": "fighting-style"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.nTjmWbyHweXuIqwc",
+      "type": "feat",
+      "identifier": "second-wind"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.xF1VTcJ3AdkbTsdQ",
+      "type": "feat",
+      "identifier": "action-surge"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.ax8M0X0q1GGWM26j",
+      "type": "feat",
+      "identifier": "martial-archetype"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+      "type": "feat",
+      "identifier": "extra-attack"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.YgLQV1O849wE5TgM",
+      "type": "feat",
+      "identifier": "improved-critical"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.hCop9uJrWhF1QPb4",
+      "type": "feat",
+      "identifier": "dueling"
+    }
+  ],
+  "B2": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.xEb8jmA5HlNs7xTF",
+      "type": "class",
+      "identifier": "rogue"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.k8iuefRorWOjb9gR",
+      "type": "subclass",
+      "identifier": "thief"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.3sYPftQKnbbVnHrh",
+      "type": "feat",
+      "identifier": "expertise"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.DPN2Gfk8yi1Z5wp7",
+      "type": "feat",
+      "identifier": "sneak-attack"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.ohwfuwnvuoBWlSQr",
+      "type": "feat",
+      "identifier": "thieves-cant"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.01pcLg6PRu5zGrsb",
+      "type": "feat",
+      "identifier": "cunning-action"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.80USV8ZFPIahpLd0",
+      "type": "feat",
+      "identifier": "roguish-archetype"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.ga3dt2zrCn2MHK8R",
+      "type": "feat",
+      "identifier": "fast-hands"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.FGrbXs6Ku5qxFK5G",
+      "type": "feat",
+      "identifier": "second-story-work"
+    }
+  ],
+  "B3": [
+    {
+      "uuid": "Compendium.dnd5e.classes.Item.wZK2Q0rXB0AQo8h3",
+      "type": "class",
+      "identifier": "wizard"
+    },
+    {
+      "uuid": "Compendium.dnd5e.subclasses.Item.Ye5f3FReEnuXfi0y",
+      "type": "subclass",
+      "identifier": "school-of-evocation"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+      "type": "feat",
+      "identifier": "spellcasting"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+      "type": "feat",
+      "identifier": "arcane-recovery"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+      "type": "feat",
+      "identifier": "arcane-tradition"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+      "type": "feat",
+      "identifier": "evocation-savant"
+    },
+    {
+      "uuid": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+      "type": "feat",
+      "identifier": "sculpt-spells"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio",
+      "type": "spell",
+      "identifier": "fire-bolt"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+      "type": "spell",
+      "identifier": "mage-hand"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ",
+      "type": "spell",
+      "identifier": "prestidigitation"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ctW81uiX56xZR2c5",
+      "type": "spell",
+      "identifier": "ray-of-frost"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H",
+      "type": "spell",
+      "identifier": "mage-armor"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7",
+      "type": "spell",
+      "identifier": "shield"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+      "type": "spell",
+      "identifier": "magic-missile"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+      "type": "spell",
+      "identifier": "detect-magic"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.3OZnNhunvRtPOQmH",
+      "type": "spell",
+      "identifier": "identify"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz",
+      "type": "spell",
+      "identifier": "find-familiar"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.pub0OWVEB71XQx1n",
+      "type": "spell",
+      "identifier": "feather-fall"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku",
+      "type": "spell",
+      "identifier": "sleep"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.1N8dDMMgZ1h1YJ3B",
+      "type": "spell",
+      "identifier": "invisibility"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL",
+      "type": "spell",
+      "identifier": "misty-step"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz",
+      "type": "spell",
+      "identifier": "mirror-image"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP",
+      "type": "spell",
+      "identifier": "web"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+      "type": "spell",
+      "identifier": "fireball"
+    },
+    {
+      "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy",
+      "type": "spell",
+      "identifier": "counterspell"
+    }
+  ]
+}

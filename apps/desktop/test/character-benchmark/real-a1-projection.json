@@ -1,0 +1,2871 @@
+{
+  "provenance": {
+    "run": "benchmark-1788942865994",
+    "kind": "field projection of actual read-back; rule descriptions omitted"
+  },
+  "actual": {
+    "id": "DNuRvKtjICziD4Gs",
+    "name": "PB1788942865994-0-A1-native_skill_build_tool 霜牙",
+    "type": "character",
+    "raw": {
+      "name": "PB1788942865994-0-A1-native_skill_build_tool 霜牙",
+      "type": "npc",
+      "img": "icons/svg/mystery-man.svg",
+      "system": {
+        "abilities": {
+          "str": {
+            "value": 9,
+            "proficient": 0,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          },
+          "dex": {
+            "value": 15,
+            "proficient": 0,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          },
+          "con": {
+            "value": 14,
+            "proficient": 0,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          },
+          "int": {
+            "value": 18,
+            "proficient": 1,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          },
+          "wis": {
+            "value": 13,
+            "proficient": 1,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          },
+          "cha": {
+            "value": 11,
+            "proficient": 0,
+            "max": null,
+            "bonuses": {
+              "check": "",
+              "save": ""
+            },
+            "check": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            },
+            "save": {
+              "roll": {
+                "min": null,
+                "max": null,
+                "mode": 0
+              }
+            }
+          }
+        },
+        "attributes": {
+          "ac": {
+            "calc": "flat",
+            "flat": 12
+          },
+          "hp": {
+            "value": 32,
+            "max": 32,
+            "temp": 0,
+            "tempmax": 0,
+            "formula": ""
+          },
+          "movement": {
+            "walk": "30",
+            "units": null,
+            "hover": false,
+            "ignoredDifficultTerrain": []
+          },
+          "spellcasting": "int",
+          "spell": {
+            "level": 5
+          },
+          "init": {
+            "ability": "",
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "bonus": ""
+          },
+          "attunement": {
+            "max": 3
+          },
+          "senses": {
+            "ranges": {
+              "blindsight": null,
+              "darkvision": null,
+              "tremorsense": null,
+              "truesight": null
+            },
+            "units": null,
+            "special": ""
+          },
+          "exhaustion": 0,
+          "concentration": {
+            "ability": "",
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "bonuses": {
+              "save": ""
+            },
+            "limit": 1
+          },
+          "loyalty": {},
+          "hd": {
+            "spent": 0
+          },
+          "death": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "success": 0,
+            "failure": 0,
+            "bonuses": {
+              "save": ""
+            }
+          },
+          "price": {
+            "value": null,
+            "denomination": "gp"
+          }
+        },
+        "details": {
+          "type": {
+            "value": "humanoid",
+            "subtype": "人类"
+          },
+          "race": "人类",
+          "alignment": "",
+          "ideal": "",
+          "bond": "",
+          "flaw": "",
+          "habitat": {
+            "value": [],
+            "custom": ""
+          },
+          "cr": 1,
+          "treasure": {
+            "value": []
+          }
+        },
+        "traits": {
+          "size": "med",
+          "languages": {
+            "value": [
+              "common",
+              "draconic"
+            ],
+            "custom": "",
+            "communication": {}
+          },
+          "di": {
+            "value": [],
+            "custom": "",
+            "bypasses": []
+          },
+          "dr": {
+            "value": [],
+            "custom": "",
+            "bypasses": []
+          },
+          "dv": {
+            "value": [],
+            "custom": "",
+            "bypasses": []
+          },
+          "dm": {
+            "amount": {},
+            "bypasses": []
+          },
+          "ci": {
+            "value": [],
+            "custom": ""
+          },
+          "important": false
+        },
+        "skills": {
+          "arc": {
+            "value": 1,
+            "ability": "dex",
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "bonuses": {
+              "check": "",
+              "passive": ""
+            }
+          },
+          "inv": {
+            "value": 1,
+            "ability": "dex",
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "bonuses": {
+              "check": "",
+              "passive": ""
+            }
+          }
+        },
+        "spells": {
+          "spell1": {
+            "value": 4
+          },
+          "spell2": {
+            "value": 3
+          },
+          "spell3": {
+            "value": 2
+          }
+        },
+        "currency": {
+          "pp": 0,
+          "gp": 0,
+          "ep": 0,
+          "sp": 0,
+          "cp": 0
+        },
+        "bonuses": {
+          "mwak": {
+            "attack": "",
+            "damage": ""
+          },
+          "rwak": {
+            "attack": "",
+            "damage": ""
+          },
+          "msak": {
+            "attack": "",
+            "damage": ""
+          },
+          "rsak": {
+            "attack": "",
+            "damage": ""
+          },
+          "abilities": {
+            "check": "",
+            "save": "",
+            "skill": ""
+          },
+          "spell": {
+            "dc": ""
+          }
+        },
+        "tools": {},
+        "resources": {
+          "legact": {
+            "max": 0,
+            "spent": 0
+          },
+          "legres": {
+            "max": 0,
+            "spent": 0
+          },
+          "lair": {
+            "value": false,
+            "initiative": null,
+            "inside": false
+          }
+        },
+        "source": {
+          "revision": 1,
+          "rules": "2024"
+        }
+      },
+      "_id": "DNuRvKtjICziD4Gs",
+      "items": [
+        {
+          "_id": "gjCfCiEBVLUylZU0",
+          "name": "法师 Wizard",
+          "type": "class",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol"
+          },
+          "system": {
+            "identifier": "wizard",
+            "levels": 5,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "ifV4AMkDUbu9z8iq",
+          "name": "施法（法师）",
+          "type": "feat",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.gGwznRsbuxkaqDVP"
+          },
+          "system": {
+            "identifier": "",
+            "type": {
+              "value": "class",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "jYyJKcQC4NGauLrT",
+          "name": "塑能学派 School of Evocation",
+          "type": "subclass",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05"
+          },
+          "system": {
+            "identifier": "school-of-evocation",
+            "classIdentifier": "wizard",
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "zDRKcvHZc4djHAjo",
+          "name": "奥术回想 Arcane Recovery",
+          "type": "feat",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW"
+          },
+          "system": {
+            "identifier": "-arcane-recovery",
+            "type": {
+              "value": "class",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "7hYD2ZUmdpLlXq4B",
+          "name": "法术塑形 Sculpt Spells",
+          "type": "feat",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6"
+          },
+          "system": {
+            "identifier": "-sculpt-spells",
+            "type": {
+              "value": "class",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "H4HyCpKA4jaD6dbv",
+          "name": "火焰箭 Fire Bolt",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio"
+          },
+          "system": {
+            "identifier": "fire-bolt",
+            "level": 0,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "39MeQmFLAZelyo1L",
+          "name": "次级幻象 Minor Illusion",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.oIzA2MEHwxhtQneU"
+          },
+          "system": {
+            "identifier": "minor-illusion",
+            "level": 0,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "nL6z7TAqljEeDaD5",
+          "name": "魔法伎俩 Prestidigitation",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ"
+          },
+          "system": {
+            "identifier": "prestidigitation",
+            "level": 0,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "b269vSKzLMBeXWLG",
+          "name": "奥术传承",
+          "type": "feat",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu"
+          },
+          "system": {
+            "identifier": "",
+            "type": {
+              "value": "class",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "YLvVVvL0XvgIrSiH",
+          "name": "法师之手 Mage Hand",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3"
+          },
+          "system": {
+            "identifier": "mage-hand",
+            "level": 0,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "8qQoCr6OWbcX0Kyr",
+          "name": "魔法飞弹 Magic Missile",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs"
+          },
+          "system": {
+            "identifier": "magic-missile",
+            "level": 1,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "ZWsuk20ksNab1M5Q",
+          "name": "护盾术 Shield",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7"
+          },
+          "system": {
+            "identifier": "shield",
+            "level": 1,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "3KX6Yn9QqMcWkUR2",
+          "name": "侦测魔法 Detect Magic",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8"
+          },
+          "system": {
+            "identifier": "detect-magic",
+            "level": 1,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "ineq8icUpm2DOxma",
+          "name": "塑能学者",
+          "type": "feat",
+          "_stats": {
+            "compendiumSource": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3"
+          },
+          "system": {
+            "identifier": "evocation-savant",
+            "type": {
+              "value": "class",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "SndF9MHuVmfUoubg",
+          "name": "油腻术 Grease",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.etgcR9wqmrhyZ0tx"
+          },
+          "system": {
+            "identifier": "grease",
+            "level": 1,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "vUDigxUdePjFmPQ3",
+          "name": "法师护甲 Mage Armor",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H"
+          },
+          "system": {
+            "identifier": "mage-armor",
+            "level": 1,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "vxUPgvHFY3TTJdT7",
+          "name": "睡眠术 Sleep",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku"
+          },
+          "system": {
+            "identifier": "sleep",
+            "level": 1,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "2M1efV12VvnVJ2X4",
+          "name": "迷踪步 Misty Step",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL"
+          },
+          "system": {
+            "identifier": "misty-step",
+            "level": 2,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "pTVcwtns8rk2DN3X",
+          "name": "蛛网术 Web",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP"
+          },
+          "system": {
+            "identifier": "web",
+            "level": 2,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "K1ryKeX72WzYHJfV",
+          "name": "镜影术 Mirror Image",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz"
+          },
+          "system": {
+            "identifier": "mirror-image",
+            "level": 2,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "rUCfihBCOn30Psfc",
+          "name": "灼热射线 Scorching Ray",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.7u2obDvuvtZBkTfq"
+          },
+          "system": {
+            "identifier": "scorching-ray",
+            "level": 2,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "vJ1vHZjdT1qTAXB9",
+          "name": "火球术",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0"
+          },
+          "system": {
+            "identifier": "fireball",
+            "level": 3,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            },
+            "activities": {
+              "3a2a2da5c124b50e": {
+                "_id": "3a2a2da5c124b50e",
+                "type": "save",
+                "activation": {
+                  "type": "action",
+                  "value": 1,
+                  "override": true,
+                  "condition": ""
+                },
+                "consumption": {
+                  "targets": [],
+                  "scaling": {
+                    "allowed": false,
+                    "max": ""
+                  },
+                  "spellSlot": true
+                },
+                "description": {
+                  "chatFlavor": ""
+                },
+                "duration": {
+                  "units": "inst",
+                  "concentration": false,
+                  "override": false
+                },
+                "effects": [],
+                "range": {
+                  "value": "150",
+                  "units": "ft",
+                  "special": "",
+                  "override": true
+                },
+                "target": {
+                  "prompt": true,
+                  "template": {
+                    "count": "",
+                    "contiguous": false,
+                    "type": "sphere",
+                    "size": "20",
+                    "width": "",
+                    "height": "",
+                    "units": "ft",
+                    "stationary": false
+                  },
+                  "affects": {
+                    "count": "",
+                    "type": "",
+                    "choice": false,
+                    "special": ""
+                  },
+                  "override": true
+                },
+                "uses": {
+                  "spent": 0,
+                  "recovery": [],
+                  "max": ""
+                },
+                "sort": 0,
+                "name": "火球术 Fireball",
+                "img": "",
+                "visibility": {
+                  "level": {
+                    "min": null,
+                    "max": null
+                  },
+                  "requireAttunement": false,
+                  "requireIdentification": false,
+                  "requireMagic": false
+                },
+                "flags": {
+                  "arcane-dnd5e-2014-automation": {
+                    "semanticActionId": "cast",
+                    "interaction": {
+                      "version": 1,
+                      "input": "placed-template",
+                      "templateTargets": "workflow"
+                    }
+                  }
+                },
+                "useConditionText": "",
+                "useConditionReason": "",
+                "effectConditionText": "",
+                "macroData": {
+                  "name": "",
+                  "command": ""
+                },
+                "ignoreTraits": {
+                  "idi": false,
+                  "idr": false,
+                  "idv": false,
+                  "ida": false,
+                  "idm": false
+                },
+                "midiProperties": {
+                  "ignoreTraits": [],
+                  "triggeredActivityId": "none",
+                  "triggeredActivityConditionText": "",
+                  "triggeredActivityTargets": "targets",
+                  "triggeredActivityRollAs": "self",
+                  "triggeredActivityConsume": true,
+                  "triggeredActivityConfigure": true,
+                  "autoConsume": false,
+                  "forceConsumeDialog": "never",
+                  "forceRollDialog": "never",
+                  "forceDamageDialog": "never",
+                  "confirmTargets": "never",
+                  "autoTargetType": "any",
+                  "autoTargetAction": "always",
+                  "automationOnly": false,
+                  "otherActivityCompatible": true,
+                  "otherActivityAsParentType": true,
+                  "identifier": "cast",
+                  "displayActivityName": false,
+                  "rollMode": "default",
+                  "chooseEffects": false,
+                  "toggleEffect": false,
+                  "ignoreFullCover": false,
+                  "removeChatButtons": "all",
+                  "magicEffect": false,
+                  "magicDamage": false,
+                  "noConcentrationCheck": false,
+                  "skipConcentrationCheck": false,
+                  "autoCEEffects": "default"
+                },
+                "isOverTimeFlag": false,
+                "save": {
+                  "ability": [
+                    "dex"
+                  ],
+                  "dc": {
+                    "calculation": "spellcasting",
+                    "formula": ""
+                  }
+                },
+                "damage": {
+                  "onSave": "half",
+                  "parts": [
+                    {
+                      "number": 8,
+                      "denomination": 6,
+                      "bonus": "",
+                      "custom": {
+                        "enabled": false,
+                        "formula": ""
+                      },
+                      "scaling": {
+                        "mode": "whole",
+                        "number": 1,
+                        "formula": ""
+                      },
+                      "types": [
+                        "fire"
+                      ]
+                    }
+                  ],
+                  "critical": {
+                    "allow": false,
+                    "bonus": ""
+                  }
+                },
+                "overTimeProperties": {
+                  "saveRemoves": true,
+                  "rollAs": "target",
+                  "preRemoveConditionText": "",
+                  "postRemoveConditionText": ""
+                },
+                "otherActivityId": "none",
+                "otherActivityAsParentType": true,
+                "friendlySave": "default"
+              }
+            }
+          }
+        },
+        {
+          "_id": "x02fvWqdccNVA8li",
+          "name": "长棍 Quarterstaff",
+          "type": "weapon",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.F567808128333146"
+          },
+          "system": {
+            "identifier": "quarterstaff",
+            "quantity": 1,
+            "equipped": true,
+            "type": {
+              "value": "simpleM",
+              "baseItem": ""
+            },
+            "armor": {
+              "value": 10
+            },
+            "damage": {
+              "versatile": {
+                "number": 1,
+                "denomination": 8,
+                "bonus": "",
+                "types": [],
+                "custom": {
+                  "enabled": false,
+                  "formula": ""
+                },
+                "scaling": {
+                  "mode": "",
+                  "number": null,
+                  "formula": ""
+                }
+              },
+              "base": {
+                "number": 1,
+                "denomination": 6,
+                "bonus": "",
+                "types": [
+                  "bludgeoning"
+                ],
+                "custom": {
+                  "enabled": false,
+                  "formula": ""
+                },
+                "scaling": {
+                  "mode": "",
+                  "number": null,
+                  "formula": ""
+                }
+              }
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            },
+            "activities": {
+              "dnd5eactivity000": {
+                "_id": "dnd5eactivity000",
+                "type": "attack",
+                "activation": {
+                  "type": "action",
+                  "value": 1,
+                  "condition": "",
+                  "override": false
+                },
+                "consumption": {
+                  "targets": [],
+                  "scaling": {
+                    "allowed": false,
+                    "max": ""
+                  },
+                  "spellSlot": true
+                },
+                "description": {
+                  "chatFlavor": ""
+                },
+                "duration": {
+                  "concentration": false,
+                  "value": "",
+                  "units": "inst",
+                  "special": "",
+                  "override": false
+                },
+                "effects": [],
+                "range": {
+                  "units": "ft",
+                  "special": "",
+                  "override": false
+                },
+                "target": {
+                  "template": {
+                    "count": "",
+                    "contiguous": false,
+                    "type": "",
+                    "size": "",
+                    "width": "",
+                    "height": "",
+                    "units": "ft",
+                    "stationary": false
+                  },
+                  "affects": {
+                    "count": "",
+                    "type": "",
+                    "choice": false,
+                    "special": ""
+                  },
+                  "prompt": true,
+                  "override": false
+                },
+                "uses": {
+                  "spent": 0,
+                  "max": "",
+                  "recovery": []
+                },
+                "attack": {
+                  "ability": "",
+                  "bonus": "",
+                  "critical": {
+                    "threshold": null
+                  },
+                  "flat": false,
+                  "type": {
+                    "value": "melee",
+                    "classification": "weapon"
+                  }
+                },
+                "damage": {
+                  "critical": {
+                    "bonus": ""
+                  },
+                  "includeBase": true,
+                  "parts": []
+                },
+                "sort": 0,
+                "img": null,
+                "flags": {},
+                "visibility": {
+                  "level": {},
+                  "requireAttunement": false,
+                  "requireIdentification": false,
+                  "requireMagic": false
+                },
+                "useConditionText": "",
+                "useConditionReason": "",
+                "effectConditionText": "",
+                "macroData": {
+                  "name": "",
+                  "command": ""
+                },
+                "ignoreTraits": {
+                  "idi": false,
+                  "idr": false,
+                  "idv": false,
+                  "ida": false,
+                  "idm": false
+                },
+                "midiProperties": {
+                  "ignoreTraits": [],
+                  "triggeredActivityId": "none",
+                  "triggeredActivityConditionText": "",
+                  "triggeredActivityTargets": "targets",
+                  "triggeredActivityRollAs": "self",
+                  "triggeredActivityConsume": true,
+                  "triggeredActivityConfigure": true,
+                  "autoConsume": false,
+                  "forceConsumeDialog": "default",
+                  "forceRollDialog": "default",
+                  "forceDamageDialog": "default",
+                  "confirmTargets": "default",
+                  "autoTargetType": "any",
+                  "autoTargetAction": "default",
+                  "automationOnly": false,
+                  "otherActivityCompatible": true,
+                  "otherActivityAsParentType": true,
+                  "identifier": "",
+                  "displayActivityName": false,
+                  "rollMode": "default",
+                  "chooseEffects": false,
+                  "toggleEffect": false,
+                  "ignoreFullCover": false,
+                  "removeChatButtons": "default",
+                  "magicEffect": false,
+                  "magicDamage": false,
+                  "noConcentrationCheck": false,
+                  "skipConcentrationCheck": false,
+                  "autoCEEffects": "default"
+                },
+                "isOverTimeFlag": false,
+                "overTimeProperties": {
+                  "saveRemoves": true,
+                  "rollAs": "target",
+                  "preRemoveConditionText": "",
+                  "postRemoveConditionText": ""
+                },
+                "otherActivityId": "",
+                "otherActivityAsParentType": true,
+                "attackMode": "oneHanded",
+                "ammunition": "",
+                "otherActivityUuid": "",
+                "attackRollPerTarget": "default",
+                "fumbleThreshold": 1
+              }
+            }
+          }
+        },
+        {
+          "_id": "4g3a3K89aXb45cJR",
+          "name": "材料包",
+          "type": "container",
+          "_stats": {
+            "compendiumSource": "Compendium.dnd5e.items.Item.eZGmdOhaTWMicXPW"
+          },
+          "system": {
+            "identifier": "component-pouch",
+            "quantity": 1,
+            "equipped": false,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "SjZVosMI66a7Rzmj",
+          "name": "学者套组",
+          "type": "container",
+          "_stats": {
+            "compendiumSource": "Compendium.dnd5e.items.Item.UOE8RGOpgv2oWIvM"
+          },
+          "system": {
+            "identifier": "scholars-pack",
+            "quantity": 1,
+            "equipped": false,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "57qOeyzphSM1qPjn",
+          "name": "法术书",
+          "type": "loot",
+          "_stats": {
+            "compendiumSource": "Compendium.dnd5e.items.Item.LBajgahniRJbAgDr"
+          },
+          "system": {
+            "identifier": "spellbook",
+            "quantity": 1,
+            "type": {
+              "value": "",
+              "subtype": ""
+            },
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "XXnVOau8K8LKPBlz",
+          "name": "雷鸣波 Thunderwave",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.WTbOQBsarsL1LuXJ"
+          },
+          "system": {
+            "identifier": "thunderwave",
+            "level": 1,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "X0l8wTfKGYKyMnAK",
+          "name": "寻获魔宠 Find Familiar",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz"
+          },
+          "system": {
+            "identifier": "find-familiar",
+            "level": 1,
+            "prepared": 0,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        },
+        {
+          "_id": "h3AxZHJeESRAWbEH",
+          "name": "法术反制 Counterspell",
+          "type": "spell",
+          "_stats": {
+            "compendiumSource": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy"
+          },
+          "system": {
+            "identifier": "counterspell",
+            "level": 3,
+            "prepared": 1,
+            "description": {
+              "value": "[source text omitted from test projection]"
+            }
+          }
+        }
+      ],
+      "folder": null,
+      "sort": 0,
+      "ownership": {
+        "default": 0,
+        "FEghKSKCCRWNsGvF": 3
+      },
+      "_stats": {
+        "compendiumSource": null,
+        "duplicateSource": null,
+        "exportSource": null,
+        "coreVersion": "13.351",
+        "systemId": "dnd5e",
+        "systemVersion": "5.3.3",
+        "createdTime": 1788942972931,
+        "modifiedTime": 1788942972931,
+        "lastModifiedBy": "FEghKSKCCRWNsGvF"
+      }
+    },
+    "sameNameCount": 1,
+    "sourceCurrent": null,
+    "effective": {
+      "level": 5,
+      "prof": 3,
+      "hp": {
+        "max": 32,
+        "temp": 0,
+        "tempmax": 0,
+        "value": 32,
+        "formula": "",
+        "effectiveMax": 32,
+        "damage": 0,
+        "pct": 100
+      },
+      "ac": {
+        "calc": "flat",
+        "flat": 12,
+        "armor": 10,
+        "cover": 0,
+        "shield": 0,
+        "bonus": "",
+        "min": "",
+        "label": null,
+        "value": 12
+      },
+      "walk": 30,
+      "movement": {
+        "walk": 30,
+        "burrow": 0,
+        "climb": 0,
+        "fly": 0,
+        "swim": 0,
+        "units": "ft",
+        "hover": false,
+        "ignoredDifficultTerrain": {},
+        "jump": 4.5,
+        "speed": 30,
+        "max": 30,
+        "slowed": false
+      },
+      "traits": {
+        "size": "med",
+        "di": {
+          "value": {},
+          "custom": "",
+          "bypasses": {}
+        },
+        "dr": {
+          "value": {},
+          "custom": "",
+          "bypasses": {}
+        },
+        "dv": {
+          "value": {},
+          "custom": "",
+          "bypasses": {}
+        },
+        "dm": {
+          "amount": {},
+          "bypasses": {}
+        },
+        "ci": {
+          "value": {},
+          "custom": ""
+        },
+        "languages": {
+          "value": {},
+          "custom": "",
+          "communication": {},
+          "labels": {
+            "languages": [
+              "通用语",
+              "龙语"
+            ],
+            "ranged": []
+          }
+        },
+        "important": false,
+        "da": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "ida": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "idr": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "idv": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "idi": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "idm": {
+          "value": {},
+          "bypasses": {},
+          "custom": ""
+        },
+        "sizeNumeric": 2
+      },
+      "abilities": {
+        "str": {
+          "value": 9,
+          "proficient": 0,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0,
+              "modeCounts": {
+                "override": null,
+                "advantages": {
+                  "count": 0,
+                  "suppressed": false
+                },
+                "disadvantages": {
+                  "count": 0,
+                  "suppressed": false
+                }
+              }
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": -1
+          },
+          "mod": -1,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 2,
+          "dc": 10
+        },
+        "dex": {
+          "value": 15,
+          "proficient": 0,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0,
+              "modeCounts": {
+                "override": null,
+                "advantages": {
+                  "count": 0,
+                  "suppressed": false
+                },
+                "disadvantages": {
+                  "count": 0,
+                  "suppressed": false
+                }
+              }
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": 2
+          },
+          "mod": 2,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 5,
+          "dc": 13
+        },
+        "con": {
+          "value": 14,
+          "proficient": 0,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": 2
+          },
+          "mod": 2,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 5,
+          "dc": 13
+        },
+        "int": {
+          "value": 18,
+          "proficient": 1,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0,
+              "modeCounts": {
+                "override": null,
+                "advantages": {
+                  "count": 0,
+                  "suppressed": false
+                },
+                "disadvantages": {
+                  "count": 0,
+                  "suppressed": false
+                }
+              }
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": 7
+          },
+          "mod": 4,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 1,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 7,
+          "dc": 15
+        },
+        "wis": {
+          "value": 13,
+          "proficient": 1,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0,
+              "modeCounts": {
+                "override": null,
+                "advantages": {
+                  "count": 0,
+                  "suppressed": false
+                },
+                "disadvantages": {
+                  "count": 0,
+                  "suppressed": false
+                }
+              }
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": 4
+          },
+          "mod": 1,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 1,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 4,
+          "dc": 12
+        },
+        "cha": {
+          "value": 11,
+          "proficient": 0,
+          "max": 20,
+          "bonuses": {
+            "check": "",
+            "save": ""
+          },
+          "check": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0,
+              "modeCounts": {
+                "override": null,
+                "advantages": {
+                  "count": 0,
+                  "suppressed": false
+                },
+                "disadvantages": {
+                  "count": 0,
+                  "suppressed": false
+                }
+              }
+            }
+          },
+          "save": {
+            "roll": {
+              "min": null,
+              "max": null,
+              "mode": 0
+            },
+            "value": 0
+          },
+          "mod": 0,
+          "checkProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "saveBonus": 0,
+          "saveProf": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "checkBonus": 0,
+          "attack": 3,
+          "dc": 11
+        }
+      },
+      "skills": {
+        "acr": {
+          "ability": "dex",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 2,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 2,
+          "passive": 12
+        },
+        "ani": {
+          "ability": "wis",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 1,
+          "passive": 11
+        },
+        "arc": {
+          "ability": "dex",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 1,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 1,
+          "bonus": 0,
+          "mod": 2,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 1,
+            "rounding": "down"
+          },
+          "proficient": 1,
+          "total": 5,
+          "passive": 15
+        },
+        "ath": {
+          "ability": "str",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": -1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": -1,
+          "passive": 9
+        },
+        "dec": {
+          "ability": "cha",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 0,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 0,
+          "passive": 10
+        },
+        "his": {
+          "ability": "int",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 4,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 4,
+          "passive": 14
+        },
+        "ins": {
+          "ability": "wis",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 1,
+          "passive": 11
+        },
+        "itm": {
+          "ability": "cha",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 0,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 0,
+          "passive": 10
+        },
+        "inv": {
+          "ability": "dex",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 1,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 1,
+          "bonus": 0,
+          "mod": 2,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 1,
+            "rounding": "down"
+          },
+          "proficient": 1,
+          "total": 5,
+          "passive": 15
+        },
+        "med": {
+          "ability": "wis",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 1,
+          "passive": 11
+        },
+        "nat": {
+          "ability": "int",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 4,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 4,
+          "passive": 14
+        },
+        "prc": {
+          "ability": "wis",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 1,
+          "passive": 11
+        },
+        "prf": {
+          "ability": "cha",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 0,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 0,
+          "passive": 10
+        },
+        "per": {
+          "ability": "cha",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 0,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 0,
+          "passive": 10
+        },
+        "rel": {
+          "ability": "int",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 4,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 4,
+          "passive": 14
+        },
+        "slt": {
+          "ability": "dex",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 2,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 2,
+          "passive": 12
+        },
+        "ste": {
+          "ability": "dex",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 2,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 2,
+          "passive": 12
+        },
+        "sur": {
+          "ability": "wis",
+          "roll": {
+            "min": null,
+            "max": null,
+            "mode": 0,
+            "modeCounts": {
+              "override": null,
+              "advantages": {
+                "count": 0,
+                "suppressed": false
+              },
+              "disadvantages": {
+                "count": 0,
+                "suppressed": false
+              }
+            }
+          },
+          "value": 0,
+          "bonuses": {
+            "check": "",
+            "passive": ""
+          },
+          "effectValue": 0,
+          "bonus": 0,
+          "mod": 1,
+          "prof": {
+            "deterministic": false,
+            "_baseProficiency": 3,
+            "multiplier": 0,
+            "rounding": "down"
+          },
+          "proficient": 0,
+          "total": 1,
+          "passive": 11
+        }
+      },
+      "spellcasting": "int",
+      "spell": {
+        "level": 5,
+        "abilityLabel": "智力",
+        "attack": 7,
+        "dc": 15,
+        "mod": 4
+      },
+      "slots": {
+        "spell1": {
+          "value": 4,
+          "label": "1 环",
+          "level": 1,
+          "max": 4,
+          "type": "spell"
+        },
+        "spell2": {
+          "value": 3,
+          "label": "2 环",
+          "level": 2,
+          "max": 3,
+          "type": "spell"
+        },
+        "spell3": {
+          "value": 2,
+          "label": "3 环",
+          "level": 3,
+          "max": 2,
+          "type": "spell"
+        },
+        "pact": {
+          "value": 0,
+          "type": "pact",
+          "label": "契约魔法"
+        },
+        "spell4": {
+          "value": 0,
+          "label": "4 环",
+          "level": 4,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell5": {
+          "value": 0,
+          "label": "5 环",
+          "level": 5,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell6": {
+          "value": 0,
+          "label": "6 环",
+          "level": 6,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell7": {
+          "value": 0,
+          "label": "7 环",
+          "level": 7,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell8": {
+          "value": 0,
+          "label": "8 环",
+          "level": 8,
+          "max": 0,
+          "type": "spell"
+        },
+        "spell9": {
+          "value": 0,
+          "label": "9 环",
+          "level": 9,
+          "max": 0,
+          "type": "spell"
+        }
+      },
+      "hd": {
+        "spent": 0,
+        "max": 5,
+        "denomination": 8,
+        "value": 5,
+        "pct": 100
+      },
+      "scale": {
+        "wizard": {
+          "cantrips-known": {
+            "value": 4
+          }
+        }
+      },
+      "items": [
+        {
+          "id": "gjCfCiEBVLUylZU0",
+          "identifier": "wizard",
+          "type": "class"
+        },
+        {
+          "id": "ifV4AMkDUbu9z8iq",
+          "identifier": "",
+          "type": "feat",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "jYyJKcQC4NGauLrT",
+          "identifier": "school-of-evocation",
+          "type": "subclass"
+        },
+        {
+          "id": "zDRKcvHZc4djHAjo",
+          "identifier": "-arcane-recovery",
+          "type": "feat",
+          "uses": {
+            "spent": 0,
+            "max": 1,
+            "recovery": [
+              {
+                "period": "lr",
+                "type": "recoverAll"
+              }
+            ],
+            "value": 1,
+            "label": "长休后充能"
+          }
+        },
+        {
+          "id": "7hYD2ZUmdpLlXq4B",
+          "identifier": "-sculpt-spells",
+          "type": "feat",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "H4HyCpKA4jaD6dbv",
+          "identifier": "fire-bolt",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "39MeQmFLAZelyo1L",
+          "identifier": "minor-illusion",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "nL6z7TAqljEeDaD5",
+          "identifier": "prestidigitation",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "b269vSKzLMBeXWLG",
+          "identifier": "",
+          "type": "feat",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "YLvVVvL0XvgIrSiH",
+          "identifier": "mage-hand",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "8qQoCr6OWbcX0Kyr",
+          "identifier": "magic-missile",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "ZWsuk20ksNab1M5Q",
+          "identifier": "shield",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "3KX6Yn9QqMcWkUR2",
+          "identifier": "detect-magic",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "ineq8icUpm2DOxma",
+          "identifier": "evocation-savant",
+          "type": "feat",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "SndF9MHuVmfUoubg",
+          "identifier": "grease",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "vUDigxUdePjFmPQ3",
+          "identifier": "mage-armor",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "vxUPgvHFY3TTJdT7",
+          "identifier": "sleep",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "2M1efV12VvnVJ2X4",
+          "identifier": "misty-step",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "pTVcwtns8rk2DN3X",
+          "identifier": "web",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "K1ryKeX72WzYHJfV",
+          "identifier": "mirror-image",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "rUCfihBCOn30Psfc",
+          "identifier": "scorching-ray",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "vJ1vHZjdT1qTAXB9",
+          "identifier": "fireball",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "x02fvWqdccNVA8li",
+          "identifier": "quarterstaff",
+          "type": "weapon",
+          "uses": {
+            "spent": null,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "4g3a3K89aXb45cJR",
+          "identifier": "component-pouch",
+          "type": "container"
+        },
+        {
+          "id": "SjZVosMI66a7Rzmj",
+          "identifier": "scholars-pack",
+          "type": "container"
+        },
+        {
+          "id": "57qOeyzphSM1qPjn",
+          "identifier": "spellbook",
+          "type": "loot"
+        },
+        {
+          "id": "XXnVOau8K8LKPBlz",
+          "identifier": "thunderwave",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "X0l8wTfKGYKyMnAK",
+          "identifier": "find-familiar",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        },
+        {
+          "id": "h3AxZHJeESRAWbEH",
+          "identifier": "counterspell",
+          "type": "spell",
+          "uses": {
+            "spent": 0,
+            "max": "",
+            "recovery": [],
+            "value": 0,
+            "label": ""
+          }
+        }
+      ]
+    }
+  },
+  "receipt": {
+    "name": "PB1788942865994-0-A1-native_skill_build_tool 霜牙",
+    "sourceBefore": null,
+    "importedSources": [
+      {
+        "uuid": "Compendium.dnd5e.classes.Item.wZK2Q0rXB0AQo8h3",
+        "type": "class",
+        "identifier": "wizard"
+      },
+      {
+        "uuid": "Compendium.dnd5e.subclasses.Item.Ye5f3FReEnuXfi0y",
+        "type": "subclass",
+        "identifier": "school-of-evocation"
+      },
+      {
+        "uuid": "Compendium.dnd5e.races.Item.ydP3QzCmur55mtY2",
+        "type": "race",
+        "identifier": "human"
+      },
+      {
+        "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+        "type": "feat",
+        "identifier": "spellcasting"
+      },
+      {
+        "uuid": "Compendium.dnd5e.classfeatures.Item.e0uTcFPpgxjIyUW9",
+        "type": "feat",
+        "identifier": "arcane-recovery"
+      },
+      {
+        "uuid": "Compendium.dnd5e.classfeatures.Item.AEWr9EMxy5gj4ZFT",
+        "type": "feat",
+        "identifier": "arcane-tradition"
+      },
+      {
+        "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+        "type": "feat",
+        "identifier": "evocation-savant"
+      },
+      {
+        "uuid": "Compendium.dnd5e.classfeatures.Item.6VBXkjjBgjSpNElh",
+        "type": "feat",
+        "identifier": "sculpt-spells"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.F567808128333146",
+        "type": "weapon",
+        "identifier": "quarterstaff"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.basicweapons.Item.78342EC246D19CE6",
+        "type": "weapon",
+        "identifier": "dagger"
+      },
+      {
+        "uuid": "Compendium.dnd5e.items.Item.eZGmdOhaTWMicXPW",
+        "type": "container",
+        "identifier": "component-pouch"
+      },
+      {
+        "uuid": "Compendium.dnd5e.items.Item.LBajgahniRJbAgDr",
+        "type": "loot",
+        "identifier": "spellbook"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.EOmsUcFQJTfG2oio",
+        "type": "spell",
+        "identifier": "fire-bolt"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Utk1OQRwYkMkFRD3",
+        "type": "spell",
+        "identifier": "mage-hand"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.udsLtG0BugXHR2JQ",
+        "type": "spell",
+        "identifier": "prestidigitation"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ctW81uiX56xZR2c5",
+        "type": "spell",
+        "identifier": "ray-of-frost"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.CKZTpZlxj7hjjo2H",
+        "type": "spell",
+        "identifier": "mage-armor"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.z1mx84ONwkXKUZd7",
+        "type": "spell",
+        "identifier": "shield"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+        "type": "spell",
+        "identifier": "magic-missile"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ghXTfe7sgCbgf1Q8",
+        "type": "spell",
+        "identifier": "detect-magic"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.3OZnNhunvRtPOQmH",
+        "type": "spell",
+        "identifier": "identify"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.JGT5bNqu9REL7Fuz",
+        "type": "spell",
+        "identifier": "find-familiar"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.pub0OWVEB71XQx1n",
+        "type": "spell",
+        "identifier": "feather-fall"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.KhwiSi9fwVfUPtku",
+        "type": "spell",
+        "identifier": "sleep"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.1N8dDMMgZ1h1YJ3B",
+        "type": "spell",
+        "identifier": "invisibility"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.wqfAVANuQonNBgnL",
+        "type": "spell",
+        "identifier": "misty-step"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.X4c8xCkmF8U9HUMz",
+        "type": "spell",
+        "identifier": "mirror-image"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.UJJu9c2UvCzVljiP",
+        "type": "spell",
+        "identifier": "web"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+        "type": "spell",
+        "identifier": "fireball"
+      },
+      {
+        "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.Ek45cBpVXvJdv1Qy",
+        "type": "spell",
+        "identifier": "counterspell"
+      }
+    ]
+  }
+}

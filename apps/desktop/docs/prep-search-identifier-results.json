@@ -1,0 +1,712 @@
+{
+  "status": "complete-functional-improvement-performance-not-established",
+  "baselineCommit": "2d94e8c",
+  "probe": {
+    "identifierBefore": "fireball",
+    "results": [
+      {
+        "label": "old-English",
+        "ms": 1,
+        "entries": [
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.AoTTjapz1FsGOIZz",
+            "id": "AoTTjapz1FsGOIZz",
+            "entryId": "AoTTjapz1FsGOIZz",
+            "name": "延迟爆裂火球 Delayed Blast Fireball",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          }
+        ],
+        "total": 1,
+        "nextCursor": null
+      },
+      {
+        "label": "new-first-English",
+        "ms": 1.2999999970197678,
+        "entries": [
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.AoTTjapz1FsGOIZz",
+            "id": "AoTTjapz1FsGOIZz",
+            "entryId": "AoTTjapz1FsGOIZz",
+            "name": "延迟爆裂火球 Delayed Blast Fireball",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          },
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+            "id": "ztgcdrWPshKRpFd0",
+            "entryId": "ztgcdrWPshKRpFd0",
+            "name": "火球术",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          }
+        ],
+        "total": 2,
+        "nextCursor": null
+      },
+      {
+        "label": "new-repeat-English",
+        "ms": 0.29999999701976776,
+        "entries": [
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.AoTTjapz1FsGOIZz",
+            "id": "AoTTjapz1FsGOIZz",
+            "entryId": "AoTTjapz1FsGOIZz",
+            "name": "延迟爆裂火球 Delayed Blast Fireball",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          },
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+            "id": "ztgcdrWPshKRpFd0",
+            "entryId": "ztgcdrWPshKRpFd0",
+            "name": "火球术",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          }
+        ],
+        "total": 2,
+        "nextCursor": null
+      },
+      {
+        "label": "old-Chinese",
+        "ms": 0.8000000044703484,
+        "entries": [
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.AoTTjapz1FsGOIZz",
+            "id": "AoTTjapz1FsGOIZz",
+            "entryId": "AoTTjapz1FsGOIZz",
+            "name": "延迟爆裂火球 Delayed Blast Fireball",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          },
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.ztgcdrWPshKRpFd0",
+            "id": "ztgcdrWPshKRpFd0",
+            "entryId": "ztgcdrWPshKRpFd0",
+            "name": "火球术",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          }
+        ],
+        "total": 2,
+        "nextCursor": null
+      },
+      {
+        "label": "new-spaced-English",
+        "ms": 0.29999999701976776,
+        "entries": [
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.41JIhpDyM9Anm7cs",
+            "id": "41JIhpDyM9Anm7cs",
+            "entryId": "41JIhpDyM9Anm7cs",
+            "name": "魔法飞弹 Magic Missile",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          },
+          {
+            "uuid": "Compendium.arcane-dnd5e-2014-automation.spells.Item.tEy4rtxkojrzSLm7",
+            "id": "tEy4rtxkojrzSLm7",
+            "entryId": "tEy4rtxkojrzSLm7",
+            "name": "吉姆的魔法飞弹 Jim's Magic Missile",
+            "type": "spell",
+            "documentType": "Item",
+            "packId": "arcane-dnd5e-2014-automation.spells",
+            "package": "arcane-dnd5e-2014-automation"
+          }
+        ],
+        "total": 2,
+        "nextCursor": null
+      }
+    ]
+  },
+  "limits": [
+    "Identifier was already present in the local index before this probe; timings are warm, not cold-index evidence.",
+    "Old English query returned Delayed Blast Fireball but missed the intended Fireball; preserve substring search behavior.",
+    "Raw candidateCommit is pre-edit HEAD; exact uncommitted runtime/tool hashes are captured here and frozen for the block, with final commit recorded on completion."
+  ],
+  "planned": {
+    "cases": [
+      "npc_wizard"
+    ],
+    "pairs": 2,
+    "timeoutMs": 120000,
+    "comparison": "revision --native-npc",
+    "skill": "Frozen 2d94e8c experimental examples in both arms",
+    "toolCounts": 16
+  },
+  "frozenInputs": {
+    "baseline": {
+      "runtimeSha256": "8206668034186593419b46f90167c8b88bcf79e7c360e25ff8817b23cabf34a6",
+      "toolsFileSha256": "237cf47e30f15b637f520090ef3da14c7414c06ec07dadffae036ff606c1cca5",
+      "skillSha256": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847"
+    },
+    "candidate": {
+      "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+      "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca",
+      "skillSha256": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847"
+    }
+  },
+  "trials": [
+    {
+      "sourceReport": "benchmark-1788867349945.json",
+      "pair": 0,
+      "arm": "baseline",
+      "ms": 120012.7032,
+      "success": false,
+      "timedOut": true,
+      "taskState": "stopped",
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": false
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "calls": [
+        {
+          "name": "read",
+          "ms": 12.786700000000565,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 49.536300000001575,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 32.73119999999835,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 51.24750000000131,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 68.79639999999927,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 38.12510000000475,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 58.14749999999913,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 77.22600000000239,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 96.18029999999999,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 114.53379999999743,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 131.2227999999959,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 144.31730000000243,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 25.551100000004226,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 38.786199999995006,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 15.554999999993015,
+          "isError": false
+        }
+      ],
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "034h7WSolY4gnjn1",
+          "n8RH3mt1S6zbFDQO",
+          "BCjCksk7FabqSvLR"
+        ],
+        "sceneId": "FWfSyx0IJcE3ZmNk",
+        "label": "PB1788867349945-0-npc_wizard-baseline",
+        "newName": "PB1788867349945-0-npc_wizard-baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788867532653.json",
+      "pair": 0,
+      "arm": "tools",
+      "ms": 92232.7817,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.NhUg26LVvJ0WYvVK",
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "calls": [
+        {
+          "name": "read",
+          "ms": 5.726400000000467,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 48.36409999999887,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 75.16159999999945,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 97.1898999999994,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 115.00040000000081,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 211.12519999999495,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.000399999997171,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.3576000000030035,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.6356999999989057,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.481899999998859,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.1987999999983003,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 692.6787999999942,
+          "isError": false
+        }
+      ],
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "a3V5BeeBJCywArq4",
+          "XSJk2K3N8PvGSRlH",
+          "AwS9gSNg5eTkqhgy"
+        ],
+        "sceneId": "JFebTOAvrbHZJn7n",
+        "label": "PB1788867532653-0-npc_wizard-tools",
+        "newName": "PB1788867532653-0-npc_wizard-tools 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788867660249.json",
+      "pair": 1,
+      "arm": "tools",
+      "ms": 120018.27410000001,
+      "success": false,
+      "timedOut": true,
+      "taskState": "stopped",
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": false
+      },
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "calls": [
+        {
+          "name": "read",
+          "ms": 8.885000000000218,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 54.93019999999888,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 84.41879999999946,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 105.27980000000025,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 121.80229999999938,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 58.95629999999801,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 88.69049999999697,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 117.60259999999835,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 154.50470000000496,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 186.5801999999967,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 213.23879999999917,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 238.55069999999978,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 260.188900000001,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 285.45440000000235,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 308.3579000000027,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 28.05109999999695,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 21.48200000000361,
+          "isError": false
+        }
+      ],
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "cfSmvcPaYUIPWCUc",
+          "DgoNOrN6CNl4GYV9",
+          "ZKzCtNIFsaE11ZoR"
+        ],
+        "sceneId": "Lig4tfFsni4MAMtI",
+        "label": "PB1788867660249-0-npc_wizard-tools",
+        "newName": "PB1788867660249-0-npc_wizard-tools 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788867856328.json",
+      "pair": 1,
+      "arm": "baseline",
+      "ms": 120012.2017,
+      "success": false,
+      "timedOut": true,
+      "taskState": "stopped",
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.EOGZOMf32MNMasum",
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "calls": [
+        {
+          "name": "read",
+          "ms": 10.895300000000134,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 44.84399999999914,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 69.95210000000043,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 92.875,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 62.28390000000218,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 98.1903999999995,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 131.0419000000038,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 164.56400000000576,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 197.21140000000014,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 223.70650000000023,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 248.97990000000573,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 277.4638999999952,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 300.5049999999974,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 319.0868000000046,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.302199999998265,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 22.987999999997555,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 39.23950000000332,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 58.70539999999892,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 797.0760000000009,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 53.27929999999469,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.62060000000929,
+          "isError": false
+        }
+      ],
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "hZ4z9FDnoE9WZ78y",
+          "RPV8SEn5GM6cGEUY",
+          "DwTeq6kNYpnLRMvR"
+        ],
+        "sceneId": "geVCzgALk7hEUeb1",
+        "label": "PB1788867856328-0-npc_wizard-baseline",
+        "newName": "PB1788867856328-0-npc_wizard-baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    }
+  ],
+  "pending": [],
+  "decision": "Retain identifier matching as a small functional fix. New tool 1/2 versus baseline 0/2 completed within 120 seconds; no stable speed claim. Next independently evaluate bounded multi-query support in the same search tool; no new top-level tool.",
+  "revisionInputsVerified": {
+    "baseline": {
+      "commit": "2d94e8cd2d1ff89780a599c2ea0e340ccada41dd",
+      "runtimeSha256": "8206668034186593419b46f90167c8b88bcf79e7c360e25ff8817b23cabf34a6",
+      "toolsFileSha256": "237cf47e30f15b637f520090ef3da14c7414c06ec07dadffae036ff606c1cca5"
+    },
+    "candidate": {
+      "commit": "2d94e8cd2d1ff89780a599c2ea0e340ccada41dd",
+      "runtimeSha256": "d4b383d51731569ad817e8ca397df2b27c1c6ae36dbc386d6c469695a12cc500",
+      "toolsFileSha256": "d6961b3b993bbeb76331334ef3f5ec5aba8da849a95c71ead64fd9395be184ca"
+    }
+  }
+}

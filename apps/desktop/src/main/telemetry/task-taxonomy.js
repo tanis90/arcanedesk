@@ -12,12 +12,24 @@ export function toolFamily(toolName) {
     case "foundry_screenshot":
       return "foundry.visual_inspect";
     case "world_status":
+    case "foundry_content_search":
+    case "foundry_actor_get":
+    case "foundry_scene_get":
       return "world.inspect";
     case "combat_battle_context":
+    case "foundry_static_context":
       return "combat.battle_context";
     case "combat_turn_context":
+    case "foundry_play_context":
       return "combat.turn_context";
     case "combat_execute_turn":
+    case "foundry_execute_action":
+    case "foundry_conditions_set":
+    case "foundry_actor_create":
+    case "foundry_actor_update":
+    case "foundry_image":
+    case "foundry_actor_grant_items":
+    case "foundry_scene_apply":
       return "combat.execute";
     case "read":
       return "filesystem.read";
@@ -53,12 +65,26 @@ export function sideEffectClass(toolName) {
 export function actionFamily(action) {
   switch (String(action ?? "")) {
     case "worldInfo":
+    case "contentSearch":
+    case "advancementPlan":
+    case "compendiumBrowse":
+    case "actorRead":
+    case "sceneRead":
       return "world_info";
     case "battleContext":
+    case "staticContext":
       return "battle_context";
     case "turnContext":
+    case "playContext":
       return "turn_context";
     case "executeTurn":
+    case "executeAction":
+    case "conditionsSet":
+    case "actorCreate":
+    case "actorEdit":
+    case "imageApply":
+    case "actorGrantItems":
+    case "sceneApply":
       return "execute_turn";
     default:
       return "other";

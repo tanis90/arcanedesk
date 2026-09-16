@@ -1,0 +1,297 @@
+{
+  "scope": "read-only local COS source check; not an LLM benchmark",
+  "querySha256": "82bb9c14523c9c3440ebb32754cee2b2bbab13a3f0ee0dfa4cf5efd64a8a893d",
+  "rows": [
+    {
+      "input": {
+        "className": "wizard",
+        "subclassName": "school-of-evocation",
+        "raceName": "human",
+        "level": 5
+      },
+      "ms": 323.80000001192093,
+      "invalid": [],
+      "roots": [
+        "Compendium.arcane-dnd5e-2014-automation.classes.Item.nPAjnlZywUaKTfol",
+        "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.wQtUjvfS0MXMFp05",
+        "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5"
+      ],
+      "grants": [
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "name": "施法",
+          "type": "feat",
+          "identifier": "spellcasting",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.j1igHekQF2wcXNwW",
+          "name": "奥术回想 Arcane Recovery",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.elRfpVmvyiEFM3lu",
+          "name": "奥术传承",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "name": "塑能学者",
+          "type": "feat",
+          "identifier": "evocation-savant",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.mzSg8HVQ6BTvrxW6",
+          "name": "法术塑形 Sculpt Spells",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        }
+      ],
+      "fallbacks": [
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.gbNo5eVPaqr8IVKL",
+          "reason": "ambiguous auto-pack match; using verified system source"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.7uzJ2JkmsdRGLra3",
+          "reason": "no auto-pack match; using verified system source"
+        }
+      ],
+      "unresolved": [],
+      "characters": 9216
+    },
+    {
+      "input": {
+        "className": "fighter",
+        "subclassName": "champion",
+        "raceName": "human",
+        "level": 5
+      },
+      "ms": 234.30000001192093,
+      "invalid": [],
+      "roots": [
+        "Compendium.arcane-dnd5e-2014-automation.classes.Item.KJ3DjQfWLSuTZT4L",
+        "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.NOdNl8paEppqJs01",
+        "Compendium.arcane-dnd5e-2014-automation.races.Item.imkdtURflFROWnr5"
+      ],
+      "grants": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.0LbuXQnP6LC0gn3H",
+          "name": "战斗风格 Fighting Style",
+          "type": "feat",
+          "identifier": "fighting-style",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AQ0X21tf5cmjRmGT",
+          "name": "回气 Second Wind",
+          "type": "feat",
+          "identifier": "second-wind",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.YdtxSgV9hbHLx416",
+          "name": "动作如潮 Action Surge",
+          "type": "feat",
+          "identifier": "action-surge",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.Fs3YJW6scuBDsPrE",
+          "name": "武术范型",
+          "type": "feat",
+          "identifier": "martial-archetype",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "name": "额外攻击",
+          "type": "feat",
+          "identifier": "extra-attack",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.xBVHiSNuo3OJrmNa",
+          "name": "精通重击 Improved Critical",
+          "type": "feat",
+          "identifier": "improved-critical",
+          "optional": false
+        }
+      ],
+      "fallbacks": [
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.q9g1MLXuLZyxjQMg",
+          "reason": "ambiguous auto-pack match; using verified system source"
+        }
+      ],
+      "unresolved": [],
+      "characters": 14595
+    },
+    {
+      "input": {
+        "className": "cleric",
+        "subclassName": "life-domain",
+        "raceName": "hill-dwarf",
+        "level": 3
+      },
+      "ms": 136.7999999821186,
+      "invalid": [],
+      "roots": [
+        "Compendium.arcane-dnd5e-2014-automation.classes.Item.Dx4Vr8FkkGZ9Bfel",
+        "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.k0Edsji19UVt4i02",
+        "Compendium.arcane-dnd5e-2014-automation.races.Item.uFcx0ZStidAoyJU4"
+      ],
+      "grants": [
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7",
+          "name": "施法",
+          "type": "feat",
+          "identifier": "spellcasting",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.fdrypzReS8PCtLFN",
+          "name": "神圣领域",
+          "type": "feat",
+          "identifier": "divine-domain",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.v8z4Z2NuBAbYnjxk",
+          "name": "引导神力 Channel Divinity",
+          "type": "feat",
+          "identifier": "channel-divinity",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.IYuxMvRIO9feIxSe",
+          "name": "引导神力：驱散不死生物 Channel Divinity: Turn Undead",
+          "type": "feat",
+          "identifier": "channel-divinity-turn-undead",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW",
+          "name": "附赠熟练项",
+          "type": "feat",
+          "identifier": "bonus-proficiency",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.JKRSuJBfZnXIx8Zu",
+          "name": "生命门徒 Disciple of Life",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.cVCWDgOyiytOouwE",
+          "name": "引导神力：维持生命 Channel Divinity: Preserve Life",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.mbBENsVQ1abapmm8",
+          "name": "矮人体魄(矮人)",
+          "type": "feat",
+          "identifier": "dwarven-resilience",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.racialtraits.Item.g8kRXKDNt5DniOel",
+          "name": "石中精妙(矮人)",
+          "type": "feat",
+          "identifier": "stonecunning",
+          "optional": false
+        }
+      ],
+      "fallbacks": [
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.v4gKwLhAq9vuqza7",
+          "reason": "ambiguous auto-pack match; using verified system source"
+        },
+        {
+          "uuid": "Compendium.dnd5e.classfeatures.Item.68bYIOvx6rIqnlOW",
+          "reason": "no auto-pack match; using verified system source"
+        }
+      ],
+      "unresolved": [],
+      "characters": 14516
+    },
+    {
+      "input": {
+        "className": "rogue",
+        "subclassName": "thief",
+        "level": 3
+      },
+      "ms": 107,
+      "invalid": [],
+      "roots": [
+        "Compendium.arcane-dnd5e-2014-automation.classes.Item.MLoKuImEJtrhGpIy",
+        "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.6ecMXduZAts7up01",
+        null
+      ],
+      "grants": [
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.zwXiai18a2q90THH",
+          "name": "专精 (游荡者) Expertise",
+          "type": "feat",
+          "identifier": "-",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.AlFAC3Lz1ud2ry9T",
+          "name": "偷袭 Sneak Attack",
+          "type": "feat",
+          "identifier": "sneak-attack",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.eXqCYX6BlKodEbgy",
+          "name": "盗贼黑话 Thieves'Cant",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.biPF9xysyu0WBtJe",
+          "name": "灵巧动作 Cunning Action",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.8cxR6XZCphM9Y7qx",
+          "name": "游荡者范型",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.nL8KdY6H1RD3FEqC",
+          "name": "快手 Fast Hands",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        },
+        {
+          "uuid": "Compendium.arcane-dnd5e-2014-automation.classfeatures.Item.FUwvN3wZZvuWDJDn",
+          "name": "梁上君子 Second-Story Work",
+          "type": "feat",
+          "identifier": "",
+          "optional": false
+        }
+      ],
+      "fallbacks": [],
+      "unresolved": [],
+      "characters": 9230
+    }
+  ]
+}

@@ -1,0 +1,842 @@
+{
+  "status": "complete-experimental-only",
+  "experiment": {
+    "arms": [
+      "native_skill_baseline",
+      "native_skill"
+    ],
+    "comparison": "skill-revision",
+    "kind": "paired skill revisions; identical 16 tools and native routing",
+    "cases": [
+      "npc_werewolf",
+      "npc_wizard"
+    ],
+    "samplesPerCase": 2,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Same native skill routing; only skill body differs",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "19e719c048638d6b834914feac11356f944d8daa",
+    "promptMode": "production",
+    "suiteVersion": "prep-npc-transfer-draft2",
+    "taskTimeoutMs": 120000,
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "trials": [
+    {
+      "sourceReport": "benchmark-1788865429451.json",
+      "plannedPair": 0,
+      "caseId": "npc_werewolf",
+      "arm": "native_skill_baseline",
+      "ms": 44108.3567,
+      "success": false,
+      "taskState": "completed",
+      "timedOut": false,
+      "checks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": false,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "actorUuid": "Actor.8Zdn1CUssuHKXBx6",
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 9.285200000000259,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 40.07510000000002,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 64.35419999999976,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 82.22609999999986,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 114.87230000000272,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 36.295500000000175,
+          "isError": false
+        }
+      ],
+      "modelResponses": 5,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "mclWxsjshXhRmacF",
+          "5z85S0kZLI7R94l2",
+          "JrRd84Dz6m23qZgU"
+        ],
+        "sceneId": "wzhiuUBbSrhVvRDP",
+        "label": "PB1788865429451-0-npc_werewolf-native_skill_baseline",
+        "newName": "PB1788865429451-0-npc_werewolf-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865429451.json",
+      "plannedPair": 0,
+      "caseId": "npc_werewolf",
+      "arm": "native_skill",
+      "ms": 54443.421899999994,
+      "success": true,
+      "taskState": "completed",
+      "timedOut": false,
+      "checks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": true,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": true
+      },
+      "actorUuid": "Actor.LlKq5wRcT32M7ezP",
+      "skillHash": "7eef96485a7f5690f40ec8438770f7ea21ea44209126e738e6e1d5b68bba40b4",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 3.5358999999953085,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.017899999998917,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 40.59970000000612,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 57.315999999998894,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 19.883200000003853,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.950700000001234,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 105.61200000000827,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.313299999994342,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 20.64650000000256,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.594200000006822,
+          "isError": false
+        }
+      ],
+      "modelResponses": 9,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "u3SmhP9G0qL8Q9xD",
+          "0snqYWA3k1KyeUpE",
+          "fiX7QBItFhUc4z3k"
+        ],
+        "sceneId": "D1GmHna947pZwgIo",
+        "label": "PB1788865429451-0-npc_werewolf-native_skill",
+        "newName": "PB1788865429451-0-npc_werewolf-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865429451.json",
+      "plannedPair": 0,
+      "caseId": "npc_wizard",
+      "arm": "native_skill_baseline",
+      "ms": 120020.9463,
+      "success": false,
+      "taskState": "stopped",
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": false,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.7m03AFWlnV1qhaWz",
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 3.849800000010873,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 31.864300000001094,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 49.27699999998731,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 61.009799999999814,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 19.20700000002398,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 35.73120000000927,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 31.308099999994738,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 53.117199999978766,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 73.58170000000973,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 92.82730000000447,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 109.10349999999744,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 35.60690000001341,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 59.36860000001616,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 79.60229999999865,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 98.84590000001481,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 119.42749999999069,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 134.7502000000095,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 21.753300000011222,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 36.14900000000489,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 47.312099999981,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 846.8671000000031,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.3787000000011176,
+          "isError": false
+        }
+      ],
+      "modelResponses": 9,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "8DpDwtGhiYUWDttL",
+          "WkxVXRRYlFtFGMxa",
+          "oekvIiggABEhN4IL"
+        ],
+        "sceneId": "Oub97qATIPBbnUIt",
+        "label": "PB1788865429451-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788865429451-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865687586.json",
+      "plannedPair": 0,
+      "caseId": "npc_wizard",
+      "arm": "native_skill",
+      "ms": 120015.1698,
+      "success": false,
+      "taskState": "stopped",
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": false,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.LtTE2tPTIKxzHg0E",
+      "skillHash": "7eef96485a7f5690f40ec8438770f7ea21ea44209126e738e6e1d5b68bba40b4",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 8.93920000000071,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 33.48019999999997,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 56.677599999999074,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 75.70939999999973,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 94.30949999999939,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 24.948599999999715,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 43.28659999999945,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 58.67989999999918,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 24.022799999998824,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 24.753700000001118,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.4981000000043423,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.147499999999127,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.035600000002887,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 418.9722000000038,
+          "isError": false
+        }
+      ],
+      "modelResponses": 9,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "dqn5BZFgGlWZSGJz",
+          "AGHh3NPgeqyI06Ib",
+          "9G68kOaaMtvIPKEY"
+        ],
+        "sceneId": "0PfuZF4f5wdjUi41",
+        "label": "PB1788865687586-0-npc_wizard-native_skill",
+        "newName": "PB1788865687586-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865867515.json",
+      "plannedPair": 1,
+      "caseId": "npc_werewolf",
+      "arm": "native_skill",
+      "ms": 48589.085699999996,
+      "success": true,
+      "taskState": "completed",
+      "timedOut": false,
+      "checks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": true,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": true
+      },
+      "actorUuid": "Actor.tEFngotEXfvl3Gfh",
+      "skillHash": "7eef96485a7f5690f40ec8438770f7ea21ea44209126e738e6e1d5b68bba40b4",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 12.287700000000768,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 36.216599999999744,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 57.982599999999366,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 76.14730000000054,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 141.60869999999704,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 28.696299999995972,
+          "isError": false
+        }
+      ],
+      "modelResponses": 5,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "suAmP9RjuT9dleKD",
+          "CktrHCogQwkR3JCz",
+          "EZW6bb6lw5zSrkw2"
+        ],
+        "sceneId": "NcWb5hDpOyQXTYAj",
+        "label": "PB1788865867515-0-npc_werewolf-native_skill",
+        "newName": "PB1788865867515-0-npc_werewolf-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865867515.json",
+      "plannedPair": 1,
+      "caseId": "npc_werewolf",
+      "arm": "native_skill_baseline",
+      "ms": 53607.7103,
+      "success": false,
+      "taskState": "completed",
+      "timedOut": false,
+      "checks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": true,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "actorUuid": "Actor.Zgty8mCWDrBRGd2L",
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 5.601299999994808,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.277200000004086,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 36.968199999995704,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 52.37580000000162,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 174.72560000000522,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 24.897500000006403,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.8269000000000233,
+          "isError": false
+        }
+      ],
+      "modelResponses": 6,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "kCQ04cWQvqjLH8GJ",
+          "JIYrrCUmjORA3sgO",
+          "ZjiR1TusdLocghfv"
+        ],
+        "sceneId": "xWd12cl0Zy4GEi8r",
+        "label": "PB1788865867515-0-npc_werewolf-native_skill_baseline",
+        "newName": "PB1788865867515-0-npc_werewolf-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788865867515.json",
+      "plannedPair": 1,
+      "caseId": "npc_wizard",
+      "arm": "native_skill",
+      "ms": 120017.89709999999,
+      "success": false,
+      "taskState": "stopped",
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": false,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.2nkEwvxNCrbNxNrs",
+      "skillHash": "7eef96485a7f5690f40ec8438770f7ea21ea44209126e738e6e1d5b68bba40b4",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 3.9548000000067987,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 42.50100000000384,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 64.93679999999586,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 80.4603999999963,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.7888999999995576,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.044899999978952,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.095100000005914,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 14.645799999998417,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 136.42110000000685,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.051100000011502,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 77.46080000000075,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 4.894799999980023,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.684399999998277,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.7533000000112224,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.0913000000000466,
+          "isError": false
+        }
+      ],
+      "modelResponses": 14,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "r8SN60K1N0zVXP9e",
+          "zXdruYxyBvlDXAOK",
+          "HImz0aei6d5Mk5F9"
+        ],
+        "sceneId": "wXetbe9qfTkwKP9o",
+        "label": "PB1788865867515-0-npc_wizard-native_skill",
+        "newName": "PB1788865867515-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "sourceReport": "benchmark-1788866118604.json",
+      "plannedPair": 1,
+      "caseId": "npc_wizard",
+      "arm": "native_skill_baseline",
+      "ms": 94938.51030000001,
+      "success": false,
+      "taskState": "completed",
+      "timedOut": false,
+      "checks": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.OH0OWZts4YPuRkBx",
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "calls": [
+        {
+          "name": "read",
+          "ms": 16.575200000001132,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 49.3132999999998,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 76.10510000000068,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 89.47659999999996,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 38.296000000002095,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 58.663699999997334,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.501299999996263,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 194.80879999999888,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 75.20100000000093,
+          "isError": false
+        }
+      ],
+      "modelResponses": 7,
+      "modelError": null,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "LbuztvPLMpsXefYb",
+          "u5ybL5gtTKnFmrX8",
+          "ijlN3dq9L3zIV1UQ"
+        ],
+        "sceneId": "ViQKDE8AKBfh43w9",
+        "label": "PB1788866118604-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788866118604-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    }
+  ],
+  "pending": [],
+  "notes": [
+    "Original batch stopped on baseline wizard timeout. Only never-executed arms are launched separately.",
+    "Candidate first werewolf passed but made an erroneous actor_get call against a compendium Actor and repaired resource configuration after import.",
+    "Baseline first werewolf kept five original features but original Longbow preservation check failed; do not describe this as deleting all abilities."
+  ],
+  "skillSize": {
+    "baseline": {
+      "characters": 8011,
+      "words": 1157
+    },
+    "candidate": {
+      "characters": 5758,
+      "words": 793
+    },
+    "note": "Word counts are whitespace-separated words, not model tokens."
+  },
+  "traceFindings": [
+    {
+      "caseId": "npc_wizard",
+      "pair": 0,
+      "arm": "native_skill",
+      "finding": "Writes and self-checks obsolete system.preparation; actual system.prepared remains 0."
+    },
+    {
+      "caseId": "npc_wizard",
+      "pair": 1,
+      "arm": "native_skill",
+      "finding": "Writes spellcasting as {ability,progression,level}, which is coerced to the string [object Object]; several repairs repeat object/subfield assumptions before schema inspection. Required native field is scalar ability string."
+    },
+    {
+      "caseId": "npc_werewolf",
+      "pair": 0,
+      "arm": "native_skill",
+      "finding": "Correct after extra read/repair; actor_get rejects compendium target; actual world-only boundary absent from short tool description."
+    }
+  ],
+  "decision": "Retain recipe as experimental: werewolf 2/2 versus 0/2, wizard both 0/2. No stable latency or unseen-generalization claim. Stop adding prose reminders; next test native API code examples against this frozen recipe.",
+  "maintenance": {
+    "productToolsAdded": 0,
+    "productRuntimeChanges": 0,
+    "skillWordsBefore": 1157,
+    "skillWordsAfter": 793,
+    "engineeringPersonDays": "Not measured; automated wall-clock test time is not engineering labor. Changes remain one experimental guide plus benchmark orchestration/reporting, no new API/schema maintenance."
+  }
+}

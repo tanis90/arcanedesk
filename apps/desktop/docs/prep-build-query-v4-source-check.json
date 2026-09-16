@@ -1,0 +1,67 @@
+{
+  "querySha256": "c9d19155395a571b241e23dce4be5b32dff9aab330af071c61b9588599c84d4e",
+  "rows": [
+    {
+      "input": {
+        "className": "warlock",
+        "subclassName": "the-fiend",
+        "level": 5
+      },
+      "characters": 53967,
+      "documents": 55,
+      "unresolved": [],
+      "spellTables": [
+        {
+          "interpretation": "expanded-list-candidates-not-granted",
+          "count": 6
+        }
+      ],
+      "classResolved": true,
+      "subclassResolved": true
+    },
+    {
+      "input": {
+        "className": "fighter",
+        "subclassName": "champion",
+        "level": 5
+      },
+      "characters": 14236,
+      "documents": 13,
+      "unresolved": [],
+      "spellTables": [],
+      "classResolved": true,
+      "subclassResolved": true
+    },
+    {
+      "input": {
+        "className": "wizard",
+        "subclassName": "school-of-evocation",
+        "level": 5
+      },
+      "characters": 10910,
+      "documents": 8,
+      "unresolved": [],
+      "spellTables": [],
+      "classResolved": true,
+      "subclassResolved": true
+    },
+    {
+      "input": {
+        "className": "cleric",
+        "subclassName": "life-domain",
+        "level": 3
+      },
+      "characters": 28075,
+      "documents": 23,
+      "unresolved": [],
+      "spellTables": [
+        {
+          "interpretation": "linked-spells-not-assumed-granted",
+          "count": 4
+        }
+      ],
+      "classResolved": true,
+      "subclassResolved": true
+    }
+  ]
+}

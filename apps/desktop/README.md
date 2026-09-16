@@ -1,5 +1,8 @@
 # Arcane Desk (MVP)
 
+备团／跑团工具升级正在按[唯一技术方案](./docs/foundry-prep-play-technical-plan.md)实施；
+当前进度与待验收项见[实施记录](./docs/foundry-prep-play-implementation.md)。以下工具说明仍描述已接入的行为。
+
 Agent-native desktop for Foundry VTT DMing — agent loop 是窗口本体:
 启动即纯 chat;agent 调 `foundry_open` 后 Foundry 主视觉从右侧弹出,
 chat 收缩为左栏(combat-only 工具白名单,无 shell)。左右分栏宽度可拖
@@ -136,25 +139,29 @@ macOS DMG 或官方 timed URL；不要求系统 Node 或 Git Bash。App 启动�
 
 ## 工具白名单(combat-only,无 shell)
 
-战斗模式的系统提示是 `system-prompts/combat.md`(启动时全量替换 SDK
+跑团模式的系统提示是 `system-prompts/combat.md`(启动时全量替换 SDK
 默认 prompt;安全边界、世界模型、回合循环纪律、四态回执处理、目标调用
-合同都在里面)。改战斗行为就改这个文件,重启生效。
+合同都在里面)。改跑团行为就改这个文件,重启生效。
 
 备团模式相反:保留 SDK 默认 coding prompt,把 `system-prompts/prep.md`
 追加在后面(角色、装机硬顺序、cwd 围栏、世界写入纪律、Mermaid 图示偏好)。
 
 | 工具 | 作用 |
-|------|------|
-| `foundry_open` | 按需打开/导航 Foundry 面板(幂等,同源不重导航) |
-| `browser_evaluate` | 页面内 JS:有界诊断和有限 UI 操作,不处理凭据或绕过结构化战斗工具 |
-| `world_status` | world/system/user/modules(只读) |
-| `combat_battle_context` | Turn Protocol v2 battle-context(每场战斗读一次) |
-| `combat_turn_context` | Turn Protocol v2 turn-context(每次决策前读) |
-| `combat_execute_turn` | 提交动作,四态回执;审批开启时需 DM 确认 |
+| --- | --- |
+| foundry_open | 连接 Foundry 面板 |
+| world_status | 世界与就绪信息 |
+| foundry_static_context | 一次取得完整参战者／当前 Scene Token 静态手册，跑团专用 |
+| foundry_play_context | 同范围轻量动态状态，或本会话已知操作回执 |
+| foundry_execute_action | 明确的法术／攻击，支持非战斗与叙事记账，跑团专用 |
+| foundry_conditions_set | 显式上／下状态与结束专注，两模式共享 |
+| foundry_content_search | 世界角色／场景和合集 Actor／Item 搜索，精确来源与分页，备团专用 |
+| foundry_actor_get/create/update/grant_items | Actor 读取、创建、有限字段编辑及合集授物，备团专用 |
+| request_user_input | 两模式通用的必要提问 |
 
-备团/运维模式在 `foundry_open` 和 `browser_evaluate` 之外额外开放只读的
-`foundry_screenshot`，用于按需截取当前 Foundry viewport，辅助视觉诊断与修复后验收；
-战斗模式的六工具合同不变。
+跑团固定六个 Foundry 工具，加通用提问实际为七个；没有页面 JS、shell 或文件工具。
+备团另有 foundry_screenshot 与 browser_evaluate，以及平台文件／shell 工具。
+图片与场景工具仍在后续实施阶段，不预注册未实现入口。
+休息接口延期；新召唤放置在扣费前说明依赖缺失，auto pack 仅记录 TODO。
 
 ## 调试
 

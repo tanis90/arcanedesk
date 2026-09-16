@@ -1,0 +1,746 @@
+{
+  "model": "kimi-for-coding-highspeed",
+  "experiment": {
+    "arms": [
+      "baseline",
+      "tools"
+    ],
+    "comparison": "revision",
+    "kind": "paired tool revisions, fixed production prompt",
+    "cases": [
+      "create_npc"
+    ],
+    "samplesPerCase": 10,
+    "model": "kimi-for-coding-highspeed",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "ea8454c8bc6e98240274a2cc1939f481a97a7f6c",
+    "promptMode": "production",
+    "baselineCommit": "59539defc58c2efca153dd149f151bc0e06c9285",
+    "suiteVersion": "prep-v1-draft2",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "thinkingLevels": [
+    "off"
+  ],
+  "groups": [
+    {
+      "caseId": "create_npc",
+      "controlArm": "baseline",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 13147.826199999996,
+          "p95": 33682.2671,
+          "mean": 16480.198589999996
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 13147.826199999996,
+          "p95": 33682.2671,
+          "mean": 16480.198589999996
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1921.6820000000007,
+          "p95": 9083.3882,
+          "mean": 2987.5725700000003
+        },
+        "calls": {
+          "n": 10,
+          "p50": 6,
+          "p95": 7,
+          "mean": 5.8
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 50446,
+          "p95": 61735,
+          "mean": 52479.8
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 6,
+          "p95": 7,
+          "mean": 6.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 832,
+          "p95": 1110,
+          "mean": 850.5
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 407,
+          "p95": 681,
+          "mean": 427.6
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 31.301100000011502,
+          "mean": 10.606940000002215
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 2,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 12005.21530000001,
+          "p95": 21954.449800000002,
+          "mean": 13329.278819999996
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 12005.21530000001,
+          "p95": 21954.449800000002,
+          "mean": 13329.278819999996
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1655.248099999997,
+          "p95": 2804.5074999999997,
+          "mean": 1931.3108300000058
+        },
+        "calls": {
+          "n": 10,
+          "p50": 4,
+          "p95": 7,
+          "mean": 5.1
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 41882,
+          "p95": 54033,
+          "mean": 42910.2
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 6,
+          "mean": 5.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 757,
+          "p95": 1207,
+          "mean": 812.6
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 405,
+          "p95": 903,
+          "mean": 445.1
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 2.3035999999847263,
+          "p95": 34.538000000000466,
+          "mean": 9.287009999999281
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 5,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": -8.690492881629252,
+      "p95ChangePercent": -34.81896650596894,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -23.548437742819537,
+        "p95": 14.776488649245456,
+        "mean": -15.587230017504002
+      },
+      "pairedWins": 7,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": -11.943464386226921
+        },
+        {
+          "sample": 1,
+          "changePercent": -27.337465151922725
+        },
+        {
+          "sample": 2,
+          "changePercent": 8.72529230345338
+        },
+        {
+          "sample": 3,
+          "changePercent": -23.548437742819537
+        },
+        {
+          "sample": 4,
+          "changePercent": 10.371630102624962
+        },
+        {
+          "sample": 5,
+          "changePercent": -18.87352510589334
+        },
+        {
+          "sample": 6,
+          "changePercent": -31.156839636181687
+        },
+        {
+          "sample": 7,
+          "changePercent": -34.85575583200522
+        },
+        {
+          "sample": 8,
+          "changePercent": 14.776488649245456
+        },
+        {
+          "sample": 9,
+          "changePercent": -42.03022337531438
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Same candidate code in both arms. Production mode also changes routing instructions; neutral mode is controlled tool ablation.",
+    "Successful-task latency is shown beside all attempts and success rate; failures are not silently dropped.",
+    "First event includes reasoning/tool events, not necessarily first visible user-facing text.",
+    "Ten samples yield a p95 equal to the sample maximum. No claim about universal or cold-connection speed.",
+    "Consult experiment.cases for upload coverage; repeated assets may be reused. Creative preparation is outside this suite."
+  ],
+  "sourceReport": "benchmark-1788849402218.json",
+  "chainAudit": [
+    {
+      "arm": "baseline",
+      "readTasks": 10,
+      "updateTasks": 10,
+      "errorTasks": 2,
+      "errors": [
+        {
+          "sample": 7,
+          "name": "foundry_actor_create"
+        },
+        {
+          "sample": 9,
+          "name": "foundry_content_search"
+        }
+      ],
+      "calls": [
+        {
+          "sample": 0,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 1,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 2,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 3,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 4,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 5,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 6,
+          "names": [
+            "foundry_open",
+            "world_status",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 7,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 8,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        },
+        {
+          "sample": 9,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get",
+            "foundry_actor_update"
+          ]
+        }
+      ]
+    },
+    {
+      "arm": "tools",
+      "readTasks": 5,
+      "updateTasks": 0,
+      "errorTasks": 5,
+      "errors": [
+        {
+          "sample": 0,
+          "name": "foundry_open"
+        },
+        {
+          "sample": 2,
+          "name": "foundry_content_search"
+        },
+        {
+          "sample": 2,
+          "name": "foundry_content_search"
+        },
+        {
+          "sample": 4,
+          "name": "foundry_content_search"
+        },
+        {
+          "sample": 8,
+          "name": "foundry_content_search"
+        },
+        {
+          "sample": 9,
+          "name": "foundry_content_search"
+        },
+        {
+          "sample": 9,
+          "name": "foundry_content_search"
+        }
+      ],
+      "calls": [
+        {
+          "sample": 0,
+          "names": [
+            "foundry_open",
+            "world_status",
+            "foundry_content_search",
+            "foundry_actor_create"
+          ]
+        },
+        {
+          "sample": 1,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create"
+          ]
+        },
+        {
+          "sample": 2,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get"
+          ]
+        },
+        {
+          "sample": 3,
+          "names": [
+            "foundry_open",
+            "world_status",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create"
+          ]
+        },
+        {
+          "sample": 4,
+          "names": [
+            "foundry_open",
+            "world_status",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get"
+          ]
+        },
+        {
+          "sample": 5,
+          "names": [
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get"
+          ]
+        },
+        {
+          "sample": 6,
+          "names": [
+            "foundry_open",
+            "world_status",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get"
+          ]
+        },
+        {
+          "sample": 7,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create"
+          ]
+        },
+        {
+          "sample": 8,
+          "names": [
+            "world_status",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create"
+          ]
+        },
+        {
+          "sample": 9,
+          "names": [
+            "foundry_open",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_content_search",
+            "foundry_actor_create",
+            "foundry_actor_get"
+          ]
+        }
+      ]
+    }
+  ]
+}

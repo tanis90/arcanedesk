@@ -16,6 +16,9 @@ import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
+const canonicalRuntimeSource = readFileSync(join(repositoryRoot, "packages/foundry-sdk/src/runtime-source.ts"), "utf8");
+const canonicalRuntimeFunction = JSON.parse(canonicalRuntimeSource.match(/export const runtimeFunction: string = (.*);/)[1]);
+const expectedRuntimeHash = createHash("sha256").update(canonicalRuntimeFunction).digest("hex");
 const temporaryRoot = resolve(tmpdir());
 const npmCli = process.env.npm_execpath;
 
@@ -93,6 +96,7 @@ try {
   writeFileSync(
     join(consumerDirectory, "smoke.mjs"),
     `import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 const root = await import("@arcanedesk/foundry-sdk");
 const client = await import("@arcanedesk/foundry-sdk/client");
@@ -104,10 +108,12 @@ const cliPackage = await import("@arcanedesk/fvtt-cli/package.json", { with: { t
 
 assert.equal(typeof root.FoundryRuntimeClient, "function");
 assert.equal(typeof client.FoundryRuntimeClient, "function");
-assert.equal(contracts.ALL_DIRECT_ACTIONS.length, 28);
-assert.equal(contracts.READ_DIRECT_ACTIONS.length, 11);
-assert.equal(contracts.WRITE_DIRECT_ACTIONS.length, 17);
-assert.equal(runtime.runtimeHash, "827e008b48d07962d587fd0e97d8292bc454c47437c79a6f1a82e9680ad3a8fb");
+assert.equal(contracts.ALL_DIRECT_ACTIONS.length, 39);
+assert.equal(contracts.READ_DIRECT_ACTIONS.length, 16);
+assert.equal(contracts.WRITE_DIRECT_ACTIONS.length, 23);
+assert.deepEqual(contracts.SAFE_DIRECT_ACTIONS, ["worldInfo", "battleContext", "turnContext", "executeTurn"]);
+assert.equal(runtime.runtimeHash, ${JSON.stringify(expectedRuntimeHash)});
+assert.equal(createHash("sha256").update(runtime.runtimeFunction).digest("hex"), runtime.runtimeHash);
 assert.equal(typeof helpers.serializeTurnResponseV2, "function");
 assert.equal(sdkPackage.default.name, "@arcanedesk/foundry-sdk");
 assert.equal(cliPackage.default.name, "@arcanedesk/fvtt-cli");

@@ -1,0 +1,67 @@
+{
+  "kind": "deterministic reference cards; not model output",
+  "world": "COS",
+  "artifacts": "C:\\Users\\yangqi\\AppData\\Local\\Temp\\character-review-20260909-v3",
+  "cards": [
+    {
+      "case": "A1",
+      "actorId": "tpmxnnwHRgdj5nVC",
+      "name": "A1 人类法师5级〔验收样例 v3〕",
+      "hp": 32,
+      "proficiency": 3,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "6666a67e004faa314996202d73ac3bc4ece433db91cdb36c147c742d703d8bca"
+    },
+    {
+      "case": "A2",
+      "actorId": "juDnyb6ZEmDijDKf",
+      "name": "A2 人类冠军勇士5级〔验收样例 v3〕",
+      "hp": 44,
+      "proficiency": 3,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "dbbd5328c4759d1087dafc8d6c933b4d7903cadbb2b72c718478e120e653c476"
+    },
+    {
+      "case": "A3",
+      "actorId": "8W9Fbg9Bi5jSrXMT",
+      "name": "A3 丘陵矮人生命牧师3级〔验收样例 v3〕",
+      "hp": 30,
+      "proficiency": 2,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "cc1a77685698b5fdc70bef678a439e876866ee02c8240215a3540536d7737ed7"
+    },
+    {
+      "case": "B1",
+      "actorId": "xCaLLTTfWBe279NR",
+      "name": "B1 狼人＋冠军勇士5级〔验收样例 v3〕",
+      "hp": 90,
+      "proficiency": 3,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "b9834ca0d214c17abe43099950927c26dc3392b4e2fc017dc78bf5eb1a53507e"
+    },
+    {
+      "case": "B2",
+      "actorId": "3JMiwAwYTVm3RSIu",
+      "name": "B2 地精＋盗贼3级〔验收样例 v3〕",
+      "hp": 17,
+      "proficiency": 2,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "b3abae2f5e1584764e1dd5a4c4306adf79e998686f438a8288f61d42fb14590b"
+    },
+    {
+      "case": "B3",
+      "actorId": "ZfYVxSIcFQbuqRIE",
+      "name": "B3 兽人＋法师5级〔验收样例 v3〕",
+      "hp": 52,
+      "proficiency": 3,
+      "corePass": true,
+      "configurationPass": true,
+      "snapshotSha256": "a8282204ec03e1798c830a95ac1bf5dce0ecbabc4d936620e0fdb29757b4580f"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -871,6 +872,7 @@ app.whenReady().then(async () => {
     console.log("[telemetry] initialization failed; continuing without telemetry:", error?.message ?? error);
   }
   foundryRuntime = new DirectFoundryRuntime({
+    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
     getWebContents: () => foundryView()?.webContents ?? null,
     onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
   });
@@ -986,6 +988,7 @@ app.whenReady().then(async () => {
       telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
+      operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
       profile: {
         getCwd: () => directory ?? combatWorkspace,
@@ -1003,6 +1006,7 @@ app.whenReady().then(async () => {
       telemetry: telemetry?.forSession(), scheduler,
       runtimeReady: fvttOpsRuntimeReady,
       taskStorageDir: configPath("tasks"),
+      operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
       profile: {
         mode: "prep",
@@ -1010,7 +1014,6 @@ app.whenReady().then(async () => {
         builtinTools: true,
         systemPrompt: "append",
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
-        customToolNames: ["foundry_open", "foundry_screenshot", "browser_evaluate", "request_user_input", "open_document"],
         fence: true,
         streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },

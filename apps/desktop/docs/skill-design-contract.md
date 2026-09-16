@@ -58,6 +58,73 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
+
+- G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
+  `choiceRequirements`（fill `choices.skills/tools/languages`），通配符池
+  （`languages:*`）用系统自带 `Trait.mixedChoices` 展开为具体 key 再下发——候选与
+  匹配共用一套词汇表，模型拿到的是可执行枚举不是通配符；注册表不可用时回退原始池
+  + 前缀匹配。实证：人类额外语言池原生就是 `languages:*`，不展开模型无从填写。
+- G2 法术位填充 slotFill：0 级建档的 advance 收尾把 `system.spells.spellN/pact.value`
+  填到 `max`（回执 `slotFill:{before,after}`），与 hpFill 同门（preLevel===0）；
+  既有角色不动余量。HP 收尾仍只对 character；NPC 不 hpFill（保留战斗史语义）。
+- NPC 入口放开：plan/advance 的 actor 类型门从 character-only 改为 character|npc；
+  NPC 加职业等级的 HP 用怪物体型骰（`actor.system.attributes.hd.denomination`）固定
+  均值、无首级满骰。实证：兽人（2d8,con+3）+法师 5 级 → hp 55、hd 7d8、slotFill
+  4/3/2，与原生公式逐点一致。
+- 发现顺序定稿：browse class → browse race → plan（必带 `raceUuid`）——种族侧选择
+  依赖 raceUuid 进 plan，原"class → plan → race"顺序会让语言选择漏出填写清单。
+
+### A 系列 trace 解剖优化（D1-D6，2026-09-15）
+
+- D1 HP 永不询问：HP 槽撤出 plan 的 choiceRequirements（1 级满骰、后续级固定均值，
+  dnd5e 原生计算，automaticSteps 给信息摘要）；choices.hp 保留为 advance 隐藏覆盖
+  （DM 掷骰 HP 才传），plan 不下发。实证：A1 模型因 hp-mode 槽语义不明翻系统源码
+  8 次，而默认行为本就正确。
+- D2 不做 HP 数值 preview/公式教学：对错由 benchmark 验收夹具判断，skill 引导模型
+  信任工具，不教模型自行验算派生值。
+- D3 receipt 即终态：advance verification 扩展为 abilities（before/after + race/asi
+  分解）/subclass/race/movement/languages/traits/proficiency/spellcasting/ac/resources
+  全字段——验收器查什么回执报什么，替代 34KB 裸 dump 式回读。亚种 = 独立 race 条目
+  沿用。选择型种族（半精灵自选属性、变体人类专长、高等精灵戏法）v1 走执行路径
+  （advance 后 actor_update SET 补终值 + 报告注明）；种族侧选择池进 plan/choices 是
+  backlog 最高优先级——工具不支持就迭代工具，不让模型长期手搓。
+- D4 browse names[] 批量解析：记忆名单一次 ≤50 个，每个名字独立做单一语言子串/
+  identifier 匹配（"火球 Fireball" 式中英组合串已实证 0 命中）；unique 直接取 uuid、
+  ambiguous 多为跨规则重名（传 rules 收窄）、miss 才翻页/search 兜底。匹配算法不变。
+- D5 skill 只教理想路径、不写禁令：模型绕开工具走裸 JS 是"工具不如裸 JS 好用"的
+  强信号，harness jsFallback 遥测天然记录，靠迭代工具收敛而非禁令压制。本条软化
+  2026-09-15"发现工具三分"记录里"禁止裸 eval 回读自检"的表述为正面路径教学。
+- D6 未点名装备从简（benchmark 与生产 skill 一致）：DM 点名的装备精确解析；未点名
+  起始装备按常识名单一次 names[] 带过，不逐件考证价格/包来源/备选组合。
+
+### 专精落地检测与回执活动计数（2026-09-15）
+
+- 专精槽独立 fill 键 `choices.expertise`：与 choices.skills 共用词汇表（skills:/tool:
+  key）但不共消费队列——take() 每值只消费一次，同 key 双填在唯一性约束下本就不可表达
+  （v5 B2 模型发 4 熟练 + 2 新 key，dnd5e 原生对未熟练目标静默丢弃 1→2 从不 0→2，
+  模型被迫裸写 `skills.slt.value:2` 补锅，读取 before=0 实锤）。
+- 双层防护：写入前校验——专精每个值必须在"卡面已熟练 ∪ 本次调用前面技能/工具槽已选"
+  集合内，非法值以 ADVANCEMENT_NEEDS_CHOICE 整体拒绝并点名（零写入）；写入后兜底——
+  按定居值复查，仍被丢弃的回执 `warnings` 报 `EXPERTISE_NOT_LANDED`。plan 侧
+  choiceRequirement 带 `mode:"expertise"` + `note` 说明该规则。
+- 回执 `verification.traits.expertise:{skills,tools}`（value≥2 清单）让专精对账免于
+  回读；grantedItems/createdItems/spellFill.created 条目带 `activities` 计数，
+  "武器攻击活动在不在卡面"从回执直接可查（v5 A3/B1 各有一次活动回读）。
+- 教义保持正面路径：skill 只教"专精槽填 choices.expertise + 先熟练后专精"，不列禁令
+  （沿用 D5）。
+- NPC 回执 `preservation.changed`：advance 前后对怪物固有特性族（dr/di/dv/ci/cv/senses/
+  size/languages/details.type/movement）做 before/after diff，空数组 = 原卡未动。实证：
+  v6 B1/B2 模型为证明原怪物保留，dump 全量 traits + 遍历 NPC schema 字段各 3-5 次；
+  把"保留证明"做成回执字段后这些回读全部不必要。grantedItems 同步补 `identifier`。
+
+### arcane-dnd5e-rules（2026-09-09）
+
+- 用户交互预算0：读取随包提供的SRD资料、选择查询路径属于C类技术细节，不要求DM确认。
+- SKILL.md兼任规则索引和查询说明；通过已有read/shell查本地Markdown，不新增查询脚本或工具，不预装完整正文到系统提示。
+- 来源固定为5thSRD的SRD 5.1文本快照，附来源/署名；规则正文与本地分发调整分开记录。查不到的扩展规则不当成SRD事实。
+- 区分职业、NPC数据块及FVTT实现；依据规则核对实际状态，不要求模型盲信工具，也不把玩家角色完整升级流程强加给NPC。
+
 ### arcane-fvtt-setup / arcane-fvtt-mods（2026-08-31）
 
 - Demo 环境默认安装：用户说"帮我装 Foundry"即含 Demo world 及 profile 解析出的
@@ -107,6 +174,94 @@
   发明"会话边界"概念，只让它检查自己上下文里有没有记录。用户只说"导入"不视为同意
   第三方云上传。
 
+### 发现工具三分：browse / plan / search（2026-09-15）
+
+- `foundry_content_list` 拆为 `foundry_advancement_plan`（升级计划唯一来源）与
+  `foundry_compendium_browse`（条件枚举 + uuids 读全文，吸收旧 detail）；`foundry_content_search`
+  收窄为身份解析兜底。硬切换无别名——与 main 的差异是探索性质，定稿即可破坏性变更。
+- 车卡发现三次拿全：browse type:"class" → plan → browse type:"race"；目录按
+  rules+identifier 去重、arcane 模块包优先、2014/2024 双版本各自成行；rules 参数不传，
+  由 classUuid 锚定推导。理由：实证模型在 search 中文名与 50/页翻页上浪费轮次，目录化
+  把"找身份"从模糊搜索变为一次枚举。
+- 写路径回执即对账：advance/grant_items 的 verification 回执就是验收依据，禁止裸 eval
+  回读自检同一结果——旧"回读 actor.items 数数"教义只适用于裸 JS 授予回退路径。
+- 建档写工具（actor_create/update/grant_items）补进 skill 教学：工具早已激活但零教学，
+  实证 A1/A2 模型零调用；装备与法师法术书统一走 advance 的 additionalItems 单次写入。
+- 完整 spec 见 `foundry-prep-tools-spec.md`（含 A1-A3 预期路径与验收标准）。
+
+### 准备施法者全法术列表（2026-09-15）
+
+- 用户裁决：准备施法者（2014 牧/德/圣/奇械）建卡时直接授满理论上能会的全部法术——他们
+  规则上"会"整个职业法术列表，"准备 N 个"是长休时的页签标记，留给 DM 与玩家在游戏中
+  自行协商；工具不管理准备（与 2026-09-14 的 prepared 决议一致：那不是数量管理）。
+  法师不受此影响：法术书是独立的已知子集概念（book 照旧）。
+- `spellBudget.fullList: {maxLevel, count, candidates}`：枚举来自模块合集包法术文档上的
+  `flags.<moduleId>.spellClasses`（模块 build 时从 donor 法术表注入，522/522 全覆盖，
+  含非 SRD 条目），运行时按职业 identifier + 最高法术位环（progression 环位表硬编码）
+  过滤，不再硬编码法术清单；2024 包无此标注，2024 职业维持不下发（已知限制）。
+- `actorAdvance` 新增 `fullSpellList: true` 开关：落地后按列表自动授予（≤50 一批、按来源
+  UUID 去重——领域法术不会叠双），模型无需回抄 30+ 个 uuid；非 fullList 职业传此开关在
+  任何写入前以 INPUT_INVALID 拒绝。list 侧仍下发完整 candidates：模型看得见将授什么。
+- benchmark 语义同步：该教义进公共 skill（两臂共享）；A3 期望从"6 个点名准备法术 + 4 个
+  领域法术 = 10"改为"2014 牧师 ≤2 环全列表 = 34"（SRD 32 + 典礼术/借鉴才学，验收器按
+  计数制，非 SRD 条目不参与 known-membership 校验）。
+
+### arcane-actor-update（2026-09-14）
+
+- 法术授予不置 `system.prepared`：dnd5e 5.3.3 源码确认 prepared 只是法术书页签标记，
+  无任何 usage/施放闸门；置准备是额外写操作且会把"合集默认值"覆写漂移。保持默认即可，
+  用户明确要求才设置。character benchmark 校验同步移除 prepared 断言（降级为诊断项）。
+
+### 建档属性与候选池水合（2026-09-15）
+
+- 基础属性建档主路径是 `actor_create` 的 `dnd5e.abilities`（六属性整数 1..20）：实测种族
+  与 ASI 加成不是 ActiveEffect，而是 advance 执行时对基础值做加法（两张自测卡
+  abilityEffects 全空、数值逐项对得上），SET 型写入必须先于 advance——create 结构性保证
+  顺序，不靠教义约束。`actor_update` 的 abilities 是 SET 语义修正路径：advance 之后写入
+  必须含种族/ASI 的最终基础值。readRef 覆盖六个 `system.abilities.*.value`（actor_get
+  默认下发），写前必读纪律不变。
+- plan 的 `choiceRequirements` 统一水合 `candidateNames`：pool-uuid 从合集 index 取名、
+  trait-key 走 dnd5e `Trait.keyLabel` 本地化（子职业池已有名）。模型在 plan 出口即可做
+  语义选择，废掉"候选只有 uuid 再发 uuids-browse 水合"的强制往返（自测每案 +1 次）。
+- 0 级建档的 advance 收尾自动把 `hp.value` 拉到派生好的 `hp.max`（只拉不压、回执
+  `hpFill:{before,after}` 可见）：value 是 HP 步用各步当时体质调整值累加的定格历史，
+  max 是 prepare 用最终体质重算的派生值，车卡中途种族 ASI 必然让两条通道对不上
+  （dnd5e 源码实证；prepare 只有 min(value,max) 钳制，少了不补）。界定签名用
+  "advance 前 details.level === 0"——0 级角色没有战斗史，拉满不抹任何真实状态；
+  既有角色（≥1 级）升级不动当前 HP（规则语义是 max 增量同步加 value，系统已正确实现）。
+  无新入参：车卡场景终态恒为满血，中间累加是纯噪声，不需要模型传旗标。
+
+### foundry_content_list spellBudget（2026-09-14）
+
+- `contentList(type=classFeature)` 新增 advisory 字段 `spellBudget: {ability, progression,
+  cantrips?, known?, book?}`，数值全部来自 SDK runtime 硬编码的 SRD 规则表（2014/2024 两版
+  + TCE 奇械），按 `source.rules` 或 classUuid 含 `classes24` 判版本、按 identifier 查表。
+  非施法职业返回 null；0 值字段省略（如 1 级游侠 known=0 不下发）。
+- 用户裁决：prepared 数量与公式一律不下发——准备只是页签标记，工具不管理准备；法师只发
+  法术书（6+2×(L−1)，两版同公式），不发 2024 Max Prepared；第三施法者（奥法骑士/诡术贼）
+  v1 放弃。法术位不进表：dnd5e 按 progression 自动计算（含兼职混合规则），重复下发只会
+  与系统漂移。
+- full-list 职业（牧/德/圣/奇械）发 ability/progression/cantrips + fullList（见 2026-09-15 记录）；
+  known 仅 2014 诗/术/契/游；book 仅法师。Actor Studio 的 2024 列照抄 2014 有误，其数值未采用；表数值
+  以 dnd5e 5.3.3 两版职业 advancement 与 TCE 奇械实测为准。
+- 配套引导：`arcane-content-catalog` 重写对齐现行工具（原稿写的是实验 fixture 的旧参数面：
+  小写 class/subclass、classEligible 三字段、不存在的 foundry_content_detail；fixture 侧
+  与自身工具一致，不动）；`arcane-actor-update` 新增工具流与数量契约（budget→候选→对账→
+  回读，环位上限从 advance 后角色的 spellN.max>0 读）。character benchmark 公共 skill
+  不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
+  不与历史报告求可比（用户裁决）。
+
+### subclass-uuid 候选池（2026-09-14）
+
+- `choiceRequirements` 中 `valueFormat:"subclass-uuid"` 的要求现挂 `candidates`（uuid）+
+  `candidateNames`（名称映射）。机制照 Actor Studio：扫合集 index 按 `system.classIdentifier
+  === 职业 identifier` 过滤；但它用配置包列表（默认只有 `dnd5e.subclasses`），我们扫全部
+  Item 包按 `type==="subclass"` 过滤——实测 2024 子职业住在 `dnd5e.classes24` 包内部、
+  2014 全集在模块包（120 条，系统 SRD 包只有 12 条）。条目带显式 `source.rules` 且与职业
+  规则版本冲突才排除，缺失规则字段的保留。
+- skill 配套两段流程：先不带 subclassUuid 拿计划与候选池，定下后带它重调 list——子职业
+  自身的授予/选择步骤（`subclass:` 前缀）才进输出，`actorAdvanceArgs` 才带上它。
+
 ### arcane-actor-update（2026-09-01）
 
 - 由 `arcane-actor-images` 扩scope改名而来：头像/token 规则原样保留，新增人物条目授予。
@@ -126,6 +281,38 @@
 - 不教模型提取/阅读流程：建库时模型已通读全文，画图要不要再读由它自决。skill 只
   约束产物——图菜单（总览/骨架/线索/关系/拓扑，每张只回答一个问题）、每条边要有
   原文依据、≤15 节点、跨图同物同名。
+
+### advance 回执 trait 落地审计（2026-09-16）
+
+- v7 批次归因：B 组 NPC 扩展裸 eval 居高（B1 14 次、~54s）不是因为回执缺字段，而是
+  模型看到 `traits.armor:[]`/`traits.weapons:[]` 无法区分"没授予"与"授予被原生丢弃"，
+  花 8 次 eval 翻数据模型求证。dnd5e 5.3.3 的 NPCData 模型没有 `traits.armorProf`/
+  `weaponProf` 字段（character 才有），怪物挂职业等级后护甲/武器熟练被原生静默丢弃。
+- 决策：advance 提交后对所有 TraitAdvancement 已选值做落地审计——经
+  `CONFIG.DND5E.traits` 的 actorKeyPath 定位目标字段（skills/saves/tool/languages 特判），
+  字段不存在或值未落入即报 `TRAIT_GRANT_NOT_LANDED` 警告（按 code+value 去重）。
+  skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
+- 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
+  的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+
+### 跑团模式回执从简（2026-09-16）
+
+- 用户裁决：战斗回执 = exec 返回值语义一行——返回值明确给出的数值（消耗、扣血）照说，
+  没返回的（伤害/HP/状态变化）不复述，DM 在 Foundry 界面看得见，复述是噪声。
+- 配套取消"执行后必读 turn 确认 HP"的固定步骤：下一次执行前的 turn 预读天然覆盖新鲜度，
+  强制回读的唯一产出就是长回执。DM 追问具体数值时才读 turn 回答；聊天卡/提交响应仍不
+  作为伤害事实。combat.md 中英版同步。
+- 补充（同日）：回复不引用内部编号/协议代号/错误码（实证：agent 把 worldInfo 的
+  summonDependency:"AUTO-001" 原样转播给 DM），能力不可用只在 DM 尝试时说明，不主动播报。
+
+### 先读后写硬纪律（2026-09-16）
+
+- 用户裁决：DM 是合作方，可随时绕开 agent 在 Foundry 里直接推进回合/改状态，agent 的
+  回合归属记忆随时可能过时——包括本轮对话刚读过的。每条战斗指示先读 turn 再行动，无
+  "刚读过还新鲜"豁免；不凭记忆拒绝 DM 指令或回答回合归属。动因实证：agent 凭上轮记忆
+  以"仍是莫德雷德的回合"拒绝执行火球术并反问 DM——若 DM 已在 UI 推进，该拒绝建立在
+  陈旧状态上。sys prompt 只写规则不写理由时模型会在记忆里走捷径，故新增独立章节把
+  "为什么每次都要读"写明。combat.md 中英版同步。
 
 ### arcane-module-reader（2026-09-12）
 

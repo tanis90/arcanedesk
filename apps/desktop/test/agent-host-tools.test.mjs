@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { after } from "node:test";
+import { activeToolNames } from "../src/main/foundry-tool-policy.js";
+const scratch = mkdtempSync(path.join(os.tmpdir(), "arcane-host-tools-"));
+after(() => rmSync(scratch, { recursive: true, force: true }));
 import test from "node:test";
 
 import {
@@ -10,17 +16,6 @@ import {
   pinArcaneNodeForShellSpawn,
 } from "../src/main/agent-host.js";
 
-const TOOL_NAMES = [
-  "foundry_open",
-  "browser_evaluate",
-  "world_status",
-  "combat_battle_context",
-  "combat_turn_context",
-  "combat_execute_turn",
-  "request_user_input",
-  "open_document",
-];
-
 function buildHarness({ call, sendToRenderer = () => {} } = {}) {
   const foundryRuntime = {
     lastWorldInfo: null,
@@ -28,11 +23,14 @@ function buildHarness({ call, sendToRenderer = () => {} } = {}) {
   };
   const host = new AgentHost({
     foundryRuntime,
+    operationStorageDir: mkdtempSync(path.join(scratch, "session-")),
     getFoundryView: () => null,
     openFoundry: async () => ({ ok: true, summary: "open" }),
     sendToRenderer,
     log: () => {},
   });
+  host.describeCurrent = () => ({ id: "test" });
+  host.taskCoordinator = () => ({ currentInputBinding: () => ({ taskId: "task", metadata: Promise.resolve({ world: { origin: "https://test", id: "w" }, selectedTokenUuids: [] }) }) });
   return {
     host,
     foundryRuntime,
@@ -215,108 +213,17 @@ test("Agent startup fails before Pi initialization when packaged Node bootstrap 
   assert.equal(host.session, null);
 });
 
-test("combat tool names and input schemas stay stable", () => {
+test("play activates the branch play tool set without the retired v2 names", () => {
   const { tools } = buildHarness();
-  const attackRollModeDescription =
-    "Optional only when the selected battle-context action advertises input.attackRollMode. " +
-    "Set it only from an explicit DM instruction: advantage/disadvantage set the corresponding Midi request flags; " +
-    "normal leaves the roll unforced and does not cancel effects Foundry applies automatically. " +
-    "Otherwise omit it; never infer it from conditions, positioning, or tactics.";
-  const executeTurnInputSchema = {
-    type: "object",
-    properties: {
-      selections: { type: "object", properties: {}, additionalProperties: true },
-      declaredRiders: {
-        type: "array",
-        items: { type: "object", properties: {}, additionalProperties: true },
-        description: 'Rider entries, e.g. [{ id: "branding-smite", spellLevel: 2 }]',
-      },
-      allocation: {
-        type: "array",
-        items: { type: "object", properties: {}, additionalProperties: true },
-        description: "Non-empty array of allocation entries",
-      },
-      spellLevel: { type: "number" },
-      attackRollMode: {
-        type: "string",
-        enum: ["normal", "advantage", "disadvantage"],
-        description: attackRollModeDescription,
-      },
-      targetSpec: { type: "object", properties: {}, additionalProperties: true },
-    },
-    additionalProperties: true,
-  };
-
-  assert.deepEqual([...tools.keys()], TOOL_NAMES);
-  assert.deepEqual(
-    Object.fromEntries([...tools].map(([name, tool]) => [name, tool.parameters])),
-    {
-      foundry_open: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description: "Foundry VTT URL, e.g. http://localhost:30000. Defaults to the local server.",
-          },
-        },
-      },
-      browser_evaluate: {
-        type: "object",
-        required: ["code"],
-        properties: {
-          code: {
-            type: "string",
-            description: "JS expression or async IIFE returning a value",
-          },
-        },
-      },
-      world_status: { type: "object", properties: {} },
-      request_user_input: {
-        type: "object", required: ["question"], properties: {
-          question: { type: "string", minLength: 1, maxLength: 12000 },
-          options: { type: "array", maxItems: 8, items: { type: "string", maxLength: 1000 } },
-        },
-      },
-      open_document: {
-        type: "object", required: ["path"], properties: {
-          path: {
-            type: "string", minLength: 1, maxLength: 4000,
-            description: "Path to a .md/.markdown file inside the current working directory.",
-          },
-        },
-      },
-      combat_battle_context: { type: "object", properties: {} },
-      combat_turn_context: { type: "object", properties: {} },
-      combat_execute_turn: {
-        type: "object",
-        properties: {
-          actionId: {
-            type: "string",
-            description: "Single action id from battle-context",
-          },
-          actions: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["actionId"],
-              properties: {
-                actionId: { type: "string" },
-                targetTokenIds: { type: "array", items: { type: "string" } },
-                input: executeTurnInputSchema,
-              },
-            },
-            description: "Multiple actions in one submission",
-          },
-          targetTokenIds: { type: "array", items: { type: "string" } },
-          input: executeTurnInputSchema,
-          advance: {
-            type: "boolean",
-            description: "Advance the combat turn after execution",
-          },
-        },
-      },
-    }
-  );
+  assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "foundry_static_context",
+    "foundry_play_context", "foundry_execute_action", "foundry_conditions_set"]);
+  assert.equal([...tools.keys()].some(name => name.startsWith("combat_")), false);
+  for (const name of activeToolNames("combat")) assert.ok(tools.has(name), name);
+  // Pool is the superset for both modes; prep-only tools stay defined but inactive in combat.
+  for (const name of ["foundry_screenshot", "foundry_actor_advance", "foundry_compendium_browse", "open_document"]) {
+    assert.ok(tools.has(name), name);
+  }
+  assert.deepEqual(tools.get("foundry_static_context").parameters.properties, {});
 });
 
 test("prep mode exposes the Foundry panel, screenshot and page eval custom tools", () => {
@@ -334,7 +241,9 @@ test("prep mode exposes the Foundry panel, screenshot and page eval custom tools
   });
   const tools = new Map(host.buildTools().map((tool) => [tool.name, tool]));
 
-  assert.deepEqual([...tools.keys()], ["foundry_open", "foundry_screenshot", "browser_evaluate"]);
+  assert.ok(tools.has("foundry_screenshot"));
+  assert.ok(activeToolNames("prep").includes("foundry_conditions_set"));
+  assert.equal(activeToolNames("prep").includes("foundry_execute_action"), false);
   assert.match(tools.get("foundry_screenshot").description, /current visible viewport/);
   assert.match(tools.get("foundry_screenshot").description, /never captures the desktop/);
   assert.match(tools.get("browser_evaluate").description, /MAY read or change the current world/);
@@ -485,22 +394,10 @@ test("tool images stay in the model transcript instead of crossing renderer IPC"
   assert.deepEqual(events[0].result.details, { width: 800, height: 450 });
 });
 
-test("attack-roll guidance exposes capability, values, semantics, and batch scope", () => {
+test("attack-roll guidance preserves explicit DM and per-action scope", () => {
   const { tools } = buildHarness();
-  const tool = tools.get("combat_execute_turn");
-  const expected = ["normal", "advantage", "disadvantage"];
-  const single = tool.parameters.properties.input.properties.attackRollMode;
-  const multiple = tool.parameters.properties.actions.items.properties.input
-    .properties.attackRollMode;
-  const prompt = readFileSync(
-    new URL("../system-prompts/combat.md", import.meta.url),
-    "utf8"
-  );
-
-  assert.deepEqual(single.enum, expected);
-  assert.deepEqual(multiple.enum, expected);
-  assert.match(single.description, /battle-context action advertises input\.attackRollMode/);
-  assert.match(single.description, /normal leaves the roll unforced/);
+  const tool = tools.get("foundry_execute_action");
+  const prompt = readFileSync(new URL("../system-prompts/combat.md", import.meta.url), "utf8");
   assert.match(tool.promptGuidelines.join("\n"), /scope it per action/);
   assert.match(prompt, /input\.optional/);
   assert.match(prompt, /"normal"[^\n]*与省略等价/);
@@ -508,114 +405,41 @@ test("attack-roll guidance exposes capability, values, semantics, and batch scop
   assert.match(prompt, /作用域不清楚时先问 DM/);
 });
 
-test("structured tools map to the fixed Foundry page runtime with bounded timeouts", async () => {
-  const calls = [];
-  const events = [];
-  const responses = {
-    worldInfo: { world: { id: "test-world" } },
-    battleContext: { combatId: "combat-1" },
-    turnContext: { round: 2, turn: 1 },
-    executeTurn: { status: "completed" },
-  };
-  const { host, tools } = buildHarness({
-    call: async (action, args, options) => {
-      calls.push({ action, args, options });
-      return responses[action];
-    },
-    sendToRenderer: (payload) => events.push(payload),
-  });
+test("structured tools resolve snapshot references and use the fixed runtime with bounded timeouts", async () => {
+  const calls = [], events = [];
+  const snapshot = { scope: { combatId: "c", world: { origin: "https://test", id: "w" } }, contextRef: "snapshot",
+    combatants: [{ tokenUuid: "Scene.s.Token.t", actorUuid: "Actor.a", actions: [{ actionRef: "ref", id: "native-id", itemId: "item", activityId: "activity" }] }] };
+  const live = { contextRef: "snapshot", turn: { tokenId: "t", actorId: "a", round: 1, index: 0 }, combatants: [] };
+  const responses = { worldInfo: { world: { id: "w" } }, staticContext: snapshot, playContext: live, executeAction: { status: "completed" } };
+  const { host, tools } = buildHarness({ call: async (action, args, options) => { calls.push({ action, args, options }); return responses[action]; }, sendToRenderer: e => events.push(e) });
   host.maybeRequestApproval = async () => true;
-  const controller = new AbortController();
-  const executeParams = {
-    actionId: "action-1",
-    targetTokenIds: ["target-1"],
-    input: { spellLevel: 2 },
-    advance: true,
-  };
-
-  const worldResult = await tools.get("world_status").execute("world-call", {}, controller.signal);
-  const battleResult = await tools.get("combat_battle_context").execute("battle-call", {}, controller.signal);
-  const turnResult = await tools.get("combat_turn_context").execute("turn-call", {}, controller.signal);
-  const executeResult = await tools.get("combat_execute_turn").execute("execute-call", executeParams, controller.signal);
-
-  assert.deepEqual(calls, [
-    {
-      action: "worldInfo",
-      args: {},
-      options: { signal: controller.signal, readyTimeoutMs: 90_000, executionTimeoutMs: 30_000 },
-    },
-    {
-      action: "battleContext",
-      args: {},
-      options: { signal: controller.signal, executionTimeoutMs: 30_000 },
-    },
-    {
-      action: "turnContext",
-      args: {},
-      options: { signal: controller.signal, executionTimeoutMs: 30_000 },
-    },
-    {
-      action: "executeTurn",
-      args: executeParams,
-      options: { signal: controller.signal, executionTimeoutMs: 120_000 },
-    },
-  ]);
-  assert.deepEqual(worldResult.details, responses.worldInfo);
-  assert.deepEqual(battleResult.details, responses.battleContext);
-  assert.deepEqual(turnResult.details, responses.turnContext);
-  assert.deepEqual(executeResult.details, responses.executeTurn);
-  assert.deepEqual(events, [{ type: "world_info", data: responses.worldInfo, mode: "combat" }]);
+  const signal = new AbortController().signal;
+  await tools.get("world_status").execute("world", {}, signal);
+  await tools.get("foundry_static_context").execute("static", {}, signal);
+  await tools.get("foundry_play_context").execute("turn", { view: "turn" }, signal);
+  const result = await tools.get("foundry_execute_action").execute("execute", { actionRef: "ref", advance: true }, signal);
+  assert.deepEqual(calls.map(value => value.action), ["worldInfo", "staticContext", "playContext", "executeAction"]);
+  assert.deepEqual(calls.map(value => value.options.executionTimeoutMs), [30000, 30000, 30000, 120000]);
+  assert.ok(calls.every(value => value.options.signal === signal));
+  assert.equal(calls[3].args.resolvedActions[0].sourceTokenUuid, "Scene.s.Token.t");
+  assert.equal(calls[3].args.resolvedActions[0].actionId, "native-id");
+  assert.deepEqual(calls[3].args.turn, live.turn);
+  assert.equal(result.details.status, "completed");
+  assert.equal(events[0].type, "world_info");
 });
 
-test("execute-turn approval denial does not dispatch the page runtime", async () => {
+test("execute-action approval denial does not dispatch the page runtime", async () => {
   const calls = [];
-  let approvalRequest = null;
-  const { host, tools } = buildHarness({
-    call: async (...args) => {
-      calls.push(args);
-      return { status: "completed" };
-    },
-  });
-  host.maybeRequestApproval = async (request) => {
-    approvalRequest = request;
-    return false;
-  };
-
-  const result = await tools.get("combat_execute_turn").execute("execute-call", {
-    actionId: "action-1",
-    targetTokenIds: ["target-1"],
-    advance: true,
-  });
-
-  assert.equal(result.content[0].text, "DM declined this action; do not retry it.");
-  assert.deepEqual(calls, []);
-  assert.deepEqual(approvalRequest, {
-    tool: "combat_execute_turn",
-    summary: "action-1 -> target-1 [advance]",
-    args: {
-      actionId: "action-1",
-      targetTokenIds: ["target-1"],
-      advance: true,
-    },
-  });
+  const { host, tools } = buildHarness({ call: async (...args) => { calls.push(args); } });
+  host.maybeRequestApproval = async () => false;
+  const result = await tools.get("foundry_execute_action").execute("execute", { actionRef: "ref" });
+  assert.equal(result.details.code, "DECLINED"); assert.deepEqual(calls, []);
 });
 
 test("structured tools fail closed when the page runtime is unavailable", async () => {
-  const host = new AgentHost({
-    foundryRuntime: null,
-    getFoundryView: () => {
-      throw new Error("structured tools must not fall back to browser_evaluate");
-    },
-    openFoundry: async () => ({ ok: true, summary: "open" }),
-    sendToRenderer: () => {},
-    log: () => {},
-  });
-  const turnContext = host.buildTools().find((tool) => tool.name === "combat_turn_context");
-
-  await assert.rejects(
-    turnContext.execute("turn-call", {}),
-    /Foundry page runtime is unavailable/
-  );
+  const { host, tools } = buildHarness();
+  host.foundryRuntime = null;
+  await assert.rejects(tools.get("foundry_play_context").execute("turn", {}), /Foundry runtime unavailable/);
 });
 
 test("prep preamble forces reading the matching skill before install actions", () => {

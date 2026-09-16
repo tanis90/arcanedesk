@@ -1,0 +1,186 @@
+{
+  "sourceReport": "benchmark-1788865124359.json",
+  "suiteVersion": "prep-npc-transfer-draft1",
+  "taskTimeoutMs": 120000,
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "status": "complete-both-failed-manual-source-audit",
+  "protocolCorrection": "Prompt did not specify 2014. Both chose official 2024 Werewolf. Original draft1 fixed-reference checks were overstrict; preserve them, separately re-read using selected source and accept existing or added real Longbow. No model reruns or skill changes. Future runner uses draft2.",
+  "trials": [
+    {
+      "arm": "native_skill_baseline",
+      "ms": 31890.936799999996,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 7.268399999999019,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 32.35530000000108,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 50.748600000000806,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 68.56740000000173,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 204.59470000000147,
+          "isError": false
+        }
+      ],
+      "taskState": "completed",
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "baseStats": false,
+        "werewolfTraits": false,
+        "originalMechanics": false,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "reviewedChecks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": false,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "reviewedSuccess": false,
+      "actorUuid": "Actor.OLbvdmXs2EznHaTk",
+      "uses": {
+        "spent": 0,
+        "max": 0,
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ],
+        "value": 0,
+        "label": ""
+      },
+      "longbowCount": 1,
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "selectedBase": "Compendium.dnd5e.actors24.Actor.mmWerewolf000000",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "OIfiMrPYWrOToc4a",
+          "HMTWN4mHCNrXMHEg",
+          "DarJX8O9CaJz0G2x"
+        ],
+        "sceneId": "b0luSXwVjfrhcwbm",
+        "label": "PB1788865124359-0-npc_werewolf-native_skill_baseline",
+        "newName": "PB1788865124359-0-npc_werewolf-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    },
+    {
+      "arm": "native_skill",
+      "ms": 43423.443999999996,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 4.963500000005297,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 49.76959999999963,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 67.89050000000134,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 83.87799999999697,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.433499999999185,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 104.33550000000105,
+          "isError": false
+        }
+      ],
+      "taskState": "completed",
+      "originalSuccess": false,
+      "originalChecks": {
+        "singleNpc": true,
+        "baseStats": false,
+        "werewolfTraits": false,
+        "originalMechanics": false,
+        "longbow": false,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "reviewedChecks": {
+        "singleNpc": true,
+        "baseStats": true,
+        "werewolfTraits": true,
+        "originalMechanics": true,
+        "longbow": true,
+        "actionSurge": true,
+        "surgeResources": false
+      },
+      "reviewedSuccess": false,
+      "actorUuid": "Actor.H707jGIY3f4GSwgY",
+      "uses": {
+        "spent": 0,
+        "max": 0,
+        "recovery": [
+          {
+            "period": "sr",
+            "type": "recoverAll"
+          }
+        ],
+        "value": 0,
+        "label": ""
+      },
+      "longbowCount": 2,
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "selectedBase": "Compendium.dnd5e.actors24.Actor.mmWerewolf000000",
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "GC9vtRPC3vEAQ8wM",
+          "aLXeAMWysXbJYk8X",
+          "uT5OamOU2Lmz7tdF"
+        ],
+        "sceneId": "SWEyvQAGus5T95sK",
+        "label": "PB1788865124359-0-npc_werewolf-native_skill",
+        "newName": "PB1788865124359-0-npc_werewolf-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      }
+    }
+  ],
+  "findings": [
+    "Baseline deleted all original werewolf embedded items before adding the requested two.",
+    "Candidate preserved original source mechanics but added a second Longbow.",
+    "Both copied Action Surge class-scale reference without resolving it; actual maximum and remaining uses were zero.",
+    "No action execution or auto-pack changes; read-only post-hoc review does not count as a new model success."
+  ]
+}

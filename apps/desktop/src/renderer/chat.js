@@ -952,6 +952,10 @@ function summarizeArgs(toolName, args) {
         }
         return (args.actionId ?? "(no action)") + (args.advance ? " [advance]" : "");
       }
+      case "foundry_execute_action":
+        return t("chat.card.actionCount", { count: args.actions?.length ?? 1 });
+      case "foundry_conditions_set":
+        return (args.conditions ?? []).map(condition => `${condition.key}: ${condition.active ? "+" : "−"}`).join(", ");
       default:
         return "";
     }

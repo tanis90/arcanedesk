@@ -1,0 +1,503 @@
+{
+  "status": "completed-supplementary-pilot",
+  "date": "2026-09-09",
+  "primaryBaseline": "qa-aliyun-token-plan/qwen3.7-plus unchanged",
+  "provider": "qa-deepseek-gray",
+  "model": "deepseek-v4.1-flash-expires-on-0910",
+  "endpoint": "https://api.deepseek.com",
+  "rawProfile": "C:\\Users\\yangqi\\AppData\\Local\\Temp/arcane-prep-play-deepseek-gray-qa",
+  "rawReport": "benchmark-1788931373311.json",
+  "thinking": {
+    "type": "enabled",
+    "reasoning_effort": "high",
+    "verifiedEveryRequest": true
+  },
+  "taskTimeoutMs": 180000,
+  "experienceTargetMs": 120000,
+  "samplesPerArm": 1,
+  "order": [
+    "native_skill_pack",
+    "native_skill_rules"
+  ],
+  "probe": {
+    "status": 200,
+    "ms": 562,
+    "requestedModel": "deepseek-v4.1-flash-expires-on-0910",
+    "returnedModel": "deepseek-v4.1-flash-expires-on-0910",
+    "hasReasoning": true,
+    "finishReason": "stop",
+    "usage": {
+      "prompt_tokens": 33,
+      "completion_tokens": 21,
+      "total_tokens": 54,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 18
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 33
+    }
+  },
+  "revisionInputs": {
+    "baseline": {
+      "commit": "a619442c37768b64daefe84e24ca3208af91d1c2",
+      "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+      "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+    },
+    "candidate": {
+      "commit": "a619442c37768b64daefe84e24ca3208af91d1c2",
+      "runtimeSha256": "786274714883d318f04f330f41fcd3c92b11470339d8cc8f51fe5596a206d1da",
+      "toolsFileSha256": "54a60b23f13d9b24af7c5e98b9ebf1518fd8ee5fad6da1139b84674cf0111391"
+    }
+  },
+  "matchedQwenToolAndSkillAndNormalizedPromptHashes": true,
+  "trials": [
+    {
+      "rawReport": "benchmark-1788931373311.json",
+      "session": "2026-09-09T05-22-58-188Z_01a0849e-8c0c-7565-9041-d845e309dce7.jsonl",
+      "arm": "native_skill_pack",
+      "ms": 53081.8177,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 17,
+      "toolExecutionMs": 2459.7196000000013,
+      "allToolsSettled": true,
+      "toolErrors": [],
+      "modelToolRounds": 14,
+      "readPaths": [
+        "arcane-actor-update/SKILL.md",
+        "fvtt-native-npc/SKILL.md"
+      ],
+      "usage": {
+        "input": 30773,
+        "output": 11439,
+        "reasoning": 5583,
+        "cacheRead": 342016
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "3f0a7af0392806afbec528d3bdf57348fcb0db20eb7b81f2cdf606ad23f50b12",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "oMzPZnwYKUfXcC7V",
+          "jobKTrJRkBnxqH0R",
+          "PnzfjHy547zdfqbG"
+        ],
+        "sceneId": "saDtQ8IPFFovOxTR",
+        "label": "PB1788931373311-0-npc_wizard-native_skill_pack",
+        "newName": "PB1788931373311-0-npc_wizard-native_skill_pack 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 1,
+      "withinExperienceTarget": true,
+      "requestModes": [
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        }
+      ]
+    },
+    {
+      "rawReport": "benchmark-1788931373311.json",
+      "session": "2026-09-09T05-23-52-758Z_01a0849f-6136-7fcc-bd2f-cb08286d1440.jsonl",
+      "arm": "native_skill_rules",
+      "ms": 121614.80500000001,
+      "success": true,
+      "timedOut": false,
+      "taskState": "completed",
+      "checks": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "artifactPass": true,
+      "postStopVerification": false,
+      "actorCount": 1,
+      "toolCount": 30,
+      "toolExecutionMs": 5222.087300000072,
+      "allToolsSettled": true,
+      "toolErrors": [
+        "browser_evaluate",
+        "browser_evaluate"
+      ],
+      "modelToolRounds": 23,
+      "readPaths": [
+        "fvtt-native-npc/SKILL.md",
+        "arcane-actor-update/SKILL.md",
+        "arcane-dnd5e-rules/SKILL.md",
+        "arcane-dnd5e-rules/references/character/classes/wizard.md",
+        "arcane-dnd5e-rules/references/spellcasting/spells/fireball.md",
+        "arcane-dnd5e-rules/references/character/races/human.md"
+      ],
+      "usage": {
+        "input": 39661,
+        "output": 28605,
+        "reasoning": 18460,
+        "cacheRead": 894336
+      },
+      "thinkingEnabledEveryRequest": true,
+      "skillHash": "6856b64a9a8a22f270d6f7a86df0a55872b1357eb18b6aeb5f446c7a730dd847",
+      "packSkill": "fa71dfc4f9bf0a9c6ed7621cbab7e0b740ec15bcd75fcaa8ee853edeac8ff6a4",
+      "rulesSkill": "f71cc8957d8c150a2fc1ee5226bd3fd106082401655ba04d59659bc7ef5615b0",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "foundry_image",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "normalizedSystemPromptHash": "f96d444a5854df9aee77a647bba50a60ae95faca320955664dd7f6a3dbabaaa4",
+      "promptNormalizationVersion": 2,
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "rvKHDhRLVkbG3ng4",
+          "EEqt390FkzzMwzTe",
+          "xehLRjd82J9sukuh"
+        ],
+        "sceneId": "mTRkNLHyeLHBSTFm",
+        "label": "PB1788931373311-0-npc_wizard-native_skill_rules",
+        "newName": "PB1788931373311-0-npc_wizard-native_skill_rules 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "sequence": 2,
+      "withinExperienceTarget": false,
+      "requestModes": [
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        },
+        {
+          "enable_thinking": "omitted",
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "high"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "One pair, fixed order, no statistical claim.",
+    "Different provider and time window than historical Qwen baseline; no model-only latency attribution.",
+    "Same nine data checks, not full character rules certification.",
+    "World objects retained; candidate read preceding control NPC name/image/prototype image/ring fields for art discovery. Not independent world snapshots.",
+    "Two candidate verification JS errors recovered without duplicate actor; full task still passed.",
+    "No change to production model default or auto pack."
+  ]
+}

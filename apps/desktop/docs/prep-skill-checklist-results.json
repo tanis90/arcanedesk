@@ -1,0 +1,528 @@
+{
+  "status": "120s-block-complete-diagnostic-180s-preregistered",
+  "suiteVersion": "prep-npc-intent-draft2",
+  "taskTimeoutMs": 120000,
+  "baselineCommit": "441106c",
+  "model": "qwen3.7-plus",
+  "providerId": "qa-aliyun-token-plan",
+  "caveats": [
+    "Original baseline batch paused; candidate ran separately without replaying baseline.",
+    "Read-only post-timeout checks do not turn timed-out tasks into successes.",
+    "All four 120-second trials timed out; preserve as experience failures. New matched diagnostic block uses 180 seconds, two pairs, no skill or tool changes. Werewolf transfer remains pending."
+  ],
+  "trials": [
+    {
+      "sourceReport": "benchmark-1788863716476.json",
+      "arm": "native_skill_baseline",
+      "ms": 120021.06839999999,
+      "taskState": "stopped",
+      "success": false,
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "modelError": null,
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "oA8UZBz6vcw7eeEF",
+          "B2mqvnGHnEbRgzgo",
+          "Nngb1ly43qYe74MA"
+        ],
+        "sceneId": "m4JErblMLgTmtsk4",
+        "label": "PB1788863716476-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788863716476-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.LwYyEwmxBQ0LNWdL",
+      "retained": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 7.205500000000029,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 39.4354000000003,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 56.02189999999973,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 75.03600000000006,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 23.46429999999964,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.0820999999996275,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.10120000000461,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.1206999999994878,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.7459000000017113,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 6.009200000000419,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 18.074699999997392,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 954.7838000000047,
+          "isError": false
+        }
+      ],
+      "systemPromptHash": "b0af5d3523993baca4f13e80a55ad2249f8a92c8a0ed730a82557e63abe5be22"
+    },
+    {
+      "sourceReport": "benchmark-1788863868970.json",
+      "arm": "native_skill",
+      "ms": 120025.01079999999,
+      "taskState": "stopped",
+      "success": false,
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "modelError": null,
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "5IWhU03bIU6cX2lb",
+          "KqglecofRjGVEETq",
+          "lGWJ2wx3qdebLl33"
+        ],
+        "sceneId": "YjFovoV0p8vynIMV",
+        "label": "PB1788863868970-0-npc_wizard-native_skill",
+        "newName": "PB1788863868970-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": false,
+        "staff": false,
+        "noShield": true
+      },
+      "actorUuid": "Actor.PYsPXq1nJs34ywvP",
+      "retained": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 12.232699999998658,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 34.337900000002264,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 51.84690000000046,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 68.57530000000042,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 29.203400000002148,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 41.55729999999676,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 45.096700000001874,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 75.12859999999637,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 103.82589999999618,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 132.00020000000222,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 152.6634999999951,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 171.39660000000003,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 30.90639999999985,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 50.10299999999552,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 29.43640000000596,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 3.8647000000055414,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 19.027399999991758,
+          "isError": false
+        }
+      ],
+      "systemPromptHash": "1b0f037d7802eac2580426635cae075898ee81e5841f3d2b8fa990b481067707"
+    },
+    {
+      "sourceReport": "benchmark-1788864078171.json",
+      "arm": "native_skill",
+      "ms": 120016.1697,
+      "taskState": "stopped",
+      "success": false,
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "modelError": null,
+      "skillHash": "c9635f591e4b001d2a6781c2dc8497c5aa33bc9741cf409a232a4dcb1b618d79",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "L8sdxPntDFAuF5SG",
+          "XsHNiTLwzflYFzEe",
+          "WXgGns2z0jQV1Ecy"
+        ],
+        "sceneId": "NOc2lRhnrpqilF0d",
+        "label": "PB1788864078171-0-npc_wizard-native_skill",
+        "newName": "PB1788864078171-0-npc_wizard-native_skill 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": true,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": false,
+        "hp": true,
+        "fireball": false,
+        "staff": false,
+        "noShield": true
+      },
+      "actorUuid": "Actor.7SezzofKuwTiI6aL",
+      "retained": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 12.11700000000019,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 51.77520000000004,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 52.303499999999985,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 73.93399999999929,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 24.17150000000038,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 46.421500000004016,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 68.37029999999504,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 91.67059999999765,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 115.50480000000243,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 135.30950000000303,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 153.0257000000056,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 35.96229999999923,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 54.48599999999715,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 68.54650000000402,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 14.811000000001513,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 27.043799999999464,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 18.132600000011735,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_grant_items",
+          "ms": 908.2789000000048,
+          "isError": false
+        }
+      ],
+      "systemPromptHash": "4998824ba44393f131ec875d9ad5f06835cd237d5cdac87d09b390e8ac5291e8"
+    },
+    {
+      "sourceReport": "benchmark-1788864230210.json",
+      "arm": "native_skill_baseline",
+      "ms": 120024.2527,
+      "taskState": "stopped",
+      "success": false,
+      "timedOut": true,
+      "cancellation": "timeout_abort",
+      "modelError": null,
+      "skillHash": "d0ef75453a0d000872d7ce9fd1ca1cb2d9acd6d1cfec1a70171c13efa20e7beb",
+      "activeTools": [
+        "foundry_open",
+        "foundry_screenshot",
+        "browser_evaluate",
+        "world_status",
+        "foundry_play_context",
+        "foundry_conditions_set",
+        "foundry_content_search",
+        "foundry_actor_get",
+        "foundry_actor_grant_items",
+        "foundry_scene_get",
+        "foundry_scene_apply",
+        "request_user_input",
+        "read",
+        "powershell",
+        "edit",
+        "write"
+      ],
+      "fixture": {
+        "protectedEffects": [],
+        "actorIds": [
+          "dKk5z2F7yArOTeZT",
+          "RKy2JRAojHQj4O2e",
+          "JojzlLE71xYS6ozO"
+        ],
+        "sceneId": "uigXSnncPqn7tLdy",
+        "label": "PB1788864230210-0-npc_wizard-native_skill_baseline",
+        "newName": "PB1788864230210-0-npc_wizard-native_skill_baseline 霜牙",
+        "originalSceneId": "A6V8lDKFVtg36CDP"
+      },
+      "checksAfterTimeout": {
+        "singleNpc": true,
+        "human": false,
+        "intelligence": true,
+        "spellcasting": true,
+        "slots": true,
+        "hp": true,
+        "fireball": true,
+        "staff": true,
+        "noShield": true
+      },
+      "actorUuid": "Actor.i2uxPjd7pfmWJlRn",
+      "retained": true,
+      "calls": [
+        {
+          "name": "read",
+          "ms": 9.333599999999933,
+          "isError": false
+        },
+        {
+          "name": "world_status",
+          "ms": 34.31750000000102,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 52.879399999997986,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 64.10279999999693,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 16.66489999999976,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.5767999999989115,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 5.419300000001385,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 721.3059999999969,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.6432999999960884,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.5266000000119675,
+          "isError": false
+        }
+      ],
+      "systemPromptHash": "483899eb4415c7bfb85e61ce105918400c77207a7ce9c664ad51df1f60e954b8"
+    }
+  ]
+}

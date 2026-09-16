@@ -260,6 +260,54 @@ test("registers models with a 256K context budget by default", () => {
   assert.equal(registered.get("custom-provider").models[0].contextWindow, 262144);
 });
 
+test("registers Qwen thinking compatibility only for verified official hybrid endpoints", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  const official = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
+  const variants = [
+    [official, "openai-completions", "qwen3.7-plus", true, true],
+    ["https://dashscope.aliyuncs.com/compatible-mode/v1", "openai-completions", "qwen3.7-plus-2026-05-26", true, true],
+    [official, "openai-completions", "other-model", true, false],
+    [official, "openai-responses", "qwen3.7-plus", true, false],
+    [official, "openai-completions", "qwen3.7-plus", false, true],
+    ["https://proxy.example/v1", "openai-completions", "qwen3.7-plus", true, false],
+    ["https://dashscope.aliyuncs.com.example/v1", "openai-completions", "qwen3.7-plus", true, false],
+    ["http://dashscope.aliyuncs.com/v1", "openai-completions", "qwen3.7-plus", true, false],
+  ];
+  for (const [index, [baseUrl, api, id, reasoning]] of variants.entries()) {
+    store.upsertProvider({ id: `test-${index}`, baseUrl, api, apiKey: "", models: [{ id, reasoning }] });
+  }
+  const registered = new Map();
+  store.applyToRuntime({ registerProvider: (id, config) => registered.set(id, config) });
+  for (const [index, variant] of variants.entries()) {
+    assert.deepEqual(registered.get(`test-${index}`)?.models[0].compat,
+      variant[4] ? { thinkingFormat: "qwen", supportsReasoningEffort: false, supportsDeveloperRole: false } : undefined);
+    if (variant[4]) assert.equal(registered.get(`test-${index}`).models[0].reasoning, true);
+  }
+});
+
+test("real Pi payload sends Qwen off and on flags before the network boundary", async () => {
+  const { streamSimple } = await import("../../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js");
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({ id: "qwen-test", baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    models: [{ id: "qwen3.7-plus" }] });
+  let config;
+  store.applyToRuntime({ registerProvider(_id, value) { config = value; } });
+  const model = { ...config.models[0], provider: "qwen-test", api: config.api, baseUrl: config.baseUrl };
+  for (const reasoning of ["off", "low"]) {
+    let payload;
+    const result = await streamSimple(model, { systemPrompt: "You are a concise assistant.", messages: [{ role: "user", content: "OK", timestamp: 0 }] }, {
+      apiKey: "dummy-no-network", reasoning,
+      onPayload(value) { payload = value; throw Error("DRY_RUN_STOP_BEFORE_NETWORK"); },
+    }).result();
+    assert.match(result.errorMessage, /DRY_RUN_STOP_BEFORE_NETWORK/);
+    assert.equal(payload.enable_thinking, reasoning !== "off");
+    assert.equal(payload.reasoning_effort, undefined);
+    assert.equal(payload.messages[0].role, "system");
+  }
+});
+
 test("reuses a stored key only within the same HTTPS origin", () => {
   const { file } = tempConfig();
   const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());

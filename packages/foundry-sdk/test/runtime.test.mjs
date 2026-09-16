@@ -20,6 +20,13 @@ test("runtime subpath exports the canonical runtime and integrity metadata", () 
   );
 });
 
+test("runtime includes the native Character advancement bridge", () => {
+  assert.match(runtimeFunction, /actorAdvanceData/);
+  assert.match(runtimeFunction, /normalizeAdvancementSteps/);
+  assert.match(runtimeFunction, /AdvancementManager\.forNewItem/);
+  assert.match(runtimeFunction, /case "actorAdvance"/);
+});
+
 test("runtime subpath exposes exactly the stable names", async () => {
   const exports = await import("../dist/runtime.js");
   assert.deepEqual(Object.keys(exports).sort(), [

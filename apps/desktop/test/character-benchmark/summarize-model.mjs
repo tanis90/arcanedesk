@@ -1,0 +1,6 @@
+import fs from 'node:fs';import path from 'node:path';
+const paths=process.argv.slice(2);if(!paths.length)throw Error('Pass one or more private benchmark report paths.');
+const rows=[];
+for(const file of paths){const r=JSON.parse(fs.readFileSync(file));for(const t of r.prepTrials||[]){rows.push({run:r.runId,model:r.model,provider:r.providerId,suite:r.experiment.suiteVersion,hardLimitSeconds:r.experiment.taskTimeoutMs/1000,case:t.caseId,arm:t.arm,seconds:t.ms==null?null:Math.round(t.ms)/1000,toolCalls:t.tools.length,toolErrors:t.tools.filter(x=>x.isError).length,thinking:t.thinking,state:t.taskState||t.state,timeout:!!t.timedOut,success:t.success??false,checks:t.verification?.checks||[],actorId:t.verification?.actorId,failures:(t.verification?.checks||[]).filter(x=>!x.ok).map(x=>x.id),reportStatus:r.status});}}
+const out=path.resolve('apps/desktop/docs/prep-character-model-pilot-v2.json');fs.writeFileSync(out,JSON.stringify({scope:'one sample per case/arm/model; benchmark pilot, not stable performance estimate',runs:paths.map(p=>path.basename(p)),trials:rows},null,2));
+console.log(rows.map(r=>`${r.model} ${r.case} ${r.arm} ${r.seconds}s ${r.toolCalls} calls ${r.state} pass=${r.success} ${r.failures.join(',')}`).join('\n'));console.log(out);

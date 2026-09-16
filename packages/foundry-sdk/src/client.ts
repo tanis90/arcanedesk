@@ -10,7 +10,7 @@ import {
   type FoundryActionOutput,
   type RuntimeArguments,
   type RuntimeStatus,
-  type SafeDirectAction,
+  type TypedDirectAction,
   type WriteDirectAction,
   type WorldInfo,
 } from "./contracts.js";
@@ -354,7 +354,7 @@ export class FoundryRuntimeClient<Context = unknown> {
     this.#lastWorldInfo = null;
   }
 
-  call<Action extends SafeDirectAction>(
+  call<Action extends TypedDirectAction>(
     action: Action,
     args: FoundryActionInput<Action>,
     options?: FoundryRuntimeCallOptions,

@@ -60,6 +60,7 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
    * @param {{
    *   getWebContents?: () => any,
    *   runtimeSource?: string,
+   *   allowedActions?: readonly import("@arcanedesk/foundry-sdk/contracts").DirectAction[],
    *   evaluate?: (webContents: any, expression: string, options: { timeoutMs: number, signal?: AbortSignal }) => Promise<any>,
    *   inspectPage?: (webContents: any, options: { timeoutMs: number, signal?: AbortSignal }) => Promise<any>,
    *   readyPollMs?: number,
@@ -71,6 +72,7 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
     const {
       getWebContents,
       runtimeSource,
+      allowedActions,
       evaluate,
       inspectPage,
       readyPollMs,
@@ -85,6 +87,7 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
     const callContext = new AsyncLocalStorage();
     super({
       transport,
+      ...(allowedActions ? { allowedActions } : {}),
       ...(runtimeSource !== undefined ? { runtimeSource } : {}),
       ...(readyPollMs !== undefined ? { readyPollMs } : {}),
       ...(log ? { log } : {}),

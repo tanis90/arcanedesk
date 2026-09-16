@@ -1,0 +1,571 @@
+{
+  "purpose": "One pair per case: Qwen native-JS versus production-tools workflow pilot",
+  "providerEnvironment": {
+    "providerId": "qa-aliyun-token-plan",
+    "model": "qwen3.7-plus",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "serverRevision": "unknown"
+  },
+  "experiment": {
+    "arms": [
+      "js",
+      "tools"
+    ],
+    "comparison": "js",
+    "kind": "same-code production tools versus native JS",
+    "cases": [
+      "create_npc",
+      "grant_items",
+      "edit_image",
+      "scene_layout",
+      "conditions",
+      "upload_image"
+    ],
+    "samplesPerCase": 1,
+    "model": "qwen3.7-plus",
+    "promptPolicy": "Production Prep prompt for tools; neutral native-JS instructions for control",
+    "newTools": [
+      "world_status",
+      "foundry_play_context",
+      "foundry_conditions_set",
+      "foundry_content_search",
+      "foundry_actor_get",
+      "foundry_actor_create",
+      "foundry_actor_update",
+      "foundry_actor_grant_items",
+      "foundry_scene_get",
+      "foundry_scene_apply"
+    ],
+    "connection": "warm authenticated target world",
+    "humanWait": "recorded; no automatic answers",
+    "candidateCommit": "cc8f470da419c04972a035d1cd6b82f277e407ba",
+    "promptMode": "production",
+    "suiteVersion": "prep-v1-draft2",
+    "imageSha256": "b95e5064ce3d221ff17615e9caeea76ff285a87d25da9d6d7dfec27f1ace6785"
+  },
+  "status": "completed-with-one-timeout-and-separate-tools-upload",
+  "caveats": [
+    "Each case has one sample per arm; no stable performance claim.",
+    "Prompt routing differs between arms; comparison is workflow-level.",
+    "Original batch paused on native-JS upload timeout. Tools upload ran separately on a fresh fixture after pause; original trial was not replayed.",
+    "Timeout cancellation was reported as provider error by the current harness; raw trace says This operation was aborted, not quota/auth failure.",
+    "Timeout fixture retained; successful trials cleaned.",
+    "Harness provider parameters are uncommitted atop cc8f470; upload-only completion added --arm-only=tools without changing product tools or acceptance."
+  ],
+  "completionHarnessHashes": {
+    "apps/desktop/test/fixtures/prep-play-model-benchmark.cjs": "142a81eae2f67aea4d7159a2462053380dd06c4dbfa662a2f6edf2080dd1244b",
+    "apps/desktop/test/fixtures/prep-prompt-benchmark.cjs": "421f67577a1133ae47df786179666f0c6cc01dc0b711478aebf34c80b4b718c4"
+  },
+  "timeoutAudit": {
+    "sourceReport": "benchmark-1788854652668",
+    "caseId": "upload_image",
+    "arm": "js",
+    "taskState": "stopped",
+    "timedOut": true,
+    "verification": {
+      "ok": false,
+      "details": {
+        "imagePath": "systems/dnd5e/icons/svg/actors/npc.svg",
+        "hash": "2359fe905f1f5e2fb6de24dec60458a60a96ee5f5723ad42a4cfa299366062c0",
+        "loadable": false,
+        "untouched": true,
+        "imageError": "InvalidStateError: The source image could not be decoded."
+      }
+    },
+    "cleaned": false,
+    "note": "Read-only inspection after timeout. No replay or cleanup. Raw provider error is abort cancellation, not evidence of provider outage."
+  },
+  "trials": [
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "create_npc",
+      "arm": "js",
+      "ms": 16222.753700000001,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "29c25ff9dc1f3606866cc571afd6572c2d8a722e2992c3731d94fb781d9361dc",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 2.96100000000024,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 106.3760000000002,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "create_npc",
+      "arm": "tools",
+      "ms": 43304.3572,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "75f56d6d69a49f265a316215f7c426d4569062812874c5678a222cb5e53a2ebc",
+      "jsFallback": true,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 28.486300000000483,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 47.38139999999839,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_create",
+          "ms": 2.319100000000617,
+          "isError": true
+        },
+        {
+          "name": "foundry_actor_create",
+          "ms": 0.4533999999985099,
+          "isError": true
+        },
+        {
+          "name": "foundry_actor_create",
+          "ms": 0.3208999999988009,
+          "isError": true
+        },
+        {
+          "name": "foundry_actor_create",
+          "ms": 0.26969999999710126,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 35.66560000000027,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 16.98479999999836,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "grant_items",
+      "arm": "js",
+      "ms": 29964.038800000002,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "0b469158acc539a9210fe6f2c09f69c50a028d40c6d7653f3493f109bc0e8e79",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 0.408899999994901,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 86.59200000000419,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 90.9994999999908,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 38.55030000000261,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "grant_items",
+      "arm": "tools",
+      "ms": 24303.036699999997,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "aa869ce694dfd456d251afffc4fbf2bd4646ff86d05a5bd10d1331683444f092",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 27.996299999998882,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 46.55430000000342,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 57.40480000000389,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 14.37960000000021,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_grant_items",
+          "ms": 53.40299999999115,
+          "isError": false,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "edit_image",
+      "arm": "js",
+      "ms": 29384.353499999997,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "b6ab0a36f48f60a6f975a37b9c391d96f5aa3be98c6223ee76d313adeebe1bb8",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 0.32060000000637956,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.825299999996787,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.1977999999944586,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.89000000001397,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 42.827000000019325,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "edit_image",
+      "arm": "tools",
+      "ms": 21502.744999999995,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "c28831e7216d71eabfd4a25fdc9ba1a5807817ac0828fa550f9a3f84de151a02",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 28.795699999987846,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 16.26679999998305,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_update",
+          "ms": 72.53709999998682,
+          "isError": false,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "scene_layout",
+      "arm": "js",
+      "ms": 58211.6538,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "7cbf820d566cff0d0eb23a8cb1c77c5b9628aaaacf379d9601ef15f885f124f9",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 0.5314000000071246,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.431799999991199,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.314299999998184,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.580099999991944,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 65.39960000000428,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "scene_layout",
+      "arm": "tools",
+      "ms": 22844.387499999983,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "1fe54f67bf1ea7edc09eeb3b4d56a0f0cde077be5c6b891b82ef936038829686",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 22.924800000007963,
+          "isError": false
+        },
+        {
+          "name": "foundry_content_search",
+          "ms": 38.209499999997206,
+          "isError": false
+        },
+        {
+          "name": "foundry_scene_get",
+          "ms": 15.42970000000787,
+          "isError": false
+        },
+        {
+          "name": "foundry_scene_apply",
+          "ms": 63.48450000002049,
+          "isError": false,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "conditions",
+      "arm": "js",
+      "ms": 23221.384499999986,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "36ed60ad2be863cc092b4f0ff4a2611e02a69c72b9e6cb5975482c1c54cd73ba",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 0.24319999999715947,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.170400000002701,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.318599999998696,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 4.511899999983143,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 47.70279999997001,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "conditions",
+      "arm": "tools",
+      "ms": 7865.213500000013,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "6c8f81e27ef588cbe53e8611d88b4825d72bf7dcc4a3b8b7d887a5cf401a6ee7",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 23.12619999999879,
+          "isError": false
+        },
+        {
+          "name": "foundry_conditions_set",
+          "ms": 70.38020000001416,
+          "isError": false,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788854652668.json",
+      "caseId": "upload_image",
+      "arm": "js",
+      "ms": 120470.42110000004,
+      "taskState": "stopped",
+      "success": false,
+      "verified": false,
+      "cleaned": false,
+      "timedOut": true,
+      "failureClass": "timeout_cancelled",
+      "rawModelError": "provider error",
+      "thinking": "off",
+      "systemPromptHash": "22b5e4f88137b8c27f95dbf30580e3a6917469c6ef0adb1e7c0d72913933c7c3",
+      "jsFallback": null,
+      "tools": [
+        {
+          "name": "foundry_open",
+          "ms": 0.5582999999751337,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.592099999950733,
+          "isError": true
+        },
+        {
+          "name": "powershell",
+          "ms": 1621.7265999999945,
+          "isError": true
+        },
+        {
+          "name": "powershell",
+          "ms": 1658.705399999977,
+          "isError": true
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 2.626499999954831,
+          "isError": false
+        },
+        {
+          "name": "browser_evaluate",
+          "ms": 1.7818000000552274,
+          "isError": false
+        },
+        {
+          "name": "powershell",
+          "ms": 1012.5566000000108,
+          "isError": false
+        },
+        {
+          "name": "powershell",
+          "ms": 88344.0147,
+          "isError": true
+        }
+      ]
+    },
+    {
+      "sourceReport": "benchmark-1788855137660.json",
+      "caseId": "upload_image",
+      "arm": "tools",
+      "ms": 19652.5334,
+      "taskState": "completed",
+      "success": true,
+      "verified": true,
+      "cleaned": true,
+      "timedOut": false,
+      "failureClass": null,
+      "rawModelError": null,
+      "thinking": "off",
+      "systemPromptHash": "27682d88a6caaf91cdd3c4dd9576427d12180464576c5a9e397d995d0f6d15af",
+      "jsFallback": false,
+      "tools": [
+        {
+          "name": "foundry_content_search",
+          "ms": 36.96600000000035,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_get",
+          "ms": 29.837099999998827,
+          "isError": false
+        },
+        {
+          "name": "foundry_actor_update",
+          "ms": 110.99829999999929,
+          "isError": false,
+          "status": "completed"
+        }
+      ]
+    }
+  ]
+}

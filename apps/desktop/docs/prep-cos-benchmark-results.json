@@ -1,0 +1,2509 @@
+{
+  "date": "2026-09-08",
+  "target": {
+    "name": "local-cos",
+    "origin": "http://127.0.0.1:30000",
+    "port": 9230,
+    "worldId": "COS"
+  },
+  "model": "kimi-for-coding-highspeed",
+  "recordedSuiteVersion": "prep-v1-draft2",
+  "variant": "local-cos-full-six-case-20260908",
+  "candidateCommit": "dbdaef2679eaebe27158cb92957feb698ca8a8e0",
+  "workingTreeModified": true,
+  "promptMode": "production",
+  "totalTrials": 120,
+  "reports": [
+    "benchmark-1788846541692.json",
+    "benchmark-1788846741340.json",
+    "benchmark-1788847034866.json",
+    "benchmark-1788847226196.json",
+    "benchmark-1788847439480.json",
+    "benchmark-1788847653155.json"
+  ],
+  "groups": [
+    {
+      "caseId": "create_npc",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 6544.406399999999,
+          "p95": 9707.962500000009,
+          "mean": 7174.567070000002
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 6544.406399999999,
+          "p95": 9707.962500000009,
+          "mean": 7174.567070000002
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1405.8336000000127,
+          "p95": 1736.3377999999993,
+          "mean": 1418.7566099999995
+        },
+        "calls": {
+          "n": 10,
+          "p50": 2,
+          "p95": 3,
+          "mean": 2.3
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 10806,
+          "p95": 15078,
+          "mean": 12031.3
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 3,
+          "p95": 4,
+          "mean": 3.3
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 852,
+          "p95": 1154,
+          "mean": 882.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 1330,
+          "p95": 1679,
+          "mean": 1388.6
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 282,
+          "p95": 505,
+          "mean": 320.7
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 1,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 10218.7431,
+          "p95": 14766.541800000006,
+          "mean": 10812.722949999998
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 10218.7431,
+          "p95": 14766.541800000006,
+          "mean": 10812.722949999998
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1450.9830000000075,
+          "p95": 1767.8331999999991,
+          "mean": 1472.169749999996
+        },
+        "calls": {
+          "n": 10,
+          "p50": 6,
+          "p95": 8,
+          "mean": 6
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 48725,
+          "p95": 67803,
+          "mean": 51590.8
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 6,
+          "p95": 8,
+          "mean": 6.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 877,
+          "p95": 1244,
+          "mean": 911.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 420,
+          "p95": 708,
+          "mean": 461.1
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 3.9311000000016065,
+          "p95": 40.33050000001094,
+          "mean": 15.61835999999821
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 2,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_create",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_create",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": 56.14469021972721,
+      "p95ChangePercent": 52.107528227473,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": 52.107528227473,
+        "p95": 86.22041870749348,
+        "mean": 52.05612917657261
+      },
+      "pairedWins": 0,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 86.22041870749348
+        },
+        {
+          "sample": 1,
+          "changePercent": 19.396531551577656
+        },
+        {
+          "sample": 2,
+          "changePercent": 58.88916500097589
+        },
+        {
+          "sample": 3,
+          "changePercent": 54.48827484598644
+        },
+        {
+          "sample": 4,
+          "changePercent": 43.025924151689395
+        },
+        {
+          "sample": 5,
+          "changePercent": 52.107528227473
+        },
+        {
+          "sample": 6,
+          "changePercent": 77.89849171654284
+        },
+        {
+          "sample": 7,
+          "changePercent": 26.665979955041095
+        },
+        {
+          "sample": 8,
+          "changePercent": 67.72349957837022
+        },
+        {
+          "sample": 9,
+          "changePercent": 34.14547803057615
+        }
+      ]
+    },
+    {
+      "caseId": "grant_items",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 7,
+        "successRate": 0.7,
+        "failed": [
+          0,
+          6,
+          7
+        ],
+        "latencyMs": {
+          "n": 7,
+          "p50": 16905.359999999986,
+          "p95": 28185.526700000017,
+          "mean": 18648.951257142853
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 16632.76529999997,
+          "p95": 28185.526700000017,
+          "mean": 17597.434189999996
+        },
+        "firstEventMs": {
+          "n": 7,
+          "p50": 1402.7968999999866,
+          "p95": 1459.664499999999,
+          "mean": 1378.459514285709
+        },
+        "calls": {
+          "n": 7,
+          "p50": 5,
+          "p95": 7,
+          "mean": 5.428571428571429
+        },
+        "inputTokens": {
+          "n": 7,
+          "p50": 32987,
+          "p95": 52221,
+          "mean": 37189.857142857145
+        },
+        "modelResponses": {
+          "n": 7,
+          "p50": 6,
+          "p95": 8,
+          "mean": 6.428571428571429
+        },
+        "outputTokens": {
+          "n": 7,
+          "p50": 2389,
+          "p95": 3783,
+          "mean": 2651
+        },
+        "javascriptChars": {
+          "n": 7,
+          "p50": 4632,
+          "p95": 5830,
+          "mean": 4669.142857142857
+        },
+        "reasoningTokens": {
+          "n": 7,
+          "p50": 785,
+          "p95": 2170,
+          "mean": 972.1428571428571
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 1,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 9378.259699999995,
+          "p95": 13426.065300000002,
+          "mean": 9748.04777
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9378.259699999995,
+          "p95": 13426.065300000002,
+          "mean": 9748.04777
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1540.7747999999992,
+          "p95": 2021.4237999999896,
+          "mean": 1591.4697100000008
+        },
+        "calls": {
+          "n": 10,
+          "p50": 6,
+          "p95": 7,
+          "mean": 5.9
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 40662,
+          "p95": 50088,
+          "mean": 38302.1
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 6,
+          "mean": 4.7
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 871,
+          "p95": 1502,
+          "mean": 949.3
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 379,
+          "p95": 943,
+          "mean": 424
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 81.38749999998254,
+          "p95": 106.96410000001197,
+          "mean": 85.53518000000076
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 0,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items",
+              "foundry_actor_get"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_grant_items"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": -44.5249335122115,
+      "p95ChangePercent": -52.36539149009411,
+      "pairedChangePercent": {
+        "n": 7,
+        "p50": -50.882781349653115,
+        "p95": -4.277233997968755,
+        "mean": -45.22149315681766
+      },
+      "pairedWins": 7,
+      "pairs": [
+        {
+          "sample": 1,
+          "changePercent": -54.13101481785829
+        },
+        {
+          "sample": 2,
+          "changePercent": -4.277233997968755
+        },
+        {
+          "sample": 3,
+          "changePercent": -46.36396444677896
+        },
+        {
+          "sample": 4,
+          "changePercent": -41.79752768354537
+        },
+        {
+          "sample": 5,
+          "changePercent": -66.71788113152411
+        },
+        {
+          "sample": 8,
+          "changePercent": -52.38004867039503
+        },
+        {
+          "sample": 9,
+          "changePercent": -50.882781349653115
+        }
+      ]
+    },
+    {
+      "caseId": "edit_image",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 8150.169299999994,
+          "p95": 13684.802,
+          "mean": 9167.839859999998
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8150.169299999994,
+          "p95": 13684.802,
+          "mean": 9167.839859999998
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1358.9559000000008,
+          "p95": 1952.2754000000004,
+          "mean": 1440.5495300000005
+        },
+        "calls": {
+          "n": 10,
+          "p50": 2,
+          "p95": 4,
+          "mean": 2.6
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 11427,
+          "p95": 21222,
+          "mean": 14195.8
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 3,
+          "p95": 5,
+          "mean": 3.6
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 1135,
+          "p95": 1767,
+          "mean": 1244.3
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 1736,
+          "p95": 2760,
+          "mean": 1826.4
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 537,
+          "p95": 851,
+          "mean": 526.5
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 2,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 8262.400699999998,
+          "p95": 8790.531799999997,
+          "mean": 7912.71817
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8262.400699999998,
+          "p95": 8790.531799999997,
+          "mean": 7912.71817
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1487.3484999999928,
+          "p95": 1617.4797999999973,
+          "mean": 1489.3768299999967
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 4,
+          "mean": 3.3
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 31382,
+          "p95": 38905,
+          "mean": 32777.3
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 5,
+          "mean": 4.2
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 684,
+          "p95": 908,
+          "mean": 719.3
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 350,
+          "p95": 485,
+          "mean": 350.5
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 3.039999999997235,
+          "mean": 0.3039999999997235
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 0,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": 1.377043787299037,
+      "p95ChangePercent": -35.76427485030476,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": -4.530429437863215,
+        "p95": 22.90673699045773,
+        "mean": -8.543790090386072
+      },
+      "pairedWins": 6,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": -39.31852868605624
+        },
+        {
+          "sample": 1,
+          "changePercent": 7.5081561035578614
+        },
+        {
+          "sample": 2,
+          "changePercent": 3.0524422406498664
+        },
+        {
+          "sample": 3,
+          "changePercent": -34.10855767662202
+        },
+        {
+          "sample": 4,
+          "changePercent": -4.530429437863215
+        },
+        {
+          "sample": 5,
+          "changePercent": -18.154896487855666
+        },
+        {
+          "sample": 6,
+          "changePercent": 16.721857873904188
+        },
+        {
+          "sample": 7,
+          "changePercent": -37.008533816646015
+        },
+        {
+          "sample": 8,
+          "changePercent": 22.90673699045773
+        },
+        {
+          "sample": 9,
+          "changePercent": -2.506148007387199
+        }
+      ]
+    },
+    {
+      "caseId": "scene_layout",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 7471.73599999999,
+          "p95": 17314.3505,
+          "mean": 9481.226320000002
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 7471.73599999999,
+          "p95": 17314.3505,
+          "mean": 9481.226320000002
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1302.063799999989,
+          "p95": 1753.4746,
+          "mean": 1360.9502199999993
+        },
+        "calls": {
+          "n": 10,
+          "p50": 2,
+          "p95": 6,
+          "mean": 2.6
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 11605,
+          "p95": 36299,
+          "mean": 15201.5
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 3,
+          "p95": 7,
+          "mean": 3.6
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 1165,
+          "p95": 2257,
+          "mean": 1369.9
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 1659,
+          "p95": 3272,
+          "mean": 1893.7
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 438,
+          "p95": 924,
+          "mean": 549.7
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 0,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 9179.4054,
+          "p95": 15081.618900000001,
+          "mean": 9928.375030000001
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9179.4054,
+          "p95": 15081.618900000001,
+          "mean": 9928.375030000001
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1448.4836999999825,
+          "p95": 1651.440699999992,
+          "mean": 1470.9726499999963
+        },
+        "calls": {
+          "n": 10,
+          "p50": 5,
+          "p95": 6,
+          "mean": 5
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 32426,
+          "p95": 50325,
+          "mean": 37281.9
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 6,
+          "mean": 4.6
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 992,
+          "p95": 1645,
+          "mean": 1087.4
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 500,
+          "p95": 837,
+          "mean": 529.4
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 33.03539999999339,
+          "p95": 46.27640000000247,
+          "mean": 33.416770000001634
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 2,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "world_status",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_scene_get",
+              "foundry_scene_apply"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": 22.855055371335542,
+      "p95ChangePercent": -12.895266270600214,
+      "pairedChangePercent": {
+        "n": 10,
+        "p50": 13.2828779683702,
+        "p95": 110.10707581806938,
+        "mean": 16.238946200020774
+      },
+      "pairedWins": 3,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": -18.111657852342688
+        },
+        {
+          "sample": 1,
+          "changePercent": 13.2828779683702
+        },
+        {
+          "sample": 2,
+          "changePercent": -31.875402903433383
+        },
+        {
+          "sample": 3,
+          "changePercent": 110.10707581806938
+        },
+        {
+          "sample": 4,
+          "changePercent": 20.60594039076595
+        },
+        {
+          "sample": 5,
+          "changePercent": 34.55181232313378
+        },
+        {
+          "sample": 6,
+          "changePercent": 18.285684205802475
+        },
+        {
+          "sample": 7,
+          "changePercent": -51.36307249873444
+        },
+        {
+          "sample": 8,
+          "changePercent": 7.6129143617225115
+        },
+        {
+          "sample": 9,
+          "changePercent": 59.293290186853945
+        }
+      ]
+    },
+    {
+      "caseId": "conditions",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 9,
+        "successRate": 0.9,
+        "failed": [
+          2
+        ],
+        "latencyMs": {
+          "n": 9,
+          "p50": 8382.387500000012,
+          "p95": 14492.071299999996,
+          "mean": 9347.847855555556
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8073.155399999989,
+          "p95": 14492.071299999996,
+          "mean": 9154.438010000002
+        },
+        "firstEventMs": {
+          "n": 9,
+          "p50": 1419.826000000001,
+          "p95": 1726.0181999999995,
+          "mean": 1432.9850444444464
+        },
+        "calls": {
+          "n": 9,
+          "p50": 3,
+          "p95": 7,
+          "mean": 3.6666666666666665
+        },
+        "inputTokens": {
+          "n": 9,
+          "p50": 15035,
+          "p95": 37834,
+          "mean": 19766.88888888889
+        },
+        "modelResponses": {
+          "n": 9,
+          "p50": 4,
+          "p95": 8,
+          "mean": 4.666666666666667
+        },
+        "outputTokens": {
+          "n": 9,
+          "p50": 809,
+          "p95": 1443,
+          "mean": 965.6666666666666
+        },
+        "javascriptChars": {
+          "n": 9,
+          "p50": 1014,
+          "p95": 2290,
+          "mean": 1203.6666666666667
+        },
+        "reasoningTokens": {
+          "n": 9,
+          "p50": 447,
+          "p95": 596,
+          "mean": 433.8888888888889
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 3,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_screenshot",
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 9246.179100000008,
+          "p95": 18610.9781,
+          "mean": 10164.230070000003
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9246.179100000008,
+          "p95": 18610.9781,
+          "mean": 10164.230070000003
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1462.428700000004,
+          "p95": 1652.0332000000017,
+          "mean": 1506.9314800000006
+        },
+        "calls": {
+          "n": 10,
+          "p50": 3,
+          "p95": 7,
+          "mean": 4.2
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 31764,
+          "p95": 42950,
+          "mean": 32631.3
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 4,
+          "p95": 5,
+          "mean": 4.1
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 972,
+          "p95": 2308,
+          "mean": 1093.8
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 781,
+          "mean": 78.1
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 562,
+          "p95": 1921,
+          "mean": 736.8
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 120.3530000000028,
+          "mean": 37.06149000000114
+        },
+        "jsFallbacks": 1,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 7,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set",
+              "foundry_conditions_set"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_content_search",
+              "foundry_conditions_set"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": 10.304839760748298,
+      "p95ChangePercent": 28.42179502663642,
+      "pairedChangePercent": {
+        "n": 9,
+        "p50": 14.529928409405102,
+        "p95": 116.48189563324837,
+        "mean": 15.705635326446687
+      },
+      "pairedWins": 3,
+      "pairs": [
+        {
+          "sample": 0,
+          "changePercent": 116.48189563324837
+        },
+        {
+          "sample": 1,
+          "changePercent": 66.67696677977533
+        },
+        {
+          "sample": 3,
+          "changePercent": -15.338369195023205
+        },
+        {
+          "sample": 4,
+          "changePercent": 20.179977081818066
+        },
+        {
+          "sample": 5,
+          "changePercent": 9.136046906503026
+        },
+        {
+          "sample": 6,
+          "changePercent": -41.88785832198778
+        },
+        {
+          "sample": 7,
+          "changePercent": -48.07021972263975
+        },
+        {
+          "sample": 8,
+          "changePercent": 14.529928409405102
+        },
+        {
+          "sample": 9,
+          "changePercent": 19.642350366921015
+        }
+      ]
+    },
+    {
+      "caseId": "upload_image",
+      "controlArm": "js",
+      "js": {
+        "n": 10,
+        "success": 0,
+        "successRate": 0,
+        "failed": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "latencyMs": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 9248.624700000015,
+          "p95": 62902.8668,
+          "mean": 16402.52307
+        },
+        "firstEventMs": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "calls": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "inputTokens": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "modelResponses": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "outputTokens": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "javascriptChars": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "reasoningTokens": {
+          "n": 0,
+          "p50": null,
+          "p95": null,
+          "mean": null
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 894.3888999999908,
+          "mean": 89.43888999999908
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 1,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "powershell",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "powershell",
+              "powershell",
+              "powershell",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate",
+              "browser_evaluate",
+              "foundry_screenshot"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": false,
+            "names": [
+              "foundry_open",
+              "browser_evaluate",
+              "browser_evaluate"
+            ]
+          }
+        ]
+      },
+      "tools": {
+        "n": 10,
+        "success": 10,
+        "successRate": 1,
+        "failed": [],
+        "latencyMs": {
+          "n": 10,
+          "p50": 8308.099299999973,
+          "p95": 13713.544500000004,
+          "mean": 8962.377639999999
+        },
+        "allAttemptsMs": {
+          "n": 10,
+          "p50": 8308.099299999973,
+          "p95": 13713.544500000004,
+          "mean": 8962.377639999999
+        },
+        "firstEventMs": {
+          "n": 10,
+          "p50": 1541.8583999999973,
+          "p95": 1743.1739000000089,
+          "mean": 1563.6250499999994
+        },
+        "calls": {
+          "n": 10,
+          "p50": 4,
+          "p95": 4,
+          "mean": 3.9
+        },
+        "inputTokens": {
+          "n": 10,
+          "p50": 38367,
+          "p95": 40785,
+          "mean": 36076
+        },
+        "modelResponses": {
+          "n": 10,
+          "p50": 5,
+          "p95": 5,
+          "mean": 4.6
+        },
+        "outputTokens": {
+          "n": 10,
+          "p50": 738,
+          "p95": 1523,
+          "mean": 814
+        },
+        "javascriptChars": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "mean": 0
+        },
+        "reasoningTokens": {
+          "n": 10,
+          "p50": 364,
+          "p95": 1113,
+          "mean": 439.3
+        },
+        "queueWaitMs": {
+          "n": 10,
+          "p50": 0,
+          "p95": 41.99580000000424,
+          "mean": 4.736699999999473
+        },
+        "jsFallbacks": 0,
+        "humanWaits": 0,
+        "uncertainReceipts": 0,
+        "reviewedAfterPause": 0,
+        "trialsWithErrors": 0,
+        "toolSequences": [
+          {
+            "sample": 0,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 1,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 2,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 3,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 4,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 5,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 6,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 7,
+            "success": true,
+            "names": [
+              "foundry_open",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 8,
+            "success": true,
+            "names": [
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          },
+          {
+            "sample": 9,
+            "success": true,
+            "names": [
+              "world_status",
+              "foundry_content_search",
+              "foundry_actor_get",
+              "foundry_actor_update"
+            ]
+          }
+        ]
+      },
+      "p50ChangePercent": null,
+      "p95ChangePercent": null,
+      "pairedChangePercent": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "mean": null
+      },
+      "pairedWins": 0,
+      "pairs": []
+    }
+  ],
+  "coverage": [
+    {
+      "name": "world_status",
+      "modelCalls": 3,
+      "modelCases": [
+        "create_npc",
+        "scene_layout",
+        "upload_image"
+      ]
+    },
+    {
+      "name": "foundry_play_context",
+      "modelCalls": 0,
+      "modelCases": []
+    },
+    {
+      "name": "foundry_conditions_set",
+      "modelCalls": 16,
+      "modelCases": [
+        "conditions"
+      ]
+    },
+    {
+      "name": "foundry_content_search",
+      "modelCalls": 117,
+      "modelCases": [
+        "create_npc",
+        "grant_items",
+        "edit_image",
+        "scene_layout",
+        "conditions",
+        "upload_image"
+      ]
+    },
+    {
+      "name": "foundry_actor_get",
+      "modelCalls": 46,
+      "modelCases": [
+        "create_npc",
+        "grant_items",
+        "edit_image",
+        "upload_image"
+      ]
+    },
+    {
+      "name": "foundry_actor_create",
+      "modelCalls": 12,
+      "modelCases": [
+        "create_npc"
+      ]
+    },
+    {
+      "name": "foundry_actor_update",
+      "modelCalls": 30,
+      "modelCases": [
+        "create_npc",
+        "edit_image",
+        "upload_image"
+      ]
+    },
+    {
+      "name": "foundry_actor_grant_items",
+      "modelCalls": 10,
+      "modelCases": [
+        "grant_items"
+      ]
+    },
+    {
+      "name": "foundry_scene_get",
+      "modelCalls": 10,
+      "modelCases": [
+        "scene_layout"
+      ]
+    },
+    {
+      "name": "foundry_scene_apply",
+      "modelCalls": 11,
+      "modelCases": [
+        "scene_layout"
+      ]
+    }
+  ],
+  "smoke": {
+    "runId": "prep-read-status-1788847944954",
+    "target": {
+      "name": "local-cos",
+      "origin": "http://127.0.0.1:30000",
+      "port": 9230,
+      "worldId": "COS"
+    },
+    "status": "completed",
+    "fixtureRun": "prep-benchmark-fixture-1788845825369",
+    "result": {
+      "worldReady": true,
+      "lightSeesToken": true,
+      "sameContext": true,
+      "lightOmitsActions": true,
+      "present": true,
+      "absent": true,
+      "add": "completed",
+      "remove": "completed",
+      "repeat": "completed",
+      "ok": true,
+      "cleaned": true
+    }
+  },
+  "sourceHashes": {
+    "apps/desktop/test/fixtures/prep-prompt-benchmark.cjs": "b09fa1d4e9e9276d8c21187d16d5dcf081452dbb3de89cbc2f20feb94c1ed71c",
+    "apps/desktop/test/fixtures/prep-benchmark-verifier.cjs": "4111eb8535b06aeb8c2e037918e597110fd1473844520d326e3160ab7d47ce4d",
+    "apps/desktop/test/fixtures/prep-play-model-benchmark.cjs": "bfbe686c73dd347932dcfb1fe51a6ae872b2ce85722c03208d33f881bb1bba09",
+    "apps/desktop/system-prompts/prep.md": "c30dccffa130f749a3511ee3700a65cd2971750b2f361c69fe89e92c1ed95263",
+    "packages/foundry-sdk/src/runtime-source.ts": "4947150ee35449dce58557b41c94e061b47c8e312ffcb8ad6904a64f6cb0c190"
+  },
+  "limitations": [
+    "Production tools prompt versus neutral JS prompt: workflow comparison, not a causal estimate of tool definitions alone.",
+    "Ten samples per arm; p95 equals the maximum.",
+    "Warm shared browser and content-addressed image cache; not cold upload latency.",
+    "Grant provenance/repeated grant and scene prototype inheritance need stronger model-case verification before stable v1.",
+    "Previous interrupted image pilots excluded; all 120 full-suite trials completed and cleaned.",
+    "Known reversed Token receipt regression still fails; production implementation unchanged."
+  ]
+}
