@@ -213,69 +213,17 @@ test("Agent startup fails before Pi initialization when packaged Node bootstrap 
   assert.equal(host.session, null);
 });
 
-test("play activates six Foundry tools plus user input; definitions do not expose legacy aliases", () => {
+test("play activates the branch play tool set without the retired v2 names", () => {
   const { tools } = buildHarness();
-  const attackRollModeDescription =
-    "Optional only when the selected battle-context action advertises input.attackRollMode. " +
-    "Set it only from an explicit DM instruction: advantage/disadvantage set the corresponding Midi request flags; " +
-    "normal leaves the roll unforced and does not cancel effects Foundry applies automatically. " +
-    "Otherwise omit it; never infer it from conditions, positioning, or tactics.";
-  const executeTurnInputSchema = {
-    type: "object",
-    properties: {
-      selections: { type: "object", properties: {}, additionalProperties: true },
-      declaredRiders: {
-        type: "array",
-        items: { type: "object", properties: {}, additionalProperties: true },
-        description: 'Rider entries, e.g. [{ id: "branding-smite", spellLevel: 2 }]',
-      },
-      allocation: {
-        type: "array",
-        items: { type: "object", properties: {}, additionalProperties: true },
-        description: "Non-empty array of allocation entries",
-      },
-      spellLevel: { type: "number" },
-      attackRollMode: {
-        type: "string",
-        enum: ["normal", "advantage", "disadvantage"],
-        description: attackRollModeDescription,
-      },
-      targetSpec: { type: "object", properties: {}, additionalProperties: true },
-    },
-    additionalProperties: true,
-  };
-
-  assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "browser_evaluate",
-    "combat_battle_context", "combat_turn_context", "combat_execute_turn", "open_document"]);
+  assert.deepEqual(activeToolNames("combat"), ["foundry_open", "world_status", "foundry_static_context",
+    "foundry_play_context", "foundry_execute_action", "foundry_conditions_set"]);
+  assert.equal([...tools.keys()].some(name => name.startsWith("combat_")), false);
   for (const name of activeToolNames("combat")) assert.ok(tools.has(name), name);
   // Pool is the superset for both modes; prep-only tools stay defined but inactive in combat.
-  for (const name of ["foundry_screenshot", "foundry_actor_advance", "foundry_compendium_browse", "foundry_play_context"]) {
+  for (const name of ["foundry_screenshot", "foundry_actor_advance", "foundry_compendium_browse", "open_document"]) {
     assert.ok(tools.has(name), name);
   }
-  assert.deepEqual(tools.get("combat_battle_context").parameters, { type: "object", properties: {} });
-  assert.deepEqual(tools.get("combat_turn_context").parameters, { type: "object", properties: {} });
-  assert.deepEqual(tools.get("combat_execute_turn").parameters, {
-    type: "object",
-    properties: {
-      actionId: { type: "string", description: "Single action id from battle-context" },
-      actions: {
-        type: "array",
-        items: {
-          type: "object",
-          required: ["actionId"],
-          properties: {
-            actionId: { type: "string" },
-            targetTokenIds: { type: "array", items: { type: "string" } },
-            input: executeTurnInputSchema,
-          },
-        },
-        description: "Multiple actions in one submission",
-      },
-      targetTokenIds: { type: "array", items: { type: "string" } },
-      input: executeTurnInputSchema,
-      advance: { type: "boolean", description: "Advance the combat turn after execution" },
-    },
-  });
+  assert.deepEqual(tools.get("foundry_static_context").parameters.properties, {});
 });
 
 test("prep mode exposes the Foundry panel, screenshot and page eval custom tools", () => {

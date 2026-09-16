@@ -1,7 +1,7 @@
 // Only implemented tools are activated. Add prep content tools here as their slices land.
 export const TOOL_NAMES_BY_MODE = Object.freeze({
-  combat: Object.freeze(["foundry_open", "world_status", "browser_evaluate", "combat_battle_context",
-    "combat_turn_context", "combat_execute_turn", "open_document"]),
+  combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
+    "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
     "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "request_user_input", "open_document"]),
