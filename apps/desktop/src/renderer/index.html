@@ -187,7 +187,10 @@
       position: relative;
       z-index: 1;
       flex: 1 1 0;
-      min-width: 44px;
+      /* 两段必须等宽(滑块是 50% 平移)且必须装得下文案:
+         内容超出时 Chromium 会把 button 文字按左对齐渲染,长文案段(如英文 Combat)就视觉跑偏。
+         68px 的内容盒(68-2×10=48px)能容纳当前最长的 "Combat"(约 43px),并给跨平台字体差异留余量。 */
+      min-width: 68px;
       border: 0;
       background: transparent;
       color: var(--muted);
