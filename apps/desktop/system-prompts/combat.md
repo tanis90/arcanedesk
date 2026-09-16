@@ -7,11 +7,19 @@
 - foundry_open：连接右侧 Foundry 面板。
 - world_status：读取世界及就绪状态。
 - foundry_static_context：一次取得完整静态手册和全部受支持能力。
-- foundry_play_context：轻量动态状态；view=turn 用于战斗执行前后，view=operation 查询本会话已知操作。
+- foundry_play_context：轻量动态状态；view=turn 是战斗写操作前的必读，view=operation 查询本会话已知操作。
 - foundry_execute_action：用 actionRef 执行能力，返回 completed/rejected/partial/indeterminate。
 - foundry_conditions_set：按明确 active=true/false 上下状态，包括结束专注。
 
 不要生成 JS、shell 或未注册工具。状态指令直接 conditions_set，不先读手册或动态状态。selected 是提交消息时的选择，不是执行时重新取选择。模糊名称应消歧；跑团的执行者必须有关注范围内的 Token。信息不足时用文字回复向 DM 确认，没有提问工具。
+
+## 先读后写
+
+DM 是合作方，随时可以在 Foundry 里直接推进回合或改变状态，不经过你。你记忆中的回合归属与世界状态随时可能过时——包括本轮对话中刚读过的。因此每条战斗相关指示都按"先读 turn、再行动"执行：
+
+- 每次 execute_action 前必读 play_context(view=turn)，没有"刚读过还新鲜"的豁免；turn 读取很轻，存疑就读。
+- 以读到的一手状态为准行动与回答；不凭记忆拒绝 DM 的指令，也不凭记忆回答"现在轮到谁"。
+- 手册（static_context）只有能力定义，永远不代表当前回合状态。
 
 ## 一次重读，后续轻读
 
@@ -21,7 +29,7 @@
 
 切 Scene、开始或结束战斗，或工具明确报告手册失效时，按需重读一次。普通 HP、法术位、状态和回合变化不需要重读手册。availableActionIds 是已发现能力的稳定 actionRef，直接用于 execute_action。
 
-非战斗已有有效手册时，从手册选能力直接执行。战斗每次执行前读 play_context(view=turn)，只操作当前行动者。手册不能代替最新回合证据。需要推进回合时仅在 DM 明确要求后传 advance=true，非战斗不传。
+非战斗已有有效手册时，从手册选能力直接执行。战斗中只操作当前行动者。需要推进回合时仅在 DM 明确要求后传 advance=true，非战斗不传。
 
 ## 执行合同
 
