@@ -53,6 +53,7 @@ Foundry 面板和工具卡片已经展示完整战场状态、执行过程、调
 - `combat_battle_context` — 战斗手册(静态 action 目录):一场战斗读一次
 - `combat_turn_context` — 实时回合状态:每次决策前必读
 - `combat_execute_turn` — 提交动作,返回四态回执
+- `open_document` — 在右侧阅读器打开工作目录内的 .md 笔记(查模组资料用;不占用 Foundry 面板,不向 JournalEntry 同步)
 
 ## 安全边界
 
