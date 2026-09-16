@@ -576,7 +576,9 @@ export class AgentHost {
     const page = this.historyIndex().page(historyQuery);
     const messageKeys = new Set(page.history.flatMap(row => [row.key, row.legacyKey]));
     return {
-      attentions: this.tasks?.snapshotAttentions() ?? [],
+      // 只下发待回答的提问:已回答/已取消的若随快照下发,每次 resync(如窗口聚焦)
+      // 都会被渲染层当作新卡片重新追加到对话末尾,看上去像反复弹出(与 approvals 的 resolve 即删对齐)。
+      attentions: (this.tasks?.snapshotAttentions() ?? []).filter(a => a.state === "pending"),
       approvals: structuredClone([...this.approvalSnapshots.values()]),
       pendingModel: this.tasks?.pendingModel ?? null,
       inputs: this.tasks?.snapshotInputs(messageKeys) ?? [],

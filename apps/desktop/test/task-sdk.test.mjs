@@ -121,6 +121,21 @@ test("real Pi releases capacity for questions and reacquires before any followin
   } finally { other?.release(); await h.session.abort(); h.session.dispose(); }
 });
 
+test("answered questions leave the session snapshot so resyncs do not replay them", { timeout: 15000 }, async () => {
+  const h = await sdkHarness({ ask: true, persistentIdentity: true });
+  try {
+    const task = h.coordinator.submit({ text: "prepare" });
+    await h.first.promise; h.release.resolve(); // 流结束后 SDK 才执行 request_user_input 工具
+    const deadline = Date.now() + 5000;
+    while (h.coordinator.task.state !== "waiting_user" && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(h.host.currentPayload().attentions.length, 1); // 待回答的提问要在快照里(恢复未答状态)
+    const attention = h.coordinator.snapshotAttentions()[0];
+    h.coordinator.respond({ commandId: "answer", taskId: task.taskId, attentionId: attention.id, response: "Forest" });
+    assert.equal(h.host.currentPayload().attentions.length, 0); // 已回答的不进快照,resync 不再重放
+    await h.coordinator.run;
+  } finally { await h.session.abort(); h.session.dispose(); }
+});
+
 test("real Pi SDK consumes steering exactly once at the next model boundary", { timeout: 15000 }, async () => {
   const h = await sdkHarness();
   try {
