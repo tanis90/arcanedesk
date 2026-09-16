@@ -53,6 +53,30 @@ test("only a started combat in the current Scene replaces Scene focus", async ()
   assert.equal((await f.read("staticContext")).combatants.length, 2);
 });
 
+test("a sceneless combat takes focus, matching the v13 combat tracker", async () => {
+  const f = fixture();
+  const combat = { id: "c", scene: null, started: true, active: true, isActive: true, round: 1, turn: 0,
+    combatants: [{ tokenId: "t1", actorId: "a1", token: f.tokens.get("t1") }] };
+  combat.combatant = combat.combatants[0];
+  f.game.combats = [combat];
+  f.game.combat = combat;
+  const light = await f.read("playContext");
+  assert.equal(light.scope.combatId, "c");
+  assert.equal(light.turn.tokenId, "t1");
+  assert.deepEqual(light.combatants.map(t => t.tokenId), ["t1"]);
+});
+
+test("an inactive sceneless started combat still takes focus; two of them are ambiguous", async () => {
+  const f = fixture();
+  const make = id => ({ id, scene: null, started: true, active: false, isActive: false, round: 1, turn: 0,
+    combatants: [{ tokenId: "t1", actorId: "a1", token: f.tokens.get("t1") }] });
+  f.game.combats = [make("c")];
+  const light = await f.read("playContext");
+  assert.equal(light.scope.combatId, "c");
+  f.game.combats = [make("c"), make("d")];
+  await assert.rejects(f.read("playContext"), /AMBIGUOUS_COMBAT/);
+});
+
 test("resources, statuses and turns do not invalidate structure; Token and Item changes do", async () => {
   const f = fixture();
   const first = await f.read("staticContext");
