@@ -61,7 +61,7 @@
 ### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
 
 - G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
-  `choiceRequirements`（fill `choices.skills/tools/languages`），通配符池
+  `choiceRequirements`（fill 键约定后被 2026-09-16 槽位寻址取代为 `key` + `choices.bySlot`），通配符池
   （`languages:*`）用系统自带 `Trait.mixedChoices` 展开为具体 key 再下发——候选与
   匹配共用一套词汇表，模型拿到的是可执行枚举不是通配符；注册表不可用时回退原始池
   + 前缀匹配。实证：人类额外语言池原生就是 `languages:*`，不展开模型无从填写。
@@ -100,7 +100,8 @@
 
 ### 专精落地检测与回执活动计数（2026-09-15）
 
-- 专精槽独立 fill 键 `choices.expertise`：与 choices.skills 共用词汇表（skills:/tool:
+- 专精槽独立 fill 键 `choices.expertise`（后被 2026-09-16 槽位寻址取代为专精槽自己的
+  bySlot key，机制不变）：与 choices.skills 共用词汇表（skills:/tool:
   key）但不共消费队列——take() 每值只消费一次，同 key 双填在唯一性约束下本就不可表达
   （v5 B2 模型发 4 熟练 + 2 新 key，dnd5e 原生对未熟练目标静默丢弃 1→2 从不 0→2，
   模型被迫裸写 `skills.slt.value:2` 补锅，读取 before=0 实锤）。
@@ -294,6 +295,25 @@
   skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
 - 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
   的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+
+### advance choices 槽位寻址（2026-09-16）
+
+- `choices` 从共享桶（skills/tools/feats/abilityScore/languages/expertise 各键）改为槽位
+  寻址：plan 的 `choiceRequirements[].key` 原样抄为 `choices.bySlot` 的键，一槽一值
+  互不抢占；`subclass-uuid` 仍填顶层入参。实证（会话 01a0a8f6 五连拒）：职业 ASI
+  （allowFeat）的 `take("choices.feats")` 盲抓共享桶第一个剩余值，把半精灵变体特性
+  UUID 当职业专长消费，种族 ItemChoice 恒 `need 1, have 0`；共享键也无法表达职业 ASI
+  与种族 ASI 两组不同加点（旧 spec backlog 已记）。本条取代 G1 记录的 fill 键约定与
+  专精记录的 `choices.expertise` 独立键——机制决定（先熟练后专精、双层防护）不变。
+- 混合 ASI（半精灵魅力+2 固定 + 2 浮动点）：fixed 由运行时并入 assignments——dnd5e
+  原生只在 `options.initial` 下注入 fixed，我们不传 initial，旧代码直接丢 +2。plan 侧
+  fixed 部分进 `automaticSteps` 摘要（`fixed ability bonuses: cha+2`），只向模型要浮动
+  点；校验要求浮动点 total===points、每项 ≤cap、非 locked。
+- 未知槽位写入前拒 `CHOICE_SLOT_UNKNOWN` 并列出合法槽位，取代 UNCONSUMED_CHOICE 警告
+  （槽位寻址下值不可能"剩下"）；`fillAllocation` 聚合随之废除，`choicesTemplate` 给每个
+  bySlot 键一个填空骨架（trait/池槽 `[]`、ASI 槽 `{ abilityScore: {} }`）。
+- 回执 abilities 分解口径：race 列 = 种族 stepSet 的 ASI assignments 合计（含 fixed），
+  asi 列 = 职业+子职业合计。D3 记录的"选择型种族 v1 走 SET 补终值"执行路径由本条收口。
 
 ### 跑团模式回执从简（2026-09-16）
 

@@ -33,16 +33,17 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 ## advancement_plan 契约
 
 - `automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复添加。
-- `choiceRequirements` 是唯一的填写清单：每条带 `fill`（填到 advance 入参的哪个键）、
-  `valueFormat`、`count`/`cap` 和候选池；只填这些要求，从池里选，不凭记忆。
-  `valueFormat:"trait-key"` 的池（技能/工具/语言，含种族侧）已展开为具体 key
-  （如 `languages:standard:elvish`）并附本地化 `candidateNames`；`fill` 对应
-  `choices.skills`/`choices.tools`/`choices.languages`，照抄池中的 key 即可。
-  专精槽（带 `mode:"expertise"` 与 `note`）独立吃 `choices.expertise`：每个值必须是
-  卡面已有、或本次调用 choices.skills/choices.tools 里已选的熟练项——先填熟练槽再填
-  专精槽，非法值会在写入前整体拒绝并点名。
-  多个普通槽位共用一个 choices 键时，`fillAllocation` 给出该键总值与槽位消耗顺序，
-  一次填够总数。
+- `choiceRequirements` 是唯一的填写清单：每条带 `key`、`valueFormat`、`count`/`cap`
+  和候选池；写入时把 `key` 原样抄进 advance 的 `choices.bySlot`（`choicesTemplate`
+  给每个 key 一个骨架：trait/池槽是 `[]`，ASI 槽是 `{ abilityScore: {} }`），只填
+  这些要求，从池里选，不凭记忆。`valueFormat:"trait-key"` 的池（技能/工具/语言，含
+  种族侧）已展开为具体 key（如 `languages:standard:elvish`）并附本地化
+  `candidateNames`，照抄池中的 key 即可。ASI 槽填 `{ abilityScore: {...} }` 浮动加点
+  （`automaticSteps` 摘要里的种族固定加成自动并入，不重复加）；`asi-or-feat` 槽二选一
+  `{ abilityScore: … }` 或 `{ feat: "<uuid>" }`；`subclass-uuid` 那条的 `key` 是
+  `subclassUuid`，填顶层入参，不进 bySlot。专精槽（带 `mode:"expertise"` 与 `note`）
+  同此键法：每个值必须是卡面已有、或本次调用前面槽位已选的熟练项，非法值会在写入前
+  整体拒绝并点名。
 - `automaticSteps` 的 `summary` 带具体值：种族 ASI 逐属性列明（如 `str+1, dex+1…`）、
   体型、职业 scale 骰（如 `scale: 2d6`）、HP 公式；种族移动速度在顶层 `race.movement`
   （种族条目直接携带，不走 advancement 步骤）。这些都不需要翻种族/职业原文核对。

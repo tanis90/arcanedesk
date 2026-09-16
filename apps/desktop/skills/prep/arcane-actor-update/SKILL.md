@@ -30,18 +30,21 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。
 3. 事后改属性：`foundry_actor_update` 的 `dnd5e.abilities` 是 SET 语义修正路径——
    advance 之后写入的必须是含种族/ASI 加成的最终基础值；名称/HP/AC/token 同此出口。
-   种族侧的技能/工具/语言选择已进 plan 的 `choiceRequirements`（填 `choices.skills`/
-   `choices.tools`/`choices.languages`，候选是具体 trait key）；其他种族侧选择
-   （专长、戏法、自选属性）以 plan 实际下发为准——出现在 `choiceRequirements` 就照填，
-   没出现就 advance 后按回执核对，用本工具 SET 补终值，并在报告里注明哪些是手工补的。
+   种族侧选择（技能/工具/语言/自选属性点/变体专长）同样进 plan 的
+   `choiceRequirements`，与职业侧同法填写；没出现在清单里的才在 advance 后按回执核对，
+   用本工具 SET 补终值，并在报告里注明哪些是手工补的。
 4. 升级写入：`foundry_actor_advance` 一次完成——`actorAdvanceArgs` 来自
-   `foundry_advancement_plan`，choices 只填 `choiceRequirements` 要求的键；多个槽位共用
-   一个 choices 键时，plan 的 `fillAllocation` 给出该键的总值与各槽消耗顺序，一次填够
-   总数即可，不足会在写入前整体拒绝并带分配提示。专精槽（plan 里带 `mode:"expertise"`
-   与说明）独立吃 `choices.expertise`：每个值必须是卡面已有熟练、或本次调用
-   `choices.skills`/`choices.tools` 里已选的项——先填熟练槽再填专精槽；把未熟练的 key
-   填进专精槽会在写入前整体拒绝并点名（dnd5e 原生对未熟练目标静默丢弃，工具把这件事
-   提前成显式拒绝；万一仍被丢弃，回执 warnings 报 `EXPERTISE_NOT_LANDED`）。装备、法术书
+   `foundry_advancement_plan`，choices 按槽位寻址：把 `choiceRequirements` 每条的 `key`
+   原样抄进 `choices.bySlot` 填值（plan 的 `choicesTemplate` 已给每个 key 备好填空骨架）。
+   trait/候选池槽填数组（trait key 或池内 UUID，长度等于该条的 `count`）；ASI 槽填
+   `{ abilityScore: { dex: 1, con: 1 } }` 浮动加点——种族固定加成（如半精灵魅力+2）
+   自动并入，不要重复加；`asi-or-feat` 槽二选一 `{ abilityScore: … }` 或
+   `{ feat: "<uuid>" }`；`subclass-uuid` 那条不进 bySlot，仍填顶层 `subclassUuid`
+   入参。plan 没列出的 key 会在写入前以 `CHOICE_SLOT_UNKNOWN` 整体拒绝并列出合法槽位。
+   专精槽（plan 里带 `mode:"expertise"` 与说明）同此键法：每个值必须是卡面已有熟练、
+   或本次调用前面槽位已选的项；把未熟练的 key 填进专精槽会在写入前整体拒绝并点名
+   （dnd5e 原生对未熟练目标静默丢弃，工具把这件事提前成显式拒绝；万一仍被丢弃，
+   回执 warnings 报 `EXPERTISE_NOT_LANDED`）。装备、法术书
    法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
    未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
    改传 `fullSpellList:true`。`expectedName`/`expectedType` 是全等漂移校验：照抄 browse
@@ -72,8 +75,8 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
 见 `arcane-content-catalog`；写入侧契约：
 
 1. 计划即填写清单：`automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复
-   添加；`choiceRequirements` 每条带 `fill`（填到 advance 入参的键）、`valueFormat`、
-   `count`/`cap`，只填这些要求。
+   添加；`choiceRequirements` 每条带 `key`（抄进 advance `choices.bySlot` 的槽位键）、
+   `valueFormat`、`count`/`cap`，只填这些要求。
 2. 数量预算：`spellBudget` 是该等级的施法数量契约——`cantrips` 戏法数、`known` 已知
    法术数（2014 诗/术/契/游）、`book` 法术书容量（法师）。选满这个数，不多不少。准备
    施法者（2014 牧师/德鲁伊/圣武士/奇械）没有数量，改发 `fullList`：他们"会"整个职业

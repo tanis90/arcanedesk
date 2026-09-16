@@ -101,13 +101,18 @@ test("classFeature serializes the shared plan: requirements, automatics, coverag
   assert.equal(result.status, "completed");
   assert.deepEqual(result.actorAdvanceArgs, { classUuid: "Compendium.packs.rules.Item.class", targetLevel: 5 });
   const skillReq = result.choiceRequirements.find(r => r.slot === "class:1:TraitAdvancement:0.pool0");
-  assert.deepEqual({ count: skillReq.count, candidates: skillReq.candidates, required: skillReq.required, fill: skillReq.fill },
-    { count: 2, candidates: ["skills:arc", "skills:his", "skills:med"], required: true, fill: ["choices.skills"] });
+  assert.deepEqual({ count: skillReq.count, candidates: skillReq.candidates, required: skillReq.required, key: skillReq.key },
+    { count: 2, candidates: ["skills:arc", "skills:his", "skills:med"], required: true, key: "class:1:TraitAdvancement:0.pool0" });
   const asiReq = result.choiceRequirements.find(r => r.kind === "AbilityScoreImprovementAdvancement");
   assert.equal(asiReq.cap, 2);
   assert.equal(asiReq.valueFormat, "asi-assignment");
+  assert.equal(asiReq.key, asiReq.slot);
   assert.ok(result.choiceRequirements.some(r => r.valueFormat === "subclass-uuid"));
   assert.ok(!result.choiceRequirements.some(r => r.kind === "HitPointsAdvancement"));
+  // choicesTemplate: one fill-in skeleton per bySlot key; subclass-uuid has none (top-level argument).
+  assert.deepEqual(result.choicesTemplate["class:1:TraitAdvancement:0.pool0"], []);
+  assert.deepEqual(result.choicesTemplate[asiReq.slot], { abilityScore: {} });
+  assert.ok(!("subclassUuid" in result.choicesTemplate));
   assert.ok(result.automaticSteps.some(s => s.kind === "HitPointsAdvancement" && s.summary === "hp: automatic system default"));
   assert.ok(result.automaticSteps.some(s => s.kind === "ItemGrantAdvancement" && s.summary === "grant 1 items"));
   assert.equal(result.coverage.nativeStepCount, 6);
@@ -116,23 +121,22 @@ test("classFeature serializes the shared plan: requirements, automatics, coverag
   assert.equal(f.writes(), 0);
 });
 
-test("classFeature marks expertise requirements with mode/note and routes them to choices.expertise", async () => {
+test("classFeature marks expertise requirements with mode/note under their own bySlot keys", async () => {
   const skills = new TraitAdvancement({ grants: [], choices: [{ count: 4, pool: ["skills:acr", "skills:ath", "skills:dec", "skills:ins", "skills:slt", "skills:ste"] }] }, "Skills");
   const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 2, pool: ["skills:acr", "skills:ath", "skills:dec", "skills:ins", "skills:per", "skills:slt", "skills:ste"] }] }, "Expertise");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: skills }, { level: 1, advancement: expertise }] });
   const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class", characterLevel: 1 });
   const skillReq = result.choiceRequirements.find(r => r.slot === "class:1:TraitAdvancement:0.pool0");
   assert.equal(skillReq.mode, undefined);
-  assert.deepEqual(skillReq.fill, ["choices.skills"]);
+  assert.equal(skillReq.key, skillReq.slot);
   const expReq = result.choiceRequirements.find(r => r.slot === "class:1:TraitAdvancement:1.pool0");
   assert.equal(expReq.mode, "expertise");
-  assert.deepEqual(expReq.fill, ["choices.expertise"]);
+  assert.equal(expReq.key, expReq.slot);
   assert.match(expReq.note, /already be proficient/);
-  const skillAlloc = result.fillAllocation.find(entry => entry.fill === "choices.skills");
-  assert.equal(skillAlloc.total, 4);
-  const expAlloc = result.fillAllocation.find(entry => entry.fill === "choices.expertise");
-  assert.equal(expAlloc.total, 2);
-  assert.deepEqual(expAlloc.slots.map(s => [s.slot, s.count]), [[expReq.slot, 2]]);
+  // Slot addressing makes shared-bucket aggregation unnecessary: every requirement owns its key.
+  assert.equal(result.fillAllocation, undefined);
+  assert.deepEqual(result.choicesTemplate[skillReq.slot], []);
+  assert.deepEqual(result.choicesTemplate[expReq.slot], []);
 });
 
 test("classFeature reports hp as an automatic step with the hit-die derived summary", async () => {
@@ -173,7 +177,7 @@ test("classFeature accepts NPC actors and summarizes hp with the monster size di
   assert.deepEqual(summaries, [[1, "hp: fixed 5 (d8 average) + con mod"], [2, "hp: fixed 5 (d8 average) + con mod"]]);
 });
 
-test("classFeature surfaces race language pools as choices.languages requirements", async () => {
+test("classFeature surfaces race language pools as slot-addressed requirements", async () => {
   const languages = new TraitAdvancement({ grants: ["languages:standard:common"],
     choices: [{ count: 1, pool: ["languages:standard:elvish", "languages:standard:dwarvish"] }] }, "语言");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: languages }],
@@ -183,10 +187,26 @@ test("classFeature surfaces race language pools as choices.languages requirement
   assert.equal(result.status, "completed", JSON.stringify(result));
   const req = result.choiceRequirements.find(r => r.slot === "race:0:TraitAdvancement:0.pool0");
   assert.ok(req, JSON.stringify(result.choiceRequirements));
-  assert.deepEqual({ count: req.count, fill: req.fill, candidates: req.candidates },
-    { count: 1, fill: ["choices.languages"], candidates: ["languages:standard:elvish", "languages:standard:dwarvish"] });
+  assert.deepEqual({ count: req.count, key: req.key, candidates: req.candidates },
+    { count: 1, key: "race:0:TraitAdvancement:0.pool0", candidates: ["languages:standard:elvish", "languages:standard:dwarvish"] });
   assert.deepEqual(req.candidateNames, { "languages:standard:elvish": "精灵语", "languages:standard:dwarvish": "矮人语" });
   assert.ok(!result.coverage.uncoveredRequiredSteps.some(s => s.startsWith("race:")));
+});
+
+test("classFeature shows mixed race ASI as a fixed-bonus automatic step plus a floating asi-assignment", async () => {
+  const racial = new AbilityScoreImprovementAdvancement(asiConfig({ fixed: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 2 } }), "Ability Score Increase");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: racial }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero",
+    classUuid: "Compendium.packs.rules.Item.class", raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  // Half-elf style mixed ASI: cha+2 rides in automatically, the plan only asks for the 2 floating points.
+  assert.ok(result.automaticSteps.some(s => s.slot === "race:0:AbilityScoreImprovementAdvancement:0" && s.summary === "fixed ability bonuses: cha+2"),
+    JSON.stringify(result.automaticSteps));
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:AbilityScoreImprovementAdvancement:0");
+  assert.ok(req, JSON.stringify(result.choiceRequirements));
+  assert.deepEqual({ valueFormat: req.valueFormat, count: req.count, cap: req.cap, key: req.key },
+    { valueFormat: "asi-assignment", count: 2, cap: 2, key: "race:0:AbilityScoreImprovementAdvancement:0" });
+  assert.deepEqual(result.choicesTemplate[req.slot], { abilityScore: {} });
 });
 
 test("classFeature expands wildcard trait pools into concrete candidates", async () => {
