@@ -186,4 +186,94 @@ NPC 案（方向相反的几条）：`warnings` 只允许 `TRAIT_GRANT_NOT_LANDE
 - 不考 2024 规则版本（工具能力对齐见 foundry-prep-tools-spec.md 已知限制）。
 - 不考装备下发（D6 从简教义已覆盖；additionalItems 由法术路径顺带考）。
 - 不考兼职（multiclass）：当前工具链未支持，不在本矩阵。
-- 不做模型参与的质量评测（那是 deepseek benchmark 的事）。
+- e2e harness 本身不含模型；模型参与的质量评测由 §6 的 matrix suite 承接。
+
+## 6. 模型 benchmark 对接（matrix suite）
+
+e2e 矩阵回答的是"工具能不能写对"；本节回答"模型用工具写，相比裸 JS 有没有
+更省力、更成功"。两者共用同一套案例定义（A/B/C 三轴同义配置），但判定哲学
+不同：e2e 是确定性填值器的逐槽断言，matrix suite 是模型自由发挥后的终态快照
+判定。
+
+### 6.1 案例与双臂
+
+- MVP 三案（先跑通，再扩到 32 案全量）：**A5**（高等精灵×战斗大师战士，
+  非施法+子职业选择槽）、**A12**（高等精灵×塑能法师，法术书+种族戏法最难
+  路径）、**C1**（狼人+战士 5 级，NPC 复制建档）。案例配置与
+  `scripts/e2e-advance-matrix.mjs` 同义，定义在
+  `test/character-benchmark/matrix-model-adapter.cjs` 的 `MATRIX_CASES`。
+- 双臂（复用 benchmark 既有配对语义，同一 case 同模型连续跑）：
+  - `matrix_tool`：完整生产 prep 工具集 + 生产 Prep prompt + 注入
+    arcane-actor-update / arcane-content-catalog / character-benchmark 三份
+    skill（hash 冻结断言，批次内不许漂移）。
+  - `matrix_js`：过滤掉 newTools 全集（即既有 `"js"` 臂语义），只给
+    character-benchmark 共享 skill + 中性 browser_evaluate 路由。**裸 JS 臂
+    跑通一轮后结果永久钉死存档，此后迭代工具只重跑工具臂。**
+
+### 6.2 prompt 哲学：自由发挥 + 不做限制
+
+prompt 只钉四个硬约束 + 命名：职业 / 子职业 / 种族（或怪物）/ 等级。属性、
+技能、法术、装备全部由模型自选。两臂同文，公平性由同文保证。不写"禁止翻
+源码"之类的禁令——模型绕开工具走裸 JS 是工具不好用的强信号，正是我们要
+收集的数据。
+
+### 6.3 判定器：probe 期望 + 终态快照（双臂同标准）
+
+不用回执判定（裸 JS 臂没有回执），统一用终态快照 + 纯函数判定
+（`judgeState`，单测 `matrix-model-adapter.test.mjs`）：
+
+1. **setup（probe）**：建一张探针卡（NPC 案先复制怪物源）→ 用 runtime 的
+   `advancementPlan` 跑一遍同配置计划 → 提取期望（子职业 UUID、技能池与
+   选择数、ASI 点数、种族固定加成与种族戏法数、生命骰、法术预算、怪物源
+   快照 sourceBefore）→ 删探针。期望与工具同源——模型应当拿到的计划就是
+   判定依据，judge 与 tool 同一个真理来源。probe plan 若报
+   `uncoveredRequiredSteps` 非空则该案不适合自由发挥判定，setup 直接抛错。
+2. **verify**：页内采集终态快照（abilities/hp/skills/items 含 sourceId），
+   调 `judgeState`。全部检查选择无关：
+   - 属性总和守恒（标准数组 72 + 种族加成 + ASI 点数），单项 3..20；
+     NPC 方向相反：原属性保留，只允许 ASI 增量（单项 ≤2）。
+   - HP：character 首级满骰 + 后续均值；NPC 每级体型骰均值、无首级满骰；
+     conMod 从终态推导；`hp.value === hp.max`。
+   - 法术：戏法总数 = 职业预算 + 种族白送；book/known/fullList 按预算精确
+     计数；环级不超预算上限。
+   - 技能：熟练数 = 职业选择数 + 来源自带；职业自选部分须落在 plan 枚举
+     池内。
+   - NPC 案另查来源条目逐条保留（按 类型+名称）。
+3. 矩阵案全部视为 npcCases：验收后 `retainedForReview`，不自动删卡，人工
+   审查后手动清理。
+
+### 6.4 运行
+
+前置：30002 COS 世界在线（模块就绪），先生成 fixture 报告：
+
+```
+ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002 ARCANE_FVTT_CDP_PORT=9230 \
+  node apps/desktop/test/setup-prep-benchmark.mjs --target=local-cos
+```
+
+套件配置（`C:/qa/suite-v9-matrix.json` 样式）：
+
+```json
+{
+  "fixtureReport": "<上一步生成的 fixture 路径>",
+  "outputDir": "C:/qa/batch-v9-matrix-<ts>",
+  "comparison": "matrix",
+  "taskTimeoutMs": 300000,
+  "cases": ["A5", "A12", "C1"],
+  "models": [{ "profile": "C:/qa/kimi-a3", "provider": "deepseek-for-benchmark", "model": "deepseek-flash" }]
+}
+```
+
+```
+node apps/desktop/test/character-benchmark/run-suite.mjs --config=C:/qa/suite-v9-matrix.json   # 先 --dry-run
+```
+
+run-suite 对 matrix 不传 `--character-suite`；指纹集含
+matrix-model-adapter.cjs，批次中途改适配器会触发 inputs-changed 中止。
+
+### 6.5 从 MVP 到 32 案
+
+1. MVP 3 案×双臂（6 trial）跑通，读报告：工具臂 vs 裸 JS 臂的迭代数 / 耗时 /
+   成功率；裸 JS 臂结果钉死。
+2. 把 `MATRIX_CASES` 补全到与 e2e 核心矩阵同构的 32 案，重跑工具臂。
+3. 扩展层（全子职业约 120 案）按需，先解决内容数据已知清单。

@@ -12,19 +12,22 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const characterActors=process.argv.includes("--character-actors");
   const character=characterSuite?(comparison==="catalog"?require("../character-benchmark/catalog-model-adapter.cjs"):require("../character-benchmark/model-adapter.cjs"))(evaluate,{verifierVersion:process.argv.includes("--character-actors")?"v5":"v4"}):null;
   if(characterSuite)assert.equal(comparison,"catalog");
-  const npcCases=[...(character?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
+  // 矩阵套件（spec: foundry-prep-e2e-matrix-spec.md §6）：--comparison=matrix，案例来自
+  // e2e 矩阵（A5/A12/C1 MVP），自由发挥 prompt + probe-plan 期望 + 终态判定，双臂同标准。
+  const matrix=comparison==="matrix"?require("../character-benchmark/matrix-model-adapter.cjs")(evaluate,{runtimeSource:revision.runtimeSource}):null;
+  const npcCases=[...(character?.ids||[]),...(matrix?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
   const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
-  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","catalog"].includes(comparison));
-  if(["native-skill","skill-revision","pack-skill","rules-ablation","catalog"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
+  assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","catalog","matrix"].includes(comparison));
+  if(["native-skill","skill-revision","pack-skill","rules-ablation","catalog","matrix"].includes(comparison))assert.ok(cases.every(c=>npcCases.includes(c)));
   const nativeRevision=process.argv.includes("--native-npc");
   const withRulesSkill=process.argv.includes("--rules-skill");
   if(withRulesSkill)assert.equal(comparison,"pack-skill","Rules skill pilot uses the production pack-skill candidate");
   if(nativeRevision)assert.ok(comparison==="revision"&&cases.every(c=>npcCases.includes(c)));
   const baselineSkill=process.argv.find(a=>a.startsWith("--baseline-skill="))?.slice(17);
   if(comparison==="skill-revision")assert.ok(baselineSkill&&fs.existsSync(baselineSkill));
-  const arms=comparison==="catalog"?["native_skill_catalog_js","native_skill_catalog_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
+  const arms=comparison==="matrix"?["matrix_js","matrix_tool"]:comparison==="catalog"?["native_skill_catalog_js","native_skill_catalog_tool"]:comparison==="rules-ablation"?["native_skill_pack","native_skill_rules"]:comparison==="pack-skill"?["native_skill","native_skill_pack"]:comparison==="skill-revision"?["native_skill_baseline","native_skill"]:comparison==="native-skill"?["tools","native_skill"]:comparison==="revision"?["baseline","tools"]:["js","tools"];
   if(process.argv.includes("--reverse-first"))arms.reverse();
   const armOnly=process.argv.find(a=>a.startsWith("--arm-only="))?.slice(11);
   if(armOnly){assert.ok(arms.includes(armOnly));assert.ok(!resumePath,"Separate arm runs cannot resume an ambiguous report");arms.splice(0,arms.length,armOnly);}
@@ -42,8 +45,10 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(comparison==="rules-ablation"){report.experiment.kind="paired SRD rules skill ablation";report.experiment.promptPolicy="Same native NPC guide, production pack guide and tools; only candidate receives SRD rules skill and read instruction";}
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   if(comparison==="catalog"){report.experiment.kind="catalog query and actor advance ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same other tools; only production search/list availability and foundry_actor_advance differ";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"../../src/main/foundry-tools.js"))).digest("hex");}
+  if(comparison==="matrix"){report.experiment.kind="matrix free-play: production prep tools versus bare browser_evaluate";report.experiment.promptPolicy="Identical free-play case prompts (only class/subclass/race-or-monster/level pinned); tool arm keeps the production Prep prompt and production prep skills; js arm gets the neutral browser_evaluate routing. Shared character-benchmark defaults for both";report.experiment.matrixToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"../../src/main/foundry-tools.js"))).digest("hex");}
   report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
   if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?characterActors?"character-v9-pc-controlled":"character-v10-production-catalog":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
+  if(comparison==="matrix"){report.experiment.suiteVersion="matrix-v1-freeplay";report.experiment.matrixVerifier=matrix.verifier;}
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??(characterSuite?300000:180000));
   report.experiment.experienceTargetMs=120000;
 
@@ -88,7 +93,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     conditions:`给世界角色“${label} 角色1”和“${label} 角色2”都加上倒地和中毒状态，不影响“${label} 角色3”。`
   })[id];
   const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
-  const verify=(id,f)=>characterSuite?character.verify(id,f):id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
+  const verify=(id,f)=>characterSuite?character.verify(id,f):matrix?matrix.verify(id,f):id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
   for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
@@ -102,8 +107,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const nativeSkillArm=nativeRevision||arm.startsWith("native_skill");
     const implementation=arm==="baseline"?baselineRevision:revision;
     if(report.prepTrials.some(t=>t.sample===sample&&t.caseId===caseId&&t.arm===arm))continue;
-    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=characterSuite?await character.setup(caseId,label):await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
-    const trial={sample,caseId,arm,fixture:f,prompt:characterSuite?character.prompt(caseId,label):prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
+    const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=characterSuite?await character.setup(caseId,label):matrix?await matrix.setup(caseId,label):await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
+    const trial={sample,caseId,arm,fixture:f,prompt:characterSuite?character.prompt(caseId,label):matrix?matrix.prompt(caseId,label):prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
     if(caseId==="upload_image"){
       const localImage=path.join(cwd,"benchmark20260508180804.jpg");fs.copyFileSync(imageFile,localImage);
@@ -140,6 +145,17 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));trial.catalogSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};report.experiment.catalogSkillHash??=trial.catalogSkill.sha256;assert.equal(trial.catalogSkill.sha256,report.experiment.catalogSkillHash);
     }
     if(characterSuite){const sourcePath=path.join(__dirname,"../character-benchmark/skill/SKILL.md"),targetPath=path.join(cwd,"skills/character-benchmark/SKILL.md");fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);skillPaths.push(path.dirname(targetPath));trial.characterSkill={path:targetPath,sha256:crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex")};}
+    if(comparison==="matrix"){
+      const inject=(rel,name)=>{const sourcePath=path.resolve(__dirname,rel),targetPath=path.join(cwd,`skills/${name}/SKILL.md`);fs.mkdirSync(path.dirname(targetPath),{recursive:true});fs.copyFileSync(sourcePath,targetPath);const sha256=crypto.createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex");skillPaths.push(path.dirname(targetPath));return {path:targetPath,sha256};};
+      trial.matrixSharedSkill=inject("../character-benchmark/skill/SKILL.md","character-benchmark");
+      report.experiment.matrixSharedSkillHash??=trial.matrixSharedSkill.sha256;assert.equal(trial.matrixSharedSkill.sha256,report.experiment.matrixSharedSkillHash,"Matrix shared skill must stay frozen during the batch");
+      if(arm==="matrix_tool"){
+        trial.matrixActorSkill=inject("../../skills/prep/arcane-actor-update/SKILL.md","arcane-actor-update");
+        trial.matrixCatalogSkill=inject("../../skills/prep/arcane-content-catalog/SKILL.md","arcane-content-catalog");
+        const pair=trial.matrixActorSkill.sha256+"+"+trial.matrixCatalogSkill.sha256;
+        report.experiment.matrixToolSkillHash??=pair;assert.equal(pair,report.experiment.matrixToolSkillHash,"Matrix tool skills must stay frozen during the batch");
+      }
+    }
     const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
     resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
@@ -157,18 +173,18 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
       trial.requestModes.push({enable_thinking:actual.enable_thinking??"omitted",thinking:actual.thinking??"omitted",reasoning_effort:actual.reasoning_effort??"omitted"});
       return replacement;
     };
-    if(arm==="js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
+    if(arm==="js"||arm==="matrix_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!newTools.has(n)));
     if(arm==="native_skill_catalog_js")host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_content_search","foundry_compendium_browse","foundry_advancement_plan","foundry_actor_advance"].includes(n)));
     if(nativeSkillArm)host.session.setActiveToolsByName(host.session.getActiveToolNames().filter(n=>!["foundry_actor_create","foundry_actor_update"].includes(n)));
     if(arm==="native_skill_catalog_tool")host.session.setActiveToolsByName([...new Set([...host.session.getActiveToolNames(),"foundry_content_search","foundry_compendium_browse","foundry_advancement_plan"])]);
     trial.activeTools=host.session.getActiveToolNames();trial.thinking=host.session.thinkingLevel;
-    const expectedTools=implementation.prepToolNames.filter(n=>!(arm==="js"&&newTools.has(n))&&!(arm==="native_skill_catalog_js"&&["foundry_content_search","foundry_compendium_browse","foundry_advancement_plan","foundry_actor_advance"].includes(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
+    const expectedTools=implementation.prepToolNames.filter(n=>!((arm==="js"||arm==="matrix_js")&&newTools.has(n))&&!(arm==="native_skill_catalog_js"&&["foundry_content_search","foundry_compendium_browse","foundry_advancement_plan","foundry_actor_advance"].includes(n))&&!(nativeSkillArm&&["foundry_actor_create","foundry_actor_update"].includes(n)));
     const uniqueExpectedTools=[...new Set(expectedTools)];
     assert.deepEqual([...trial.activeTools].sort(),uniqueExpectedTools.sort(),"Ablated tool set changed");
     // A deliberate test-only prompt seam. Keep the SDK's generated tool preamble
     // Neutral mode replaces both arms; production mode keeps the tools prompt.
     assert.ok(host.session.systemPrompt.includes(productionPrep),"Prep preamble anchor changed");
-    let prompt=promptMode==="production"&&arm!=="js"&&arm!=="native_skill_catalog_js"?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+(arm==="tools"?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
+    let prompt=promptMode==="production"&&!["js","matrix_js","native_skill_catalog_js"].includes(arm)?host.session.systemPrompt:host.session.systemPrompt.replace(productionPrep,common+((arm==="tools"||arm==="matrix_tool")?" 优先使用结构化工具；未覆盖的操作才使用 browser_evaluate。":" 使用 browser_evaluate 编写 JavaScript 调用原生 Document API 完成世界操作。"));
     if(nativeSkillArm){
       assert.ok(host.session.systemPrompt.includes("fvtt-native-npc"),"Skill metadata must be loaded through resource loader");
       prompt=host.session.systemPrompt.replace(productionPrep,common+" 创建或修改 NPC 前先读取可用的 fvtt-native-npc skill。根据当前开放的查询工具发现资源；没有查询工具时使用 browser_evaluate 读取来源。普通角色创建和修改使用 browser_evaluate 原生 API；其他已开放工具按需要使用。不要调用未开放的 actor_create 或 actor_update。");
@@ -183,6 +199,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     }
     if(trial.buildSkill)prompt+="\n创建前读取车卡查询指南："+trial.buildSkill.path+"。本指南关于未指定项走默认的约束优先于其他指南的自由补充建议。";
     if(trial.characterSkill)prompt+="\n本轮是完整职业车卡测试。先读取 "+trial.characterSkill.path+"，其中完整成长范围与默认优先于旧指南的最小NPC建议。";
+    if(trial.matrixSharedSkill){prompt+="\n本轮是职业车卡矩阵测试（自由发挥，仅硬约束见任务描述）：先读取共享默认 "+trial.matrixSharedSkill.path+"。";if(trial.matrixActorSkill)prompt+="创建与升级全程遵循生产备团指南："+trial.matrixActorSkill.path+" 与 "+trial.matrixCatalogSkill.path+"，以其工具链路为准。";}
     if(characterActors)prompt=prompt.replaceAll("NPC","Character").replaceAll("fvtt-native-Character","fvtt-native-npc");
     host.session._baseSystemPrompt=prompt;host.session.agent.state.systemPrompt=prompt;
     trial.systemPromptHash=crypto.createHash("sha256").update(prompt).digest("hex");trial.systemPromptChars=prompt.length;
