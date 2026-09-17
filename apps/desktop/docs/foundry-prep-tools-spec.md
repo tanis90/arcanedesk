@@ -179,11 +179,26 @@ output: {
   `languages:*`）在 plan 出口用系统自带 `Trait.mixedChoices` 展开为具体 key
   （`languages:standard:elvish` 等 24 个）并附 candidateNames；模型照抄池中 key
   即可。注册表不可用时回退原始池，advance 侧匹配仍按通配符前缀语义接受具体 key。
+- **trait 池可寻址族**（2026-09-17 扩）：模型可填的 Trait 选择池为
+  skills/tool/languages 加防御族 `dr:`/`di:`/`ci:`/`dv:`（龙裔伤害抗性为准案，
+  e2e B14）；其余族（weapon/armor/saves/senses 等）仍走原生默认值并在
+  uncoveredRequiredSteps 显性报告，待矩阵案例驱动再扩。
 - **NPC 支持**：actor 类型门为 character|npc。NPC（怪物加职业等级）的 HP 摘要
   按怪物体型骰（actor hd.denomination）下发"fixed N (dX average)"，无首级满骰。
 - **子职业两次调用约定**：不带 subclassUuid 先拿计划（choiceRequirements 里
   valueFormat="subclass-uuid" 的步骤自带 candidates/candidateNames 池）；定下子职业后
   带 subclassUuid 重调一次，子职业自身的授予/选择步骤才会枚举（slot 带 subclass: 前缀）。
+  **advance 接受 subclass: 槽位**（2026-09-17 定稿）：子职业步骤与 class/race 走同一条
+  enumerate+normalize 管线——枚举用不落入世界的临时条目（避免与 SubclassAdvancement
+  apply 插入的真卡重复），apply 时按 advancement id 映射到真卡上执行，授出条目的
+  advancementOrigin 因此指向存活卡。plan 与 advance 的槽宇宙严格同源。
+- **空池 ItemChoice 按 restriction 枚举**（2026-09-17 定稿）：pool 为空是 dnd5e 表达
+  "按限制自选"的标准编码（高等精灵戏法 pool:[] + restriction.level:"0"，系统包与模块
+  一致；原生 UI 在选择器里按 restriction 过滤）。plan 对这种槽按 restriction 枚举候选：
+  spell+整数环 → 该环全部法术；feat → 全部专长；统一 identifier 去重、arcane 包优先、
+  按 classUuid 锚定的 rules 版本过滤。不可枚举形状（level:"available" 的魔法奥秘、
+  无 type 的条目）保持 candidates 缺省，视为已知边界。校验侧本就按 restriction 验收，
+  枚举集是它的子集，天然自洽。
 - **HP 永不进 choiceRequirements**（D1）：1 级满骰、后续级固定均值，dnd5e 原生计算；
   automaticSteps 给信息性摘要（"hp: max hit die (6) + con mod" / "hp: fixed 4 (d6
   average) + con mod"）。choices.hp 保留为 advance 隐藏覆盖项（DM 掷骰 HP 才传），
@@ -274,8 +289,12 @@ verification 覆盖 actor 终态全字段（D3）：abilities（每属性 before
 分解，回答"人类 +1 是否落地"类问题）、subclass（uuid/name）、race（uuid/name/size）、
 movement（walk 及非零其他）、languages（applied + 种族默认池 note）、traits（豁免/
 技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/slots/戏法与法术
-计数）、ac、resources（带 uses 条目）、hpFill/slotFill/spellFill。hpFill 与 slotFill
-同属 0 级建档收尾（hpFill 仅 character；slotFill 把 spellN/pact 的 value 填到 max）。
+计数 + **cantripsBySource/spellsBySource 来源拆分**——2026-09-17 定稿：按
+advancementRoot/Origin 解析授予条目类型分 class/subclass/race/granted 四桶，
+budget 只对 class+granted 两桶，种族白送的戏法/环法不再造成假差 1）、ac、
+resources（带 uses 条目）、hpFill/slotFill/spellFill。hpFill 与 slotFill
+同属 0 级建档收尾（hpFill 仅 character 且仅发生拉满时出现——种族不加 con 无漂移时
+自然满血、无 hpFill；slotFill 把 spellN/pact 的 value 填到 max）。
 收到回执即对账完成，禁止再裸 eval 自检；回执未覆盖的字段先视为工具缺口上报，再考虑
 补读。
 

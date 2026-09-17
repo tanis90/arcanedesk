@@ -52,7 +52,7 @@ function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells =
       .map(({ level: flowLevel, advancement }) => ({ level: flowLevel, advancement })),
   };
   const spellIndex = spells.map(([id, name, level, identifier, flags]) => ({ _id: id, name, type: "spell", system: { identifier, level }, ...(flags ? { flags } : {}) }));
-  const spellPack = { metadata: { id: "dnd5e.spells", type: "Item" }, getIndex: async () => spellIndex };
+  const spellPack = { metadata: { id: "dnd5e.spells", type: "Item" }, index: new Map(spellIndex.map(entry => [entry._id, entry])), getIndex: async () => spellIndex };
   const subclassPack = { metadata: { id: "dnd5e.subclasses", type: "Item" }, getIndex: async () => subclassEntries };
   const extraPacks = catalogPacks.map(({ id, entries }) => ({ metadata: { id, type: "Item" }, getIndex: async () => entries }));
   const choicePools = poolPacks.map(({ id, index }) => ({ metadata: { id, type: "Item" }, index, getIndex: async () => [...index.values()] }));
@@ -72,6 +72,7 @@ function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells =
         }
         return { asSet: () => out };
       } } : {}) } } },
+    getDocumentClass: () => class { constructor(data = {}) { Object.assign(this, data); } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
@@ -193,6 +194,23 @@ test("classFeature surfaces race language pools as slot-addressed requirements",
   assert.ok(!result.coverage.uncoveredRequiredSteps.some(s => s.startsWith("race:")));
 });
 
+test("classFeature enumerates defense trait pools (dr/di/ci/dv) as addressable candidates", async () => {
+  // Dragonborn damage resistance is the proving case (e2e B14): a concrete dr:* pool must reach
+  // the model as candidates instead of falling back to a silent native default.
+  const resist = new TraitAdvancement({ grants: [],
+    choices: [{ count: 1, pool: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] }] }, "伤害抗性");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: resist }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero",
+    classUuid: "Compendium.packs.rules.Item.class", raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:TraitAdvancement:0.pool0");
+  assert.ok(req, JSON.stringify(result.choiceRequirements));
+  assert.deepEqual({ count: req.count, key: req.key, valueFormat: req.valueFormat, candidates: req.candidates },
+    { count: 1, key: "race:0:TraitAdvancement:0.pool0", valueFormat: "trait-key",
+      candidates: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] });
+  assert.ok(!result.coverage.uncoveredRequiredSteps.some(s => s.startsWith("race:")));
+});
+
 test("classFeature shows mixed race ASI as a fixed-bonus automatic step plus a floating asi-assignment", async () => {
   const racial = new AbilityScoreImprovementAdvancement(asiConfig({ fixed: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 2 } }), "Ability Score Increase");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: racial }] });
@@ -245,6 +263,48 @@ test("classFeature with subclass enumerates the subclass item's own grants", asy
   assert.equal(subStep.kind, "ItemGrantAdvancement");
   assert.equal(subStep.level, 2);
   assert.equal(f.writes(), 0);
+});
+
+test("empty-pool spell ItemChoice enumerates candidates by restriction level", async () => {
+  // dnd5e encodes "pick any cantrip" as pool:[] + restriction:{level:"0"}; plan must enumerate.
+  const cantrip = new ItemChoiceAdvancement({ type: "spell", choices: { 0: { count: 1 } }, pool: [], restriction: { level: "0", list: {} } }, "戏法");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: cantrip }],
+    spells: [["fb", "Fire Bolt", 0, "fire-bolt"], ["mh", "Mage Hand", 0, "mage-hand"], ["ble", "Bless", 1, "bless"]] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class",
+    raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:ItemChoiceAdvancement:0");
+  assert.deepEqual(req.candidates, ["Compendium.dnd5e.spells.Item.fb", "Compendium.dnd5e.spells.Item.mh"]);
+  assert.equal(req.candidateNames["Compendium.dnd5e.spells.Item.fb"], "Fire Bolt");
+});
+
+test("empty-pool enumeration dedupes by identifier preferring arcane packs", async () => {
+  const cantrip = new ItemChoiceAdvancement({ type: "spell", choices: { 0: { count: 1 } }, pool: [], restriction: { level: "0", list: {} } }, "戏法");
+  const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: cantrip }],
+    spells: [["fb", "Fire Bolt", 0, "fire-bolt"]],
+    catalogPacks: [{ id: "arcane-dnd5e-2014-automation.spells",
+      entries: [{ _id: "afb", name: "Fire Bolt", type: "spell", system: { identifier: "fire-bolt", level: 0 } }] }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class",
+    raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  const req = result.choiceRequirements.find(r => r.slot === "race:0:ItemChoiceAdvancement:0");
+  assert.deepEqual(req.candidates, ["Compendium.arcane-dnd5e-2014-automation.spells.Item.afb"]);
+});
+
+test("empty-pool feat ItemChoice enumerates feat candidates; unenumerable shapes stay null", async () => {
+  const featChoice = new ItemChoiceAdvancement({ type: "feat", choices: { 0: { count: 1 } }, pool: [], restriction: {} }, "专长");
+  const openChoice = new ItemChoiceAdvancement({ type: "spell", choices: { 0: { count: 1 } }, pool: [], restriction: { level: "available", list: {} } }, "魔法奥秘");
+  const f = fixture({ classFlows: [hp(1)],
+    raceFlows: [{ level: 0, advancement: featChoice }, { level: 0, advancement: openChoice }],
+    catalogPacks: [{ id: "arcane-dnd5e-2014-automation.feats", entries: [
+      { _id: "al", name: "Alert", type: "feat", system: { identifier: "alert" } },
+      { _id: "fb2", name: "Not A Feat", type: "spell", system: { identifier: "fake", level: 0 } }] }] });
+  const result = await f.list({ type: "classFeature", actorUuid: "Actor.hero", classUuid: "Compendium.packs.rules.Item.class",
+    raceUuid: "Compendium.packs.rules.Item.race", characterLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  const featReq = result.choiceRequirements.find(r => r.label === "专长");
+  assert.deepEqual(featReq.candidates, ["Compendium.arcane-dnd5e-2014-automation.feats.Item.al"]);
+  const openReq = result.choiceRequirements.find(r => r.label === "魔法奥秘");
+  assert.equal(openReq.candidates, undefined); // "available" ring enumeration unsupported: serialized without candidates
 });
 
 test("spell candidates filter by query, rules, maxLevel and mark class-list eligibility", async () => {

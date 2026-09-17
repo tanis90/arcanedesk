@@ -3,8 +3,10 @@ import test from "node:test";
 import vm from "node:vm";
 import { runtimeFunction } from "../dist/runtime.js";
 
+let advSeq = 0;
 class BaseAdvancement {
   constructor(configuration = {}, title = "") {
+    this.id = "adv" + (++advSeq);
     this.configuration = configuration;
     this.title = title;
     this.applied = [];
@@ -23,7 +25,7 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [], traitPaths = false } = {}) {
+function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [], traitPaths = false } = {}) {
   let writes = 0;
   const itemUpdates = [], itemDeletes = [];
   const preItems = actorItems.map(item => ({ ...item }));
@@ -46,7 +48,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
   const docs = new Map();
   docs.set("Compendium.packs.rules.Item.class", source("Compendium.packs.rules.Item.class", "class", classFlows, { identifier: "wizard", ...classSystem }));
   docs.set("Compendium.packs.rules.Item.race", source("Compendium.packs.rules.Item.race", "race", raceFlows));
-  docs.set("Compendium.packs.rules.Item.sub", source("Compendium.packs.rules.Item.sub", "subclass", []));
+  docs.set("Compendium.packs.rules.Item.sub", source("Compendium.packs.rules.Item.sub", "subclass", subclassFlows));
   docs.set(actor.uuid, actor);
   const spellIndex = spells.map(([id, name, level, identifier, flags]) => ({ _id: id, name, type: "spell", system: { identifier, level }, ...(flags ? { flags } : {}) }));
   for (const [id, name, level, identifier] of spells) {
@@ -84,6 +86,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
         }
         return { asSet: () => out };
       } } : {}) } } },
+    getDocumentClass: () => class { constructor(data = {}) { Object.assign(this, data); } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
@@ -121,6 +124,21 @@ test("trait pools read their own bySlot keys per pool and include grants in chos
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(trait.applied), [[1, { chosen: ["saves:int", "skills:arc", "skills:med", "tool:art:mason"] }]]);
   assert.equal(result.warnings.length, 0);
+});
+
+test("defense trait pools (dr/di/ci/dv) are addressable via bySlot instead of native defaults", async () => {
+  // Dragonborn damage resistance (e2e B14): the dr:* pool enumerates and the pick lands in chosen.
+  const resist = new TraitAdvancement({ grants: [], choices: [
+    { count: 1, pool: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] }] }, "伤害抗性");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: resist }] });
+  const result = await f.advance({ choices: { bySlot: { "class:1:TraitAdvancement:0.pool0": ["dr:fire"] } } });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(applied(resist.applied), [[1, { chosen: ["dr:fire"] }]]);
+  const missing = fixture({ classFlows: [hp(1), { level: 1, advancement: new TraitAdvancement({ grants: [], choices: [
+    { count: 1, pool: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] }] }, "伤害抗性") }] });
+  const rejected = await missing.advance({ choices: { bySlot: {} } });
+  assert.equal(rejected.status, "rejected");
+  assert.match(rejected.message, /class:1:TraitAdvancement:0\.pool0/);
 });
 
 test("expertise picks ride their own slot and may re-pick a same-call proficiency slot value", async () => {
@@ -367,17 +385,51 @@ test("hit points default to max at level 1 and avg later unless overridden", asy
 });
 
 test("subclass item's own grants apply in the same session after the subclass step", async () => {
+  // Deferred enumeration: steps resolve from the subclass source data (temp item), the apply is
+  // remapped onto the real item the SubclassAdvancement apply inserted ("sub-clone" here).
   const grant = new ItemGrantAdvancement({ items: [{ uuid: "Compendium.packs.rules.Item.feature" }] }, "Tradition Features");
-  grant.autoValue = { selected: ["Compendium.packs.rules.Item.feature"] };
   const subclass = new SubclassAdvancement({}, "Arcane Tradition");
   subclass.apply = async function (level, data) { this.applied.push([level, data]); this.value = { document: "sub-clone", uuid: data.uuid }; };
-  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }] });
+  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }], subclassFlows: [{ level: 2, advancement: grant }] });
   f.preItems.push({ _id: "sub-clone", __flows: [{ level: 2, advancement: grant }] });
   const result = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub" });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(grant.applied), [[2, { selected: ["Compendium.packs.rules.Item.feature"] }]]);
-  assert.ok(result.steps.some(step => step.label === "subclass" && step.kind === "ItemGrantAdvancement"));
+  assert.ok(result.steps.some(step => step.label === "subclass" && step.kind === "ItemGrantAdvancement" && step.slot === "subclass:2:ItemGrantAdvancement:0"));
   assert.equal(result.warnings.length, 0);
+});
+
+test("subclass choice slots resolve through bySlot and apply on the inserted item", async () => {
+  const choice = new ItemChoiceAdvancement({ type: "feat", choices: { 2: { count: 1 } },
+    pool: [{ uuid: "Compendium.packs.rules.Item.m1" }, { uuid: "Compendium.packs.rules.Item.m2" }], restriction: {} }, "Maneuvers");
+  const subclass = new SubclassAdvancement({}, "Archetype");
+  subclass.apply = async function (level, data) { this.applied.push([level, data]); this.value = { document: "sub-clone", uuid: data.uuid }; };
+  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }], subclassFlows: [{ level: 2, advancement: choice }] });
+  f.preItems.push({ _id: "sub-clone", __flows: [{ level: 2, advancement: choice }] });
+  const missing = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub" });
+  assert.equal(missing.status, "rejected");
+  assert.equal(missing.code, "ADVANCEMENT_NEEDS_CHOICE");
+  assert.match(missing.message, /subclass:2:ItemChoiceAdvancement:0/);
+  assert.equal(f.writes(), 0);
+  const done = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub",
+    choices: { bySlot: { "subclass:2:ItemChoiceAdvancement:0": ["Compendium.packs.rules.Item.m2"] } } });
+  assert.equal(done.status, "completed", JSON.stringify(done));
+  assert.deepEqual(applied(choice.applied), [[2, { selected: ["Compendium.packs.rules.Item.m2"] }]]);
+  assert.equal(done.warnings.length, 0);
+});
+
+test("spellcasting receipt splits cantrips and spells by granting source", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorItems: [
+    { _id: "raceitem", type: "race", name: "Elf", system: {} },
+    { _id: "classitem", type: "class", name: "Cleric", system: {}, updateSource() {} },
+    { _id: "sp1", type: "spell", name: "Fire Bolt", system: { level: 0 }, flags: { dnd5e: { advancementOrigin: "raceitem.adv1" } } },
+    { _id: "sp2", type: "spell", name: "Mage Hand", system: { level: 0 }, flags: { dnd5e: { advancementRoot: "classitem.adv2", advancementOrigin: "featitem.adv9" } } },
+    { _id: "sp3", type: "spell", name: "Bless", system: { level: 1 } }] });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.verification.spellcasting.cantrips, 2);
+  assert.deepEqual(result.verification.spellcasting.cantripsBySource, { race: 1, class: 1 });
+  assert.deepEqual(result.verification.spellcasting.spellsBySource, { granted: 1 });
 });
 
 test("fullSpellList grants the annotated class spell list after advancement; other classes reject before writes", async () => {
