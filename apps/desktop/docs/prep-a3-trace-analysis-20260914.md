@@ -56,7 +56,9 @@ JS：49 次 browser_evaluate，累计工具执行约 2.85s；全部工具累计�
 
 ## 原始证据
 
-- js trace: [agent-trace.jsonl](C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789362688330/0-A3-native_skill_catalog_js/agent-trace.jsonl)
-- js snapshot: [A3 snapshot](C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789362688330/audit/A3-native_skill_catalog_js-snapshot.json)
-- tool trace: [agent-trace.jsonl](C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789363280479/0-A3-native_skill_catalog_tool/agent-trace.jsonl)
-- tool snapshot: [A3 snapshot](C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789363280479/audit/A3-native_skill_catalog_tool-snapshot.json)
+以下为作者本机的 benchmark 产物路径（临时目录，不随仓库分发，仅留档备查）：
+
+- js trace: `C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789362688330/0-A3-native_skill_catalog_js/agent-trace.jsonl`
+- js snapshot: `C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789362688330/audit/A3-native_skill_catalog_js-snapshot.json`
+- tool trace: `C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789363280479/0-A3-native_skill_catalog_tool/agent-trace.jsonl`
+- tool snapshot: `C:/Users/yangqi/AppData/Local/Temp/deepseek-character-benchmark-20260914/benchmark-1789363280479/audit/A3-native_skill_catalog_tool-snapshot.json`
