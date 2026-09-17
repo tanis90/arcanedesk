@@ -131,10 +131,8 @@ const COMBAT_PROFILE = {
   streamingInput: "steer", // 流式期间输入投递:"steer" 软打断(战斗默认);"followUp" 排队(prep)
 };
 
-/** Pi 默认仍启用 Bash；Windows 必须显式选择一等公民的 PowerShell 工具。 */
-export function builtinToolNamesForPlatform(platform = process.platform) {
-  return ["read", platform === "win32" ? "powershell" : "bash", "edit", "write"];
-}
+// 内置工具名单的单一来源在 foundry-tool-policy.js;这里保留导出供既有测试/调用方使用。
+export { builtinToolNamesForPlatform } from "./foundry-tool-policy.js";
 
 /**
  * Pi prepends its own fd/rg directory when a shell call begins. Re-apply the

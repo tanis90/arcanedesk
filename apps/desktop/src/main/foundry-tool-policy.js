@@ -16,10 +16,19 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
   "sceneRead", "sceneApply", "imageApply",
 ]);
 
+/**
+ * Pi built-ins for prep. The coding quartet plus the read-only trio
+ * (grep/find/ls) for searching the prep directory without shelling out.
+ * Pi 默认仍启用 Bash；Windows 必须显式选择一等公民的 PowerShell 工具。
+ */
+export function builtinToolNamesForPlatform(platform = process.platform) {
+  return ["read", platform === "win32" ? "powershell" : "bash", "edit", "write", "grep", "find", "ls"];
+}
+
 export function activeToolNames(mode, platform = process.platform) {
   const names = TOOL_NAMES_BY_MODE[mode];
   if (!names) throw new Error(`Unknown tool mode: ${mode}`);
-  return mode === "prep" ? [...names, "read", platform === "win32" ? "powershell" : "bash", "edit", "write"] : [...names];
+  return mode === "prep" ? [...names, ...builtinToolNamesForPlatform(platform)] : [...names];
 }
 
 export function verifyActiveTools(session, expected) {

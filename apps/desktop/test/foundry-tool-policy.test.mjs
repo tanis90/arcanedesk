@@ -40,7 +40,7 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
     assert.equal(session.getActiveToolNames().includes("request_user_input"), false);
     assert.equal(session.getActiveToolNames().includes("read"), false);
   } else {
-    assert.equal(expected.length, 23);
+    assert.equal(expected.length, 26);
     assert.equal(session.getActiveToolNames().includes("foundry_actor_advance"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_compendium_browse"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_advancement_plan"), true);
@@ -48,6 +48,9 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
     assert.equal(session.getActiveToolNames().includes("foundry_scene_apply"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_execute_action"), false);
     assert.equal(session.getActiveToolNames().includes("foundry_conditions_set"), true);
+    for (const builtin of ["read", process.platform === "win32" ? "powershell" : "bash", "edit", "write", "grep", "find", "ls"]) {
+      assert.equal(session.getActiveToolNames().includes(builtin), true, `${builtin} should be active in prep`);
+    }
   }
 });
 
