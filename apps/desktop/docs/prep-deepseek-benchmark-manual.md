@@ -21,8 +21,10 @@ benchmark 比较同一模型两臂：`matrix_tool`（生产 prep 工具 + 三份
    命令行或仓库。**
 3. **依赖已构建**：从仓库根执行过安装与构建（desktop / foundry-sdk /
    fvtt-cli），本机有 Electron（可用 `ARCANE_QA_ELECTRON` 指定）。
-4. **环境变量**（target `local-cos` 默认指向 30000，必须覆盖）：
+4. **环境变量**（target `local-cos` 默认指向本机 30000/COS 世界，必须覆盖）：
    `ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002`、`ARCANE_FVTT_CDP_PORT=9230`。
+   目标世界 id 不是 `COS` 时（如 docker qa-farm 的世界）再加
+   `ARCANE_FVTT_WORLD_ID=<世界id>`——fixture 守卫会校验 `game.world.id`。
 
 ## 2. 三步跑法
 
@@ -159,6 +161,12 @@ aasimar-mpmm 阿斯莫、kender-dsotdq 坎德人。
 `tmp-preflight-matrix.mjs` 的案例列表改成遍历 `matrixCaseIds` 即可。e2e
 32/32 全绿已证明所有案 plan 可达 completed 且无未覆盖步骤，probe 预期全过；
 若有不过的，先修工具/内容包，不要带病开批。
+
+**在别的世界/实例上跑（如 docker qa-farm）时多三件事**：① 镜像世界里
+`arcane-dnd5e-2014-automation` 必须已**启用**（装了≠启用，未启用时工具报
+`Unsupported direct action`）；② 用 `ARCANE_FVTT_WORLD_ID` 覆盖世界 id；
+③ arcane 内容包版本可能与开发世界有漂移——probe 期望按当下世界现算会吸收
+大部分差异，但与历史批次横向对比时记得这个混杂变量。
 
 ### 7.3 跑批策略：双臂全量一次，之后只迭代工具臂
 
