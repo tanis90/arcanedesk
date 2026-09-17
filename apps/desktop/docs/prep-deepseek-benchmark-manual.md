@@ -11,33 +11,46 @@ benchmark 比较同一模型两臂：`matrix_tool`（生产 prep 工具 + 三份
 
 ## 1. 前置条件
 
-1. **世界在线**：本地 COS 世界 `http://127.0.0.1:30002/game`，CDP 端口 9230，
-   恰好一个已登录 GM 的 `/game` 标签页。模块须含 `arcane-agent-bridge` 与
-   `arcane-dnd5e-2014-automation`（缺模块时工具调用会报
+> **⚠ 先选环境再照抄**：本文同时服务两个并发环境——**开发实例（30002/COS，
+> 子职业扩展占用中）**与 **docker qa-farm（30001，32 案全量批次用）**。
+> 两边必须各用各的世界、profile、outputDir。把别人正在用的世界或 profile
+> 当成自己的，会互相认错 benchmark 报告并中止批次。
+
+1. **世界在线**：恰好一个已登录 GM 的 `/game` 标签页。模块须启用
+   `arcane-dnd5e-2014-automation`（装了≠启用；未启用时工具报
    `Unsupported direct action`）。
-   - 注意隔离：**9233/30001 是另一窗口的 world（arcane-demo），不要碰**。
-2. **QA profile**：`C:/qa/kimi-a3`。provider 的 baseUrl 与 key 通过应用界面
-   预配置，加密存于 profile 的 ProviderStore。**不要把 key 写进 suite 配置、
-   命令行或仓库。**
+   - 开发实例（勿占用）：`http://127.0.0.1:30002/game`，CDP 9230，世界 COS，
+     另有 `arcane-agent-bridge`。
+   - qa-farm（32 案批次用）：`http://127.0.0.1:30001/game`，CDP 9233，
+     世界 id 以实际为准（多半不是 COS，见第 4 条 `ARCANE_FVTT_WORLD_ID`）。
+2. **QA profile**：开发实例用 `C:/qa/kimi-a3`；qa-farm 批次**复制一份再用**
+   （如 `C:/qa/kimi-b32`）——run-suite 靠 profile 目录里新增报告文件的唯一性
+   识别 trial，两个批次共用一个 profile 会互相中止。key 是 DPAPI 加密，同机
+   同用户复制后能解；解不开就在应用界面重存一次。provider 的 baseUrl 与 key
+   只存 profile 的 ProviderStore，**不要把 key 写进 suite 配置、命令行或仓库。**
 3. **依赖已构建**：从仓库根执行过安装与构建（desktop / foundry-sdk /
    fvtt-cli），本机有 Electron（可用 `ARCANE_QA_ELECTRON` 指定）。
+   qa-farm 批次请在**独立 worktree**（pin 到推送的 commit）里跑——benchmark
+   子进程每个 trial 现读代码树，别人正在编辑的工作树会让同批 trial 代码不一致。
 4. **环境变量**（target `local-cos` 默认指向本机 30000/COS 世界，必须覆盖）：
-   `ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002`、`ARCANE_FVTT_CDP_PORT=9230`。
-   目标世界 id 不是 `COS` 时（如 docker qa-farm 的世界）再加
-   `ARCANE_FVTT_WORLD_ID=<世界id>`——fixture 守卫会校验 `game.world.id`。
+   qa-farm 例：`ARCANE_FVTT_ORIGIN=http://127.0.0.1:30001`、
+   `ARCANE_FVTT_CDP_PORT=9233`、`ARCANE_FVTT_WORLD_ID=<qa-farm 世界id>`。
+   开发实例例：`ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002`、
+   `ARCANE_FVTT_CDP_PORT=9230`（世界 COS 是默认值，无需 WORLD_ID）。
 
 ## 2. 三步跑法
 
 ### ① 生成 fixture 报告（世界隔离对象 + 切到测试场景）
 
 ```bash
+# 开发实例示例；qa-farm 换成 ORIGIN=30001 / CDP_PORT=9233 / WORLD_ID=<实际世界id>
 ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002 ARCANE_FVTT_CDP_PORT=9230 \
   node apps/desktop/test/setup-prep-benchmark.mjs --target=local-cos
 ```
 
 输出形如 `{"status":"completed","output":".../prep-benchmark-fixture-<ts>.json"}`，
 把 output 路径填进 suite 配置。fixture 里含世界 id/模块清单快照；世界重建或
-模块大变后要重新生成。
+模块大变后要重新生成。**fixture 与目标世界一一对应，跨世界复用会被守卫拦下。**
 
 ### ② 写 suite 配置（例：`C:/qa/suite-v9-matrix.json`）
 
@@ -53,6 +66,8 @@ ARCANE_FVTT_ORIGIN=http://127.0.0.1:30002 ARCANE_FVTT_CDP_PORT=9230 \
   ]
 }
 ```
+
+（qa-farm 批次：`profile` 换成复制出来的独立目录，`outputDir` 换个名字。）
 
 - `cases`：matrix MVP 为 A5（高等精灵×战斗大师）、A12（高等精灵×塑能法师）、
   C1（狼人+战士 5）。省略则跑全部已定义案。
