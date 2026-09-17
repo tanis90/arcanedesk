@@ -27,7 +27,7 @@ function snapshot(mode) {
     busy: id === "A" && (taskOverride ? ["running", "stopping"].includes(taskOverride.state) : !finished || question?.state === "pending"),
     task: id === "A" ? taskOverride ?? { id: question?.taskId ?? "task-A", state: interrupted ? "interrupted" : question?.state === "pending" ? "waiting_user" : finished ? "completed" : "running" } : null,
     inputs: id === "A" && receiptInput ? [receiptInput] : [],
-    attentions: id === "A" && question ? [question] : [],
+    attentions: id === "A" && question?.state === "pending" ? [question] : [],
     history: id === "A" ? [...Array.from({ length: 40 }, (_, i) => ({ role: "user", text: "Earlier message " + i, ts: 100 + i })),
       { role: "user", text: "Task A", ts: 1 },
       { role: "assistant", ts: 2, toolCalls: [{ id: "tool-A", name: "bash", hasResult: finished, resultText: finished ? "ok" : undefined }] },
@@ -169,7 +169,7 @@ app.whenReady().then(async () => {
     await evaluate('switchMode("prep")');
     await until('selectedSessionId === "A" && document.querySelector("[data-attention-id] textarea")?.value === "Quiet forest"');
     await evaluate('document.querySelector("[data-attention-id] button.primary").click()');
-    await until('!document.querySelector("[data-attention-id] textarea") && document.querySelector("[data-attention-id]").textContent.includes("Quiet forest")');
+    await until('document.querySelectorAll("[data-attention-id]").length === 0');
     assert.equal(lastAnswer.sessionId, "A");
     assert.equal(lastAnswer.taskId, "task-question");
     assert.equal(lastAnswer.attentionId, "question-A");

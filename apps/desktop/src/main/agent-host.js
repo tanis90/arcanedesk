@@ -772,7 +772,12 @@ export class AgentHost {
     if (file) pending.migrate(file, model => this.navigation.patch(sessionId, { selectedModel: model, pendingModel: model }));
     this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, pending,
       pendingModel: this.navigation?.get(sessionId).pendingModel ?? null,
-      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }), emit: event => this.emit(event),
+      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }),
+      emit: event => {
+        if (event.type === "attention" && event.attention?.state !== "pending")
+          this.log(`[agent] attention ${event.attention.state}: q=${JSON.stringify(String(event.attention.question ?? "").slice(0, 80))} a=${JSON.stringify(String(event.attention.response ?? "").slice(0, 80))}`);
+        this.emit(event);
+      },
       adapter: {
         captureInput: () => captureFoundryInputContext(this.getFoundryView?.()?.webContents),
         beginTask: async (pending) => {
