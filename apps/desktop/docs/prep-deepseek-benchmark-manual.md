@@ -121,3 +121,70 @@ node apps/desktop/test/run-prep-benchmark.mjs --qa-root=C:/qa/kimi-a3 \
 - probe plan 若报 `uncoveredRequiredSteps`，该案 setup 直接失败（不适合自由
   发挥判定），先补工具覆盖再进矩阵。
 - 单批 6 trial 约 20–30 分钟；挂后台跑即可，中途不要动被指纹的文件。
+
+## 7. 下一步：32 案全量怎么跑起来
+
+### 7.1 补全案例定义（纯数据，无新代码）
+
+把 `matrix-model-adapter.cjs` 的 `MATRIX_CASES` 从 3 案扩到 32 案，与
+`scripts/e2e-advance-matrix.mjs` 的核心矩阵同构（13 A + 18 B + 1 C）：
+
+| 字段 | 来源 | 说明 |
+|---|---|---|
+| `id` | e2e 同名 | A1–A13 / B1–B18 / C1 |
+| `kind` | e2e `npc` | `"character"` 或 `"npc"` |
+| `cls` / `subclassMatch` | e2e `cls` / `subclass` | subclassMatch 是对 probe 池 `candidateNames` 做 includes 的中文片段 |
+| `race` / `raceName` | e2e `race` + 自配中文名 | raceName 只用于 prompt |
+| `level` | 固定 5 | |
+| `maxSpellLevel` | e2e 同名 | 0=不施法；圣武士/游侠/奇械师 2；全施法者 3 |
+
+不需要 e2e 的 `primary`/`spells` 字段：自由发挥不 pin 属性分配，法术判定直接
+读 probe 的 spellBudget（book/known/fullList 判定器已通用）。
+
+注意三个别名坑（probe 池里的名字与通称不同）：A9 盗贼池里叫「盗贼 Thief」、
+A13 炼金师叫「炼金师 Alchemist」、B 轴勇士叫「勇士 Champion」——includes
+中文部分即可命中，无需特殊处理。
+
+B 轴 18 种族中文名（prompt 用）：human 人类、variant-human 变体人类、
+hill-dwarf 丘陵矮人、mountain-dwarf 山地矮人、high-elf 高等精灵、wood-elf
+木精灵、drow 卓尔、lightfoot-halfling 轻足半身人、stout-halfling 壮心半身人、
+forest-gnome 森林侏儒、rock-gnome 岩侏儒、half-elf 半精灵、half-orc 半兽人、
+dragonborn 龙裔、tiefling 提夫林、tiefling-levistus 提夫林（勒维斯图斯）、
+aasimar-mpmm 阿斯莫、kender-dsotdq 坎德人。
+
+### 7.2 先跑 probe 自检，再开模型批次
+
+扩完后先把 32 案的 setup（probe 建档 + plan 期望推导）全部干跑一遍——这步
+不调用模型、只读合集，几分钟内暴露"哪些案 probe 不过"。把
+`tmp-preflight-matrix.mjs` 的案例列表改成遍历 `matrixCaseIds` 即可。e2e
+32/32 全绿已证明所有案 plan 可达 completed 且无未覆盖步骤，probe 预期全过；
+若有不过的，先修工具/内容包，不要带病开批。
+
+### 7.3 跑批策略：双臂全量一次，之后只迭代工具臂
+
+1. **基线批（钉死）**：32 案 × 双臂 = 64 trial。裸 JS 臂几乎必定顶满 300s
+   超时，单批总时长约 4 小时，建议拆 3 批跑（A 轴 / B 轴 / C 轴各一个
+   outputDir，cases 字段分批）。跑完裸 JS 臂永久钉死，不再重跑。
+2. **迭代批**：之后每次改工具/skill 只重跑 `matrix_tool` 臂。suite 层不支持
+   单臂过滤，用单案直跑（§2.③ 的 `--arm-only=matrix_tool`）或临时多模型
+   空挂方式绕——更推荐前者，逐案快。
+3. 结果汇总写回本文档 §5 表格，标注判定器版本（matrixVerifier.sha256 在
+   报告里）。
+
+### 7.4 预期会撞的边界（先知道，别当 harness 故障）
+
+- **专长替代 ASI**：judge 的 `abilities.sum` 期望按"ASI 全加属性"算
+  （asiPoints 来自 plan 的 asi-or-feat 槽）。自由发挥下模型可能选专长
+  （尤其 B2 变体人类），属性总和会少 2 → 误报。届时决策：判定器接受
+  "专长 item + 属性少 2"等价，或在 prompt 钉死"属性提升选属性"。
+- **种族法术案**（B7 卓尔、B15/B16 提夫林）：fighter 无 spellBudget，法术
+  检查块整体跳过，种族自带法术不计数——这是刻意放宽，不是漏洞。
+- **A9 游荡者专精槽**：expertise 不进 skillPickCount（判定器已过滤
+  `mode==="expertise"`），但熟练值 ≥2 的技能会被 skills.count 算作熟练——
+  专精加倍后 value=2 仍计数一次，口径正确。
+- probe 的怪物解析：本世界无 arcane 怪物包，C 轴固定回退 dnd5e.monsters。
+
+### 7.5 扩展层（全职业×全子职业约 120 案）
+
+等 32 案双臂数据稳定后再谈。前置：内容数据已知清单（e2e 扩展层登记的那些）
+要先消化，否则模型会大量撞上空池/缺条目，测的是内容缺口而不是工具。
