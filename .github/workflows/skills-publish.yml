@@ -3,9 +3,9 @@ name: Publish Arcane Skills
 # 内置 skills 的独立下发入口:只打包并发布 apps/desktop/skills/prep,不构建、
 # 不发 app 版本。revision 来自 bundle.json 且必须严格大于远端指针,
 # 不可变对象全部 HEAD 验收通过后才切换 skills/latest.json。
-# 国际化方案 M4 双轨:region=cn 发 skills/prep 到 OSS arcane-package;
-# region=intl 先组合 skills/prep-intl 英文基线(过四道 fail-closed 门禁)再发到
-# R2 arcane-desk-intl 独立前缀,两侧 revision 与 latest 指针互不影响。
+# 两个 region 发布同一棵中文单源树(skill 是模型侧指令,不随界面语言分叉):
+# region=cn 发到 OSS arcane-package;region=intl 发到 R2 arcane-desk-intl
+# 独立前缀,两侧 latest 指针互不影响。
 on:
   workflow_dispatch:
     inputs:

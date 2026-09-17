@@ -2,11 +2,10 @@
 // publish-skills.mjs — 内置 skills 的独立发布入口:改 skill 文本不再发 app 版。
 //
 // 职责(顺序固定,镜像 publish-release 的不可变+指针纪律):
-//   1. 读 bundle.json 的单调 revision(cn = skills/prep/bundle.json,
-//      intl = skills/prep-intl/bundle.json,两棵树的计数器与远端指针各自独立)
+//   1. 读 skills/prep/bundle.json 的单调 revision(两个 region 共用中文单源树,
+//      共用同一个计数器;远端指针各自独立)
 //   2. 拉远端 skills/latest.json,要求新 revision 严格更大(防回滚、防重传)
 //   3. 把技能树全量打成 bundle.tar.gz,生成逐文件 SHA256 的 manifest.json
-//      (intl 先经 compose-intl-skills.mjs 组合:cn 树脚本单源 + intl 翻译覆盖)
 //   4. 上传不可变对象 <skillsRoot>/<revision>/{bundle.tar.gz,manifest.json}
 //   5. HEAD 全量验收通过后才切换可变指针 <skillsRoot>/latest.json
 //
@@ -27,7 +26,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import * as tar from "tar";
 
 import { createStorageClient, resolveTarget, uploadObject, verifyUrl } from "./publish-release.mjs";
-import { composeIntlSkills } from "./compose-intl-skills.mjs";
 import { REGION_IDS } from "../src/main/region.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -204,13 +202,9 @@ async function main() {
 
   const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "arcane-skills-publish-"));
   try {
-    // intl 技能树 = cn 树脚本单源 + skills/prep-intl 翻译覆盖（含独立 bundle.json
-    // 计数器），组合器自带 CJK 渗漏与翻译覆盖率门禁。
-    let skillsDir = SKILLS_DIR;
-    if (region === "intl") {
-      skillsDir = path.join(workDir, "composed");
-      await composeIntlSkills({ outDir: skillsDir });
-    }
+    // 两个 region 发布同一棵中文单源树 skills/prep（skill 是模型侧指令，不随
+    // 界面语言分叉；intl 仅路由到 R2 独立前缀，指针互不影响）。
+    const skillsDir = SKILLS_DIR;
 
     const bundleMeta = JSON.parse(await fsp.readFile(path.join(skillsDir, "bundle.json"), "utf8"));
     const revision = bundleMeta?.schemaVersion === 1 && Number.isSafeInteger(bundleMeta?.revision) && bundleMeta.revision >= 1
@@ -229,7 +223,7 @@ async function main() {
 
     const current = await remoteRevision({ baseUrl: target.baseUrl, latestKey, tolerateFailure: args.dryRun });
     if (current != null && revision <= current) {
-      throw new Error(`skills revision ${revision} is not newer than the published r${current}; bump the intl/cn bundle.json`);
+      throw new Error(`skills revision ${revision} is not newer than the published r${current}; bump skills/prep/bundle.json`);
     }
 
     const bundleFile = path.join(workDir, "bundle.tar.gz");
@@ -292,7 +286,7 @@ async function main() {
       } catch (error) {
         if (Number(error?.status) !== 404) throw error;
       }
-      if (exists) throw new Error(`immutable object already exists: ${obj.key} (bump the intl/cn bundle.json)`);
+      if (exists) throw new Error(`immutable object already exists: ${obj.key} (bump skills/prep/bundle.json)`);
     }
     for (const obj of immutableObjects) await uploadObject(client, obj);
 

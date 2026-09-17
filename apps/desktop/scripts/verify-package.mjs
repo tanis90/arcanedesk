@@ -84,23 +84,17 @@ export const exactDirectories = new Map([
   ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
 ]);
 
-// generated/ 的精确清单随 region flavor 变化（国际化方案 M4，评审 P1 修复）：
-// intl 包必须携带组合产出的英文基线（generated/skills-intl/prep 与
-// generated/system-prompts-intl，由 prepare-desktop-release 组合并过 CJK 门禁），
-// cn 包则必须没有它们（cn 构建会清除残留）。组合产出与 skills/prep 同构
-// （cn 全文事实源 + intl 散文覆盖），顶层清单直接复用，新增技能时只需改一处。
+// generated/ 的精确清单随 region flavor 变化：intl 包必须携带英文 system prompts
+// 基线（generated/system-prompts-intl，由 prepare-desktop-release 复制并过 CJK
+// 门禁），cn 包则必须没有它（cn 构建会清除残留）。skills 基线两 flavor 同为
+// 中文单源 skills/prep，不再有组合产物。
 export function packagedLayout(region) {
   if (region !== "intl") return { required: requiredFiles, exact: exactDirectories };
-  const skillTopLevel = exactDirectories.get("skills/prep");
   const exact = new Map(exactDirectories);
-  exact.set("generated", [...exactDirectories.get("generated"), "skills-intl", "system-prompts-intl"]);
-  exact.set("generated/skills-intl", ["prep"]);
-  exact.set("generated/skills-intl/prep", skillTopLevel);
+  exact.set("generated", [...exactDirectories.get("generated"), "system-prompts-intl"]);
   exact.set("generated/system-prompts-intl", ["combat.md", "prep.md"]);
   const required = [
     ...requiredFiles,
-    "generated/skills-intl/prep/bundle.json",
-    ...skillTopLevel.filter((entry) => entry !== "bundle.json").map((id) => `generated/skills-intl/prep/${id}/SKILL.md`),
     "generated/system-prompts-intl/combat.md",
     "generated/system-prompts-intl/prep.md",
   ];

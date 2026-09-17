@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// check-skills-revision.mjs — PR 检查:apps/desktop/skills/prep(及 intl 覆盖树
-// skills/prep-intl)有内容变更时,对应 bundle.json 的单调 revision 必须随之增大。
-// 这个 revision 是 app 包内基线与 OSS skills 通道共用的计数器(见
-// publish-skills.mjs / skills-updater.mjs;intl 树由 compose-intl-skills.mjs 组合),
+// check-skills-revision.mjs — PR 检查:apps/desktop/skills/prep 有内容变更时,
+// bundle.json 的单调 revision 必须随之增大。
+// 这个 revision 是 app 包内基线与 OSS/R2 skills 通道共用的计数器(见
+// publish-skills.mjs / skills-updater.mjs;两个 region 发布同一棵中文单源树),
 // 漏 bump 不会发错版本(发布端有远端指针校验兜底),但会让"revision 唯一标识
 // 内容"这条不变量从仓库侧失效,所以在 PR 阶段直接拦下,而不是等发布时才报错。
 //
 // 用法:node apps/desktop/scripts/check-skills-revision.mjs <base-ref>
 // 例:node apps/desktop/scripts/check-skills-revision.mjs origin/main
-// base 上还没有 bundle.json 时按 r0 处理;对应树无变更直接通过;
-// 某棵树在 base 与 HEAD 都不存在(如旧分支上的 prep-intl)时跳过。
+// base 上还没有 bundle.json 时按 r0 处理;该树无变更直接通过。
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -20,8 +19,8 @@ const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const repoRoot = path.resolve(desktopRoot, "..", "..");
 const SKILLS_PREFIX = "apps/desktop/skills/prep";
 const BUNDLE_FILE = `${SKILLS_PREFIX}/bundle.json`;
-// 每棵树各自携带 bundle.json、各自单调计数;两棵树都要过同一条 bump 规则。
-const SKILLS_TREES = [SKILLS_PREFIX, "apps/desktop/skills/prep-intl"];
+// skills 单源中文树:只有一个计数器,过同一条 bump 规则。
+const SKILLS_TREES = [SKILLS_PREFIX];
 
 export { parseBundleRevision, assertRevisionBump, checkSkillsRevision };
 
@@ -80,7 +79,7 @@ function checkSkillsRevision({ repoRoot: root = repoRoot, baseRef, skillsPrefix 
   try {
     headText = fs.readFileSync(path.join(root, bundleFile), "utf8");
   } catch {
-    headText = null; // 该树在 HEAD 不存在(如旧分支上的 prep-intl):按 r0 处理。
+    headText = null; // 该树在 HEAD 不存在:按 r0 处理。
   }
   const headRevision = parseBundleRevision(headText, bundleFile);
   assertRevisionBump({ changedFiles, baseRevision, headRevision, bundleFile });
