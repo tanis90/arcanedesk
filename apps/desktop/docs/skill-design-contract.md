@@ -252,6 +252,22 @@
   不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
   不与历史报告求可比（用户裁决）。
 
+### 三环施法者 spellBudget（2026-09-17）
+
+- 本条取代 2026-09-14 spellBudget 记录的"第三施法者（奥法骑士/诡术贼）v1 放弃"。实证缺口：
+  扩展层扫描（`e2e-advance-matrix.mjs --subclasses-of fighter`）中奥法骑士落卡 3 环位
+  0 环法照绿——环级法术在原生数据里无 advancement 载体（子职业 `system.spellcasting.
+  progression="third"` 只驱动系统自动派生槽位），plan 无槽、表无行、oracle 无查。
+- 全量核实：全世界 Item 包扫 `spellcasting.progression`，2014 仅奥法骑士/诡术师两个
+  子职业引入施法，共用同一 PHB 三环表（wikidot PHB 转录逐行核对）；四象宗武僧等为气点
+  施法无环位，正确不命中。2024 子职业无此配置（未调研形态，不下发）。
+- 实现：plan 侧 `spellBudgetForClass` 收 subclassData，职业不施法而子职业 progression
+  非空时按三环表下发 `known` + `source:"subclass"` + `maxSpellLevel`（progression 环位
+  公式 `min(4, ceil(L/6))`）+ `spellListClassUuid`（法师列表，browse eligibility 回传
+  它）；戏法不下发——走子职业自带 ItemChoice 槽，避免双口径。学派限制（EK 防护/塑能、
+  AT 附魔/幻术、AT 固定 Mage Hand）是自然语言规则，以 `note` 提示不校验。法术选取复用
+  additionalItems（known 语义），advance 侧零改动。
+
 ### subclass-uuid 候选池（2026-09-14）
 
 - `choiceRequirements` 中 `valueFormat:"subclass-uuid"` 的要求现挂 `candidates`（uuid）+

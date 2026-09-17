@@ -60,6 +60,24 @@ identifier `high-elf`）：种族侧带戏法选择（法师池）、固定 ASI�
 
 运行量级：扩展层每案 30-60s，全量约 1-2 小时；`--filter` 随时切子集。
 
+**扩展层首扫结果（战士，2026-09-17）**：10 案跑通，但抓到奥法骑士假绿——落卡
+3 环位 0 环法照绿（子职业施法不走 advancement：环位由系统按
+`spellcasting.progression="third"` 自动派生，环级法术原生就是手工拖卡，plan 无槽、
+表无行、oracle 无查）。修复：oracle 补"环位非空但无 budget 且环级法术为 0"兜底断言
+（假绿正确转红）+ runtime 三环表 budget 下发（见 foundry-prep-tools-spec §3.2
+spellBudget 子职业施法条）。诡术师（游荡者）同形态，`--subclasses-of rogue` 已回归
+9/9 绿（法术 4 个 1 环按法师列表落卡）。
+
+首扫登记的已知问题（均不阻塞工具合入）：
+
+- **内容数据**：arcane 包诡术师缺"自选 2 个法师戏法"的 ItemChoice advancement
+  （奥法骑士有对应槽，诡术师只有 Mage Hand 固定 ItemGrant）——规则上 3 级诡术师是
+  Mage Hand + 2 自选戏法，落卡少 2 个自选。修模块数据另开工作项。
+- **回执口径**：`cantripsBySource`/`spellsBySource` 把 activity 缓存法术
+  （`flags.dnd5e.cachedFor`，原生"经活动施法"的副本）计为 granted 桶——诡术师案的
+  法师之手因此呈 subclass 1 + granted 1（缓存副本）。不是重复 bug，但对账口径应排除
+  cachedFor 条目，候选修正暂记。
+
 ### 2.2 轴 B：冠军勇士 × 全 2014 种族（18 案）
 
 职业固定为战士 + 冠军勇士（无施法、最少 choice，把变量压到种族侧；它也是
@@ -107,8 +125,13 @@ identifier `high-elf`）：种族侧带戏法选择（法师池）、固定 ASI�
   命令，不接 CI runner、不进 GitHub Actions（GitHub 托管 runner 跑不了授权软件
   Foundry + 世界数据；单元层回归仍由既有 `npm test` 承担）。
 - 参数：`--port <cdpPort>`（默认 9222）、`--host`、`--world <origin,id>`、
-  `--filter <正则>`（只跑匹配案，调试单案用）、`--extended`（轴 A 换成全子职业
-  扩展层，默认只跑核心 32 案）、`--keep`（不清理测试 actor）。
+  `--filter <正则>`（只跑匹配案，调试单案用）、`--subclasses-of <cls>`（扩展层：
+  逐职业全子职业扫描——建一次性 probe 卡跑 plan 拿权威子职业池，每子职业一案，
+  案 id `A5s-<identifier>`；browse 仅用于反查 identifier；sweep 案 `spells:"auto"`，
+  按 plan.spellBudget 形状自适应 known/book/fullList）、`--keep`（不清理测试 actor）。
+  池来源是 plan 的 subclass-uuid 槽而非 browse：plan 池是 advance 实际接受的集合，
+  且自动按职业 rules 排除跨规则条目（browse 目录不传 rules 时不排除，2026-09-17 实测
+  2014 战士池混入 2024 Champion——browse 侧已知不对称，调用方显式传 rules 对齐）。
 - 依赖：一个活着的、GM 已登录的 Foundry 标签页（COS 世界、dnd5e 5.3.3、
   arcane 模块启用），经 fvtt-cli 直连（directCdp）。harness 以子进程调
   `packages/fvtt-cli/dist/cli.js`，不走网络服务。
@@ -156,7 +179,8 @@ identifier `high-elf`）：种族侧带戏法选择（法师池）、固定 ASI�
    不与职业配额对账。（2026-09-17 首轮全案差 1 的教训：卡面总数 ≠ 职业配额。）
 4. creation 收尾：`hp.value === hp.max`；施法者 `slotFill` 存在。
    （`hpFill` 只在发生拉满时才出现在回执里——种族不加 con 时无漂移、自然满血，
-   不当必填。）
+   不当必填。）**施法兜底**：卡面环位非空但 plan 无 spellBudget 且环级法术为 0 →
+   判失败（未对账的施法能力；2026-09-17 奥法骑士假绿抓出此盲区）。
 5. `grantedItems` 同时含职业、种族、子职业来源条目。
 6. `uncoveredRequiredSteps` 为空（plan 阶段断言）。
 

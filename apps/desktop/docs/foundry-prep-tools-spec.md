@@ -153,6 +153,10 @@ output: {
   choicesTemplate: Record<string, unknown>;  // 每个 bySlot 槽位的填空骨架，照抄改值即可
   spellBudget: { ability: string | null; progression: string; cantrips?: number;
     known?: number; book?: number;
+    source?: "subclass";            // 子职业引入施法（三环）时标 "subclass"
+    maxSpellLevel?: number;         // 子职业施法者：目标等级最高环位（browse maxLevel 回传）
+    spellListClassUuid?: string;    // 子职业施法者：法术列表所在职业（2014 三环 = 法师）
+    note?: string;                  // 规则提示（学派限制/固定戏法），不校验
     fullList?: { maxLevel: number; count: number;
       candidates: Array<{ uuid: string; name: string; level: number }> } } | null;
   coverage: { nativeStepCount: number; automaticStepCount: number;
@@ -213,6 +217,13 @@ output: {
 - **spellBudget.fullList**：准备施法者（2014 牧师/德鲁伊/圣武士/奇械）能会的全部法术
   （按环位上限枚举自模块标注包）。这类职业"会"整个职业法术列表，准备是 DM 与玩家
   游戏时决定的页签标记，工具不管理。配套 advance 的 fullSpellList 开关使用。
+- **spellBudget 子职业施法（2026-09-17 定稿，取代"v1 放弃"）**：职业不施法而子职业
+  `system.spellcasting.progression` 非空时（2014 仅奥法骑士/诡术师，全世界包扫描 +
+  PHB 三环表逐行核实），按三环表下发 `known` + `source:"subclass"` + `maxSpellLevel` +
+  `spellListClassUuid`（法师列表）。环级法术走 additionalItems（known 语义，browse 回传
+  spellListClassUuid 拿 eligibility）；戏法不下发——走子职业自带 ItemChoice 槽，避免
+  双口径。学派限制/固定 Mage Hand 进 `note` 提示，不校验。2024 子职业施法形态未调研，
+  不下发。
 - rules 由 classUuid 锚定推导，模型不传。
 
 ### 3.4 foundry_actor_get（现状不变）

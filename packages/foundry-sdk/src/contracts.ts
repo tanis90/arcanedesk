@@ -521,14 +521,25 @@ export interface ContentListFullSpellList {
  *  computes slots. Prepared-list casters (2014 cleric/druid/paladin/artificer) instead receive
  *  fullList — every class spell up to their highest slot level, enumerated from module-annotated
  *  spell packs (flags.<moduleId>.spellClasses) — because they "know" their whole class list and
- *  preparation is left to the DM and players. Null for non-spellcasting classes. */
+ *  preparation is left to the DM and players. Null for non-spellcasting classes.
+ *  Subclass-introduced casting (source "subclass"; 2014 Eldritch Knight / Arcane Trickster via
+ *  the shared third-caster table): known only — cantrips ride the subclass's own ItemChoice
+ *  advancement slot and are deliberately absent here; leveled picks go additionalItems, drawn
+ *  from the spellListClassUuid list (the wizard list) with browse maxLevel = maxSpellLevel. */
 export interface ContentListSpellBudget {
   ability: string | null;
   progression: string;
+  source?: "subclass";
   cantrips?: number;
   known?: number;
   book?: number;
   fullList?: ContentListFullSpellList;
+  /** Highest slot level at the target level (subclass casters only); browse maxLevel filter. */
+  maxSpellLevel?: number;
+  /** Class whose spell list the picks come from; feed back to compendium_browse classUuid. */
+  spellListClassUuid?: string;
+  /** Advisory natural-language rule note (school restrictions, fixed Mage Hand). Never validated. */
+  note?: string;
 }
 export interface AdvancementPlanResult {
   status: "completed" | "rejected"; code?: string; message?: string;

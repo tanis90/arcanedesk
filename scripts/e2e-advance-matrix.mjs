@@ -165,13 +165,15 @@ function fillChoices(caseCfg, plan, primary, takenUuids = new Set()) {
 }
 
 // ── 法术选取（spec §3.2.4）：不背名单，browse 分页取 eligibility:"legal" ─────
+// 子职业施法者（三环）列表不在本职职业上：budget.spellListClassUuid 指法师列表（runtime 下发）。
 function pickSpells(caseCfg, classUuid, budget) {
   const grants = [];
+  const listUuid = budget.spellListClassUuid ?? classUuid;
   const take = (maxLevel, count) => {
     if (!count) return;
     let got = 0;
     for (let page = 1; got < count; page++) {
-      const data = cli("compendium-browse", { scope: "compendium", type: "spell", classUuid, maxLevel, page, pageSize: 50 });
+      const data = cli("compendium-browse", { scope: "compendium", type: "spell", classUuid: listUuid, maxLevel, page, pageSize: 50 });
       const entries = (data.candidates ?? []).filter(c => c.eligibility === "legal" && (maxLevel === 0 ? c.level === 0 : (c.level ?? 0) >= 1));
       for (const c of entries) {
         if (got >= count) break;
@@ -365,7 +367,7 @@ async function runCase(caseCfg) {
     if (plan.status !== "completed") throw new Error(`plan ${plan.status}: ${plan.message ?? ""}`);
     note.planKeys = (plan.choiceRequirements ?? []).map(r => r.key);
     // 3b. sweep 案的施法自适应：子职业可能引入 spellBudget（奥法骑士类）。按 budget 形状推断
-    // known/book/fullList；三环施法子职业 5 级只有 1 环位，maxSpellLevel 自适应为 1。
+    // known/book/fullList；maxSpellLevel 优先取 budget 下发值（三环表），缺省 1。
     // budget 缺失/形状不识别的案不选法术——若 advance 仍要求法术槽，会炸出来当工具缺口信号。
     const effCfg = { ...caseCfg };
     if (caseCfg.spells === "auto") {
@@ -377,7 +379,7 @@ async function runCase(caseCfg) {
       else if (b.fullList) effCfg.spells = "fullList";
       else if ((b.cantrips ?? 0) > 0) effCfg.spells = "known"; // 仅戏法
       else effCfg.spells = null;
-      if (effCfg.spells && effCfg.spells !== "fullList") effCfg.maxSpellLevel = 1;
+      if (effCfg.spells && effCfg.spells !== "fullList") effCfg.maxSpellLevel = b?.maxSpellLevel ?? 1;
       note.autoSpells = effCfg.spells ? { mode: effCfg.spells, maxSpellLevel: effCfg.maxSpellLevel } : null;
     }
     // 4. 法术（known/book 职业）；fullList 职业不选

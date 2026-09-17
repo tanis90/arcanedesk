@@ -82,11 +82,15 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    施法者（2014 牧师/德鲁伊/圣武士/奇械）没有数量，改发 `fullList`：他们"会"整个职业
    法术列表，建卡时给 advance 传 `fullSpellList:true` 一次授满（领域法术等已有条目按
    来源 UUID 自动去重，高级别自动分批）；`system.prepared` 页签标记留给 DM 和玩家在
-   游戏中自行决定，一律不设置。
-3. 候选：法术候选用 `foundry_compendium_browse`（`type:"spell"`，传同一 `classUuid`）
-   分页列取并带 `eligibility`；戏法传 `maxLevel:0`。环位上限按目标等级的规则知识传
-   `maxLevel`；总数不背表，以 `spellBudget` 为准。`fullList` 职业的候选已在
-   `spellBudget.fullList.candidates` 里给全，不必再分页搜。
+   游戏中自行决定，一律不设置。子职业引入的施法（2014 奥法骑士/诡术师）发
+   `source:"subclass"` + `known`：环级法术按数选满；戏法不在预算里，走子职业自带的
+   选择槽（`subclass:` 前缀槽位）。
+3. 候选：法术候选用 `foundry_compendium_browse`（`type:"spell"`，传同一 `classUuid`；
+   budget 带 `spellListClassUuid` 时改传它——子职业施法者的列表挂在法师职业上）
+   分页列取并带 `eligibility`；戏法传 `maxLevel:0`。环位上限：budget 带 `maxSpellLevel`
+   时照传，否则按目标等级的规则知识传 `maxLevel`；总数不背表，以 `spellBudget` 为准。
+   budget 的 `note` 是规则提示（如学派限制、固定戏法），遵循但不需验算。`fullList`
+   职业的候选已在 `spellBudget.fullList.candidates` 里给全，不必再分页搜。
 4. 子职业：先不带 `subclassUuid` 调计划拿候选池（`candidates`/`candidateNames`）；用户
    指定学派时按名称从池里选，未指定时按任务默认或从池里挑。定下 `subclassUuid` 后必须
    带它重调一次计划：子职业自身的授予/选择步骤（`subclass:` 前缀）才进输出，

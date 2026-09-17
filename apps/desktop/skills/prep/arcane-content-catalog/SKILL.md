@@ -51,7 +51,9 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   游）、`book` 法术书容量（法师），选满这个数。准备施法者（2014 牧师/德鲁伊/圣武士/
   奇械）改发 `fullList`：他们能会的全部法术候选（带 uuid/名称/环位，上限为最高法术位
   环）——这类职业"会"整个职业法术列表，准备是 DM 与玩家游戏时决定的页签标记，工具
-  不管理；建卡时给 advance 传 `fullSpellList:true` 一次授满。
+  不管理；建卡时给 advance 传 `fullSpellList:true` 一次授满。子职业引入的施法（2014
+  奥法骑士/诡术师）发 `source:"subclass"` + `known` + `spellListClassUuid`（列表挂在
+  法师职业上）+ `maxSpellLevel`；戏法不在此预算，走子职业自身的选择槽。
 - 子职业两次调用约定：先不带 `subclassUuid` 拿计划（`subclass-uuid` 步骤自带
   `candidates`/`candidateNames` 池，按职业与规则版本过滤）；定下后带它重调一次，子职业
   自身的授予/选择步骤（`subclass:` 前缀）才进输出。
