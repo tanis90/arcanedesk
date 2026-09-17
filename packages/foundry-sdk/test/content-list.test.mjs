@@ -486,7 +486,10 @@ test("classFeature subclass pool dedupes SRD and module copies by identifier, ar
   const f = fixture({ classFlows: flows(), subclassEntries: [subs[0], subs[2]],
     catalogPacks: [{ id: "arcane-dnd5e-2014-automation.subclasses", entries: [subs[1]] }] });
   const req = (await f.list(args)).choiceRequirements.find(r => r.valueFormat === "subclass-uuid");
-  assert.deepEqual(req.candidates, ["Compendium.dnd5e.subclasses.Item.illusion", "Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo-mod"]);
+  // 顺序无关断言：候选按名称 localeCompare 排序，中文名的排序依赖宿主 ICU/locale
+  // （Windows zh 按拼音、Linux CI 按码位），断死顺序会让测试只在特定平台成立。
+  // 本条用例的意图是去重与 arcane 优先，与顺序无关。
+  assert.deepEqual([...req.candidates].sort(), ["Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo-mod", "Compendium.dnd5e.subclasses.Item.illusion"]);
   assert.equal(req.candidateNames["Compendium.arcane-dnd5e-2014-automation.subclasses.Item.evo-mod"], "塑能学派 School of Evocation");
 });
 
