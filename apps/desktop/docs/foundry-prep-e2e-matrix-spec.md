@@ -78,6 +78,29 @@ spellBudget 子职业施法条）。诡术师（游荡者）同形态，`--subcl
   法师之手因此呈 subclass 1 + granted 1（缓存副本）。不是重复 bug，但对账口径应排除
   cachedFor 条目，候选修正暂记。
 
+**扩展层二扫结果（全职业，2026-09-17）**：12 职业 119 案（战士 10、游荡者 9 为一扫），
+115 绿 4 红，四案各是一种根因：
+
+- **工具 bug（已定位已修复）— bard/逸闻学院 EXPERTISE_NOT_LANDED**：二扫当天定位。
+  真凶不是专精顺序——专精实际落成了（arc/prf 1→2），是填值器在子职业"额外熟练"
+  槽把同样的 arc/prf/prc **又选了一遍**，dnd5e 对 `mode:"default"` 无条件写 1，
+  把专精踩回熟练（页面内 monkey-patch TraitAdvancement.apply 拿到的逐条
+  before/after 实锤）。原生 UI 把已熟练项标 selected 不可再选，API 侧本无护栏。
+  修复双管齐下：① runtime default 模式槽写入前拒绝重复选取（见
+  foundry-prep-tools-spec §13.2 纪律 4）；② harness 填值器 trait-key 槽排除前序
+  已选。修复后 bard sweep 8/8 绿。
+- **harness 选取策略（非工具）— cleric/知识领域**：专精池要 2 个已熟练的
+  arc/his/nat/rel，填值器前序技能槽只落了 1 个，自家"合法候选不足"异常拦下
+  （零写入）。填值器需要前瞻：后面有受限专精池时，前面技能槽优先从池里选。
+  对 LLM 该报错可读可重试，暂不视为工具缺口。
+- **工具缺口（已知类别）— monk/剑圣宗**：TraitAdvancement 武器池
+  （skills/tools/languages/dr/di/ci/dv 之外的族）落到 uncoveredRequiredSteps，
+  剑圣武器选择无法经工具下发。候选：槽位寻址扩到 weapon 族 trait 池。
+- **口径碰撞 — sorcerer/月之术法**：子职业自动授予 9 个法术，填值器按 budget 6
+  自选，1 个与子职业授予撞车被去重 → granted 5 ≠ budget 6（卡面 14，合法但少
+  一个有效自选）。候选：plan 暴露子职业自动授予法术清单（LLM 也能避开），
+  或 oracle 容忍"自选∩子职业授予"的重合。
+
 ### 2.2 轴 B：冠军勇士 × 全 2014 种族（18 案）
 
 职业固定为战士 + 冠军勇士（无施法、最少 choice，把变量压到种族侧；它也是

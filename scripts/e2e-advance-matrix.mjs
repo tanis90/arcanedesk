@@ -154,8 +154,11 @@ function fillChoices(caseCfg, plan, primary, takenUuids = new Set()) {
       bySlot[req.key] = legal.slice(0, req.count);
     } else if (!(req.candidates ?? []).length) {
       throw new Error(`槽 ${req.key}(${req.label}) 无候选——plan 未枚举，工具缺口`);
-    } else { // trait-key / pool-uuid：取池内前 count 个（避开已被 additionalItems 占用的）
-      const pool = (req.candidates ?? []).filter(c => !takenUuids.has(c));
+    } else { // trait-key / pool-uuid：取池内前 count 个（避开已被 additionalItems 占用的；
+      // trait-key 还要避开本 call 前序槽已选的——default 模式重选会把专精踩回熟练，
+      // runtime 现在也写入前拒绝，见逸闻学院案）
+      const pool = (req.candidates ?? []).filter(c => !takenUuids.has(c)
+        && !(req.valueFormat === "trait-key" && pickedTraits.includes(c)));
       if (pool.length < req.count) throw new Error(`槽 ${req.key} 候选不足：需 ${req.count}，池 ${pool.length}（已排除占用）`);
       bySlot[req.key] = pool.slice(0, req.count);
       if (req.valueFormat === "trait-key") pickedTraits.push(...bySlot[req.key]);

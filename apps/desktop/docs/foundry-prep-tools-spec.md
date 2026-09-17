@@ -781,6 +781,14 @@ fillAllocation，见 §3.3。
    扫子职业步骤，两条路径产生的 subclass: 前缀 slot 必须一致。
 3. **专精顺序约束保留**：expertise 槽校验"须已熟练（卡面或本次调用更早槽位）"，
    landedTraits 仍按步骤顺序累积——这是规则本身的数据依赖，不是桶消费。
+4. **default 槽重复选取拒绝（2026-09-17，逸闻学院案）**：dnd5e `TraitAdvancement.apply`
+   对 `mode:"default"` 无条件写熟练值 1——重选已熟练项会把已落专精（2）踩回 1
+   （原生 UI 把已熟练项标 selected 不可再选，API 侧本无护栏）。default 模式槽的
+   skills:/tool: 选取若已在 landedTraits（卡面或本次调用更早槽位）中，写入前整体
+   拒绝并点名。languages/dr/di/ci/dv 是集合添加、幂等无害，不在拒绝范围；
+   expertise/upgrade 模式本就要求已熟练项，也不受影响。
+   已知边界：若某池全部候选都已在卡面（理论情形），原生会按需减 count 而我们仍
+   要求满额——暂无真实案命中，命中再议。
 
 ### 13.3 验收
 

@@ -44,7 +44,10 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    专精槽（plan 里带 `mode:"expertise"` 与说明）同此键法：每个值必须是卡面已有熟练、
    或本次调用前面槽位已选的项；把未熟练的 key 填进专精槽会在写入前整体拒绝并点名
    （dnd5e 原生对未熟练目标静默丢弃，工具把这件事提前成显式拒绝；万一仍被丢弃，
-   回执 warnings 报 `EXPERTISE_NOT_LANDED`）。装备、法术书
+   回执 warnings 报 `EXPERTISE_NOT_LANDED`）。镜像规则：普通熟练槽（default 模式）
+   不得重复选卡面已熟练或本次调用前面槽位已选的 skills:/tool: 项——dnd5e 对 default
+   模式无条件写熟练值 1，重选会把已落的专精（2）踩回 1，工具同样在写入前整体拒绝
+   并点名。装备、法术书
    法术等额外条目随 `additionalItems`（≤50）同一批写入：用户点名的装备精确解析来源，
    未点名的起始装备按职业常识一次 `names` 批量解析带过，不逐件考证；`fullList` 职业
    改传 `fullSpellList:true`。`expectedName`/`expectedType` 是全等漂移校验：照抄 browse
