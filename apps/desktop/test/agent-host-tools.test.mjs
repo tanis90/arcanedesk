@@ -158,9 +158,9 @@ test("setCurrentModel skips a redundant model_change when the session already ho
 });
 
 test("prep sessions select the native shell tool for each desktop platform", () => {
-  assert.deepEqual(builtinToolNamesForPlatform("win32"), ["read", "powershell", "edit", "write"]);
-  assert.deepEqual(builtinToolNamesForPlatform("darwin"), ["read", "bash", "edit", "write"]);
-  assert.deepEqual(builtinToolNamesForPlatform("linux"), ["read", "bash", "edit", "write"]);
+  assert.deepEqual(builtinToolNamesForPlatform("win32"), ["read", "powershell", "edit", "write", "grep", "find", "ls"]);
+  assert.deepEqual(builtinToolNamesForPlatform("darwin"), ["read", "bash", "edit", "write", "grep", "find", "ls"]);
+  assert.deepEqual(builtinToolNamesForPlatform("linux"), ["read", "bash", "edit", "write", "grep", "find", "ls"]);
 });
 
 test("Agent shell spawn pins Arcane Node ahead of Pi and system tool directories", () => {
