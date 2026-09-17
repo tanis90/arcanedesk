@@ -89,10 +89,12 @@ spellBudget 子职业施法条）。诡术师（游荡者）同形态，`--subcl
   修复双管齐下：① runtime default 模式槽写入前拒绝重复选取（见
   foundry-prep-tools-spec §13.2 纪律 4）；② harness 填值器 trait-key 槽排除前序
   已选。修复后 bard sweep 8/8 绿。
-- **harness 选取策略（非工具）— cleric/知识领域**：专精池要 2 个已熟练的
-  arc/his/nat/rel，填值器前序技能槽只落了 1 个，自家"合法候选不足"异常拦下
-  （零写入）。填值器需要前瞻：后面有受限专精池时，前面技能槽优先从池里选。
-  对 LLM 该报错可读可重试，暂不视为工具缺口。
+- **内容数据（包语义缺口）— cleric/知识领域**：表面是填值器"专精槽合法候选
+  不足"（零写入），真根因在包数据——知识祝福是三段规则（2 语言 + 四选二技能
+  **授予** + 熟练双倍），包里只建了语言槽和 expertise 双倍槽，缺 default 模式的
+  授予槽；dnd5e expertise 对未熟练项静默跳过，就算填值器有完美前瞻落卡也比
+  PHB 少 2 项熟练。修复 spec 见 `arcane-module-knowledge-domain-spec.md`；
+  **修包前该案保持红 = 设计意图，不豁免、不做 harness 前瞻**。
 - **工具缺口（已知类别）— monk/剑圣宗**：TraitAdvancement 武器池
   （skills/tools/languages/dr/di/ci/dv 之外的族）落到 uncoveredRequiredSteps，
   剑圣武器选择无法经工具下发。候选：槽位寻址扩到 weapon 族 trait 池。
