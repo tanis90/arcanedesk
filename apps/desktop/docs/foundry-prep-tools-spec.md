@@ -159,6 +159,10 @@ output: {
     note?: string;                  // 规则提示（学派限制/固定戏法），不校验
     fullList?: { maxLevel: number; count: number;
       candidates: Array<{ uuid: string; name: string; level: number }> } } | null;
+  autoGrantedSpells?: Array<{ uuid: string; name: string | null;
+    spellLevel: number | null;      // 0 = 戏法
+    grantLevel: number;             // 授予发生的职业等级
+    source: "class" | "subclass" | "race" }>;  // 无自动授予时整个字段缺省
   coverage: { nativeStepCount: number; automaticStepCount: number;
     choiceStepCount: number; uncoveredRequiredSteps: string[] };
   warnings: object[];
@@ -184,9 +188,10 @@ output: {
   （`languages:standard:elvish` 等 24 个）并附 candidateNames；模型照抄池中 key
   即可。注册表不可用时回退原始池，advance 侧匹配仍按通配符前缀语义接受具体 key。
 - **trait 池可寻址族**（2026-09-17 扩）：模型可填的 Trait 选择池为
-  skills/tool/languages 加防御族 `dr:`/`di:`/`ci:`/`dv:`（龙裔伤害抗性为准案，
-  e2e B14）；其余族（weapon/armor/saves/senses 等）仍走原生默认值并在
-  uncoveredRequiredSteps 显性报告，待矩阵案例驱动再扩。
+  skills/tool/languages、武器熟练 `weapon:`（剑圣宗近战武器 21 选 1 为准案，
+  monk sweep）加防御族 `dr:`/`di:`/`ci:`/`dv:`（龙裔伤害抗性，e2e B14）；其余族
+  （armor/saves/senses 等）仍走原生默认值并在 uncoveredRequiredSteps 显性报告，
+  待矩阵案例驱动再扩。
 - **NPC 支持**：actor 类型门为 character|npc。NPC（怪物加职业等级）的 HP 摘要
   按怪物体型骰（actor hd.denomination）下发"fixed N (dX average)"，无首级满骰。
 - **子职业两次调用约定**：不带 subclassUuid 先拿计划（choiceRequirements 里
@@ -224,6 +229,11 @@ output: {
   spellListClassUuid 拿 eligibility）；戏法不下发——走子职业自带 ItemChoice 槽，避免
   双口径。学派限制/固定 Mage Hand 进 `note` 提示，不校验。2024 子职业施法形态未调研，
   不下发。
+- **autoGrantedSpells（2026-09-17 定稿）**：本次 advance 会经固定 ItemGrant 自动授予的
+  法术清单（职业/子职业/种族链 ≤目标等级，复用 resolved steps 的 `dataFor.selected`，
+  与写路径严格同源；ItemChoice 自选池不在其列）。known/cantrip 预算的自选必须避开
+  它们——重复选择会被写入去重、静默烧掉一个名额（月之术法 A10s 实证：subclass 9 +
+  granted 5 ≠ budget 6）。纯增量信息下发，不改写路径与既有字段语义。
 - rules 由 classUuid 锚定推导，模型不传。
 
 ### 3.4 foundry_actor_get（现状不变）

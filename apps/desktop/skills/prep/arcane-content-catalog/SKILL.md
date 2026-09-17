@@ -54,6 +54,9 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   不管理；建卡时给 advance 传 `fullSpellList:true` 一次授满。子职业引入的施法（2014
   奥法骑士/诡术师）发 `source:"subclass"` + `known` + `spellListClassUuid`（列表挂在
   法师职业上）+ `maxSpellLevel`；戏法不在此预算，走子职业自身的选择槽。
+- `autoGrantedSpells` 是本次升级会**自动授予**的法术清单（子职业固定赠法术、种族法术，
+  带 uuid/名称/环位/来源）：known/戏法自选时避开它们——重复选择会被写入去重，白白
+  烧掉一个自选名额。
 - 子职业两次调用约定：先不带 `subclassUuid` 拿计划（`subclass-uuid` 步骤自带
   `candidates`/`candidateNames` 池，按职业与规则版本过滤）；定下后带它重调一次，子职业
   自身的授予/选择步骤（`subclass:` 前缀）才进输出。

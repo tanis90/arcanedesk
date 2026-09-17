@@ -93,7 +93,9 @@ Character 路径中，模型只负责选择来源、等级和明确选项。不�
    分页列取并带 `eligibility`；戏法传 `maxLevel:0`。环位上限：budget 带 `maxSpellLevel`
    时照传，否则按目标等级的规则知识传 `maxLevel`；总数不背表，以 `spellBudget` 为准。
    budget 的 `note` 是规则提示（如学派限制、固定戏法），遵循但不需验算。`fullList`
-   职业的候选已在 `spellBudget.fullList.candidates` 里给全，不必再分页搜。
+   职业的候选已在 `spellBudget.fullList.candidates` 里给全，不必再分页搜。计划带
+   `autoGrantedSpells` 时（子职业固定赠法术、种族法术），自选避开清单内的 uuid——
+   撞上会被写入去重，白烧一个自选名额。
 4. 子职业：先不带 `subclassUuid` 调计划拿候选池（`candidates`/`candidateNames`）；用户
    指定学派时按名称从池里选，未指定时按任务默认或从池里挑。定下 `subclassUuid` 后必须
    带它重调一次计划：子职业自身的授予/选择步骤（`subclass:` 前缀）才进输出，

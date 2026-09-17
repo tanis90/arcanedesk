@@ -95,13 +95,19 @@ spellBudget 子职业施法条）。诡术师（游荡者）同形态，`--subcl
   授予槽；dnd5e expertise 对未熟练项静默跳过，就算填值器有完美前瞻落卡也比
   PHB 少 2 项熟练。修复 spec 见 `arcane-module-knowledge-domain-spec.md`；
   **修包前该案保持红 = 设计意图，不豁免、不做 harness 前瞻**。
-- **工具缺口（已知类别）— monk/剑圣宗**：TraitAdvancement 武器池
+- **工具缺口（已修复）— monk/剑圣宗**：TraitAdvancement 武器池
   （skills/tools/languages/dr/di/ci/dv 之外的族）落到 uncoveredRequiredSteps，
-  剑圣武器选择无法经工具下发。候选：槽位寻址扩到 weapon 族 trait 池。
-- **口径碰撞 — sorcerer/月之术法**：子职业自动授予 9 个法术，填值器按 budget 6
-  自选，1 个与子职业授予撞车被去重 → granted 5 ≠ budget 6（卡面 14，合法但少
-  一个有效自选）。候选：plan 暴露子职业自动授予法术清单（LLM 也能避开），
-  或 oracle 容忍"自选∩子职业授予"的重合。
+  剑圣武器选择无法经工具下发。修复：isSupportedPool 白名单加 `weapon:`（下游
+  展开/落卡/审计全链路本就族无关就绪），修后 monk sweep 10/10 绿。
+- **口径碰撞（已修复）— sorcerer/月之术法**：子职业自动授予 9 个法术，填值器按
+  budget 6 自选撞 1 个被去重 → granted 5 ≠ budget 6（卡面 14，合法但少
+  一个有效自选）。修复：plan 新增 `autoGrantedSpells`（固定 ItemGrant 授予的法术
+  清单，职业/子职业/种族链），harness 自选排除、skill 教义避开；修后 sorcerer
+  sweep 8/8 绿（畸变心智/时械之魂同形态一并覆盖）。
+
+当日收口：bard/monk/sorcerer 三案已修复并回归绿（bard 8/8、monk 10/10、sorcerer 8/8），
+cleric 待修包（spec 已交，见 `arcane-module-knowledge-domain-spec.md`）。修包后
+cleric sweep 应全绿，届时全职业 119 案全绿。
 
 ### 2.2 轴 B：冠军勇士 × 全 2014 种族（18 案）
 

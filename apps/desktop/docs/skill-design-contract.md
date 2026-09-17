@@ -252,6 +252,20 @@
   不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
   不与历史报告求可比（用户裁决）。
 
+### autoGrantedSpells 与 weapon 族 trait 池（2026-09-17）
+
+- plan 新增 `autoGrantedSpells`：本次 advance 会经固定 ItemGrant 自动授予的法术清单
+  （职业/子职业/种族链 ≤目标等级；ItemChoice 自选池不在其列）。月之术法案实证：术士
+  known 6 自选撞上白送的 9 个，写入去重静默烧掉一个名额（granted 5 ≠ budget 6，卡面
+  14 合法但少一个有效自选）。纯增量信息下发，harness 填值器排除、skill 教模型避开，
+  回执 spellsBySource 的 subclass/race 桶口径不变。否决备选：oracle 容忍重合（把浪费
+  合法化）；包数据改 ItemChoice（违背规则原文）。
+- trait 选择池白名单加 `weapon:`：剑圣宗 L3 近战武器 21 选 1 实证（monk sweep 唯一红案，
+  修后 10/10 绿）。下游零改动——expandTraitPool 经 `Trait.mixedChoices` 族无关展开、
+  weaponProf 是集合添加幂等（无 0/1/2 踩踏语义，不入 default 模式重复选取守卫）、
+  traitLanded 审计经 actorKeyPath 族无关解析。armor/saves/senses 仍落 uncovered，
+  等矩阵案例驱动。
+
 ### 三环施法者 spellBudget（2026-09-17）
 
 - 本条取代 2026-09-14 spellBudget 记录的"第三施法者（奥法骑士/诡术贼）v1 放弃"。实证缺口：

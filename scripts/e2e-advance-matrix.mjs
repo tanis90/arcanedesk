@@ -169,7 +169,9 @@ function fillChoices(caseCfg, plan, primary, takenUuids = new Set()) {
 
 // ── 法术选取（spec §3.2.4）：不背名单，browse 分页取 eligibility:"legal" ─────
 // 子职业施法者（三环）列表不在本职职业上：budget.spellListClassUuid 指法师列表（runtime 下发）。
-function pickSpells(caseCfg, classUuid, budget) {
+// excluded：plan.autoGrantedSpells 的 uuid——子职业/种族固定白送的法术（月之术法 9 个、
+// 圣火术戏法等），自选撞上去会被写入去重静默烧掉一个名额（A10s 红案根因）。
+function pickSpells(caseCfg, classUuid, budget, excluded = new Set()) {
   const grants = [];
   const listUuid = budget.spellListClassUuid ?? classUuid;
   const take = (maxLevel, count) => {
@@ -177,7 +179,7 @@ function pickSpells(caseCfg, classUuid, budget) {
     let got = 0;
     for (let page = 1; got < count; page++) {
       const data = cli("compendium-browse", { scope: "compendium", type: "spell", classUuid: listUuid, maxLevel, page, pageSize: 50 });
-      const entries = (data.candidates ?? []).filter(c => c.eligibility === "legal" && (maxLevel === 0 ? c.level === 0 : (c.level ?? 0) >= 1));
+      const entries = (data.candidates ?? []).filter(c => c.eligibility === "legal" && !excluded.has(c.uuid) && (maxLevel === 0 ? c.level === 0 : (c.level ?? 0) >= 1));
       for (const c of entries) {
         if (got >= count) break;
         grants.push({ uuid: c.uuid, expectedName: c.name, expectedType: "spell" });
@@ -385,9 +387,9 @@ async function runCase(caseCfg) {
       if (effCfg.spells && effCfg.spells !== "fullList") effCfg.maxSpellLevel = b?.maxSpellLevel ?? 1;
       note.autoSpells = effCfg.spells ? { mode: effCfg.spells, maxSpellLevel: effCfg.maxSpellLevel } : null;
     }
-    // 4. 法术（known/book 职业）；fullList 职业不选
+    // 4. 法术（known/book 职业）；fullList 职业不选。白送法术（autoGrantedSpells）排除出候选
     const additionalItems = [];
-    if (effCfg.spells === "known" || effCfg.spells === "book") additionalItems.push(...pickSpells(effCfg, classUuid, plan.spellBudget ?? {}));
+    if (effCfg.spells === "known" || effCfg.spells === "book") additionalItems.push(...pickSpells(effCfg, classUuid, plan.spellBudget ?? {}, new Set((plan.autoGrantedSpells ?? []).map(s => s.uuid))));
     // 5. readRef（NPC 案同时留档 HP 基数供 oracle 对账）
     const read = cli("actor-read", { actorUuid, include: ["items"] });
     if (caseCfg.npc) note.hpBefore = read.hp?.max ?? null;

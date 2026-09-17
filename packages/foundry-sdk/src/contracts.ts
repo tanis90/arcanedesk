@@ -541,6 +541,14 @@ export interface ContentListSpellBudget {
   /** Advisory natural-language rule note (school restrictions, fixed Mage Hand). Never validated. */
   note?: string;
 }
+/** A spell the advance will grant automatically via a fixed ItemGrant on the class/subclass/race
+ *  chain (up to targetLevel). Known/cantrip-budget casters must not spend self-picks on these:
+ *  the write dedupes the duplicate and silently wastes one budget slot (lunar sorcery lesson,
+ *  2026-09-17). ItemChoice pools are not listed — they are choices in choiceRequirements. */
+export interface AutoGrantedSpell {
+  uuid: string; name: string | null; spellLevel: number | null; grantLevel: number;
+  source: "class" | "subclass" | "race" | string;
+}
 export interface AdvancementPlanResult {
   status: "completed" | "rejected"; code?: string; message?: string;
   actorAdvanceArgs?: { classUuid: string; subclassUuid?: string; raceUuid?: string; targetLevel: number };
@@ -554,6 +562,9 @@ export interface AdvancementPlanResult {
    *  substitute { feat: "<uuid>" }). subclass-uuid requirements have no entry. */
   choicesTemplate?: Record<string, string[] | { abilityScore: Record<string, number> }>;
   spellBudget?: ContentListSpellBudget | null;
+  /** Spells this advance auto-grants via fixed ItemGrants (subclass bonus spells, race spell
+   *  grants). Exclude from known/cantrip self-picks. Absent when none. */
+  autoGrantedSpells?: AutoGrantedSpell[];
   coverage?: { nativeStepCount: number; automaticStepCount: number; choiceStepCount: number; uncoveredRequiredSteps: string[] };
   warnings?: Array<RuntimeArguments>;
 }
