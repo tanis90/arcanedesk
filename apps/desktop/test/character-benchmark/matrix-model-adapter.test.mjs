@@ -14,13 +14,14 @@ const a5Expect = {
   classUuid: "Compendium.packs.rules.Item.fighter", subclassUuid: "Compendium.packs.rules.Item.battle-master",
   raceUuid: "Compendium.packs.rules.Item.high-elf", spellBudget: null, maxSpellLevel: 0,
   skillPickCount: 2, skillPool: FIGHTER_SKILLS, asiPoints: 2, hitDie: 10, racialSum: 3, racialCantrips: 1,
+  fixedSkills: ["prc"], // 高等精灵 keen senses：种族固定熟练，不占职业选择数
 };
 // str15+2asi=17 dex13+2race=15 con14 int12+1race=13 wis10 cha8 → 77；conMod+2 → hp 10+2+4×(6+2)=44
 const a5Snap = {
   type: "character",
   abilities: { str: 17, dex: 15, con: 14, int: 13, wis: 10, cha: 8 },
   hp: { value: 44, max: 44 },
-  skills: { ath: 1, prc: 1 },
+  skills: { ath: 1, sur: 1, prc: 1 }, // 2 职业自选 + 1 种族固定
   items: [
     { type: "class", name: "战士 Fighter", identifier: "fighter", levels: 5, sourceId: "Compendium.packs.rules.Item.fighter" },
     { type: "subclass", name: "战斗大师 Battle Master", sourceId: "Compendium.packs.rules.Item.battle-master" },
@@ -56,13 +57,14 @@ test("A12 法术口径：戏法=职业预算+种族 1，book 精确计数，环�
     raceUuid: "Compendium.packs.rules.Item.high-elf",
     spellBudget: { ability: "int", progression: "full", cantrips: 4, book: 14 }, maxSpellLevel: 3,
     skillPickCount: 2, skillPool: ["arc", "his", "ins", "inv", "med", "rel"], asiPoints: 2, hitDie: 6, racialSum: 3, racialCantrips: 1,
+    fixedSkills: ["prc"],
   };
   const spell = (name, level) => ({ type: "spell", name, level, sourceId: null });
   const snap = {
     type: "character",
     abilities: { str: 8, dex: 15, con: 14, int: 18, wis: 12, cha: 10 }, // 77
     hp: { value: 32, max: 32 }, // 6+2+4×(4+2)=32
-    skills: { arc: 1, inv: 1 },
+    skills: { arc: 1, inv: 1, prc: 1 }, // 2 职业自选 + 1 种族固定
     items: [
       { type: "class", name: "法师 Wizard", identifier: "wizard", levels: 5, sourceId: "Compendium.packs.rules.Item.wizard" },
       { type: "subclass", name: "塑能学派 School of Evocation", sourceId: "Compendium.packs.rules.Item.evocation" },

@@ -232,12 +232,16 @@ prompt 只钉四个硬约束 + 命名：职业 / 子职业 / 种族（或怪物�
    调 `judgeState`。全部检查选择无关：
    - 属性总和守恒（标准数组 72 + 种族加成 + ASI 点数），单项 3..20；
      NPC 方向相反：原属性保留，只允许 ASI 增量（单项 ≤2）。
-   - HP：character 首级满骰 + 后续均值；NPC 每级体型骰均值、无首级满骰；
-     conMod 从终态推导；`hp.value === hp.max`。
+   - HP：character 首级满骰 + 后续均值（职业骰）；NPC 每级体型骰均值（原生口径，
+     hitDie 由 probe 卡 traits.size 映射：tiny d4 / sm d6 / med d8 / lg d10 /
+     huge d12 / grg d20）、无首级满骰；conMod 从终态推导；`hp.value === hp.max`。
    - 法术：戏法总数 = 职业预算 + 种族白送；book/known/fullList 按预算精确
      计数；环级不超预算上限。
-   - 技能：熟练数 = 职业选择数 + 来源自带；职业自选部分须落在 plan 枚举
-     池内。
+   - 技能：熟练数 = 职业选择数 + 固定熟练（character：职业/种族 Trait
+     advancement 的固定 grants，如高等精灵 keen senses 的 skills:prc；
+     NPC：来源自带）；职业自选部分须落在 plan 枚举池内。注意去重语义：
+     自选与固定熟练重叠会被 dnd5e 去重、熟练数变少——判 fail，因为
+     "浪费一个选择"正是要抓的质量瑕疵。
    - NPC 案另查来源条目逐条保留（按 类型+名称）。
 3. 矩阵案全部视为 npcCases：验收后 `retainedForReview`，不自动删卡，人工
    审查后手动清理。

@@ -95,7 +95,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
   const verify=(id,f)=>characterSuite?character.verify(id,f):matrix?matrix.verify(id,f):id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
   const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
-  for(const trial of report.prepTrials.filter(t=>!t.cleaned)){
+  for(const trial of report.prepTrials.filter(t=>!t.cleaned&&!t.retainedForReview)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
     trial.verification=await verify(trial.caseId,trial.fixture);trial.success=trial.verification.ok;
     if(trial.tools.some(t=>t.status==="indeterminate"))trial.uncertainReceiptReviewed=true;
@@ -156,11 +156,11 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
         report.experiment.matrixToolSkillHash??=pair;assert.equal(pair,report.experiment.matrixToolSkillHash,"Matrix tool skills must stay frozen during the batch");
       }
     }
-    const resources=new implementation.ResourceCoordinator(),originalAcquire=resources.acquire.bind(resources);
-    resources.acquire=async(keys,owner,signal,onWait=()=>{})=>{let began=null;const lease=await originalAcquire(keys,owner,signal,d=>{began??=performance.now();onWait(d);});trial.waits.push(began===null?0:performance.now()-began);return lease;};
+    const scheduler=new implementation.ExecutionScheduler({capacity:1}),originalAcquire=scheduler.acquire.bind(scheduler);
+    scheduler.acquire=(owner,signal,onQueued=()=>{})=>{let began=null;const lease=originalAcquire(owner,signal,()=>{began??=performance.now();onQueued();});return Promise.resolve(lease).then(value=>{trial.waits.push(began===null?0:performance.now()-began);return value;});};
     const runtime=new implementation.DirectFoundryRuntime({getWebContents:()=>page,runtimeSource:implementation.runtimeSource,allowedActions:implementation.allowedActions,onCallResult:r=>trial.runtime.push(r),log(){}});
     const host=new implementation.AgentHost({foundryRuntime:runtime,getFoundryView:()=>({webContents:page}),openFoundry:async url=>{if(url&&new URL(url).origin!==origin)throw Error("Only configured benchmark origin");return{ok:true,url:`${origin}/game`,summary:"Benchmark world connected, GM ready"};},
-      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},resources,scheduler:new implementation.ExecutionScheduler({capacity:1}),
+      providerStore:store,runtimeReady:Promise.resolve({nodeBinary:process.env.ARCANE_QA_NODE}),profile:{mode:"prep",getCwd:()=>cwd,builtinTools:true,systemPrompt:"append",fence:true,getSkillPaths:()=>skillPaths},getLocale:()=>"zh-CN",log(){},scheduler,
       taskStorageDir:path.join(cwd,"tasks"),operationStorageDir:path.join(cwd,"operations"),sendToRenderer:e=>{if(e.type==="task_state"&&e.task?.state==="waiting_user")trial.waitingUser=true;}});
     setHost(host);await host.start({fresh:true});
     if(thinkingOverride)host.session.setThinkingLevel(thinkingOverride);
@@ -216,7 +216,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     });
     const timer=setTimeout(()=>{trial.timedOut=true;save();void host.abort().catch(error=>{trial.abortError=error.message;save();});},report.experiment.taskTimeoutMs);
     trial.state="submitted";save();
-    try{await host.prompt(trial.prompt);}finally{clearTimeout(timer);unsubscribe();trial.trace=trace.summary();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.taskError=host.task?.error??host.task?.failure??null;trial.agentError=host.session?.lastError??null;trial.state="returned";save();}
+    const submitted=host.submitInput(trial.prompt);assert.ok(submitted?.ok,`submit rejected: ${submitted?.code??"unknown"}`);
+    try{await new Promise(resolve=>{const poll=setInterval(()=>{const s=host.task?.state;if(s&&!["running","stopping","waiting_user","queued"].includes(s)){clearInterval(poll);resolve();}},250);});}finally{clearTimeout(timer);unsubscribe();trial.trace=trace.summary();trial.ms=performance.now()-start;trial.taskState=host.task?.state;trial.taskError=host.task?.error??host.task?.failure??null;trial.agentError=host.session?.lastError??null;trial.state="returned";save();}
     assert.equal(host.session.agent.state.systemPrompt,prompt,"Prompt override was not the actual model prompt");
     if(trial.timedOut||trial.tools.some(t=>t.status==="indeterminate"))throw Error("Ambiguous run retained for inspection; no automatic retry/cleanup");
     trial.verification=await verify(caseId,f);trial.success=trial.taskState==="completed"&&trial.verification.ok;

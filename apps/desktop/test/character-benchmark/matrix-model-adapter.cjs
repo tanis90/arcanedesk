@@ -84,9 +84,9 @@ function judgeState(cfg, expectations, snapshot, sourceBefore) {
       check("spells.levelCap", overleveled.length === 0, `level ≤ ${maxSlot}`, overleveled);
     }
   }
-  // 技能：熟练数 = 职业选择数 + 种族/来源自带；职业自选部分须落在 plan 枚举的池内
+  // 技能：熟练数 = 职业选择数 + 来源自带（NPC）或 职业/种族固定熟练（character）；职业自选部分须落在 plan 枚举的池内
   const profSkills = Object.entries(snapshot.skills ?? {}).filter(([, v]) => v >= 1).map(([k]) => k);
-  const baseSkills = cfg.kind === "npc" ? (sourceBefore?.skills ?? []) : [];
+  const baseSkills = cfg.kind === "npc" ? (sourceBefore?.skills ?? []) : (expectations.fixedSkills ?? []);
   const expectCount = baseSkills.length + expectations.skillPickCount;
   check("skills.count", profSkills.length === expectCount, expectCount, profSkills);
   const pool = new Set(expectations.skillPool ?? []);
@@ -151,18 +151,24 @@ module.exports = (evaluate, { runtimeSource } = {}) => {
         const uncovered = plan.coverage?.uncoveredRequiredSteps ?? [];
         if (uncovered.length) throw Error(`probe plan 存在未覆盖步骤，不适合自由发挥判定: ${uncovered.join("; ")}`);
         // 期望字段：技能池/ASI 点数/种族固定加成/种族戏法/生命骰/法术环上限
+        // fixedSkills：职业与种族 Trait advancement 的固定技能熟练（Set 序列化陷阱：页内须展开成数组）
         const derived = await evaluate(`(async()=>{
           const cls=await fromUuid(${JSON.stringify(classUuid)});
           const hd=parseInt(String(cls?.system?.hd?.denomination??"").replace(/^d/i,""),10)||null;
-          let racialSum=0, racialCantrips=0;
+          let racialSum=0, racialCantrips=0; const fixedSkills=[];
+          const collectFixed=doc=>{ for (const adv of doc?.system?.advancement??[]) {
+            if (adv.type!=="Trait"&&adv.type!=="TraitAdvancement") continue;
+            for (const g of [...(adv.configuration?.grants??[])]) if (String(g).startsWith("skills:")) fixedSkills.push(String(g).slice(7)); } };
+          collectFixed(cls);
           if (${JSON.stringify(raceUuid)}) { const race=await fromUuid(${JSON.stringify(raceUuid)});
+            collectFixed(race);
             for (const adv of race?.system?.advancement??[]) {
               if (adv.type==="AbilityScoreImprovement") {
                 const fixed=adv.configuration?.fixed??{}; for (const v of Object.values(fixed)) racialSum+=Number(v)||0;
                 racialSum+=Number(adv.configuration?.points??0)||0; }
               if (adv.type==="ItemChoice") { const r=adv.configuration?.restriction??{};
                 if ((r.type==="spell"||!r.type) && String(r.level)==="0") racialCantrips+=Number(adv.configuration?.choices?.["0"]?.count??adv.configuration?.choices?.[0]?.count??1)||0; } } }
-          return { hd, racialSum, racialCantrips }; })()`);
+          return { hd, racialSum, racialCantrips, fixedSkills:[...new Set(fixedSkills)] }; })()`);
         const skillReqs = (plan.choiceRequirements ?? []).filter(r => r.valueFormat === "trait-key" && (r.candidates ?? []).every(k => k.startsWith("skills:")) && r.mode !== "expertise");
         const asiPoints = (plan.choiceRequirements ?? []).filter(r => r.valueFormat === "asi-assignment" || r.valueFormat === "asi-or-feat").reduce((a, r) => a + r.count, 0);
         const budget = plan.spellBudget ?? null;
@@ -172,12 +178,18 @@ module.exports = (evaluate, { runtimeSource } = {}) => {
           skillPickCount: skillReqs.reduce((a, r) => a + r.count, 0),
           skillPool: [...new Set(skillReqs.flatMap(r => (r.candidates ?? []).map(k => k.replace(/^skills:/, ""))))],
           asiPoints, hitDie: derived.hd, racialSum: derived.racialSum, racialCantrips: derived.racialCantrips,
+          fixedSkills: derived.fixedSkills,
         };
         const sourceBefore = cfg.kind === "npc" ? await evaluate(`(async()=>{ const a=game.actors.find(x=>x.name===${JSON.stringify(probeName)});
-          return { hpMax: a.system.attributes.hp.max,
+          return { hpMax: a.system.attributes.hp.max, size: a.system.traits?.size ?? null,
             abilities: Object.fromEntries(Object.entries(a.system.abilities).map(([k,v])=>[k,v.value])),
             skills: Object.entries(a.system.skills??{}).filter(([,s])=>(s.value??0)>=1).map(([k])=>k),
             items: a.items.map(i=>({type:i.type,name:i.name})) }; })()`) : null;
+        // NPC 每级血量按体型骰（原生口径），不用职业骰：wolf 中型 d8 均值 5，见 e2e spec §3.4
+        if (cfg.kind === "npc" && sourceBefore?.size) {
+          const SIZE_DIE = { tiny: 4, sm: 6, med: 8, lg: 10, huge: 12, grg: 20 };
+          expectations.hitDie = SIZE_DIE[sourceBefore.size] ?? expectations.hitDie;
+        }
         return { name: label, caseId: id, expectations, sourceBefore, monsterUuid };
       } finally {
         await evaluate(`(async()=>{ for (const a of game.actors.filter(x=>x.name===${JSON.stringify(probeName)})) await a.delete(); return true; })()`);
