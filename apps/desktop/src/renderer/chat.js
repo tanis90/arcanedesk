@@ -78,23 +78,27 @@ function showTaskState(task) {
   updateComposerAction();
 }
 
+function removeAttentionCard(id) {
+  attentionCards.get(id)?.remove();
+  attentionCards.delete(id);
+}
 function renderAttention(attention) {
-  dismissWelcome();
   const existing = attentionCards.get(attention.id);
   if (existing) {
     const draft = existing.querySelector("textarea");
     if (draft) attentionDrafts.set(attention.id, draft.value);
-    existing.remove();
+    removeAttentionCard(attention.id);
   }
+  // 终态(answered/cancelled/interrupted)不渲染:卡片使命结束即消失,
+  // 问答留痕在 request_user_input 的工具结果(会话 jsonl)与历史工具卡里。
+  if (attention.state !== "pending") return;
+  dismissWelcome();
   const card = el("div", "card attention open");
   card.dataset.itemKey = "attention:" + attention.id;
   card.dataset.attentionId = attention.id;
   card.appendChild(el("div", "head", attention.question));
   const body = el("div", "body");
-  if (attention.state !== "pending") {
-    const stateKeys = { answered: "chat.attention.answered", cancelled: "chat.attention.cancelled", interrupted: "chat.attention.interrupted" };
-    body.appendChild(el("div", null, attention.response ?? t(stateKeys[attention.state] ?? "chat.attention.interrupted")));
-  } else {
+  {
     const target = { sessionId: selectedSessionId, taskId: attention.taskId, attentionId: attention.id };
     const answer = /** @type {HTMLTextAreaElement} */ (el("textarea"));
     answer.placeholder = t("chat.attention.placeholder");
@@ -118,7 +122,7 @@ function renderAttention(attention) {
       try { result = await window.arcane.respondToTask(attempt); }
       catch { result = { ok: false }; }
       sending = false; submitAnswer.disabled = false;
-      if (result.ok) { attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id); feedback.textContent = t("chat.attention.answered"); }
+      if (result.ok) { attentionDrafts.delete(attention.id); attentionAttempts.delete(attention.id); removeAttentionCard(attention.id); saveWorkspace(); }
       else feedback.textContent = t(result.code === "STALE_ATTENTION" ? "chat.attention.stale" : "chat.attention.retry");
     }
     for (const option of attention.options ?? []) {

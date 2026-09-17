@@ -553,7 +553,9 @@ export class AgentHost {
     const page = this.historyIndex().page(historyQuery);
     const messageKeys = new Set(page.history.flatMap(row => [row.key, row.legacyKey]));
     return {
-      attentions: this.tasks?.snapshotAttentions() ?? [],
+      // 只下发待回答的提问:已回答/已取消的若随快照下发,每次 resync(如窗口聚焦)
+      // 都会被渲染层当作新卡片重新追加到对话末尾,看上去像反复弹出(与 approvals 的 resolve 即删对齐)。
+      attentions: (this.tasks?.snapshotAttentions() ?? []).filter(a => a.state === "pending"),
       approvals: structuredClone([...this.approvalSnapshots.values()]),
       pendingModel: this.tasks?.pendingModel ?? null,
       inputs: this.tasks?.snapshotInputs(messageKeys) ?? [],
@@ -770,7 +772,12 @@ export class AgentHost {
     if (file) pending.migrate(file, model => this.navigation.patch(sessionId, { selectedModel: model, pendingModel: model }));
     this.tasks = new TaskCoordinator({ sessionId, scheduler: this.scheduler, pending,
       pendingModel: this.navigation?.get(sessionId).pendingModel ?? null,
-      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }), emit: event => this.emit(event),
+      saveModel: model => this.navigation?.patch(sessionId, { pendingModel: model }),
+      emit: event => {
+        if (event.type === "attention" && event.attention?.state !== "pending")
+          this.log(`[agent] attention ${event.attention.state}: q=${JSON.stringify(String(event.attention.question ?? "").slice(0, 80))} a=${JSON.stringify(String(event.attention.response ?? "").slice(0, 80))}`);
+        this.emit(event);
+      },
       adapter: {
         captureInput: () => captureFoundryInputContext(this.getFoundryView?.()?.webContents),
         beginTask: async (pending) => {
