@@ -74,7 +74,38 @@
       → 先装 docker（cn 用阿里云镜像源装 docker-ce；装不上再回退裸机安装路径）
 ```
 
-探测手段与现有 ops 对齐：`curl http://<host>:30000/api/status`（返回 `version/world/systemVersion`）、端口进程定位、数据目录列举。SSH 凭证走用户本机 ssh-agent / 密钥，skill 永不存储密码。
+### 连入后的探测序列（全部只读、零写入、秒级）
+
+原则：**能探测的绝不问用户**（用户记不清装没装、装在哪、什么版本），问话只出现在探测产生歧义的三个点上（见后）。探测顺序固定，后一步在前一步结果上收敛：
+
+| # | 探测（SSH 在目标机上执行） | 判定什么 |
+|---|---|---|
+| P1 | `curl -sS -m 3 http://127.0.0.1:30000/api/status`（**loopback**，不受安全组影响） | FVTT 是否在跑；JSON 直接给 `version/world/systemVersion`（与本机 QA 同款判据） |
+| P2 | `ss -tlnp \| grep -w 30000` + `ps -eo args \| grep 'main.js --dataPath'` | 监听进程的**安装目录、数据目录、--world**——进程命令行直接暴露，这是 B2 裸机远程运维的关键输入 |
+| P3 | `docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}'` | B1（容器在跑/停着）还是别人的容器（felddy 等非 arcane 镜像）；arcane 容器可再认 `docker inspect` 的 compose 标签与 `/arcane` 路径 |
+| P4 | `systemctl list-unit-files \| grep -iE 'foundry\|fvtt'` + `systemctl cat <unit>` | 裸机装了 systemd 服务但停着（unit 文件里 ExecStart 同样暴露 `--dataPath`） |
+| P5 | `find /root /home /opt /srv -maxdepth 4 \( -name options.json -path '*/Config/*' \) -o -name main.js 2>/dev/null`（有界深度） | 没进程也没服务时的**已安装未运行**痕迹：`Config/options.json` 是数据目录铁标记，main.js 是安装目录标记 |
+| P6 | `docker --version`、`docker compose version`、`systemctl is-active docker`、当前用户是否 root/docker 组 | C/D 分流：docker 现成还是要装 |
+| P7 | `cat /etc/os-release`、`uname -m`、`nproc`、`free -h`、`df -h` | 部署前提：发行版（apt/yum）、架构（x64/arm64）、内存（FVTT 建议 ≥2G）、磁盘（本体+mod+世界 ≥10G） |
+
+探测结果 → 决策树映射：
+
+- **P1 有 JSON** → 已在运行（B）。P2/P3 分流裸机/容器；`version≠13.351` 或 `systemVersion≠5.3.3` 记为**版本漂移**，照常进运维分支并报告差异，升级与否是问点③。
+- **P1 空、P4/P5 有痕迹** → 已安装未运行。启动它属于"继续运维"范畴，但启动用户自己停掉的东西前问一句（问点②）。
+- **P1-P5 全空** → 全新机器（C/D），无需问任何问题，直接 Docker 部署——用户发起这个 skill 本身就是意图声明。
+- **P3 发现非 arcane 容器**（felddy 等手搓部署）→ 唯一必须问的场景（问点①）：按现状接管运维，还是换我们的镜像（数据卷保留迁移）。
+
+**三个问点**（探测产生歧义才问，都是选择题不是填空题）：
+
+1. 发现别人的 FVTT 容器：接管 or 迁移到 arcane 镜像？
+2. 发现已安装但停着：帮你启动它？
+3. 在跑但版本不是 13.351/5.3.3：现在升级对齐，还是先这样用？
+
+对用户的汇报口径（小白话术，探测完一段说完）：
+
+> 我看了一眼你的服务器：上面已经有一套 Foundry 在运行（版本 13.351，世界 COS，装在 Docker 里/直接装在系统里，数据在 /xxx）。我会直接在这套上继续运维，不会重复安装。
+
+公网可达性单独一步（不在探测序列里）：部署/接管完成后从**用户本机**测 `http://<IP>:30000`，loopback 通而公网不通 → 安全组放行提示（云知识唯一出场点）。权限注：非 root 用户时 `ss -p`/`docker` 需要 sudo/docker 组，探测前 `sudo -n true` 检查免密可用性，不可用则请用户处理。
 
 ### 目标接入：统一 SSH，不感知云厂商
 
