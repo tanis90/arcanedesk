@@ -237,3 +237,68 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 | CDP 暴露公网 | sidecar 只绑容器 loopback，仅 SSH 隧道可达；不进默认 compose profile |
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
 | 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成且永不打印；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
+
+## 附录 A：首次接入话术（Windows / cn 主路径）
+
+以下是 `arcane-fvtt-server` skill 首次接入时对用户的实际引导文案（实现时进 `references/ssh-onboarding.md`，intl 包出英文版）。设计约束：每条涉及秘密输入的命令都在**用户自己的终端**跑，agent 只检查结果；分支按现场探测结果选择。
+
+**① 开场**（agent 检查 `Test-Path $env:USERPROFILE\.ssh\id_ed25519` 后进入对应分支）
+
+> 服务器到手了？我们先花两分钟把"钥匙"配好——之后我对这台机器的所有操作都走 SSH 密钥，密码类的东西只在你本机输，不经过我。
+> 开始菜单搜 **PowerShell** 打开（普通窗口即可），下面几条命令都在这里跑。
+
+**② 生成密钥**（无现成密钥时）
+
+> 第一步，生成一对密钥：
+>
+> ```
+> ssh-keygen -t ed25519 -C arcanedesk
+> ```
+>
+> - 问保存路径时**直接回车**——默认的 `C:\Users\你\.ssh\` 就是标准位置，Windows 自带的 SSH 只认这里的钥匙，我也只从这里用；
+> - passphrase 建议设一个（给钥匙再加一道锁）。嫌麻烦可留空回车，代价是能登录你这台电脑的人都能用这把钥匙。
+
+分支：用户购买 ECS 时已在阿里云控制台绑定过密钥对（手里有 .pem 文件）→ 引导把 .pem 放到 `C:\Users\你\.ssh\aliyun-ecs.pem`，第④步 IdentityFile 指向它，跳过②③。
+
+**③ 装公钥**（agent 读 `.pub` 展示 + `ssh-keyscan` 取指纹）
+
+> 你的公钥（可以公开的一半）：
+>
+> ```
+> ssh-ed25519 AAAAC3… arcanedesk
+> ```
+>
+> 我先探测了服务器指纹：`47.98.x.x 的 ED25519 指纹是 SHA256:xxxx…`，请留意它。
+>
+> 现在运行（IP 换成你的）：
+>
+> ```
+> type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@47.98.x.x "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+> ```
+>
+> - 首次连接问 `Are you sure…continue connecting?`——核对显示指纹与我上面给的一致，输 yes；
+> - 再输 root 密码（买 ECS 时设置的那个）。密码交给 ssh，我看不到也不保存。
+
+分支：偏好控制台 → 阿里云控制台 → 云服务器 ECS → 密钥对 → 导入（粘贴公钥）→ 绑定实例（需停机一次）。
+
+**④ 写别名**（agent 展示后经确认写入 `~/.ssh/config`，纯配置非机密）
+
+> ```
+> Host arcane-server
+>     HostName 47.98.x.x
+>     User root
+>     Port 22
+>     IdentityFile ~/.ssh/id_ed25519
+> ```
+
+分支：②设了 passphrase → 引导启用 Windows OpenSSH Agent（管理员 PowerShell 一次）：`Start-Service ssh-agent; Set-Service ssh-agent -StartupType Automatic; ssh-add`。
+
+**⑤ 验证**（agent 执行）
+
+> `ssh arcane-server "echo ok"` → 通了。之后我对这台机器的所有操作都走 arcane-server 别名，你的私钥与密码全程未经过我。现在开始探测服务器环境……
+
+**拒绝话术**（用户提出把私钥发给 agent 时）
+
+> 不用也不行：我们的对话会被存档，钥匙贴进对话等于永久写进日志。命令你敲、结果我查，一样快。
+
+macOS 变体：路径 `~/.ssh/`；③的命令为 `cat ~/.ssh/id_ed25519.pub | ssh root@IP "…"`；④后 `ssh-add --apple-use-keychain` 入钥匙串。诊断分支：`ssh-keyscan` 22 端口不通 → 提示检查阿里云安全组放行 22/TCP（云知识仅此一处文案）。
