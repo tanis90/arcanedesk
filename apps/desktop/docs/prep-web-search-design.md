@@ -300,3 +300,10 @@ model tool_call(query)
 
 - 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费/第 6 次软提示/第 11 次硬断、429/402 文案 key、8KB 截断、consent 前零外发、双语占位符一致、en-US 布局待人工过一遍。
 - 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、consent 弹窗视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
+
+### 实测已知怪癖（2026-09-18 真实流量）
+
+- 智谱 `search_recency_filter` 接受参数但过滤不可靠（freshness=day 仍返回旧页），
+  且与 count 同用时 count 被无视、返回满 50 条——两端靠客户端截断兜底，
+  warning 如实透出；对"近 X 天"类需求应引导模型改用具体关键词而非时间过滤。
+- 结果日期来自 snippet，不可核实；引用以链接为准（prompt 已约束）。
