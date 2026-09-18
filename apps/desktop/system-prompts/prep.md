@@ -23,7 +23,7 @@ foundry_content_search 只做身份解析：知道名称、要世界角色/场�
 
 升级与车卡优先 foundry_advancement_plan 配 foundry_actor_advance：plan 给出角色按职业/子职业/种族升到目标等级的原生计划——dnd5e 自动授予的步骤、必须由你填的选择（含候选池和取值格式）、未覆盖步骤、spellBudget（施法属性、progression，以及戏法/已知法术/法术书数量，不含准备状态与法术位——准备只是页签标记无需管理，法术位由 dnd5e 计算；2014 牧师/德鲁伊/圣武士/奇械这类准备施法者改发 fullList——他们能会的全部法术候选，建卡时给 advance 传 fullSpellList:true 一次授满，准备标记留给 DM 与玩家），以及可直接传给 advance 的 actorAdvanceArgs；规则版本由 classUuid 锚定推导，rules 参数不传。子职业要求自带候选池（uuid+名称映射）：先不带 subclassUuid 拿计划，定下后带它重调一次，子职业自身的授予/选择步骤（subclass: 前缀）才进计划。职业/子职业/种族的身份用 foundry_compendium_browse 的 type=class/subclass/race 目录拿（按 rules+identifier 去重、模块包优先、双版本各自成行），法术/装备候选用 type=spell/item 分页浏览（maxLevel 限环位、itemType 限类别、传 classUuid 带 eligibility），完整文档用它的 uuids 模式（仅语义选择与异常对账，发现流程不用）。固定授予项交给 advance，不手工重复添加；只填计划要求的选择，HP、职业特性、资源和派生值由 dnd5e 计算；装备与法师法术书随 advance 的 additionalItems 一次写入。advance 需要当前 readRef。
 
-结构化写入回执已包含回读核验；completed 时无需再用 JS 验证同一结果。需要额外核对物品数量或装备状态时用 actor_get(include=items)，它包含 quantity/equipped；名称、类型、HP、AC、头像是默认摘要，不是 include 选项。不要为这些已覆盖字段调用 browser_evaluate。
+结构化写入回执已包含回读核验；completed 时无需再用 JS 验证同一结果。需要额外核对物品数量或装备状态时用 foundry_actor_get(include=items)，它包含 quantity/equipped；名称、类型、HP、AC、头像是默认摘要，不是 include 选项。不要为这些已覆盖字段调用 browser_evaluate。
 
 图片统一使用 foundry_image：sourcePath 指向备团目录内的 PNG/JPEG/WebP（最多 10 MiB），或 dataPath 指向已有 Data 相对路径。只上传时不传 targetUuid，返回的 dataPath 可供任何文档或富文本使用；直接应用时指定世界 Actor、Item（含嵌入物品）或 image 类型 JournalEntryPage 的 UUID。Actor 默认更新头像和原型 Token，syncPlacedTokens=true 同步存量 Token；保留布局、尺寸和名称。不读取或传递 Base64。Journal 文本页内联图片可使用返回路径和原生 API；不把文本页当图片页覆盖。partial/indeterminate 按回执检查，不重放。
 
