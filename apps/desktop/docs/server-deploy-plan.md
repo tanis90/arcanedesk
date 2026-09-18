@@ -292,6 +292,15 @@ intl R2 arcane-desk-intl（dl.arcanedesk.app）:
 - **极端兜底（显式分支，非默认）**：目标机出网被完全限制（罕见）→ 唯一允许经客户端中转的场景：客户端下载后 `rsync/scp` 上服务器，**落盘后仍在服务器侧验 SHA256**。
 - **例外——用户自供的 Foundry zip**：它本来就在用户手里（或由用户提供限时 URL），`scp` 上服务器或服务器 curl 限时 URL；mirror 制品不走这条路。
 
+**下载工具：探测后统一 curl 模板**（不赌发行版预装）：
+
+- 探测 `command -v curl` → 有就用 curl：RHEL 系/阿里云默认镜像必有 curl（wget 反而未必），且我们的 HEAD 验收、`_cb=` cache-bust、`-f` 语义全是 curl 既有姿势。
+- 无 curl 再 `command -v wget` → `wget -c`（断点续传等价）作 fallback。
+- 两者皆无 → 发行版源装 curl（与 Docker 安装第 2 层同一条路，一条 `apt-get install curl` / `dnf install curl`）。
+- curl 参数模板：`curl -fL --retry 5 --retry-delay 2 -C - --connect-timeout 10 -o <file> <url>`——`-f` 让 HTTP 4xx/5xx 直接失败（不把错误页当数据写盘）、`-C -` 断点续传（对象不可变，续传安全）、`--retry` 覆盖瞬时网络抖动。
+- **下载目录不落 `/tmp`**（很多发行版 /tmp 是 tmpfs，150MB tarball 直接吃内存），统一 `/var/lib/arcane/staging/`，`docker load` 后即删。
+- `_cb=` cache-bust 只用于 HEAD 验收；镜像 tarball 的 GET 不带（不可变对象无缓存问题）。
+
 为什么这条链是安全的：registry pull 的信任来自 registry 域名 + manifest 签名；tarball 链的信任来自**我们自己索引钉死的 SHA256 + image ID 双断言**——与我们分发 dnd5e zip（107MB）、desktop 安装包完全同一信任模型，甚至比匿名 `docker pull` 更强。未来若用户明确要 `docker pull` 体验，加一条 CI 步骤推 Docker Hub 即可（intl 受益），不影响本通道。
 
 docker 本体的安装在探测 D 分支处理（cn 用阿里云源装 docker-ce）；用户侧零 registry 概念、零加速器配置——"arcane mirror 是唯一第一方镜像"纪律保持完整。
