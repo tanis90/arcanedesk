@@ -859,6 +859,13 @@
     .plus-item:disabled { opacity: 0.45; cursor: default; }
     .plus-item .pi { flex: none; }
     #voice-status { color: var(--accent-dim); }
+    #search-usage { color: var(--muted); font-size: var(--fs-meta); }
+    #search-consent:not([hidden]) { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 72%, transparent); }
+    .settings-body { position: relative; }
+    .ss-results { display: flex; flex-direction: column; gap: 4px; }
+    .ss-result { color: var(--accent); text-decoration: none; font-size: var(--fs-meta); overflow-wrap: anywhere; }
+    .ss-result:hover { text-decoration: underline; }
+    .ss-results-note { color: var(--muted); font-size: var(--fs-meta); margin-bottom: 6px; }
     #voice-status:empty { display: none; }
     #send { background: var(--accent); color: var(--accent-contrast); border-radius: 50%; font-size: 15px; }
     #stop { background: rgba(240, 112, 112, 0.15); color: var(--err); border: 1px solid rgba(240, 112, 112, 0.35); display: none; }
@@ -1608,6 +1615,7 @@
       <span class="hint-left">
         <span class="chip dir" id="dir-chip" style="display:none" data-i18n-dynamic></span>
         <span id="voice-status"></span>
+        <span id="search-usage" hidden></span>
       </span>
       <button id="model-picker" title="切换模型" data-i18n-title="modelPicker.title"><span id="model-picker-label">…</span><span class="caret">▾</span></button>
     </div>
@@ -1622,6 +1630,7 @@
       <div class="settings-tabs">
         <button class="tab active" data-pane="pane-model" data-i18n="settings.tab.model">模型</button>
         <button class="tab" data-pane="pane-voice" data-i18n="settings.tab.voice">语音</button>
+        <button class="tab" data-pane="pane-search" data-i18n="settings.tab.search">联网搜索</button>
         <button class="tab" data-pane="pane-general" data-i18n="settings.tab.general">通用</button>
       </div>
       <div class="settings-body">
@@ -1698,6 +1707,35 @@
           <div class="settings-note" id="vs-status"></div>
         </section>
         </div>
+        <div class="settings-pane" id="pane-search" hidden>
+        <section>
+          <h3 data-i18n="ss.title">联网搜索（备团）</h3>
+          <p class="settings-note" data-i18n="ss.note">为备团助手提供 web_search 工具；战斗模式不可用。未配置时不产生任何搜索请求。</p>
+          <div class="pf-row"><span data-i18n="ss.mode">启用方式</span>
+            <select id="ss-mode">
+              <option value="off" data-i18n="ss.mode.off">关闭</option>
+              <option value="spark" data-i18n="ss.mode.spark">Arcane Spark</option>
+              <option value="byok" data-i18n="ss.mode.byok">自带搜索服务</option>
+              <option value="custom" data-i18n="ss.mode.custom">自定义端点</option>
+            </select>
+          </div>
+          <p class="settings-note" id="ss-mode-desc"></p>
+          <p class="settings-note" id="ss-spark-nokey" data-i18n="ss.spark.noKey" hidden></p>
+          <div class="pf-row" id="ss-backend-row" hidden><span data-i18n="ss.byok.backend">搜索服务</span>
+            <select id="ss-backend">
+              <option value="zai" data-i18n="ss.byok.zai">智谱</option>
+              <option value="brave" data-i18n="ss.byok.brave">Brave Search</option>
+            </select>
+          </div>
+          <label class="pf-row" id="ss-apikey-row" hidden><span data-i18n="ss.apikey">API Key</span><input id="ss-apikey" type="password" data-i18n-placeholder="ss.apikeyPlaceholder" placeholder="留空 = 保持已保存的 Key" /></label>
+          <label class="pf-row" id="ss-endpoint-row" hidden><span data-i18n="ss.custom.endpoint">端点</span><input id="ss-endpoint" type="url" data-i18n-placeholder="ss.custom.endpointPlaceholder" placeholder="https://…" /></label>
+          <label class="pf-row" id="ss-custom-key-row" hidden><span data-i18n="ss.custom.key">API Key</span><input id="ss-custom-key" type="password" data-i18n-placeholder="ss.apikeyPlaceholder" placeholder="留空 = 保持已保存的 Key" /></label>
+          <div class="pf-actions">
+            <button class="btn primary" id="ss-save" data-i18n="ss.save">保存</button>
+          </div>
+          <div class="settings-note" id="ss-status" aria-live="polite"></div>
+        </section>
+        </div>
         <div class="settings-pane" id="pane-general" hidden>
           <section>
             <div class="telemetry-setting-row">
@@ -1737,6 +1775,20 @@
           <section>
             <h3 data-i18n="settings.general.version">版本</h3>
             <p class="settings-note">Arcane Desk <span id="app-version"></span></p>
+          </section>
+        </div>
+        <div id="search-consent" class="settings-pane" role="dialog" aria-modal="true" aria-labelledby="ss-consent-title-el" hidden>
+          <section class="card" style="padding:18px; border:1px solid var(--border); background:var(--panel-2)">
+            <h3 id="ss-consent-title-el" data-i18n="ss.consent.title">启用联网搜索</h3>
+            <div class="pf-row"><span data-i18n="ss.consent.receiver">接收方</span><strong id="ss-consent-receiver"></strong></div>
+            <div class="pf-row"><span data-i18n="ss.consent.data">发送内容</span><span data-i18n="ss.consent.dataDesc">仅搜索关键词；不含备团文档正文、世界数据与任何密钥</span></div>
+            <div class="pf-row"><span data-i18n="ss.consent.cost">费用</span><span id="ss-consent-cost"></span></div>
+            <p class="settings-note" data-i18n="ss.consent.minimize">助手将被要求只发送完成检索所需的最少关键词。</p>
+            <p class="settings-note" data-i18n="ss.consent.persist">搜索结果（标题/链接/摘要）会保存在本地会话记录中。</p>
+            <div class="pf-actions">
+              <button class="btn" id="ss-consent-cancel" data-i18n="ss.consent.cancel">取消</button>
+              <button class="btn primary" id="ss-consent-accept" data-i18n="ss.consent.accept">我已了解，启用</button>
+            </div>
           </section>
         </div>
       </div>

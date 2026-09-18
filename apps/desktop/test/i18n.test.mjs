@@ -71,7 +71,7 @@ test("site permissions live inside General instead of a dedicated settings tab",
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const paneRefs = [...html.matchAll(/class="tab(?: active)?" data-pane="([^"]+)"/g)]
     .map((match) => match[1]);
-  assert.deepEqual(paneRefs, ["pane-model", "pane-voice", "pane-general"]);
+  assert.deepEqual(paneRefs, ["pane-model", "pane-voice", "pane-search", "pane-general"]);
   assert.doesNotMatch(html, /id="pane-permissions"/);
   assert.match(
     html,
