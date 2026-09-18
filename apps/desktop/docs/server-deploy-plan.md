@@ -94,6 +94,30 @@ SSH 凭证纪律（平移现有 ops 安全纪律）：
 - 首次连接的 host key 确认由用户完成，skill **不自动 accept**——部署会话遇到新 fingerprint 时展示给用户核对后再继续。
 - 目标机范围：v1 仅 Linux（x64/arm64，覆盖全部主流云）。本机 Docker Desktop（Windows/macOS）作为 local target 扩展列 M4 可选。
 
+### 首次接入引导：secrets 不过 agent
+
+核心原则一句话：**私钥材料永不进入 agent 上下文**。用户把 key 粘贴给 LLM 这条路明确堵死（skill 纪律条款）：会话记录会被持久化/快照重放（本仓库就有会话快照机制）、agent 为执行不得不把 key 落到临时文件会制造不可控副本——与我们"license key 永不打印、skill 永不存密码"是同一条纪律线。
+
+key 放哪不是我们发明特殊位置，就是**操作系统标准位置**，认证由系统 OpenSSH 完成，agent 只碰别名：
+
+```
+~/.ssh/id_ed25519(.pub)   私钥/公钥——用户自己 ssh-keygen 生成，agent 可探测存在性、可读 .pub（非机密），永不读私钥内容
+~/.ssh/config             Host 别名 + HostName/User/Port/IdentityFile——纯配置非机密，skill 可代写
+ssh-agent                 passphrase 解锁一次（Windows 用 OpenSSH Authentication Agent 服务），之后 ssh 别名免交互
+```
+
+**首次接入流程（skill 引导，每步给用户可直接复制的命令，用户在自己终端跑）**：
+
+1. skill 检查 `~/.ssh/id_ed25519` 是否存在（只看存在性）→ 无则给用户 `ssh-keygen -t ed25519` 命令自己跑，passphrase 由用户自选。
+2. skill 读 `id_ed25519.pub` **公钥内容展示给用户**（公钥可公开），指引用户去云控制台绑定（阿里云 ECS 创建时可绑密钥对，或安全设置里注入公钥）——和 license 激活一样，浏览器里的动作归用户。
+3. skill 代写 `~/.ssh/config` 别名块（追加前展示内容，纯配置），用户 `ssh-add` 解锁一次。
+4. host key 确认：skill `ssh-keyscan` 取 fingerprint 展示，用户口头确认后 skill 才把条目追加进 known_hosts（TOFU + 人工核对，仍不算"自动 accept"）。
+5. 验证：`ssh <alias> 'echo ok'` 通了才进探测-再-执行决策树。
+
+密码登录（sshpass 之类）v1 明确不支持：agent 无法安全持有密码，交互式密码提示在非 TTY 下也不可用——只有公钥路径。若用户坚持"把私钥发给你，你帮我配"，skill 拒绝并回到上面的引导流程；这个拒绝话术与"agent 永不代填 EULA/license"同一模板。
+
+后续（M4 可选）：desktop 做一个连接管理 UI（选择/新建目标、测连通、显示 fingerprint），但即便如此私钥材料也只进 OS keychain/agent，不进 LLM 上下文——UI 改善的是引导体验，不改变 secrets 边界。
+
 ## 4. 镜像与编排设计
 
 ### Dockerfile 骨架（放在 `apps/desktop/distribution/server-image/`）
