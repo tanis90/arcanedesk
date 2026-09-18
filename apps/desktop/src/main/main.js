@@ -1503,7 +1503,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("app:get-version", () => app.getVersion());
 
-  // ---- 联网搜索(PRD prep-web-search):配置 + 首次外发确认 ----
+  // ---- 联网搜索(PRD prep-web-search):配置保存;无 consent 流程——启用即知情 ----
   // spark 模式与语音同源:复用内置 arcane-spark provider 的凭据。
   const arcaneSparkForSearch = () => providerStore.credentialForProvider("arcane-spark");
   ipcMain.handle("search:get-config", (event) => {
@@ -1512,19 +1512,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("search:save-config", (event, input) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
-    const result = searchStore.update(input ?? {}, arcaneSparkForSearch());
-    if (!result?.ok) return result;
-    // 保存成功但接收方未确认:提示 renderer 弹 consent;确认前工具执行会被拦。
-    return searchStore.data.mode !== "off" && !searchStore.consentSatisfied(arcaneSparkForSearch())
-      ? { ok: true, consentRequired: true, consentTarget: searchStore.consentTarget(arcaneSparkForSearch()) }
-      : { ok: true };
-  });
-  ipcMain.handle("search:confirm-consent", (event, input) => {
-    if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
-    const target = typeof input?.target === "string" ? input.target : "";
-    if (!target) return { ok: false, error: err("err.search.badRequest") };
-    searchStore.recordConsent(target);
-    return { ok: true };
+    return searchStore.update(input ?? {}, arcaneSparkForSearch());
   });
 
   // ---- 语音输入:ASR 配置 + 识别(智谱直连 / Arcane 中转,上游都是 GLM-ASR-2512) ----

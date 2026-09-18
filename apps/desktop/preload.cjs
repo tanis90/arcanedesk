@@ -123,10 +123,9 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
   getVoiceConfig: () => ipcRenderer.invoke("voice:get-config"),
   saveVoiceConfig: (cfg) => ipcRenderer.invoke("voice:save-config", cfg),
-  /** Prep web search: config (masked view) + first-use consent. */
+  /** Prep web search: masked config view (mode/backend/key state). */
   getSearchConfig: () => ipcRenderer.invoke("search:get-config"),
   saveSearchConfig: (cfg) => ipcRenderer.invoke("search:save-config", cfg),
-  confirmSearchConsent: (target) => ipcRenderer.invoke("search:confirm-consent", { target }),
   /** wav: ArrayBuffer(16kHz mono PCM WAV)→ { ok, text?, latency?, error? } */
   transcribeAudio: (wav) => ipcRenderer.invoke("voice:transcribe", wav),
   /** macOS 首次录音前申请麦克风系统权限;其他平台恒 { ok: true }。 */

@@ -43,7 +43,7 @@ test("zai adapter speaks the zhipu web_search wire format", async () => {
     }),
   }]);
   const store = makeStore({ mode: "byok", byokBackend: "zai", apiKey: "zai-key" });
-  store.recordConsent("origin:https://open.bigmodel.cn");
+
   const budget = new SearchBudget();
   budget.reset("run");
 
@@ -77,7 +77,7 @@ test("spark adapter posts the arcane /v1/search contract", async () => {
     }),
   }]);
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
+
   const budget = new SearchBudget();
   budget.reset("run");
 
@@ -101,7 +101,7 @@ test("brave adapter maps web.results and warns on domains", async () => {
     body: JSON.stringify({ web: { results: [{ title: "B", url: "https://b.example/1", description: "D" }] } }),
   }]);
   const store = makeStore({ mode: "byok", byokBackend: "brave", apiKey: "brave-key" });
-  store.recordConsent("origin:https://api.search.brave.com");
+
   const budget = new SearchBudget();
   budget.reset("run");
 
@@ -122,7 +122,7 @@ test("dedupe cache short-circuits identical queries in the same run", async () =
     { body: JSON.stringify({ search_results: [{ title: "T", url: "https://x.example/1", content: "C" }] }) },
   ]);
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
+
   const budget = new SearchBudget();
   budget.reset("run");
 
@@ -134,10 +134,12 @@ test("dedupe cache short-circuits identical queries in the same run", async () =
   assert.equal(budget.used("run"), 1);
 });
 
-test("hard cap and consent gate produce structured errors", async () => {
-  const fetch = stubFetch([]);
+test("hard cap produces budgetExhausted; first search goes out without any confirmation", async () => {
+  const fetch = stubFetch([
+    { body: JSON.stringify({ search_results: [{ title: "T", url: "https://x.example/1", content: "C" }] }) },
+  ]);
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
+
   const budget = new SearchBudget({ hard: 1 });
   budget.reset("run");
   budget.record("run", "previous", "p");
@@ -147,13 +149,12 @@ test("hard cap and consent gate produce structured errors", async () => {
     (error) => error instanceof SearchError && error.code === "budgetExhausted",
   );
 
+  // 无 consent 闸:配置完成即首次外发。
   const freshBudget = new SearchBudget();
   freshBudget.reset("run");
-  const unconsented = makeStore({ mode: "spark" }); // 未记录 consent
-  await assert.rejects(
-    executeSearch({ query: "next query" }, { store: unconsented, spark: SPARK, budget: freshBudget, runKey: "run", fetchImpl: fetch.impl, log: () => {} }),
-    (error) => error instanceof SearchError && error.code === "consentRequired",
-  );
+  const { usage } = await executeSearch({ query: "first query" }, { store, spark: SPARK, budget: freshBudget, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
+  assert.equal(usage.cached, false);
+  assert.equal(fetch.calls.length, 1);
 });
 
 test("upstream 429/401 map to quota/auth errors; empty results consume budget", async () => {
@@ -163,7 +164,7 @@ test("upstream 429/401 map to quota/auth errors; empty results consume budget", 
     { body: JSON.stringify({ search_results: [] }) },
   ]);
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
+
 
   const quota = await executeSearch({ query: "quota query" }, { store, spark: SPARK, budget: new SearchBudget(), runKey: "r", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
   assert.ok(quota instanceof SearchError && quota.code === "quotaExceeded");
@@ -189,7 +190,7 @@ test("payload respects the 8KB cap by dropping trailing results", async () => {
   }));
   const fetch = stubFetch([{ body: JSON.stringify({ search_results: rows }) }]);
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
+
   const budget = new SearchBudget();
   budget.reset("run");
 

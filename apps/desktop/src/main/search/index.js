@@ -1,4 +1,4 @@
-// search/index.js — 搜索执行编排：budget → consent → 凭据 → adapter → 归一化截断。
+// search/index.js — 搜索执行编排：budget → 凭据 → adapter → 归一化截断。
 // M2 的 defineTool("web_search") 只包一层壳调用这里；renderer 不 import 本模块。
 
 import { coerceSearchError, SearchError } from "./errors.js";
@@ -63,10 +63,6 @@ export async function executeSearch(rawParams, { store, spark, budget, runKey, s
   const cached = budget.lookup(runKey, params.query);
   if (cached != null) {
     return { payload: cached, usage: { used: budget.used(runKey), backend: adapter.id, cached: true } };
-  }
-  // 首次外发同意：接收方 target 变化即要求重新确认。
-  if (!store.consentSatisfied(spark)) {
-    throw new SearchError("consentRequired", { backend: adapter.id });
   }
 
   let response;

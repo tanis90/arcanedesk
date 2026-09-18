@@ -15,14 +15,22 @@ function tempStore() {
   return { store, file: join(dir, "search.json") };
 }
 
-test("new users default to off: no tool registration, no requests", () => {
-  const { store } = tempStore();
-  assert.equal(store.data.mode, "off");
-  assert.equal(store.usable(SPARK), false);
-  assert.equal(store.usable(null), false);
+test("new users default to spark: zero requests until a spark credential exists", () => {
+  const { store, file } = tempStore();
+  assert.equal(store.data.mode, "spark");
+  assert.equal(store.usable(SPARK), true); // 有 Spark 凭据即可用
+  assert.equal(store.usable(null), false); // 没有凭据:工具不注册、零请求
   const pub = store.toPublic(SPARK);
-  assert.equal(pub.mode, "off");
-  assert.equal(pub.hasKey, false);
+  assert.equal(pub.mode, "spark");
+  assert.equal(pub.hasKey, true);
+  assert.equal(pub.keySource, "arcane-spark");
+  const pubNoSpark = store.toPublic(null);
+  assert.equal(pubNoSpark.hasKey, false);
+  // schema v2:不再持久化 consent 字段。
+  store.update({ mode: "spark" }, SPARK); // 触发落盘
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(raw.schemaVersion, 2);
+  assert.equal("consent" in raw, false);
 });
 
 test("spark mode follows the Spark provider credential without storing a key", () => {
@@ -89,24 +97,17 @@ test("custom endpoint requires a valid https url", () => {
   assert.equal(cred.baseUrl, "https://search.example.com/v1");
 });
 
-test("consent follows the actual receiver target and must be re-confirmed on change", () => {
+test("byok/custom stay opt-in: mode must be chosen explicitly and a key saved before usable", () => {
   const { store } = tempStore();
+  // 默认 spark 落到自有 key 模式时,凭据为空 → 不可用,直到显式填写保存。
+  store.update({ mode: "byok", byokBackend: "zai", apiKey: "" }, SPARK);
+  assert.equal(store.data.mode, "byok");
+  assert.equal(store.usable(null), false);
   store.update({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-1234" }, SPARK);
-  assert.equal(store.consentSatisfied(null), false);
-  assert.equal(store.consentTarget(null), "origin:https://open.bigmodel.cn");
-  store.recordConsent("origin:https://open.bigmodel.cn");
-  assert.equal(store.consentSatisfied(null), true);
-  // 切到 spark 模式：接收方变成 Spark 端点，旧 consent 不再覆盖。
-  store.update({ mode: "spark" }, SPARK);
-  assert.equal(store.consentTarget(SPARK), "origin:https://llm.example");
-  assert.equal(store.consentSatisfied(SPARK), false);
-  // 换 backend → target 变化 → 旧 consent 不再覆盖。
-  store.update({ mode: "byok", byokBackend: "brave", apiKey: "brave-key-777" }, SPARK);
-  assert.equal(store.consentTarget(null), "origin:https://api.search.brave.com");
-  assert.equal(store.consentSatisfied(null), false);
+  assert.equal(store.usable(null), true);
 });
 
-test("protected key persists across reload; corrupted file falls back to off", () => {
+test("protected key persists across reload; corrupted file falls back to the spark default", () => {
   const dir = mkdtempSync(join(tmpdir(), "arcane-search-test-"));
   const file = join(dir, "search.json");
   const first = new SearchStore(file, () => {}, testSecretStorage());

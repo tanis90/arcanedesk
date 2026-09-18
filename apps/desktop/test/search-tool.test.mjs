@@ -63,9 +63,9 @@ test("web_search joins the tool pool only when search is configured and usable",
   const off = buildHost({ store: makeStore({ mode: "off" }) });
   assert.equal(off.host.buildTools().some((tool) => tool.name === "web_search"), false);
 
-  const unconsented = buildHost({ store: makeStore({ mode: "spark" }) });
-  // spark 模式 usable(有 Spark 凭据)即进池;consent 在 execute 阶段拦。
-  assert.equal(unconsented.host.buildTools().some((tool) => tool.name === "web_search"), true);
+  const sparkMode = buildHost({ store: makeStore({ mode: "spark" }) });
+  // spark 模式 usable(有 Spark 凭据)即进池;凭据缺失时 store.usable 为 false。
+  assert.equal(sparkMode.host.buildTools().some((tool) => tool.name === "web_search"), true);
 
   const none = buildHost({});
   assert.equal(none.host.buildTools().some((tool) => tool.name === "web_search"), false);
@@ -73,7 +73,6 @@ test("web_search joins the tool pool only when search is configured and usable",
 
 test("web_search execute returns structured payload and emits search_usage", async () => {
   const store = makeStore({ mode: "spark" });
-  store.recordConsent("origin:https://llm.example");
   const { impl } = stubFetch(OK_BODY);
   const { host, events } = buildHost({ store, fetchImpl: impl });
 
@@ -91,29 +90,25 @@ test("web_search execute returns structured payload and emits search_usage", asy
   assert.equal(usage.data.sessionId, "session-1");
 });
 
-test("missing consent returns isError guidance and emits search_error; run reset restores budget", async () => {
-  const store = makeStore({ mode: "spark" }); // 未记录 consent
+test("first search succeeds without confirmation; hard cap and run reset behave", async () => {
+  const store = makeStore({ mode: "spark" });
   const { impl, calls } = stubFetch(OK_BODY);
-  const { host, events } = buildHost({ store, fetchImpl: impl });
+  const { host } = buildHost({ store, fetchImpl: impl });
   host.searchBudget = new SearchBudget({ soft: 5, hard: 1 }); // 注入小上限
 
   const tool = host.buildTools().find((t) => t.name === "web_search");
-  const consent = await tool.execute("c1", { query: "consent check" }, undefined);
-  assert.equal(consent.isError, true);
-  assert.match(consent.content[0].text, /first-use confirmation/);
-  assert.equal(calls.length, 0); // 未确认前零外发
-  assert.equal(events.find((e) => e.type === "search_error").data.code, "consentRequired");
-
-  // consent 后第一条成功,第二条触发硬上限。
-  store.recordConsent("origin:https://llm.example");
-  const first = await tool.execute("c2", { query: "first query" }, undefined);
+  // 无首次确认闸:配置完成即外发。
+  const first = await tool.execute("c1", { query: "first query" }, undefined);
   assert.equal(first.isError, undefined);
-  const second = await tool.execute("c3", { query: "second query" }, undefined);
+  assert.equal(calls.length, 1);
+
+  // 第二条触发硬上限。
+  const second = await tool.execute("c2", { query: "second query" }, undefined);
   assert.equal(second.isError, true);
   assert.match(second.content[0].text, /budget for this turn is exhausted/);
 
   // agent_start 语义:新一轮 run 预算重置。
   host.resetSearchRun();
-  const third = await tool.execute("c4", { query: "third query" }, undefined);
+  const third = await tool.execute("c3", { query: "third query" }, undefined);
   assert.equal(third.isError, undefined);
 });
