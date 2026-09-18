@@ -84,7 +84,8 @@
 │           pm2 / tmux-screen / nohup 逐级判定，停服/重启必须走同一拉起方式，绝不裸 kill
 ├─ C. 目标机有 docker 但无容器
 │     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待
-│       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、玩家 join 链接
+│       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、adminKey（首启用）、玩家 join 链接
+│       → 自动 foundry_open 打开远程面板，用户在面板里完成 license 激活（agent 永不代填）
 └─ D. 目标机无 docker
       → 装 docker：装前预检 + 四层降级（见"Docker 安装保障"）
       → 仍装不上（内核过老/OpenVZ/无 root）→ 二选一：裸机兜底安装（钉版 Node +
@@ -343,7 +344,15 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 | ops（启停/日志/探测） | 本机 shell | `ssh <target> docker exec` / 直执 | skill 增加 target 抽象（local \| ssh），ops/mods 两个 skill 扩展 |
 | mod 安装/升级 | mod-manager 本机直跑 | 同一二进制在容器内跑（`docker exec arcane-fvtt node /arcane/mod-manager/mod-manager.mjs …`），索引端点由容器 region 决定 | 低：参数透传，`--index-url` 机制现成 |
 | CLI CDP 通道（QA） | 本机 Chromium 9230 | 服务器部署默认**不需要**——面板通道已覆盖 ArcaneDesk 全部控制能力。仅独立 CLI 的 QA 流程需要 CDP：可选 compose profile 起 chromium sidecar，其调试端口**必须**绑容器 loopback、经 SSH 隧道使用（CDP 能完全控制浏览器会话、绕过 FVTT 权限体系，绝不可公网暴露） | 中：文档 + compose profile，CLI 代码零改（仍连 127.0.0.1:9230） |
-| license 激活 | 用户浏览器内完成 | 不变：用户开远程面板完成激活/EULA，会话态存服务器 Config 卷 | 0（政策平移） |
+| license 激活 | 用户浏览器内完成 | 不变：**deploy 收尾 skill 自动 `foundry_open` 打开远程面板**（见下"首启与激活收尾"），用户在面板里完成 license/EULA（agent 永不代填），激活态存服务器 Config 卷 | 0（政策平移）+ 连接目标切换 |
+
+**首启与激活收尾（deploy 的最后一段，自动化到只剩"用户填 key"）**：
+
+1. healthcheck 三层验证（V1-V3）通过后，skill 把 desktop 的 **Foundry 连接目标切到 `http://<server>:30000` 并持久化**（现状 `main.js:59` 是 `ARCANE_FOUNDRY_URL \|\| localhost` 固定值——连接设置项是本方案唯一的 ~0 级改造，M2 一并做）。
+2. skill 调 `foundry_open`（`agent-host.js:981`）→ 面板加载服务器首页 → 首启未激活时自然落在 license/setup 页。
+3. 用户在面板里输入 **adminKey（交付信息里带的那份）+ license key**，接受 EULA——这两样只能用户自己填，skill 只开页面不碰表单。
+4. 激活后：cn 轨道入口脚本已预装 arcane-demo 世界（mirror 有 `worlds/arcane-demo@0.1.2` + profile），用户激活完即有世界可进；正式世界由用户自建或走世界三线协议发布。
+5. skill 轮询 `/api/status` 确认 license 生效、world 加载、`systemVersion=5.3.3`，然后才发最终交付（join 链接等），面板会话 cookie 由现有记忆/回填机制持久化，之后直达 /game。
 
 ## 8. CI/CD 与发布流程
 
@@ -376,7 +385,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 | 镜像被替换/供应链 | 清单钉 tarball SHA256 + image ID **双断言**（比匿名 registry pull 更强）；镜像内容单源（region 表/mod-manager/skills 树）；全链 HEAD 验收复用 |
 | CDP 暴露公网 | sidecar 只绑容器 loopback，仅 SSH 隧道可达；不进默认 compose profile |
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
-| 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成且永不打印；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
+| 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成，**不进日志/遥测/例行输出，仅首启交付一次**（license/setup 页需要它），提供 ops 重置动作；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
 
 ## 附录 A：首次接入话术（小白单一主路径，Windows / 全云厂商）
 
