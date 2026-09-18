@@ -12,7 +12,7 @@
 三个核心决策：
 
 1. **镜像既不是"只含 FVTT"，也不是"全含"，而是"安装器 + 运行时"**：Foundry 本体**绝不烤进镜像**（EULA 禁止再分发，且与我们既有 user-supplied-only 政策一致），首启时从挂载 zip / 限时 URL 装进卷；mod/dnd5e **也不烤**，运行时从 arcane-mirror 索引装进数据卷。镜像只含：钉版 Node 22.23.2、region 配置、mod-manager bootstrap、幂等入口脚本、健康检查。
-2. **分发双轨**：国内在自有阿里云 ECS 上**自建 registry**（`registry:2` + 已备案域名 `*.arcanedesk.bitterbebop.cn` + 既有证书同步，存储后端走 OSS，即 arcane-mirror 新增成员，解决 Docker Hub 拉不动；ACR 个人版实测已要收费、企业版开匿名拉取 564 元/月起，托管路线不划算）；海外走 Docker Hub 主出口 + GHCR 双推；Cloudflare R2 **不做 registry**（S3 协议≠OCI registry 协议），只继续承担 compose/部署清单/文档分发。
+2. **分发不走 registry**：为单个薄镜像养 registry（Docker Hub / GHCR / 自建 `registry:2` / ACR——个人版实测已收费、企业版开匿名拉取 564 元/月起）都不划算。镜像 `docker save` 成 gzip 压缩包，作为**普通 mirror 制品**放进现有 OSS(cn)/R2(intl) 桶，部署 skill 在目标机上下载 → SHA256 校验 → `docker load` 展开加载。供应链协议（不可变 revision + latest 指针 + cache-bust HEAD 验收）与 mod zip / skill bundle 完全同一套。
 3. **先探测再执行**：新 skill `arcane-fvtt-server` 先探测本机/目标机（端口 30000、进程、数据目录、docker 容器），命中裸机部署→沿用 `arcane-fvtt-ops` 继续运维；命中已有容器→远程 ops；什么都没有→Docker 部署。
 
 ## 1. 现状盘点（本机部署链路）
@@ -98,49 +98,45 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 - 卷：`foundry`（本体）、`data`（数据目录）。**升级 FVTT = 换镜像 tag + 新本体版本目录，数据卷不动**。
 - 端口：**30000 默认直接对公网开放**——服务器部署的全部意义就是让玩家远程登录；安全边界是 FVTT 自带的用户/权限体系（world 用户 + 密码 + adminKey），不是把端口藏起来。文档附可选 TLS 反代示例（不改变默认）。
 - **默认不含 chromium sidecar**：ArcaneDesk 的控制通道（内嵌面板 + executeJavaScript 注入 SDK）走的就是公网 30000，与玩家同一入口，无需额外暴露面。
-- 镜像引用用 **digest 钉版**（`image: registry.../arcane-fvtt@sha256:...`），digest 由部署清单下发，防 tag 漂移。
+- 镜像引用用**本地 tag**（`docker load` 后即持有 `arcane/arcane-fvtt:13.351-r<N>`），compose 引用该 tag；防漂移靠发布物的 SHA256 钉版（见下）。
 
-### tag 策略
+### 版本与发布物
 
-- `arcane-fvtt:13.351-r<N>`：不可变，N=镜像配方 revision（配方文件改动必 bump，同 skill bundle revision 纪律）。
-- `arcane-fvtt:13.351` / `:13`：浮动指针。
-- 发布物：`server-release.json`（image digest、配方 revision、foundry/node/dnd5e 版本、mod-manager 对应 skill revision、minAppVersion）。
+- tag：`arcane/arcane-fvtt:13.351-r<N>`，N=镜像配方 revision（配方文件改动必 bump，同 skill bundle revision 纪律）。
+- 发布物 `server-release.json`：tarball 的 bytes+SHA256、**镜像 image ID**（config digest，`docker load` 后 `docker inspect` 比对）、配方 revision、foundry/node/dnd5e 版本、mod-manager 对应 skill revision、minAppVersion、sizeGate 上限。
+- 校验链：下载 tarball 按清单 bytes+SHA256 逐字节核对（mod-manager `stageModule` 同款）→ `docker load` → `docker inspect` 断言 image ID 与清单一致 → 才允许 `compose up`。
 
-## 5. 分发渠道
+## 5. 分发：镜像压缩包进 mirror，skill 展开
 
-### 国内：自有 ECS 上自建 registry（arcane-mirror 新增成员）
+**不建 registry**。询价结论（2026-09 查证）摆在那：ACR 个人版实际开通已要收费（官方文档仍写"公测限额免费"，且 2026-02 起函数计算已不允许跨地域拉个人版镜像，功能持续收缩）；企业版经济版 45 元/月**关闭公共匿名拉取**，开匿名拉取从基础版 564 元/月起；腾讯云 TCR 个人版/华为云 SWR 虽仍免费但有同样的转收费风险；自建 `registry:2` 要养域名、证书、单点——**为这一个镜像都不值得**。而 Docker Hub 对国内拉取方向不可用。
 
-托管 registry 的询价结论（2026-09 实测/查证）：
+镜像本身足够薄（不含 Foundry 本体、不含 mod，只有 Node 基础层 + 脚本，tar.gz 预计 100-150MB，与 desktop 安装包 227MB 同量级），完全不需要 registry 的层去重/增量拉取生态。所以：
 
-| 方案 | 状态 | 结论 |
-|---|---|---|
-| ACR 个人版 | 官方文档仍写"公测限额免费"，但实际开通已要收费（控制台实测）；且 2026-02 起函数计算已不允许跨地域拉个人版镜像，功能持续收缩 | 不押注 |
-| ACR 企业版经济版 | 45 元/月，但**公共匿名拉取关闭** | 不适用——用户在自己服务器拉镜像不可能登录我们的阿里云账号 |
-| ACR 企业版基础版+ | 564 元/月起才开匿名拉取 | v1 阶段不值 |
-| 腾讯云 TCR 个人版 / 华为云 SWR | 目前仍免费限额 + 支持公开匿名拉取 | 备选；跨云拆分基础设施，且与 ACR 个人版同样面临"免费转收费"风险 |
-| **自建 registry:2（推荐）** | 边际成本≈0 | 见下 |
+**发布物 = `docker save | gzip` 的镜像压缩包，作为普通制品进现有桶**：
 
-**推荐：在自有阿里云 ECS 上跑 Docker 官方 `registry:2`**。前提全部现成：
+```
+cn  OSS arcane-package:
+  desktop/arcane-desk/server/<revision>/arcane-fvtt-<tag>.tar.gz   # 不可变
+  desktop/arcane-desk/server/<revision>/{server-release.json, docker-compose.yml, README.md}
+  desktop/arcane-desk/server/latest.json                            # 唯一可变指针
+intl R2 arcane-desk-intl（dl.arcanedesk.app）:
+  desktop/arcane-desk-intl/server/...（同构）
+```
 
-- 机器：`arcane-fvtt-ecs` 等已在运 ECS（cn mod 镜像重打包已在用），SSH 别名与连接权威定义见 arcanedesk-ops `SETUP.md`/`MIGRATION.md:28-29`。
-- 域名：`arcanedesk.bitterbebop.cn` 已备案、已有证书同步服务（`infra/site/cdn-cert-sync`），加 `docker.arcanedesk.bitterbebop.cn` 子域 + 443 即可，TLS 证书走同一工作流。
-- 存储：registry:2 的 S3 存储驱动指向 `arcane-package` 桶（OSS 兼容 S3 endpoint，镜像层落 `docker/registry/` 前缀），ECS 侧近无状态，重启/迁移干净。
-- 量级匹配：拉取只发生在用户部署/升级时（单镜像数百 MB、月拉取次数量级小），单节点 ECS 的可用性完全够；Docker Hub 副本始终是并行出口。
+协议完全照搬 skills 通道（`publish-skills.mjs` 模式）：不可变对象禁重传、指针只允许指向更老 revision、HEAD 验收带 `_cb=` cache-bust（吸取 8c902ec 边缘负缓存事故）。CI 设 **sizeGate**（tar.gz 超 300MB 直接失败），防止镜像悄悄变胖。
 
-arcan-mirror 侧新增：
+**部署/升级流程（`arcane-fvtt-server` skill 在目标机上执行，不经用户本机中转）**：
 
-- 自建 registry 一个（上述 ECS + 域名 + OSS 后端），匿名公开拉取，写入凭证仅 CI 持有（RAM 限定 `docker/registry/*` 前缀 Put/Get，照 `oss-release-contract.md` 的凭证纪律）。
-- OSS `arcane-package` 桶新前缀 `desktop/arcane-desk/server/<revision>/{docker-compose.yml, server-release.json, README}` + 唯一可变指针 `desktop/arcane-desk/server/latest.json`（完全复用 skills 通道的"不可变对象 + 指针 + HEAD 验收 + cache-bust"协议，`publish-skills.mjs` 模式照搬）。
-- `region.mjs` 默认值表加 `serverDeployBaseUrl`（OSS 前缀）与 `serverImageRegistry`（cn=自建 registry / intl=Docker Hub）。
-- CI 推送：GitHub Actions 海外 runner 构建后 `docker push` 双写 Docker Hub + 自建 registry——推送方向海外→国内畅通，只有拉取方向被墙，自建 registry 恰好解决。
+1. `curl` 指针 `latest.json` → 取 `server-release.json` →（升级时 `minAppVersion`/revision 门）。
+2. 服务器上直接下载 tar.gz（cn 从 OSS 北京、intl 从 R2，都快）→ 按**清单 bytes+SHA256 逐字节校验**（mod-manager `stageModule` 同款纪律）。
+3. `docker load` → `docker inspect` 断言 image ID 与清单一致 → `docker compose up -d`。
+4. 升级后清理旧 tag 镜像（`docker image rm` 旧 revision，skill 负责），避免磁盘堆积。
 
-降级链（写进部署 skill 文档，不进自动逻辑）：自建 registry 不可达 → 提示用户配代理直连 Docker Hub（同 digest 同镜像）；第三方加速器（docker.1ms.run 等）不进官方路径（违背"arcane mirror 是唯一第一方镜像"纪律）。
+为什么这条链是安全的：registry pull 的信任来自 registry 域名 + manifest 签名；tarball 链的信任来自**我们自己索引钉死的 SHA256 + image ID 双断言**——与我们分发 dnd5e zip（107MB）、desktop 安装包完全同一信任模型，甚至比匿名 `docker pull` 更强。未来若用户明确要 `docker pull` 体验，加一条 CI 步骤推 Docker Hub 即可（intl 受益），不影响本通道。
 
-### 海外：Docker Hub 主出口 + GHCR 双推
+docker 本体的安装在探测 D 分支处理（cn 用阿里云源装 docker-ce）；用户侧零 registry 概念、零加速器配置——"arcane mirror 是唯一第一方镜像"纪律保持完整。
 
-- Docker Hub 原生可用；免费匿名拉取有限速，但桌面用户量级下足够，且镜像只在部署/升级时拉一次。
-- 同一次 CI 双推 `ghcr.io/<org>/arcane-fvtt`（GitHub Actions 凭证现成），作为 Docker Hub 政策/限速风险的备份出口；部署清单可带 fallback 顺序。
-- **R2 为什么不做 registry**：R2 是 S3 兼容对象存储，说不了 OCI Distribution 协议（`/v2/` manifest/token 语义）；要用 R2 存层必须包一层 Worker 实现只读 registry（社区有 docker-hub 代理先例），工程收益低于 Docker Hub+GHCR 双出口。R2 继续做它擅长的事：compose、部署清单、文档、（既有）mod 索引。若未来 Docker Hub 出现政策风险，Worker 只读 registry 列为后备方案再评估。
+region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前缀 / intl=R2 前缀），desktop 经 `ARCANE_SERVER_RELEASE_BASE` 注入 skill 子进程——与 `ARCANE_MOD_INDEX_URL` 完全同一接线模式（`main.js:43-45`），业务代码零 if(region) 分支。
 
 ## 6. 版本与能力对齐表（服务器部署必须等于本机基线）
 
@@ -174,8 +170,8 @@ arcan-mirror 侧新增：
 
 1. 检查配方 revision 递增（照 skills-publish 纪律）。
 2. 构建：单源复制 mod-manager（来自 skills 树）→ docker build → 本地起容器冒烟（挂测试 zip、假索引、断言 `/api/status`）。
-3. 双推 Docker Hub +（cn）自建 registry /（intl）GHCR，记录 digest。
-4. `server-release.json` + compose 上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
+3. `docker save | gzip` 出 tar.gz（**sizeGate：>300MB 直接失败**），记录 SHA256 与 image ID，生成 `server-release.json`。
+4. tar.gz + `server-release.json` + compose 上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
 
 与 skill 发布的联动：skills-publish 成功后可选触发 server-image 重建（mod-manager 单源跟随），或依赖入口脚本启动自更新兜底——v1 先做后者（简单），联动重建列 M3。
 
@@ -183,7 +179,7 @@ arcan-mirror 侧新增：
 
 分支 `feat/server-deploy`（实现时自 main 切；若 intl M4 skill packs 已合入则直接受益于 composer 双语机制，未合入也不阻塞——镜像轨道不依赖 skill 双语）。
 
-- **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、自建 registry 落地（ECS + 域名 + OSS 后端）、CI 双推自建 registry+DockerHub、server-release 指针协议、版本闸。
+- **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、镜像 tar.gz 发布物与 CI（save/gzip/sizeGate/指针协议）、版本闸。
 - **M2 deploy skill**：`arcane-fvtt-server`（探测-再-执行决策树、Docker 部署、world 用户与默认密码初始化、连接信息与玩家 join 链接交付）。
 - **M3 远程运维**：ops/mods skill 的 target 抽象（local\|ssh）、mod-manager 容器内执行、skill↔镜像联动重建。
 - **M4 增强（可选）**：CLI QA 用 chromium sidecar profile（CDP 仅 SSH 隧道）、`-full` 离线镜像变体、TLS 反代一键化、服务器侧 headless agent（远期，desktop 仍是控制面）。
@@ -193,9 +189,9 @@ arcan-mirror 侧新增：
 | 风险 | 缓解 |
 |---|---|
 | EULA：再分发 Foundry 本体 | 镜像不含本体；限时 URL 不缓存不复述；license key 永不入日志/遥测（现有纪律平移） |
-| 国内拉不动 Docker Hub | 自建 registry 直拉 + compose/清单走 OSS；docker 安装本身用阿里云源 |
-| 自建 registry 单点（ECS 宕机/证书过期） | 拉取只发生在部署/升级时点，非运行时依赖；证书复用 cdn-cert-sync 工作流；Docker Hub 同 digest 副本兜底；未来量大可无痛迁 ACR 企业版（基础版起支持匿名拉取） |
-| tag 漂移/供应链 | digest 钉版下发；镜像内容单源（region 表/mod-manager/skills 树）；全链 SHA256 + HEAD 验收复用 |
+| 国内拉不动 Docker Hub | 全流程**无 `docker pull`**：tar.gz 从 OSS 直下、skill `docker load` 展开；docker 安装用阿里云源 |
+| 升级全量重下 tar.gz（无层增量） | 镜像 sizeGate 钉 300MB 内 + 升级低频；`docker load` 同 tag 原子覆盖，旧 revision 由 skill 清理防磁盘堆积 |
+| 镜像被替换/供应链 | 清单钉 tarball SHA256 + image ID **双断言**（比匿名 registry pull 更强）；镜像内容单源（region 表/mod-manager/skills 树）；全链 HEAD 验收复用 |
 | CDP 暴露公网 | sidecar 只绑容器 loopback，仅 SSH 隧道可达；不进默认 compose profile |
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
 | 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成且永不打印；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
