@@ -21,7 +21,7 @@ const IPC_KEYS = {
 export class SearchError extends Error {
   /**
    * @param {keyof typeof IPC_KEYS} code
-   * @param {{ detail?: string, backend?: string, used?: number }=} meta
+   * @param {{ detail?: string, backend?: string, used?: number | string }} meta
    */
   constructor(code, meta = {}) {
     super(`search:${code}${meta.detail ? ` (${meta.detail})` : ""}`);
@@ -34,9 +34,7 @@ export class SearchError extends Error {
   toIpc() {
     return err(IPC_KEYS[this.code] ?? "err.search.backendUnavailable", {
       ...(this.meta?.backend ? { backend: this.meta.backend } : {}),
-      ...(this.meta?.used != null && this.meta?.used !== ""
-        ? { used: String(this.meta.used) }
-        : {}),
+      ...(this.meta?.used != null ? { used: String(this.meta.used) } : {}),
     });
   }
 }

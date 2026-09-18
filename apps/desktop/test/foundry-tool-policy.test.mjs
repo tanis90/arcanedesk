@@ -6,7 +6,9 @@ import path from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager,
   createReadTool, createWriteTool, createEditTool, createBashTool, createPowerShellTool } from "@earendil-works/pi-coding-agent";
 import { AgentHost } from "../src/main/agent-host.js";
-import { activeToolNames, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { activeToolNames, activeToolNamesForPool, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { SearchStore } from "../src/main/search/store.js";
+import { testSecretStorage } from "./test-secret-storage.mjs";
 import { SAFE_DIRECT_ACTIONS } from "@arcanedesk/foundry-sdk/contracts";
 import { sideEffectClass } from "../src/main/telemetry/task-taxonomy.js";
 
@@ -25,7 +27,8 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
   for (const tool of customTools) assert.equal(tool.parameters.type, "object", `${tool.name}: provider requires an object root even for unions`);
   if (mode === "prep") customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
-  const expected = activeToolNames(mode);
+  // 池感知激活表:无搜索配置时 web_search 不激活(与 agent-host 会话创建同判定)。
+  const expected = activeToolNamesForPool(mode, customTools);
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
     customTools, tools: expected });
@@ -59,4 +62,32 @@ test("activation check rejects extra/missing names; Desktop explicitly opts in w
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("actorImport"), false);
   assert.equal(sideEffectClass("foundry_conditions_set"), "world_write");
   assert.equal(sideEffectClass("foundry_execute_action"), "world_write");
+});
+
+test("real Pi prep session activates web_search when search is configured", async t => {
+  const cwd = mkdtempSync(path.join(os.tmpdir(), "arcane-tool-policy-search-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const settingsManager = SettingsManager.inMemory();
+  const runtime = await ModelRuntime.create({ authPath: path.join(cwd, "auth.json"), modelsPath: null, refreshOnCreate: false });
+  runtime.registerProvider("test", { api: "openai-completions", apiKey: "fixture", baseUrl: "http://127.0.0.1:1",
+    models: [{ id: "model", name: "Fixture", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 1000 }] });
+  const loader = new DefaultResourceLoader({ cwd, agentDir: cwd, settingsManager, noExtensions: true,
+    noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true });
+  await loader.reload();
+  const searchStore = new SearchStore(path.join(cwd, "search.json"), () => {}, testSecretStorage());
+  searchStore.update({ mode: "spark" }, { apiKey: "sk-spark", baseUrl: "https://llm.example/v1" });
+  const host = new AgentHost({ profile: { mode: "prep", getCwd: () => cwd }, log() {},
+    search: { store: searchStore, spark: () => ({ apiKey: "sk-spark", baseUrl: "https://llm.example/v1" }) } });
+  const customTools = host.buildTools();
+  assert.equal(customTools.some((tool) => tool?.name === "web_search"), true);
+  customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
+    process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
+  const expected = activeToolNamesForPool("prep", customTools);
+  assert.equal(expected.length, 24); // 23 基线 + web_search
+  const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
+    sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
+    customTools, tools: expected });
+  t.after(() => session.dispose());
+  verifyActiveTools(session, expected);
+  assert.equal(session.getActiveToolNames().includes("web_search"), true);
 });

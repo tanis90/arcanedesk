@@ -14,7 +14,7 @@ export const zaiAdapter = {
   capabilities: ZAI_CAPABILITIES,
   /**
    * @param {{ query: string, count?: number, domains?: string[] }} params
-   * @param {{ apiKey: string, baseUrl: string, signal?: AbortSignal, fetchImpl?: Function, log?: Function }} ctx
+   * @param {{ apiKey: string, baseUrl: string, signal?: AbortSignal, fetchImpl?: any, log?: any }} ctx
    * @returns {Promise<{ results: Array<{title,url,snippet,publishedAt,source}>, requestId: string | null }>}
    */
   async search(params, ctx) {

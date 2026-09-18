@@ -44,8 +44,8 @@ function capabilityWarnings(adapter, params) {
 
 /**
  * 一次 web_search 执行（tool execute 的内核）。
- * @param {object} deps { store, spark, budget, signal, fetchImpl?, log? }
- * @param {string} runKey 当前 agent 链（budget 窗口）
+ * @param {any} rawParams 模型工具参数（query/count/freshness/domains）
+ * @param {{ store: any, spark: any, budget: any, runKey: string, signal?: AbortSignal, fetchImpl?: any, log?: any }} deps
  * @returns {Promise<{ payload: string, usage: { used: number, backend: string, cached: boolean } }>}
  *   payload 是 toolResult 文本（≤8KB JSON）；usage 给 host.emit(search_usage)。
  */
@@ -89,8 +89,13 @@ export async function executeSearch(rawParams, { store, spark, budget, runKey, s
   }
 
   const warnings = capabilityWarnings(adapter, params);
-  const notice = budget.used(runKey) + 1 > budget.soft ? `\n${SOFT_NOTICE}` : "";
-  const payload = toToolPayload(unified, { backend: adapter.id, requestId, warnings }) + notice;
+  const includeNotice = budget.used(runKey) + 1 > budget.soft;
+  const payload = toToolPayload(unified, {
+    backend: adapter.id,
+    requestId,
+    warnings,
+    ...(includeNotice ? { notice: SOFT_NOTICE } : {}),
+  });
   budget.record(runKey, params.query, payload);
   return { payload, usage: { used: budget.used(runKey), backend: adapter.id, cached: false } };
 }
