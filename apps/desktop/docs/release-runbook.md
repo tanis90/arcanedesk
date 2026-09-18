@@ -153,7 +153,8 @@ The signed-release sequence is build in CI, sign and publish locally:
    node apps/desktop/scripts/publish-release.mjs \
      --staging staging-cn --signed-dir apps/desktop/dist-signed \
      --region cn --channel private-beta --skip-latest
-   # intl additionally needs CF_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+   # intl credentials: CF_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY env, or the
+   # [ArcaneDeskIntlRelease] section of ~/.ossutil/arcane-release.conf (local ops profile)
    node apps/desktop/scripts/publish-release.mjs \
      --staging staging-intl --signed-dir apps/desktop/dist-signed \
      --region intl --channel private-beta --skip-latest
@@ -306,7 +307,12 @@ npm run publish:release --workspace arcane-desktop -- --from-dist dist `
 Local credentials may be supplied with `OSS_RELEASE_KEY_ID` and
 `OSS_RELEASE_KEY_SECRET`, or through the `ArcaneDeskRelease` section of
 `~/.ossutil/arcane-release.conf`. The GitHub CI key is not copied to the local
-profile.
+profile. The intl leg resolves the same way: `CF_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` env first, then the
+`[ArcaneDeskIntlRelease]` section of the same conf file (fields:
+`accountId`/`accessKeyID`/`accessKeySecret`). That R2 token is an
+Object-Read-&-Write account API token scoped to the `arcane-desk-intl` bucket
+only, created 2026-09; rotate it from the Cloudflare R2 API tokens page.
 
 ## Completion checks
 

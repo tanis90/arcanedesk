@@ -145,23 +145,55 @@ export {
   BASE_URL,
 };
 
+// ~/.ossutil/arcane-release.conf 按段读取：本地发布凭证的 ops 约定位置，
+// 环境变量（CI）优先，本地回落该文件（见 release-runbook「GitHub credentials」）。
+const defaultConfFile = () => path.join(os.homedir(), ".ossutil", "arcane-release.conf");
+
+function readConfSection(sectionName, confFile = defaultConfFile()) {
+  if (!fs.existsSync(confFile)) return null;
+  const text = fs.readFileSync(confFile, "utf8");
+  const section = text.split(/^\[(.+)\]$/m).findIndex((name) => name === sectionName);
+  if (section === -1) return null;
+  const body = text.split(/^\[(.+)\]$/m).slice(section + 1, section + 2)[0] ?? "";
+  const pick = (key) => body.match(new RegExp(`^\\s*${key}\\s*=\\s*(\\S+)`, "m"))?.[1];
+  return pick;
+}
+
 function loadCredentials() {
   if (process.env.OSS_RELEASE_KEY_ID && process.env.OSS_RELEASE_KEY_SECRET) {
     return { accessKeyId: process.env.OSS_RELEASE_KEY_ID, accessKeySecret: process.env.OSS_RELEASE_KEY_SECRET };
   }
-  const conf = path.join(os.homedir(), ".ossutil", "arcane-release.conf");
-  if (!fs.existsSync(conf)) {
+  const pick = readConfSection("ArcaneDeskRelease");
+  if (!pick) {
     throw new Error("missing OSS credentials: set OSS_RELEASE_KEY_ID and OSS_RELEASE_KEY_SECRET or create ~/.ossutil/arcane-release.conf");
   }
-  const text = fs.readFileSync(conf, "utf8");
-  const section = text.split(/^\[(.+)\]$/m).findIndex((name) => name === "ArcaneDeskRelease");
-  if (section === -1) throw new Error("arcane-release.conf has no [ArcaneDeskRelease] section");
-  const body = text.split(/^\[(.+)\]$/m).slice(section + 1, section + 2)[0] ?? "";
-  const pick = (key) => body.match(new RegExp(`^\\s*${key}\\s*=\\s*(\\S+)`, "m"))?.[1];
   const accessKeyId = pick("accessKeyID");
   const accessKeySecret = pick("accessKeySecret");
   if (!accessKeyId || !accessKeySecret) throw new Error("arcane-release.conf is missing accessKeyID/accessKeySecret");
   return { accessKeyId, accessKeySecret };
+}
+
+// intl 腿（R2）与 cn 腿（OSS）同构的凭证解析：env（CI publish job）优先，
+// 本地回落 arcane-release.conf 的 [ArcaneDeskIntlRelease] 段（accountId/accessKeyID/accessKeySecret）。
+function loadR2Credentials(confFile) {
+  if (process.env.CF_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) {
+    return {
+      accountId: process.env.CF_ACCOUNT_ID,
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    };
+  }
+  const pick = readConfSection("ArcaneDeskIntlRelease", confFile);
+  if (!pick) {
+    throw new Error("missing R2 credentials: set CF_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY or add [ArcaneDeskIntlRelease] to ~/.ossutil/arcane-release.conf");
+  }
+  const accountId = pick("accountId");
+  const accessKeyId = pick("accessKeyID");
+  const secretAccessKey = pick("accessKeySecret");
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error("arcane-release.conf [ArcaneDeskIntlRelease] is missing accountId/accessKeyID/accessKeySecret");
+  }
+  return { accountId, accessKeyId, secretAccessKey };
 }
 
 // 按 electron-builder artifactName（Arcane-Desk-<version>-<win|mac>-<arch>[-intl].<ext>）分拣到平台目录。
@@ -306,13 +338,11 @@ function amzDateOf(date) {
 }
 
 async function createR2Client(overrides = {}) {
-  const accountId = overrides.accountId ?? process.env.CF_ACCOUNT_ID;
-  const accessKeyId = overrides.accessKeyId ?? process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = overrides.secretAccessKey ?? process.env.R2_SECRET_ACCESS_KEY;
+  const conf = loadR2Credentials(overrides.confFile);
+  const accountId = overrides.accountId ?? conf.accountId;
+  const accessKeyId = overrides.accessKeyId ?? conf.accessKeyId;
+  const secretAccessKey = overrides.secretAccessKey ?? conf.secretAccessKey;
   const bucket = overrides.bucket ?? TARGETS.intl.bucket;
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error("missing R2 credentials: set CF_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY");
-  }
   const fetchImpl = overrides.fetchImpl ?? fetch;
   const now = overrides.now ?? (() => new Date());
   const host = `${accountId}.r2.cloudflarestorage.com`;
