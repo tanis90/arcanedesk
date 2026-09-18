@@ -230,9 +230,27 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 ### compose 要点
 
 - 卷：`foundry`（本体）、`data`（数据目录）。**升级 FVTT = 换镜像 tag + 新本体版本目录，数据卷不动**。
-- 端口：**30000 默认直接对公网开放**——服务器部署的全部意义就是让玩家远程登录；安全边界是 FVTT 自带的用户/权限体系（world 用户 + 密码 + adminKey），不是把端口藏起来。文档附可选 TLS 反代示例（不改变默认）。
+- 端口：**30000 默认直接对公网开放**——服务器部署的全部意义就是让玩家远程登录；安全边界是 FVTT 自带的用户/权限体系（world 用户 + 密码 + adminKey），不是把端口藏起来。
+- `restart: unless-stopped` + HEALTHCHECK：进程级自愈常在；网络路径本身（安全组/路由）在云侧，运行时没有需要"保活"的东西。
 - **默认不含 chromium sidecar**：ArcaneDesk 的控制通道（内嵌面板 + executeJavaScript 注入 SDK）走的就是公网 30000，与玩家同一入口，无需额外暴露面。
 - 镜像引用用**本地 tag**（`docker load` 后即持有 `arcane/arcane-fvtt:13.351-r<N>`），compose 引用该 tag；防漂移靠发布物的 SHA256 钉版（见下）。
+- 部署收尾顺手一件事：`options.json` 的 `hostname` 写成公网 IP——FVTT 游戏内"邀请链接"才会指对地址。
+
+### 网络连通性：三层验证链，Caddy 非默认
+
+**默认不需要 Caddy（或任何反代）**，三个理由：① Let's Encrypt 签证书需要**域名**，小白用户只有裸 IP，默认路径走不通；② 反代引入 websocket/proxy 配置维度（FVTT 需 `options.json` 开 `proxy: true`），多一个故障面；③ 安全边界本来就在 FVTT 账号体系，HTTP+密码是裸 IP 建服的常态。
+
+"通不通"用三层验证链钉死（部署收尾必跑，断在哪层一测便知）：
+
+| 层 | 在哪测 | 测什么 | 失败指向 |
+|---|---|---|---|
+| V1 | 容器 HEALTHCHECK（compose 内置） | FVTT 进程活着、监听 30000、版本断言 | 容器日志 / 入口脚本 |
+| V2 | **宿主机**上 `curl 127.0.0.1:30000/api/status`（不是 exec 进容器） | docker 端口映射生效 | `docker ps` 的 PORTS 列、compose ports 配置 |
+| V3 | **用户本机** `curl http://<公网IP>:30000/api/status` | 完整公网路径 | **安全组**——云知识唯一出场点：提示去控制台放行 30000/TCP |
+
+主机防火墙（ufw/firewalld）通常不是障碍：docker 发布端口时自插 iptables 的 DOCKER 链，优先级高于 ufw/firewalld 规则——所以发布 30000 不会被主机防火墙误拦（也不把"关防火墙"当步骤，更不教用户关它）。
+
+**Caddy 作为 opt-in profile**（M4 一键化，默认不开）：适用用户 = 有域名 + 想要 https 或标准 443 端口（个别公司/校园网封高位端口）。形态：compose profile 起 caddy sidecar，Caddyfile 两行（域名 + `reverse_proxy arcane-fvtt:30000`），证书自动签发续期；同时 FVTT `options.json` 设 `proxy: true`。
 
 ### 版本与发布物
 
