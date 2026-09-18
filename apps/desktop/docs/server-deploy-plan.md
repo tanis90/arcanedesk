@@ -56,13 +56,15 @@
 
 ### 用户下载指引（skill 主动说三要素，避免拿错）
 
-1. **版本：13.351**。下载页默认给最新稳定版——若当前最新不是 13.351，引导用户到 foundryvtt.com 的 **releases 归档页**选 13.351。钉版值单一来源：`community-distribution.json:12`，与线上 mod 索引 `foundry` 字段、`server-release.json` 同源，skill 比对这个值。
-2. **平台：Linux/NodeJS 的 zip**——不是 Windows 安装包、不是 macOS dmg（Windows 桌面用户最常拿错的就是这个）。
-3. **交付**：scp 上服务器 `/arcane/incoming/`，或提供限时 URL。
+1. **版本：13.351**。入口只有一个：登录 foundryvtt.com → 用户资料 → **Purchased Licenses** 标签页（`/releases` 页只是发行说明，**没有下载按钮**）。页面上 **Versions 下拉**默认 "Recommended"（当前最新已是 14.368）——**不要用默认**，选 "Older Stable" → 13.351。钉版值单一来源：`community-distribution.json:12`，与线上 mod 索引 `foundry` 字段、`server-release.json` 同源，skill 比对这个值。
+2. **平台：Operating System 下拉选 Node.JS**（跨平台构建，官方定位就是专用服务器）。注意 **13.338 起 "Linux" 与 "Node.JS" 是两个独立选项**——我们要 Node.JS，不是 Linux 桌面构建，更不是 Windows/macOS 安装包或 Windows Portable（桌面用户最常拿错）。
+3. **交付**（二选一）：Download 存 zip 后 `scp` 上服务器 `/arcane/incoming/`；或点 **Timed URL** 生成限时链接交给 skill——**5 分钟过期**，生成后立即给，入口脚本立即下载（官方提示命令行使用时 URL 需加双引号）。
 
 **skill 预检**：拿到 zip 先 `unzip -p <zip> resources/app/package.json` 读版本比对（结构不符则回退到入口脚本的 main.js 结构校验兜底）——版本不对当场告诉用户去下哪个，而不是等容器起不来才报错。
 
 **Node 不需要用户下载**：Docker 轨道 node 在镜像内（22.23.2）；裸机兜底/治理时由 skill 在服务器侧下载钉版 node（nodejs.org + SHA256），用户全程不接触 node。我们 bump 钉版时，skill 按 `server-release.json` 的 foundry 字段提示用户重新下载对应 zip。
+
+**世界单向迁移警告（官方文档明确）**：世界被更新版本打开过会触发数据迁移，之后无法回旧版本（只能靠备份恢复）。推论见"冲突处理·迁移打法"的前置检查；我们未来升 v14 基线时同样单向，升级前强制世界备份（复用 ops 既有 `.arcane-world-backups` 机制）。
 
 ## 3. 探测-再-执行（deploy 决策树）
 
@@ -128,7 +130,7 @@
 
 为什么敢这么问：我们的栈**自包含且不抢资源**——镜像 tar 包 + 两个卷，目录独立、端口可错开，与服务器上任何已有部署天然并行。选项 2 永远零风险可用，这是 Docker 轨道换来的灵活性。
 
-**迁移打法**（选项 1）：/proc 恢复拉起方式 → 按原方式停旧服 → `rsync` 数据目录（`Config/ + Data/` 含 `.arcane-*`）进我们的数据卷 → `compose up` → `/api/status` 断言 world 一致 → 版本漂移项（旧 dnd5e 等）经 mod-manager 正常升级流程对齐（有备份有 receipt）→ **旧安装原样保留**，用户确认运行无误后另行清理（我们不主动删）。
+**迁移打法**（选项 1）：**前置检查——源世界最后运行的 coreVersion ≤13.351**（世界被 14.x 打开过即单向迁移，拒迁并告知选项只剩"维持/等基线升级"）→ /proc 恢复拉起方式 → 按原方式停旧服 → `rsync` 数据目录（`Config/ + Data/` 含 `.arcane-*`）进我们的数据卷 → `compose up` → `/api/status` 断言 world 一致 → 版本漂移项（旧 dnd5e 等）经 mod-manager 正常升级流程对齐（有备份有 receipt）→ **旧安装原样保留**，用户确认运行无误后另行清理（我们不主动删）。
 
 **并行打法**（选项 2）：arcane 栈以 `30000→30001` 端口映射 up（旧服继续占 30000）；用户验收后做切换——停旧服、arcane 改回 30000、玩家链接不变。两套并存期间磁盘/内存翻倍，P7 的资源探测会先检查。
 
