@@ -38,7 +38,7 @@ export class SearchStore {
   /**
    * @param {string} filePath userData/config/search.json
    * @param {Function} log
-   * @param {object} secretStorage SecretStorage 实例（测试注入桩）
+   * @param {import("../secret-storage.js").SecretStorage} secretStorage SecretStorage 实例（测试注入桩）
    * @param {{ zaiBaseUrl?: string }} defaults 区域 overlay 注入点（国内 bigmodel / 国际 z.ai）
    */
   constructor(filePath, log = console.log, secretStorage = createUnavailableSecretStorage(), defaults = {}) {

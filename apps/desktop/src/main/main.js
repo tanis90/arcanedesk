@@ -22,6 +22,7 @@ import { StartupReconciler } from "./conversations/startup-reconciler.js";
 import "../shared/i18n/messages.js";
 import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
+import { SearchStore } from "./search/store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
@@ -886,6 +887,14 @@ app.whenReady().then(async () => {
     providerStore.baseUrlForProvider("arcane-spark") ?? DEFAULT_NEW_API_BASE_URL,
   );
   const prepStore = new PrepStore(configPath("prep.json"));
+  // 联网搜索（PRD prep-web-search）：凭据存储同 voice；智谱 BYOK 默认端点按
+  // region flavor（cn=bigmodel / intl=z.ai，src/main/region.mjs 登记表）。
+  const searchStore = new SearchStore(
+    configPath("search.json"),
+    console.log,
+    secretStorage,
+    { zaiBaseUrl: REGION.searchZaiBaseUrl },
+  );
   // Large, replaceable runtimes stay outside the signed/read-only app bundle.
   // Windows uses LocalAppData rather than roaming AppData; macOS/Linux use the
   // normal app userData directory.
@@ -1016,6 +1025,11 @@ app.whenReady().then(async () => {
         getSkillPaths: () => [skillsUpdater.resolveSkillsDir()],
         fence: true,
         streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
+      },
+      // web_search 仅 prep 注入;spark 凭据运行时取 arcane-spark provider。
+      search: {
+        store: searchStore,
+        spark: () => providerStore.credentialForProvider("arcane-spark"),
       },
     }); } }),
   };
