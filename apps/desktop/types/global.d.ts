@@ -93,6 +93,9 @@ interface ArcaneBridge {
   getAppVersion(): Promise<string>;
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
   getVoiceConfig(): Promise<any>;
+  getSearchConfig(): Promise<any>;
+  saveSearchConfig(cfg: any): Promise<any>;
+  confirmSearchConsent(target: string): Promise<any>;
   saveVoiceConfig(cfg: any): Promise<any>;
   /** wav: ArrayBuffer(16kHz mono PCM WAV)→ { ok, text?, latency?, error? } */
   transcribeAudio(wav: ArrayBuffer): Promise<any>;

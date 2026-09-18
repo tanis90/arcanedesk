@@ -960,6 +960,10 @@ function summarizeArgs(toolName, args) {
         return t("chat.card.actionCount", { count: args.actions?.length ?? 1 });
       case "foundry_conditions_set":
         return (args.conditions ?? []).map(condition => `${condition.key}: ${condition.active ? "+" : "−"}`).join(", ");
+      case "web_search": {
+        const q = String(args.query ?? "").trim();
+        return q.length > 80 ? `“${q.slice(0, 80)}…”` : `“${q}”`;
+      }
       default:
         return "";
     }
@@ -1079,7 +1083,28 @@ function finishToolCard(toolCallId, toolName, event) {
     card.appendChild(body);
   }
   body.appendChild(el("div", "io-label", event.isError ? t("chat.card.error") : t("chat.card.output")));
-  body.appendChild(el("pre", null, shorten(text)));
+  if (toolName === "web_search" && !event.isError) {
+    // 搜索结果以链接列表呈现(publishedAt 悬浮提示);解析失败回落 pre。
+    try {
+      const parsed = JSON.parse(text);
+      const list = el("div", "ss-results");
+      for (const item of (parsed.results ?? [])) {
+        const link = el("a", "ss-result", item.title ?? item.url);
+        link.href = item.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+        if (item.publishedAt) link.title = item.publishedAt;
+        list.appendChild(link);
+      }
+      if (parsed.meta?.backend) {
+        const note = [parsed.results.length, parsed.meta.cached ? "· cached" : null].filter(Boolean).join(" ");
+        body.appendChild(el("div", "ss-results-note", `${parsed.meta.backend} · ${note}`));
+      }
+      body.appendChild(list);
+    } catch {
+      body.appendChild(el("pre", null, shorten(text)));
+    }
+  } else {
+    body.appendChild(el("pre", null, shorten(text)));
+  }
   // 完成且无回执详情的卡片收起,保持时间线干净;有 receipt 或错误时保持展开。
   if (!event.isError && !receipt) card.classList.remove("open");
   scrollToEnd();
@@ -1471,7 +1496,19 @@ function onEvent(event) {
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
       break;
+    case "search_usage": {
+      const chip = document.getElementById("search-usage");
+      if (chip) {
+        chip.hidden = false;
+        chip.textContent = t("ss.usage.line", {
+          count: event.data?.used ?? 0,
+          backend: t(`ss.backend.${event.data?.backend ?? "custom"}`),
+        });
+      }
+      break;
+    }
     case "agent_end":
+      { const chip = document.getElementById("search-usage"); if (chip) chip.hidden = true; }
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
       // Metadata is patched in place by receiveEvent, including background tasks.
@@ -3154,6 +3191,83 @@ document.getElementById("vs-save").addEventListener("click", async () => {
     refreshVoiceSettings(); // 刷新 key 打码回显
   }
 });
+
+// ---------- 设置:联网搜索(prep web search) ----------
+const ssMode = /** @type {HTMLSelectElement} */ (document.getElementById("ss-mode"));
+const ssBackend = /** @type {HTMLSelectElement} */ (document.getElementById("ss-backend"));
+const ssApikey = /** @type {HTMLInputElement} */ (document.getElementById("ss-apikey"));
+const ssEndpoint = /** @type {HTMLInputElement} */ (document.getElementById("ss-endpoint"));
+const ssCustomKey = /** @type {HTMLInputElement} */ (document.getElementById("ss-custom-key"));
+const ssStatus = document.getElementById("ss-status");
+let lastSearchCfg = null;
+
+function renderSearchModeUi() {
+  const mode = ssMode.value;
+  document.getElementById("ss-backend-row").hidden = mode !== "byok";
+  document.getElementById("ss-apikey-row").hidden = mode !== "byok";
+  document.getElementById("ss-endpoint-row").hidden = mode !== "custom";
+  document.getElementById("ss-custom-key-row").hidden = mode !== "custom";
+  document.getElementById("ss-spark-nokey").hidden = !(mode === "spark" && lastSearchCfg && !lastSearchCfg.sparkHasKey);
+  const descKey = { off: "ss.mode.offDesc", spark: "ss.mode.sparkDesc", byok: "ss.mode.byokDesc", custom: "ss.mode.customDesc" }[mode];
+  document.getElementById("ss-mode-desc").textContent = t(descKey);
+}
+
+async function refreshSearchSettings() {
+  const cfg = await window.arcane.getSearchConfig();
+  if (!cfg) return;
+  lastSearchCfg = cfg;
+  ssMode.value = cfg.mode ?? "off";
+  ssBackend.value = cfg.byokBackend ?? "zai";
+  ssApikey.value = ""; // 留空/掩码语义同 provider:留空 = 保持已保存的 Key
+  ssEndpoint.value = cfg.customBaseUrl ?? "";
+  ssCustomKey.value = "";
+  renderSearchModeUi();
+  ssStatus.textContent = cfg.mode !== "off" && !cfg.consentSatisfied ? t("ss.consentPending") : "";
+}
+
+ssMode.addEventListener("change", renderSearchModeUi);
+
+/** consent 弹窗:接收方/费用文案按当前选择生成,确认后才放行首次外发。 */
+function searchCostKey(mode) {
+  return { spark: "ss.consent.cost.spark", byok: ssBackend.value === "brave" ? "ss.consent.cost.brave" : "ss.consent.cost.zai", custom: "ss.consent.cost.custom" }[mode] ?? "ss.consent.cost.custom";
+}
+
+function openSearchConsent(target) {
+  const dialog = document.getElementById("search-consent");
+  document.getElementById("ss-consent-receiver").textContent = String(target ?? "").replace(/^origin:/, "");
+  document.getElementById("ss-consent-cost").textContent = t(searchCostKey(ssMode.value));
+  dialog.hidden = false;
+  document.getElementById("ss-consent-accept").onclick = async () => {
+    await window.arcane.confirmSearchConsent(target);
+    dialog.hidden = true;
+    ssStatus.textContent = t("ss.status.saved");
+    await refreshSearchSettings();
+  };
+  document.getElementById("ss-consent-cancel").onclick = () => { dialog.hidden = true; };
+}
+
+document.getElementById("ss-save").addEventListener("click", async () => {
+  const result = await window.arcane.saveSearchConfig({
+    mode: ssMode.value,
+    byokBackend: ssBackend.value,
+    apiKey: ssMode.value === "byok" ? ssApikey.value : "",
+    customBaseUrl: ssMode.value === "custom" ? ssEndpoint.value.trim() : "",
+    ...(ssMode.value === "custom" ? { apiKey: ssCustomKey.value } : {}),
+  });
+  if (!result?.ok) {
+    ssStatus.textContent = result?.error ? fmtIpc(result.error) : t("common.unknownError");
+    return;
+  }
+  if (result.consentRequired) {
+    await refreshSearchSettings();
+    openSearchConsent(result.consentTarget);
+    return;
+  }
+  ssStatus.textContent = t("ss.status.saved");
+  await refreshSearchSettings();
+});
+
+refreshSearchSettings();
 
 // ---------- 设置:通用(界面语言) ----------
 const localeSelect = /** @type {HTMLSelectElement} */ (document.getElementById("locale-select"));
