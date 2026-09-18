@@ -12,7 +12,7 @@
 三个核心决策：
 
 1. **镜像既不是"只含 FVTT"，也不是"全含"，而是"安装器 + 运行时"**：Foundry 本体**绝不烤进镜像**（EULA 禁止再分发，且与我们既有 user-supplied-only 政策一致），首启时从挂载 zip / 限时 URL 装进卷；mod/dnd5e **也不烤**，运行时从 arcane-mirror 索引装进数据卷。镜像只含：钉版 Node 22.23.2、region 配置、mod-manager bootstrap、幂等入口脚本、健康检查。
-2. **分发双轨**：国内走阿里云 ACR 个人版（免费、`registry.cn-beijing.aliyuncs.com`，加入 arcane-mirror 家族，解决 Docker Hub 拉不动）；海外走 Docker Hub 主出口 + GHCR 双推；Cloudflare R2 **不做 registry**（S3 协议≠OCI registry 协议），只继续承担 compose/部署清单/文档分发。
+2. **分发双轨**：国内在自有阿里云 ECS 上**自建 registry**（`registry:2` + 已备案域名 `*.arcanedesk.bitterbebop.cn` + 既有证书同步，存储后端走 OSS，即 arcane-mirror 新增成员，解决 Docker Hub 拉不动；ACR 个人版实测已要收费、企业版开匿名拉取 564 元/月起，托管路线不划算）；海外走 Docker Hub 主出口 + GHCR 双推；Cloudflare R2 **不做 registry**（S3 协议≠OCI registry 协议），只继续承担 compose/部署清单/文档分发。
 3. **先探测再执行**：新 skill `arcane-fvtt-server` 先探测本机/目标机（端口 30000、进程、数据目录、docker 容器），命中裸机部署→沿用 `arcane-fvtt-ops` 继续运维；命中已有容器→远程 ops；什么都没有→Docker 部署。
 
 ## 1. 现状盘点（本机部署链路）
@@ -107,14 +107,33 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 
 ## 5. 分发渠道
 
-### 国内：阿里云 ACR 个人版（arcane-mirror 新增成员）
+### 国内：自有 ECS 上自建 registry（arcane-mirror 新增成员）
 
-- 开通 ACR 个人版（免费），命名空间 `arcane`，公网地址 `registry.cn-beijing.aliyuncs.com/arcane/arcane-fvtt`，匿名可拉。
-- CI（GitHub Actions 海外 runner）构建后 `docker push` 双写 Docker Hub + ACR——推送方向海外→国内畅通，只有拉取方向被卡，ACR 恰好解决。
-- arcane-mirror 侧新增：
-  - OSS `arcane-package` 桶新前缀 `desktop/arcane-desk/server/<revision>/{docker-compose.yml, server-release.json, README}` + 唯一可变指针 `desktop/arcane-desk/server/latest.json`（完全复用 skills 通道的"不可变对象 + 指针 + HEAD 验收 + cache-bust"协议，`publish-skills.mjs` 模式照搬）。
-  - `region.mjs` 默认值表加 `serverDeployBaseUrl`（OSS 前缀）与 `serverImageRegistry`（cn=ACR / intl=Docker Hub）。
-- 风险标注：ACR 个人版无 SLA，若不可用可平滑升企业版（地址换 `<实例>-registry.cn-beijing.cr.aliyuncs.com`），CI 推送配置是唯一改动点。
+托管 registry 的询价结论（2026-09 实测/查证）：
+
+| 方案 | 状态 | 结论 |
+|---|---|---|
+| ACR 个人版 | 官方文档仍写"公测限额免费"，但实际开通已要收费（控制台实测）；且 2026-02 起函数计算已不允许跨地域拉个人版镜像，功能持续收缩 | 不押注 |
+| ACR 企业版经济版 | 45 元/月，但**公共匿名拉取关闭** | 不适用——用户在自己服务器拉镜像不可能登录我们的阿里云账号 |
+| ACR 企业版基础版+ | 564 元/月起才开匿名拉取 | v1 阶段不值 |
+| 腾讯云 TCR 个人版 / 华为云 SWR | 目前仍免费限额 + 支持公开匿名拉取 | 备选；跨云拆分基础设施，且与 ACR 个人版同样面临"免费转收费"风险 |
+| **自建 registry:2（推荐）** | 边际成本≈0 | 见下 |
+
+**推荐：在自有阿里云 ECS 上跑 Docker 官方 `registry:2`**。前提全部现成：
+
+- 机器：`arcane-fvtt-ecs` 等已在运 ECS（cn mod 镜像重打包已在用），SSH 别名与连接权威定义见 arcanedesk-ops `SETUP.md`/`MIGRATION.md:28-29`。
+- 域名：`arcanedesk.bitterbebop.cn` 已备案、已有证书同步服务（`infra/site/cdn-cert-sync`），加 `docker.arcanedesk.bitterbebop.cn` 子域 + 443 即可，TLS 证书走同一工作流。
+- 存储：registry:2 的 S3 存储驱动指向 `arcane-package` 桶（OSS 兼容 S3 endpoint，镜像层落 `docker/registry/` 前缀），ECS 侧近无状态，重启/迁移干净。
+- 量级匹配：拉取只发生在用户部署/升级时（单镜像数百 MB、月拉取次数量级小），单节点 ECS 的可用性完全够；Docker Hub 副本始终是并行出口。
+
+arcan-mirror 侧新增：
+
+- 自建 registry 一个（上述 ECS + 域名 + OSS 后端），匿名公开拉取，写入凭证仅 CI 持有（RAM 限定 `docker/registry/*` 前缀 Put/Get，照 `oss-release-contract.md` 的凭证纪律）。
+- OSS `arcane-package` 桶新前缀 `desktop/arcane-desk/server/<revision>/{docker-compose.yml, server-release.json, README}` + 唯一可变指针 `desktop/arcane-desk/server/latest.json`（完全复用 skills 通道的"不可变对象 + 指针 + HEAD 验收 + cache-bust"协议，`publish-skills.mjs` 模式照搬）。
+- `region.mjs` 默认值表加 `serverDeployBaseUrl`（OSS 前缀）与 `serverImageRegistry`（cn=自建 registry / intl=Docker Hub）。
+- CI 推送：GitHub Actions 海外 runner 构建后 `docker push` 双写 Docker Hub + 自建 registry——推送方向海外→国内畅通，只有拉取方向被墙，自建 registry 恰好解决。
+
+降级链（写进部署 skill 文档，不进自动逻辑）：自建 registry 不可达 → 提示用户配代理直连 Docker Hub（同 digest 同镜像）；第三方加速器（docker.1ms.run 等）不进官方路径（违背"arcane mirror 是唯一第一方镜像"纪律）。
 
 ### 海外：Docker Hub 主出口 + GHCR 双推
 
@@ -161,7 +180,7 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 
 分支 `feat/server-deploy`（实现时自 main 切；若 intl M4 skill packs 已合入则直接受益于 composer 双语机制，未合入也不阻塞——镜像轨道不依赖 skill 双语）。
 
-- **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、CI 双推 ACR+DockerHub、server-release 指针协议、版本闸。
+- **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、自建 registry 落地（ECS + 域名 + OSS 后端）、CI 双推自建 registry+DockerHub、server-release 指针协议、版本闸。
 - **M2 deploy skill**：`arcane-fvtt-server`（探测-再-执行决策树、Docker 部署、连接信息回填 desktop）。
 - **M3 远程运维**：ops/mods skill 的 target 抽象（local\|ssh）、mod-manager 容器内执行、skill↔镜像联动重建。
 - **M4 增强（可选）**：chromium sidecar + CDP 隧道文档、`-full` 离线镜像变体、TLS 反代一键化、服务器侧 headless agent（远期，desktop 仍是控制面）。
@@ -171,8 +190,8 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 | 风险 | 缓解 |
 |---|---|
 | EULA：再分发 Foundry 本体 | 镜像不含本体；限时 URL 不缓存不复述；license key 永不入日志/遥测（现有纪律平移） |
-| 国内拉不动 Docker Hub | ACR 直拉 + compose/清单走 OSS；docker 安装本身用阿里云源 |
-| ACR 个人版无 SLA | 地址可平滑迁企业版；GHCR 备份出口始终存在 |
+| 国内拉不动 Docker Hub | 自建 registry 直拉 + compose/清单走 OSS；docker 安装本身用阿里云源 |
+| 自建 registry 单点（ECS 宕机/证书过期） | 拉取只发生在部署/升级时点，非运行时依赖；证书复用 cdn-cert-sync 工作流；Docker Hub 同 digest 副本兜底；未来量大可无痛迁 ACR 企业版（基础版起支持匿名拉取） |
 | tag 漂移/供应链 | digest 钉版下发；镜像内容单源（region 表/mod-manager/skills 树）；全链 SHA256 + HEAD 验收复用 |
 | CDP 暴露公网 | sidecar 只绑容器 loopback，仅 SSH 隧道可达；不进默认 compose profile |
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
