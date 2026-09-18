@@ -13,6 +13,7 @@ export const MODES = new Set(["off", "spark", "byok", "custom"]);
 export const BYOK_BACKENDS = new Set(["zai", "brave"]);
 
 export const DEFAULT_ZAI_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/web_search";
+export const DEFAULT_ZAI_SEARCH_ENGINE = "search_pro";
 export const DEFAULT_BRAVE_BASE_URL = "https://api.search.brave.com/res/v1/web/search";
 
 /** 目标 backend → 实际会请求的端点。 */
@@ -39,7 +40,7 @@ export class SearchStore {
    * @param {string} filePath userData/config/search.json
    * @param {Function} log
    * @param {import("../secret-storage.js").SecretStorage} secretStorage SecretStorage 实例（测试注入桩）
-   * @param {{ zaiBaseUrl?: string }} defaults 区域 overlay 注入点（国内 bigmodel / 国际 z.ai）
+   * @param {{ zaiBaseUrl?: string, zaiSearchEngine?: string }} defaults 区域 overlay 注入点（国内 bigmodel+search_pro / 国际 z.ai+search-prime）
    */
   constructor(filePath, log = console.log, secretStorage = createUnavailableSecretStorage(), defaults = {}) {
     this.filePath = filePath;
@@ -47,6 +48,7 @@ export class SearchStore {
     this.secretStorage = secretStorage;
     this.defaults = {
       zaiBaseUrl: defaults.zaiBaseUrl ?? DEFAULT_ZAI_BASE_URL,
+      zaiSearchEngine: defaults.zaiSearchEngine ?? DEFAULT_ZAI_SEARCH_ENGINE,
       braveBaseUrl: DEFAULT_BRAVE_BASE_URL,
     };
     this.data = this.load();
@@ -138,7 +140,7 @@ export class SearchStore {
       sparkHasKey: Boolean(spark?.apiKey),
       consentSatisfied: this.consentSatisfied(spark),
       consentTarget: this.consentTarget(spark),
-      defaults: { zaiBaseUrl: this.defaults.zaiBaseUrl },
+      defaults: { zaiBaseUrl: this.defaults.zaiBaseUrl, zaiSearchEngine: this.defaults.zaiSearchEngine },
     };
   }
 
@@ -207,6 +209,7 @@ export class SearchStore {
         adapterId: backend,
         apiKey: this.data.apiKey && this.data.credentialTarget === target ? this.data.apiKey : "",
         baseUrl: base,
+        ...(backend === "zai" ? { searchEngine: this.defaults.zaiSearchEngine } : {}),
       };
     }
     if (this.data.mode === "custom") {

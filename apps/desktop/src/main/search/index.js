@@ -74,6 +74,7 @@ export async function executeSearch(rawParams, { store, spark, budget, runKey, s
     response = await adapter.search(params, {
       apiKey: cred.apiKey,
       baseUrl: cred.baseUrl,
+      ...(cred.searchEngine ? { searchEngine: cred.searchEngine } : {}),
       signal,
       ...(fetchImpl ? { fetchImpl } : {}),
       log,

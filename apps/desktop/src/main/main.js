@@ -893,7 +893,7 @@ app.whenReady().then(async () => {
     configPath("search.json"),
     console.log,
     secretStorage,
-    { zaiBaseUrl: REGION.searchZaiBaseUrl },
+    { zaiBaseUrl: REGION.searchZaiBaseUrl, zaiSearchEngine: REGION.searchZaiEngine },
   );
   // Large, replaceable runtimes stay outside the signed/read-only app bundle.
   // Windows uses LocalAppData rather than roaming AppData; macOS/Linux use the
