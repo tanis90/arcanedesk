@@ -7,7 +7,7 @@
 
 ## 0. TL;DR
 
-现在的部署模型是"一切都在用户本机"：desktop 内置 Node 22.23.2 与 FVTT 本体（用户自供）、skill 部署到 `userData/skills/active`、mod 从 arcane-mirror 装进本机数据目录。本方案新增**服务器部署轨道**：一台服务器（国内=阿里云 ECS，海外=任意 VPS/Cloudflare）上用 Docker 跑同样的 FVTT 栈，desktop 与 agent skills 远程运维它。
+现在的部署模型是"一切都在用户本机"：desktop 内置 Node 22.23.2 与 FVTT 本体（用户自供）、skill 部署到 `userData/skills/active`、mod 从 arcane-mirror 装进本机数据目录。本方案新增**服务器部署轨道**：一台服务器（国内=阿里云 ECS，海外=任意 VPS）上用 Docker 跑同样的 FVTT 栈，desktop 与 agent skills 远程运维它。
 
 三个核心决策：
 
@@ -83,9 +83,10 @@
 │         → 无论选哪条，先完整恢复"怎么被拉起的"（见裸机 Node 纪律）——systemd unit /
 │           pm2 / tmux-screen / nohup 逐级判定，停服/重启必须走同一拉起方式，绝不裸 kill
 ├─ C. 目标机有 docker 但无容器
-│     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待
-│       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、adminKey（首启用）、玩家 join 链接
-│       → 自动 foundry_open 打开远程面板，用户在面板里完成 license 激活（agent 永不代填）
+│     → 用户没选 → Docker 部署（默认轨道）：装 compose → 下载 tar.gz → docker load → up → 健康等待
+│       → 自动 foundry_open 打开远程面板：用户输 adminKey + license key 激活（agent 永不代填）
+│       → demo 世界首启 → 建 world 用户 + 设默认密码（世界存在后才能建，时序见 §7"激活收尾"）
+│       → 最终交付：服务器 URL、GM 初始凭据、玩家 join 链接
 └─ D. 目标机无 docker
       → 装 docker：装前预检 + 四层降级（见"Docker 安装保障"）
       → 仍装不上（内核过老/OpenVZ/无 root）→ 二选一：裸机兜底安装（钉版 Node +
@@ -149,7 +150,7 @@
 
 ### 连入后的探测序列（全部只读、零写入、秒级）
 
-原则：**能探测的绝不问用户**（用户记不清装没装、装在哪、什么版本），问话只出现在探测产生歧义的三个点上（见后）。探测顺序固定，后一步在前一步结果上收敛：
+原则：**能探测的绝不问用户**（用户记不清装没装、装在哪、什么版本），问话收敛为两类（见后）。探测顺序固定，后一步在前一步结果上收敛：
 
 | # | 探测（SSH 在目标机上执行） | 判定什么 |
 |---|---|---|
@@ -178,7 +179,7 @@
 
 （有冲突时第二句换成冲突问法的三选项。）
 
-公网可达性单独一步（不在探测序列里）：部署/接管完成后从**用户本机**测 `http://<IP>:30000`，loopback 通而公网不通 → 安全组放行提示（云知识唯一出场点）。权限注：非 root 用户时 `ss -p`/`docker` 需要 sudo/docker 组，探测前 `sudo -n true` 检查免密可用性，不可用则请用户处理。
+公网可达性单独一步（不在探测序列里）：部署/接管完成后从**用户本机**测 `http://<IP>:30000`，loopback 通而公网不通 → 安全组放行提示（安全组引导已前移为部署期并行步骤，见 §4"网络连通性"）。权限注：非 root 用户时 `ss -p`/`docker` 需要 sudo/docker 组，探测前 `sudo -n true` 检查免密可用性，不可用则请用户处理。
 
 ### 目标接入：统一 SSH，不感知云厂商
 
@@ -259,7 +260,7 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 |---|---|---|---|
 | V1 | 容器 HEALTHCHECK（compose 内置） | FVTT 进程活着、监听 30000、版本断言 | 容器日志 / 入口脚本 |
 | V2 | **宿主机**上 `curl 127.0.0.1:30000/api/status`（不是 exec 进容器） | docker 端口映射生效 | `docker ps` 的 PORTS 列、compose ports 配置 |
-| V3 | **用户本机** `curl http://<公网IP>:30000/api/status` | 完整公网路径 | **安全组**——云知识唯一出场点：提示去控制台放行 30000/TCP |
+| V3 | **用户本机** `curl http://<公网IP>:30000/api/status` | 完整公网路径 | **安全组**——提示去控制台放行 30000/TCP（引导话术见本节下方表格） |
 
 主机防火墙（ufw/firewalld）通常不是障碍：docker 发布端口时自插 iptables 的 DOCKER 链，优先级高于 ufw/firewalld 规则——所以发布 30000 不会被主机防火墙误拦（也不把"关防火墙"当步骤，更不教用户关它）。
 
@@ -327,7 +328,7 @@ intl R2 arcane-desk-intl（dl.arcanedesk.app）:
 
 为什么这条链是安全的：registry pull 的信任来自 registry 域名 + manifest 签名；tarball 链的信任来自**我们自己索引钉死的 SHA256 + image ID 双断言**——与我们分发 dnd5e zip（107MB）、desktop 安装包完全同一信任模型，甚至比匿名 `docker pull` 更强。未来若用户明确要 `docker pull` 体验，加一条 CI 步骤推 Docker Hub 即可（intl 受益），不影响本通道。
 
-docker 本体的安装在探测 D 分支处理（cn 用阿里云源装 docker-ce）；用户侧零 registry 概念、零加速器配置——"arcane mirror 是唯一第一方镜像"纪律保持完整。
+docker 本体的安装在探测 D 分支处理（预检 + 四层降级，见 §3"Docker 安装保障"）；用户侧零 registry 概念、零加速器配置——"arcane mirror 是唯一第一方镜像"纪律保持完整。
 
 region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前缀 / intl=R2 前缀），desktop 经 `ARCANE_SERVER_RELEASE_BASE` 注入 skill 子进程——与 `ARCANE_MOD_INDEX_URL` 完全同一接线模式（`main.js:43-45`），业务代码零 if(region) 分支。
 
@@ -351,7 +352,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 |---|---|---|---|
 | 内嵌面板 + foundry-sdk | `ARCANE_FOUNDRY_URL \|\| http://localhost:30000`（`main.js:59`），WebContentsView 加载页面 + executeJavaScript 注入 SDK | 指向 `http://<server>:30000` 即可，SDK 全部能力（协议/预检/写中断）不依赖 Foundry 在哪。**ArcaneDesk 以 gamemaster 账号直连 `<server>/game` 操作**：GM 登录一次后会话 cookie 由现有记忆/回填机制（`main.js:265-291,382-387`）持久化，之后直达 /game | 小：**连接目标不是设置项，是对话状态**——`foundry_open` 增加目标参数（人告诉 agent 打开哪，或 agent 从部署/探测上下文自己知道），面板只**记住上一次打开的地址**（下次启动回到它），没有上一次地址就空态，**删除 localhost 隐式默认**（见下） |
 | 玩家入口 | 不适用（本机单人） | **`http://<server>:30000/join`**——玩家选自己的用户、输密码进入。部署完成后 skill 把 join 链接整理进交付信息，由 GM 自己分发给玩家 | 0 |
-| 账号与权限 | FVTT world 用户体系 | FVTT 自带权限体系就是安全边界：部署 skill 首次部署时建 world 用户并**设好默认密码**（GM 账号强随机初始密码；可选预建玩家账号），完成后把初始凭据告知用户并提示首登后修改。adminKey 由 FVTT 首启自动随机生成，维持"永不打印"纪律 | 中：skill 新增账户初始化步骤（经 SDK 以 GM 会话设置，或首启前预置 world 用户数据） |
+| 账号与权限 | FVTT world 用户体系 | FVTT 自带权限体系就是安全边界：部署 skill 建 world 用户并**设好默认密码**（GM 账号强随机初始密码；可选预建玩家账号），完成后把初始凭据告知用户并提示首登后修改。adminKey 由 FVTT 首启自动随机生成，**不进日志/遥测/例行输出，仅首启交付一次**（license/setup 页需要，与 §10 风险表口径一致） | 中：skill 新增账户初始化步骤——**时序上只能在 license 激活 + 世界首启之后**（未激活的 FVTT 不加载世界，没有 world 用户可建），经 SDK 以 GM 会话设置或预置 world 用户数据 |
 | ops（启停/日志/探测） | 本机 shell | `ssh <target> docker exec` / 直执 | skill 增加 target 抽象（local \| ssh），ops/mods 两个 skill 扩展 |
 | mod 安装/升级 | mod-manager 本机直跑 | 同一二进制在容器内跑（`docker exec arcane-fvtt node /arcane/mod-manager/mod-manager.mjs …`），索引端点由容器 region 决定 | 低：参数透传，`--index-url` 机制现成 |
 | CLI CDP 通道（QA） | 本机 Chromium 9230 | 服务器部署默认**不需要**——面板通道已覆盖 ArcaneDesk 全部控制能力。仅独立 CLI 的 QA 流程需要 CDP：可选 compose profile 起 chromium sidecar，其调试端口**必须**绑容器 loopback、经 SSH 隧道使用（CDP 能完全控制浏览器会话、绕过 FVTT 权限体系，绝不可公网暴露） | 中：文档 + compose profile，CLI 代码零改（仍连 127.0.0.1:9230） |
@@ -370,12 +371,28 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 新增 `.github/workflows/arcane-server-image.yml`（workflow_dispatch，region 矩阵 cn/intl）：
 
 1. 检查配方 revision 递增（照 skills-publish 纪律）。
-2. 构建：单源复制 mod-manager（来自 skills 树）→ docker build → 本地起容器冒烟（挂测试 zip、假索引、断言 `/api/status`）。
+2. 构建：单源复制 mod-manager（来自 skills 树）→ **buildx 双架构构建**（linux/amd64 + linux/arm64）→ 本地起容器冒烟：挂**结构等价的假 foundry zip fixture**（CI 拿不到付费本体——fixture 生成器造假 main.js + 带 13.351 版本号的假 package.json，让入口脚本的校验/断言跑真路径）+ 假 mod 索引，断言 `/api/status`。
 3. `docker save | gzip` 出 tar.gz（**sizeGate：>300MB 直接失败**），记录 SHA256 与 image ID，生成 `server-release.json`。
 4. 钉版下载 docker 静态包与 compose 二进制（linux x64/arm64，SHA256 校验后原样入桶 `runtime/` 前缀）——它们是 Docker 安装第三层降级的弹药。
 5. tar.gz + `server-release.json` + compose 文件 + `runtime/` 静态包上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
 
 与 skill 发布的联动：skills-publish 成功后可选触发 server-image 重建（mod-manager 单源跟随），或依赖入口脚本启动自更新兜底——v1 先做后者（简单），联动重建列 M3。
+
+### 发布与线上影响面（实施 ≠ 发布）
+
+**合并代码不触碰任何线上系统**。全部线上触点都藏在"显式触发的发布动作"后面，且三个通道的可变指针是三个不同的 key，互不覆盖：
+
+| 通道 | 可变对象（唯一会被覆盖的 key） | 触发动作 |
+|---|---|---|
+| desktop 发版 | `desktop/arcane-desk[-intl]/latest.json` | `arcane-desktop-release.yml` 且 `skip_oss=false` |
+| skills OTA | `desktop/arcane-desk[-intl]/skills/latest.json` | `skills-publish.yml` 手动 dispatch |
+| server 镜像（本方案新增） | `desktop/arcane-desk[-intl]/server/latest.json`（**全新 key**） | `arcane-server-image.yml` 手动 dispatch |
+
+已有用户拉 arcane-mirror 为什么不受影响：mod 索引（`index.json`/`index-en.json`）、`packages/*`、skills `<revision>/*`、releases 全是不可变对象，本方案只**新增** `server/` 前缀下的新 key，不 PUT 任何既有对象；发布脚本沿用"不可变对象禁重传 + 指针只指更老 revision + HEAD 预检"闸，写错前缀会在预检就被拦下。用户的 app 在两次发版之间读取的都是旧对象，行为零变化。
+
+实施会触碰的是**仓库内部闸**（CI 红，不是线上影响）：新增 skill 目录必须同步 bump 两棵 `bundle.json` revision（`check-skills-revision`）；`verify-package.mjs` 的 packagedLayout 是**精确清单**——`skills/prep` 多一个目录就要同步更新 exactDirectories，否则发版门直接失败；新 skill 若带 scripts 要过 `assertSkillsSelfContained`。
+
+发布**时**的行为变化备忘（记录在案，发布时进 release notes，不是现在的事）：① 删除 localhost 隐式默认——存量本机用户升级后首次打开面板是空态，跟 agent 说一声才连；② skills OTA 会向存量用户下发 `arcane-fvtt-server` 新 skill（additive，不改变既有 skill 行为）。
 
 ## 9. 分支与里程碑
 
@@ -436,7 +453,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 >
 > 跑完跟我说一声。
 
-**④ skill 收尾（全自动）**：`ssh-keyscan` 记录指纹（供日后漂移告警，不打扰用户核对）→ 写 `~/.ssh/config` 别名块（告知"已配好 arcane-server 别名"，不请求许可——纯配置非机密）→ `ssh arcane-server 'echo ok'`；`Permission denied` 则自动换下一候选用户名重装公钥（回到③换一条命令）；22 端口超时则提示"去云厂商控制台把安全组的 22 端口放行（这也是全流程唯一需要进控制台的场景）"。
+**④ skill 收尾（全自动）**：`ssh-keyscan` 记录指纹（供日后漂移告警，不打扰用户核对）→ 写 `~/.ssh/config` 别名块（告知"已配好 arcane-server 别名"，不请求许可——纯配置非机密）→ `ssh arcane-server 'echo ok'`；`Permission denied` 则自动换下一候选用户名重装公钥（回到③换一条命令）；22 端口超时则提示"去云厂商控制台把安全组的 22 端口放行"。
 
 > ✅ 连上了。以后你对我说"服务器"就是它（arcane-server），你的密码和私钥我从头到尾没碰过。现在开始检查服务器环境（系统、Docker、30000 端口）……
 
