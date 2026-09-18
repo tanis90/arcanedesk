@@ -106,13 +106,14 @@ key 放哪不是我们发明特殊位置，就是**操作系统标准位置**，
 ssh-agent                 passphrase 解锁一次（Windows 用 OpenSSH Authentication Agent 服务），之后 ssh 别名免交互
 ```
 
-**首次接入流程（skill 引导，每步给用户可直接复制的命令，用户在自己终端跑）**：
+**首次接入流程（小白单一主路径，逐字话术见附录 A）**——设计原则：**用户零选择**，所有分支由 skill 现场探测/试错决定，用户只做两件躲不开的事（输一次 yes、输一次密码）：
 
-1. skill 检查 `~/.ssh/id_ed25519` 是否存在（只看存在性）→ 无则给用户 `ssh-keygen -t ed25519` 命令自己跑，passphrase 由用户自选。
-2. skill 读 `id_ed25519.pub` **公钥内容展示给用户**（公钥可公开），指引用户去云控制台绑定（阿里云 ECS 创建时可绑密钥对，或安全设置里注入公钥）——和 license 激活一样，浏览器里的动作归用户。
-3. skill 代写 `~/.ssh/config` 别名块（追加前展示内容，纯配置），用户 `ssh-add` 解锁一次。
-4. host key 确认：skill `ssh-keyscan` 取 fingerprint 展示，用户口头确认后 skill 才把条目追加进 known_hosts（TOFU + 人工核对，仍不算"自动 accept"）。
-5. 验证：`ssh <alias> 'echo ok'` 通了才进探测-再-执行决策树。
+1. skill 问且只问事实问题：哪家云、公网 IP、买时设了登录密码还是下载过 .pem（不知道就按密码试）。厂商答案同时决定默认登录名（阿里云/腾讯/华为/火山/Vultr/DO→root，AWS→ec2-user，Oracle→ubuntu…）和安全组诊断文案。
+2. skill 自检自备：`ssh` 客户端存在性（缺则引导装 OpenSSH Client）；`~/.ssh/id_ed25519` 不存在就**自己生成**（`ssh-keygen -N ""` 空口令——小白不设 passphrase，Windows 账户就是锁；生成不涉密，私钥内容 skill 依然永不读取）。
+3. **用户唯一要跑的命令**：skill 给出按厂商/用户名/IP 填好的公钥安装一行命令，用户粘进 PowerShell，遇到首次连接提示输 yes、然后输服务器密码（交给 ssh，skill 不可见）。host key 的 TOFU 由用户这次 yes 完成，skill 同时 keyscan 记录指纹供日后漂移告警。
+4. skill 收尾全自动：写 `~/.ssh/config` 别名块（告知即可，纯配置非机密）→ `ssh <alias> 'echo ok'` 验证 → 失败自动换下一候选用户名重试 → 通了进探测-再-执行决策树。
+
+`.pem` 分支（skill 判断，不问用户偏好）：买时下载过 .pem → skill 把文件复制进 `~/.ssh/`、config 指向它、直接验证，**用户一条命令都不用跑**。
 
 密码登录（sshpass 之类）v1 明确不支持：agent 无法安全持有密码，交互式密码提示在非 TTY 下也不可用——只有公钥路径。若用户坚持"把私钥发给你，你帮我配"，skill 拒绝并回到上面的引导流程；这个拒绝话术与"agent 永不代填 EULA/license"同一模板。
 
@@ -238,67 +239,52 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
 | 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成且永不打印；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
 
-## 附录 A：首次接入话术（Windows / cn 主路径）
+## 附录 A：首次接入话术（小白单一主路径，Windows / 全云厂商）
 
-以下是 `arcane-fvtt-server` skill 首次接入时对用户的实际引导文案（实现时进 `references/ssh-onboarding.md`，intl 包出英文版）。设计约束：每条涉及秘密输入的命令都在**用户自己的终端**跑，agent 只检查结果；分支按现场探测结果选择。
+`arcane-fvtt-server` skill 的逐字引导文案（实现进 `references/ssh-onboarding.md`，intl 包出英文版）。原则：**用户零选择**——分支全部由 skill 决定；用户全程只做两件事：跑一条 skill 给好的命令、输一次 yes + 一次密码。
 
-**① 开场**（agent 检查 `Test-Path $env:USERPROFILE\.ssh\id_ed25519` 后进入对应分支）
+**厂商 → 默认登录名映射**（skill 内置，登录失败自动试下一候选）：
 
-> 服务器到手了？我们先花两分钟把"钥匙"配好——之后我对这台机器的所有操作都走 SSH 密钥，密码类的东西只在你本机输，不经过我。
-> 开始菜单搜 **PowerShell** 打开（普通窗口即可），下面几条命令都在这里跑。
+| 云厂商 | 默认用户 | 首选认证 |
+|---|---|---|
+| 阿里云 / 腾讯云 / 华为云 / 火山引擎 / 京东云 / UCloud / Vultr / DigitalOcean / Hetzner | root | 购买时设的密码 |
+| AWS EC2 | ec2-user（Amazon Linux）/ ubuntu（Ubuntu） | .pem |
+| Oracle Cloud | ubuntu | .pem |
+| GCP | 购买时自设 | .pem 或密码 |
+| 不认识的小服务商 | root → ubuntu → admin 逐个试 | 密码 |
 
-**② 生成密钥**（无现成密钥时）
+**① 开场（skill 问且只问事实，三个答案一次收齐）**
 
-> 第一步，生成一对密钥：
->
-> ```
-> ssh-keygen -t ed25519 -C arcanedesk
-> ```
->
-> - 问保存路径时**直接回车**——默认的 `C:\Users\你\.ssh\` 就是标准位置，Windows 自带的 SSH 只认这里的钥匙，我也只从这里用；
-> - passphrase 建议设一个（给钥匙再加一道锁）。嫌麻烦可留空回车，代价是能登录你这台电脑的人都能用这把钥匙。
+> 你的服务器买好了，我们花两分钟连上它。告诉我三件事：
+> 1. 在哪家买的（阿里云？腾讯云？……）
+> 2. 服务器的公网 IP（控制台实例列表里那串，比如 47.98.x.x）
+> 3. 买的时候是**设置了登录密码**，还是**下载过一个 .pem 文件**？（不记得也没事，先按密码试）
 
-分支：用户购买 ECS 时已在阿里云控制台绑定过密钥对（手里有 .pem 文件）→ 引导把 .pem 放到 `C:\Users\你\.ssh\aliyun-ecs.pem`，第④步 IdentityFile 指向它，跳过②③。
+**② skill 静默准备（用户无感知）**：`ssh` 客户端存在性 → 无钥匙则 `ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/id_ed25519` 自己生成（空口令：小白场景 Windows 账户即锁；skill 生成钥匙不等于接触私钥内容）→ 读 `.pub` 备用。
 
-**③ 装公钥**（agent 读 `.pub` 展示 + `ssh-keyscan` 取指纹）
+**③ 用户唯一的一步（skill 已按①填好所有参数）**
 
-> 你的公钥（可以公开的一半）：
->
-> ```
-> ssh-ed25519 AAAAC3… arcanedesk
-> ```
->
-> 我先探测了服务器指纹：`47.98.x.x 的 ED25519 指纹是 SHA256:xxxx…`，请留意它。
->
-> 现在运行（IP 换成你的）：
+> 最后一步需要你动手，因为密码只能输给你电脑上的 SSH。
+> 开始菜单搜 **PowerShell**，打开，把下面这条**整个复制**进去回车（IP 已填好）：
 >
 > ```
 > type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@47.98.x.x "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 > ```
 >
-> - 首次连接问 `Are you sure…continue connecting?`——核对显示指纹与我上面给的一致，输 yes；
-> - 再输 root 密码（买 ECS 时设置的那个）。密码交给 ssh，我看不到也不保存。
+> - 第一次会问 `Are you sure you want to continue connecting?` → 输 **yes** 回车；
+> - 然后输你买服务器时设置的密码（屏幕上不会显示，输完回车）——密码交给 SSH，我看不到；
+> - 如果它提示你先改密码，改一个能记住的，改完把这条命令再跑一遍。
+>
+> 跑完跟我说一声。
 
-分支：偏好控制台 → 阿里云控制台 → 云服务器 ECS → 密钥对 → 导入（粘贴公钥）→ 绑定实例（需停机一次）。
+**④ skill 收尾（全自动）**：`ssh-keyscan` 记录指纹（供日后漂移告警，不打扰用户核对）→ 写 `~/.ssh/config` 别名块（告知"已配好 arcane-server 别名"，不请求许可——纯配置非机密）→ `ssh arcane-server 'echo ok'`；`Permission denied` 则自动换下一候选用户名重装公钥（回到③换一条命令）；22 端口超时则提示"去云厂商控制台把安全组的 22 端口放行（这也是全流程唯一需要进控制台的场景）"。
 
-**④ 写别名**（agent 展示后经确认写入 `~/.ssh/config`，纯配置非机密）
+> ✅ 连上了。以后你对我说"服务器"就是它（arcane-server），你的密码和私钥我从头到尾没碰过。现在开始检查服务器环境（系统、Docker、30000 端口）……
 
-> ```
-> Host arcane-server
->     HostName 47.98.x.x
->     User root
->     Port 22
->     IdentityFile ~/.ssh/id_ed25519
-> ```
+**.pem 分支（skill 判断走，不问用户偏好）**：①的答案提到 .pem → skill 让用户把文件拖到指定文件夹（或告知下载位置），skill 复制进 `~/.ssh/<厂商>-<IP>.pem`、修 ACL、config 直接指向它、验证——**用户一条命令都不用跑**。
 
-分支：②设了 passphrase → 引导启用 Windows OpenSSH Agent（管理员 PowerShell 一次）：`Start-Service ssh-agent; Set-Service ssh-agent -StartupType Automatic; ssh-add`。
-
-**⑤ 验证**（agent 执行）
-
-> `ssh arcane-server "echo ok"` → 通了。之后我对这台机器的所有操作都走 arcane-server 别名，你的私钥与密码全程未经过我。现在开始探测服务器环境……
-
-**拒绝话术**（用户提出把私钥发给 agent 时）
+**拒绝话术**（用户提出把私钥发给 agent）
 
 > 不用也不行：我们的对话会被存档，钥匙贴进对话等于永久写进日志。命令你敲、结果我查，一样快。
 
-macOS 变体：路径 `~/.ssh/`；③的命令为 `cat ~/.ssh/id_ed25519.pub | ssh root@IP "…"`；④后 `ssh-add --apple-use-keychain` 入钥匙串。诊断分支：`ssh-keyscan` 22 端口不通 → 提示检查阿里云安全组放行 22/TCP（云知识仅此一处文案）。
+**故障兜底（skill 侧自动处理，不增加用户步骤）**：`ssh` 缺失 → 引导装 Windows OpenSSH Client 可选功能；`bad permissions`（.pem 权限）→ `icacls` 修复；厂商强制首登改密 → ③话术已含；macOS 变体：`cat ~/.ssh/id_ed25519.pub | ssh …`，其余同构。
