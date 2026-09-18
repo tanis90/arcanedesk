@@ -95,6 +95,120 @@ xcrun stapler validate dist/Arcane-Desk-*-mac-arm64.dmg
 When the certificate or API key is rotated, re-export a clean p12 (Developer
 ID identity only) and update the five secrets; no workflow change is needed.
 
+## Windows code signing (local sign-first publish)
+
+Windows installers are signed locally, never in CI. The certificate is a
+Certum OV code signing certificate (`CN=Qi Yang`, thumbprint pinned in
+`scripts/sign-windows.mjs`, valid until 2027-09-07) whose private key lives in
+Certum's SimplySign cloud and is non-exportable — the certificate store
+reports `SimplySign CSP` / `私钥不能导出` — so it cannot become a p12 GitHub
+secret. Signing therefore runs on a machine with SimplySign Desktop installed
+and logged in; a signing session may ask for an OTP confirmation in the
+SimplySign mobile app.
+
+The signed-release sequence is build in CI, sign and publish locally:
+
+1. Dispatch `Release Arcane Desktop` at the commit to ship with the defaults
+   (`skip_oss=true`, `update_latest=false`, `create_github_release=false`).
+   All eight matrix legs must pass; macOS artifacts come out signed and
+   notarized, Windows artifacts unsigned.
+2. Download the run's artifacts (named `arcane-desk-<platform>-<region>-<sha>`)
+   into per-region staging trees:
+
+   ```bash
+   run_id=<run-id>
+   for artifact in $(gh run view "$run_id" --json artifacts -q '.artifacts[].name' | grep '^arcane-desk-'); do
+     platform=$(echo "$artifact" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-[0-9a-f]{40}$/\1/')
+     region=$(echo "$artifact" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-[0-9a-f]{40}$/\2/')
+     gh run download "$run_id" -n "$artifact" -D "staging-$region/$platform"
+   done
+   ```
+
+3. Sign every Windows installer (both regions in one pass; already-valid
+   signatures are skipped, `--force` re-signs):
+
+   ```bash
+   node apps/desktop/scripts/sign-windows.mjs --in staging-cn --in staging-intl
+   ```
+
+   The script Authenticode-signs each `Arcane-Desk-*-win-*.exe` (SHA-256,
+   RFC3161 Sectigo timestamp), then verifies the signature, the pinned
+   thumbprint, and the presence of a timestamp — a signature without a
+   timestamp dies with the certificate, so it is an error, not a warning.
+   Signed copies land flat in `apps/desktop/dist-signed`.
+4. Regenerate the release manifest per region at the pinned commit (the same
+   rules the CI publish job uses; an explicit intl release id gets the
+   `-intl` suffix):
+
+   ```bash
+   ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=cn \
+     npm run prepare:desktop-release --workspace arcane-desktop
+   ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=intl ARCANE_RELEASE_ID=<id>-intl \
+     npm run prepare:desktop-release --workspace arcane-desktop
+   ```
+
+5. Publish each region with the signed overlay, without moving `latest`:
+
+   ```bash
+   node apps/desktop/scripts/publish-release.mjs \
+     --staging staging-cn --signed-dir apps/desktop/dist-signed \
+     --region cn --channel private-beta --skip-latest
+   # intl additionally needs CF_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+   node apps/desktop/scripts/publish-release.mjs \
+     --staging staging-intl --signed-dir apps/desktop/dist-signed \
+     --region intl --channel private-beta --skip-latest
+   ```
+
+   `--signed-dir` replaces every staged `.exe` with its signed copy and fails
+   if one is missing, so an unsigned installer cannot slip through.
+   SHA256SUMS and `release.json` are computed from the actual (signed) files,
+   and the publisher still refuses to touch an existing version directory —
+   the release is immutable and self-consistent from birth, which is why the
+   sign-before-publish overlay replaces the 2026-09-08 one-off that overwrote
+   published objects.
+6. After both regions verify, promote them and create the GitHub Releases
+   (per region: 12 assets, `SHA256SUMS.txt` renamed per platform as CI does):
+
+   ```bash
+   node apps/desktop/scripts/publish-release.mjs --promote-release <id> --region cn
+   node apps/desktop/scripts/publish-release.mjs --promote-release <id>-intl --region intl
+
+   mkdir -p github-release-assets-cn
+   for platform_dir in staging-cn/*; do
+     platform=$(basename "$platform_dir")
+     for source in "$platform_dir"/*; do
+       name=$(basename "$source")
+       [[ "$name" == SHA256SUMS* ]] && name="SHA256SUMS-$platform.txt"
+       cp "$source" "github-release-assets-cn/$name"
+     done
+   done
+   # repeat for staging-intl with SHA256SUMS-<platform>-intl.txt, then:
+   gh release create <id> --title "Arcane Desk <id>" --target <sha> --prerelease \
+     --notes "macOS: signed with a Developer ID certificate and notarized by Apple.
+   Windows: signed with a Certum OV certificate; SmartScreen may still warn
+   until reputation builds." \
+     github-release-assets-cn/*
+   ```
+
+7. Commit the repo metadata the publisher wrote
+   (`distribution/desktop-latest*.json`) and delete the transient
+   `distribution/releases/` audit directory — `verify-source.mjs` forbids it
+   in the source tree, so leaving it behind breaks local
+   `npm test`/`typecheck`/`start`.
+
+Operational notes:
+
+- Only the NSIS `.exe` installer is signed; the `.zip` artifact keeps an
+  unsigned unpacked binary inside (same scope as the 0.4.3 first signing).
+- SmartScreen: an OV certificate builds reputation per file over time. Early
+  downloads may still see "Windows protected your PC"; the signature plus
+  timestamp keeps the installer valid and attributable after the certificate
+  expires.
+- signtool discovery order: `--signtool`/`ARCANE_SIGNTOOL`, the Windows SDK
+  (`Windows Kits\10\bin\<ver>\x64`), electron-builder's winCodeSign cache,
+  then `PATH`. Installing the SDK "Signing Tools for Windows" component is
+  the stable option; the cache path appears after any local Windows build.
+
 ## Build-only verification
 
 Dispatch `Release Arcane Desktop` with:
@@ -127,13 +241,20 @@ Because `update_latest` is false, the public download pointer remains unchanged.
 
 ## Formal release
 
-A formal release uses the same workflow with `create_github_release=true` and,
-only after every object is verified, `update_latest=true`. Non-`stable` channels
-create a GitHub prerelease. Do not enable either option merely to test CI.
+A release with signed Windows installers is published through the local
+sign-first procedure above ("Windows code signing (local sign-first
+publish)"), because CI cannot hold the Windows certificate. The CI publish
+path below (`skip_oss=false`, then `create_github_release=true` and
+`update_latest=true`) publishes everything the build produced — its Windows
+installers are unsigned; use it knowingly. Non-`stable` channels create a
+GitHub prerelease. Do not enable either option merely to test CI.
 
-Current Desktop artifacts: macOS builds are Developer ID signed and notarized
-(see the next section), so Gatekeeper opens them without any prompt. Windows
-builds remain unsigned and can trigger SmartScreen; the documented path is
+Current Desktop artifacts: macOS builds are Developer ID signed and notarized,
+so Gatekeeper opens them without any prompt. Windows installers from the local
+sign-first path are Authenticode-signed with a Certum OV certificate —
+SmartScreen may still warn until reputation builds, and the `.zip` artifact
+contains an unsigned unpacked binary. Windows installers published straight
+from CI are unsigned; the documented path for those is
 More info > Run anyway.
 
 ## Skills bundle publish

@@ -8,6 +8,8 @@ npm-debug.log*
 
 # Build and test output
 dist/
+# 本地签名副本（sign-windows.mjs 输出，publish-release --signed-dir 输入）
+dist-signed/
 build/
 # electron-builder signing resources are source, not output
 !apps/desktop/build/
