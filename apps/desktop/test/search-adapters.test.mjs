@@ -54,8 +54,10 @@ test("zai adapter speaks the zhipu web_search wire format", async () => {
   assert.equal(usage.backend, "zai");
   assert.equal(usage.cached, false);
   const request = JSON.parse(fetch.calls[0].init.body);
-  assert.equal(request.search_engine, "search-prime");
+  assert.equal(request.search_engine, "search_pro"); // cn 默认引擎
+  assert.equal(request.search_intent, false);
   assert.equal(request.search_query, "foundry v13 dnd5e");
+  assert.equal(request.search_recency_filter, "oneMonth"); // freshness 全链路支持
   assert.equal(fetch.calls[0].url, "https://open.bigmodel.cn/api/paas/v4/web_search");
 
   const parsed = JSON.parse(payload);
@@ -63,9 +65,8 @@ test("zai adapter speaks the zhipu web_search wire format", async () => {
   assert.equal(parsed.results[0].url, "https://foundryvtt.com/a");
   assert.equal(parsed.results[0].snippet, "release notes");
   assert.equal(parsed.results[0].publishedAt, "2026-08-30");
-  // z-ai 不支持 freshness → 显式 warning，不静默。
-  assert.equal(parsed.meta.warnings.length, 1);
-  assert.match(parsed.meta.warnings[0], /freshness/);
+  // zai 契约全支持（count/freshness/domains）→ 无 warning。
+  assert.equal(parsed.meta.warnings.length, 0);
 });
 
 test("spark adapter posts the arcane /v1/search contract", async () => {
