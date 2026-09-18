@@ -54,6 +54,16 @@
 
 安装目标 `/arcane/foundry/<version>/`（独立卷），入口脚本幂等：校验 main.js 结构 + 版本号与钉版一致才放行，否则报错拒启。
 
+### 用户下载指引（skill 主动说三要素，避免拿错）
+
+1. **版本：13.351**。下载页默认给最新稳定版——若当前最新不是 13.351，引导用户到 foundryvtt.com 的 **releases 归档页**选 13.351。钉版值单一来源：`community-distribution.json:12`，与线上 mod 索引 `foundry` 字段、`server-release.json` 同源，skill 比对这个值。
+2. **平台：Linux/NodeJS 的 zip**——不是 Windows 安装包、不是 macOS dmg（Windows 桌面用户最常拿错的就是这个）。
+3. **交付**：scp 上服务器 `/arcane/incoming/`，或提供限时 URL。
+
+**skill 预检**：拿到 zip 先 `unzip -p <zip> resources/app/package.json` 读版本比对（结构不符则回退到入口脚本的 main.js 结构校验兜底）——版本不对当场告诉用户去下哪个，而不是等容器起不来才报错。
+
+**Node 不需要用户下载**：Docker 轨道 node 在镜像内（22.23.2）；裸机兜底/治理时由 skill 在服务器侧下载钉版 node（nodejs.org + SHA256），用户全程不接触 node。我们 bump 钉版时，skill 按 `server-release.json` 的 foundry 字段提示用户重新下载对应 zip。
+
 ## 3. 探测-再-执行（deploy 决策树）
 
 新 skill：`arcane-fvtt-server`（cn/intl 双语，走 composer 覆盖树）。首步永远是探测，探测结果决定动作：
