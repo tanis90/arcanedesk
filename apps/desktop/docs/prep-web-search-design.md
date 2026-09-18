@@ -272,3 +272,31 @@ model tool_call(query)
 - Kimi / OpenAI 复用的第三方客户端资格（P2 前必须书面确认）。
 - Spark 网关 `/v1/search` 排期与 key scope（是否独立子额度）由服务端定，不阻塞 P1 桌面侧
   （先以 custom 端点 + 自部署 staging 验证）。
+
+## 13. 实施状态与上线清单（2026-09-18）
+
+| 里程碑 | 提交 | 内容 |
+| --- | --- | --- |
+| M1 | `de595f5` | search 模块（store/budget/errors/adapters/normalize）+ 21 单测 |
+| M2 | `7c1a8bc` | AgentHost 工具装配、prep allowlist（池感知激活）、search_usage/error 事件、region 注入 |
+| M3 | ops `226fe72` + 桌面 `87c19c3` | arcane-spark-edge `POST /v1/search`（z-ai 上游、双闸门计量、deductSearch）；桌面 zai adapter 对齐 bigmodel 文档 |
+| M4 | `f6bac45` | 设置页 tab、consent 弹窗、工具卡片、用量 chip、ss.*/err.search.* 双语 |
+| M5 | 本次 | prep system prompt 增量；Spark 链路本地 e2e（真 HTTP + 真 fetch，fixture 与 worker 输出逐字段一致）；全套 650/650 |
+
+测试基线：desktop `npm test` 650/650、`tsc --noEmit` 干净；ops `services/arcane-spark-edge` `node --test test/*.test.mjs` 25/25。
+
+### 上线（intl Spark）步骤——需用户确认后执行（ops 仓库 AGENTS 生产变更纪律）
+
+1. `services/arcane-spark-edge`：`npx wrangler secret put ZAI_API_KEY`（智谱海外站 key）→ `npm run deploy`。
+2. 发放/轮换搜索权益：`tools/arcane-key-intl` 以 `--models arcane-spark,web_search` 发 key；存量 key 默认无搜索能力（403）。
+3. 计量参数在 `wrangler.toml [vars]`：`SEARCH_UNIT_TOKENS`（默认 1000/次）、`SEARCH_ENGINE`（z.ai 用 search-prime）。
+4. 冒烟：`curl -H "Authorization: Bearer <key>" -d '{"query":"foundry vtt v13","count":5}' https://llm.arcanedesk.app/v1/search`。
+
+### CN 侧待办（部署期配置，不在本分支）
+
+- CN Spark 域名（NewAPI 网关）需要增加 `/v1/search` 路由指向同一契约的上游实现（bigmodel.cn + `search_pro`）；桌面端已按 region 自动选择端点与引擎，无需改代码。
+
+### 手工验收（对齐 PRD §11）
+
+- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费/第 6 次软提示/第 11 次硬断、429/402 文案 key、8KB 截断、consent 前零外发、双语占位符一致、en-US 布局待人工过一遍。
+- 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、consent 弹窗视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
