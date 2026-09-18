@@ -171,7 +171,7 @@ arcan-mirror 侧新增：
 
 1. 检查配方 revision 递增（照 skills-publish 纪律）。
 2. 构建：单源复制 mod-manager（来自 skills 树）→ docker build → 本地起容器冒烟（挂测试 zip、假索引、断言 `/api/status`）。
-3. 双推 Docker Hub +（cn）ACR /（intl）GHCR，记录 digest。
+3. 双推 Docker Hub +（cn）自建 registry /（intl）GHCR，记录 digest。
 4. `server-release.json` + compose 上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
 
 与 skill 发布的联动：skills-publish 成功后可选触发 server-image 重建（mod-manager 单源跟随），或依赖入口脚本启动自更新兜底——v1 先做后者（简单），联动重建列 M3。
