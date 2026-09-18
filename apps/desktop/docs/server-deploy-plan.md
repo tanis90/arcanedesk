@@ -68,7 +68,8 @@
 │   └─ B2. 进程是裸机 node（无容器包裹）
 │         → 已有服务器裸机部署：远程 ops（ssh 直执，等价现有 ops 平移）
 ├─ C. 目标机有 docker 但无容器
-│     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待 → 回填连接
+│     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待
+│       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、玩家 join 链接
 └─ D. 目标机无 docker
       → 先装 docker（cn 用阿里云镜像源装 docker-ce；装不上再回退裸机安装路径）
 ```
@@ -95,8 +96,8 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 ### compose 要点
 
 - 卷：`foundry`（本体）、`data`（数据目录）。**升级 FVTT = 换镜像 tag + 新本体版本目录，数据卷不动**。
-- 端口：仅暴露 30000（建议文档给出可选 caddy/nginx TLS 反代示例，不默认）。
-- 可选 sidecar（M4 后期）：headless Chromium 开 `--remote-debugging-port=9230` 绑容器内 loopback，配合 SSH 隧道供 CLI CDP 通道使用（见 §7）。
+- 端口：**30000 默认直接对公网开放**——服务器部署的全部意义就是让玩家远程登录；安全边界是 FVTT 自带的用户/权限体系（world 用户 + 密码 + adminKey），不是把端口藏起来。文档附可选 TLS 反代示例（不改变默认）。
+- **默认不含 chromium sidecar**：ArcaneDesk 的控制通道（内嵌面板 + executeJavaScript 注入 SDK）走的就是公网 30000，与玩家同一入口，无需额外暴露面。
 - 镜像引用用 **digest 钉版**（`image: registry.../arcane-fvtt@sha256:...`），digest 由部署清单下发，防 tag 漂移。
 
 ### tag 策略
@@ -159,10 +160,12 @@ arcan-mirror 侧新增：
 
 | 通道 | 本机现状 | 服务器轨道 | 改造量 |
 |---|---|---|---|
-| 内嵌面板 + foundry-sdk | `ARCANE_FOUNDRY_URL \|\| http://localhost:30000`（`main.js:59`），WebContentsView 加载页面 + executeJavaScript 注入 SDK | 指向 `http://<server>:30000` 即可，SDK 全部能力（协议/预检/写中断）不依赖 Foundry 在哪 | ~0（URL 已是 env；补一个连接设置 UI + TLS 选项） |
+| 内嵌面板 + foundry-sdk | `ARCANE_FOUNDRY_URL \|\| http://localhost:30000`（`main.js:59`），WebContentsView 加载页面 + executeJavaScript 注入 SDK | 指向 `http://<server>:30000` 即可，SDK 全部能力（协议/预检/写中断）不依赖 Foundry 在哪。**ArcaneDesk 以 gamemaster 账号直连 `<server>/game` 操作**：面板打开服务器 URL，GM 登录一次后会话 cookie 由现有记忆/回填机制（`main.js:265-291,382-387`）持久化，之后直达 /game | ~0（URL 已是 env；补一个连接设置 UI） |
+| 玩家入口 | 不适用（本机单人） | **`http://<server>:30000/join`**——玩家选自己的用户、输密码进入。部署完成后 skill 把 join 链接整理进交付信息，由 GM 自己分发给玩家 | 0 |
+| 账号与权限 | FVTT world 用户体系 | FVTT 自带权限体系就是安全边界：部署 skill 首次部署时建 world 用户并**设好默认密码**（GM 账号强随机初始密码；可选预建玩家账号），完成后把初始凭据告知用户并提示首登后修改。adminKey 由 FVTT 首启自动随机生成，维持"永不打印"纪律 | 中：skill 新增账户初始化步骤（经 SDK 以 GM 会话设置，或首启前预置 world 用户数据） |
 | ops（启停/日志/探测） | 本机 shell | `ssh <target> docker exec` / 直执 | skill 增加 target 抽象（local \| ssh），ops/mods 两个 skill 扩展 |
 | mod 安装/升级 | mod-manager 本机直跑 | 同一二进制在容器内跑（`docker exec arcane-fvtt node /arcane/mod-manager/mod-manager.mjs …`），索引端点由容器 region 决定 | 低：参数透传，`--index-url` 机制现成 |
-| CLI CDP 通道（QA） | 本机 Chromium 9230 | compose 可选 chromium sidecar，CDP 只绑容器 loopback；用户本机 `ssh -L 9230:localhost:9230` 隧道后体验完全一致，CDP 不暴露公网 | 中：文档 + compose profile，CLI 代码零改（仍连 127.0.0.1:9230） |
+| CLI CDP 通道（QA） | 本机 Chromium 9230 | 服务器部署默认**不需要**——面板通道已覆盖 ArcaneDesk 全部控制能力。仅独立 CLI 的 QA 流程需要 CDP：可选 compose profile 起 chromium sidecar，其调试端口**必须**绑容器 loopback、经 SSH 隧道使用（CDP 能完全控制浏览器会话、绕过 FVTT 权限体系，绝不可公网暴露） | 中：文档 + compose profile，CLI 代码零改（仍连 127.0.0.1:9230） |
 | license 激活 | 用户浏览器内完成 | 不变：用户开远程面板完成激活/EULA，会话态存服务器 Config 卷 | 0（政策平移） |
 
 ## 8. CI/CD 与发布流程
@@ -181,9 +184,9 @@ arcan-mirror 侧新增：
 分支 `feat/server-deploy`（实现时自 main 切；若 intl M4 skill packs 已合入则直接受益于 composer 双语机制，未合入也不阻塞——镜像轨道不依赖 skill 双语）。
 
 - **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、自建 registry 落地（ECS + 域名 + OSS 后端）、CI 双推自建 registry+DockerHub、server-release 指针协议、版本闸。
-- **M2 deploy skill**：`arcane-fvtt-server`（探测-再-执行决策树、Docker 部署、连接信息回填 desktop）。
+- **M2 deploy skill**：`arcane-fvtt-server`（探测-再-执行决策树、Docker 部署、world 用户与默认密码初始化、连接信息与玩家 join 链接交付）。
 - **M3 远程运维**：ops/mods skill 的 target 抽象（local\|ssh）、mod-manager 容器内执行、skill↔镜像联动重建。
-- **M4 增强（可选）**：chromium sidecar + CDP 隧道文档、`-full` 离线镜像变体、TLS 反代一键化、服务器侧 headless agent（远期，desktop 仍是控制面）。
+- **M4 增强（可选）**：CLI QA 用 chromium sidecar profile（CDP 仅 SSH 隧道）、`-full` 离线镜像变体、TLS 反代一键化、服务器侧 headless agent（远期，desktop 仍是控制面）。
 
 ## 10. 风险与合规
 
@@ -195,4 +198,4 @@ arcan-mirror 侧新增：
 | tag 漂移/供应链 | digest 钉版下发；镜像内容单源（region 表/mod-manager/skills 树）；全链 SHA256 + HEAD 验收复用 |
 | CDP 暴露公网 | sidecar 只绑容器 loopback，仅 SSH 隧道可达；不进默认 compose profile |
 | 数据目录双层坑（Data/Data） | 卷挂载点钉 `<data-dir>` 契约，healthcheck 校验 `Data/systems` 层级 |
-| 服务器 30000 裸暴露 | 文档默认建议反代/TLS 或仅绑内网/SSH 隧道访问面板 |
+| 公网暴露 30000 | **这是部署目的，不是风险项**：玩家要远程登录。安全边界=FVTT 自带权限体系——部署 skill 强制 GM 初始密码强随机并提示首登修改；adminKey 随机生成且永不打印；真正绝不可暴露的是 CDP 调试端口（绕过 FVTT 权限，仅 QA sidecar + SSH 隧道场景存在）；TLS 反代作可选文档不默认 |
