@@ -349,17 +349,17 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 
 | 通道 | 本机现状 | 服务器轨道 | 改造量 |
 |---|---|---|---|
-| 内嵌面板 + foundry-sdk | `ARCANE_FOUNDRY_URL \|\| http://localhost:30000`（`main.js:59`），WebContentsView 加载页面 + executeJavaScript 注入 SDK | 指向 `http://<server>:30000` 即可，SDK 全部能力（协议/预检/写中断）不依赖 Foundry 在哪。**ArcaneDesk 以 gamemaster 账号直连 `<server>/game` 操作**：面板打开服务器 URL，GM 登录一次后会话 cookie 由现有记忆/回填机制（`main.js:265-291,382-387`）持久化，之后直达 /game | ~0（URL 已是 env；补一个连接设置 UI） |
+| 内嵌面板 + foundry-sdk | `ARCANE_FOUNDRY_URL \|\| http://localhost:30000`（`main.js:59`），WebContentsView 加载页面 + executeJavaScript 注入 SDK | 指向 `http://<server>:30000` 即可，SDK 全部能力（协议/预检/写中断）不依赖 Foundry 在哪。**ArcaneDesk 以 gamemaster 账号直连 `<server>/game` 操作**：GM 登录一次后会话 cookie 由现有记忆/回填机制（`main.js:265-291,382-387`）持久化，之后直达 /game | 小：**连接目标不是设置项，是对话状态**——`foundry_open` 增加目标参数（人告诉 agent 打开哪，或 agent 从部署/探测上下文自己知道），面板只**记住上一次打开的地址**（下次启动回到它），没有上一次地址就空态，**删除 localhost 隐式默认**（见下） |
 | 玩家入口 | 不适用（本机单人） | **`http://<server>:30000/join`**——玩家选自己的用户、输密码进入。部署完成后 skill 把 join 链接整理进交付信息，由 GM 自己分发给玩家 | 0 |
 | 账号与权限 | FVTT world 用户体系 | FVTT 自带权限体系就是安全边界：部署 skill 首次部署时建 world 用户并**设好默认密码**（GM 账号强随机初始密码；可选预建玩家账号），完成后把初始凭据告知用户并提示首登后修改。adminKey 由 FVTT 首启自动随机生成，维持"永不打印"纪律 | 中：skill 新增账户初始化步骤（经 SDK 以 GM 会话设置，或首启前预置 world 用户数据） |
 | ops（启停/日志/探测） | 本机 shell | `ssh <target> docker exec` / 直执 | skill 增加 target 抽象（local \| ssh），ops/mods 两个 skill 扩展 |
 | mod 安装/升级 | mod-manager 本机直跑 | 同一二进制在容器内跑（`docker exec arcane-fvtt node /arcane/mod-manager/mod-manager.mjs …`），索引端点由容器 region 决定 | 低：参数透传，`--index-url` 机制现成 |
 | CLI CDP 通道（QA） | 本机 Chromium 9230 | 服务器部署默认**不需要**——面板通道已覆盖 ArcaneDesk 全部控制能力。仅独立 CLI 的 QA 流程需要 CDP：可选 compose profile 起 chromium sidecar，其调试端口**必须**绑容器 loopback、经 SSH 隧道使用（CDP 能完全控制浏览器会话、绕过 FVTT 权限体系，绝不可公网暴露） | 中：文档 + compose profile，CLI 代码零改（仍连 127.0.0.1:9230） |
-| license 激活 | 用户浏览器内完成 | 不变：**deploy 收尾 skill 自动 `foundry_open` 打开远程面板**（见下"首启与激活收尾"），用户在面板里完成 license/EULA（agent 永不代填），激活态存服务器 Config 卷 | 0（政策平移）+ 连接目标切换 |
+| license 激活 | 用户浏览器内完成 | 不变：**deploy 收尾 skill 自动 `foundry_open <server-url>` 打开远程面板**（见下"首启与激活收尾"），用户在面板里完成 license/EULA（agent 永不代填），激活态存服务器 Config 卷 | 0（政策平移） |
 
 **首启与激活收尾（deploy 的最后一段，自动化到只剩"用户填 key"）**：
 
-1. healthcheck 三层验证（V1-V3）通过后，skill 把 desktop 的 **Foundry 连接目标切到 `http://<server>:30000` 并持久化**（现状 `main.js:59` 是 `ARCANE_FOUNDRY_URL \|\| localhost` 固定值——连接设置项是本方案唯一的 ~0 级改造，M2 一并做）。
+1. healthcheck 三层验证（V1-V3）通过后，skill 调 `foundry_open <server-url>` 直接打开远程面板——**连接目标没有任何设置入口**：目标由对话驱动（人告诉 agent"打开服务器/打开本机"，或 agent 从部署上下文自己知道），面板只**默认记住上一次打开的地址**（下次启动回到服务器），没有上一次地址就空态，**不回落 localhost**（现状 `main.js:59` 的固定默认值删除）。desktop 侧改造就三件：`foundry_open` 目标参数、上次地址持久化、空态呈现。
 2. skill 调 `foundry_open`（`agent-host.js:981`）→ 面板加载服务器首页 → 首启未激活时自然落在 license/setup 页。
 3. 用户在面板里输入 **adminKey（交付信息里带的那份）+ license key**，接受 EULA——这两样只能用户自己填，skill 只开页面不碰表单。
 4. 激活后：cn 轨道入口脚本已预装 arcane-demo 世界（mirror 有 `worlds/arcane-demo@0.1.2` + profile），用户激活完即有世界可进；正式世界由用户自建或走世界三线协议发布。
