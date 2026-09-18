@@ -67,12 +67,26 @@
 │   │     → 已有服务器容器部署：远程 ops（ssh + docker exec），必要时升级镜像 tag
 │   └─ B2. 进程是裸机 node（无容器包裹）
 │         → 已有服务器裸机部署：远程 ops（ssh 直执，等价现有 ops 平移）
+│         → 接管前提：完整恢复"怎么被拉起的"（见裸机 Node 纪律）——systemd unit / pm2 /
+│           tmux-screen / nohup 逐级判定，重启必须走同一拉起方式，绝不裸 kill
 ├─ C. 目标机有 docker 但无容器
 │     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待
 │       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、玩家 join 链接
 └─ D. 目标机无 docker
-      → 先装 docker（cn 用阿里云镜像源装 docker-ce；装不上再回退裸机安装路径）
+      → 先装 docker（cn 用阿里云镜像源装 docker-ce）；确实装不上（内核过老/受限容器环境）
+        → 裸机兜底安装：我们钉版 Node 22.23.2 + arcane-foundry.service（见裸机 Node 纪律）
+        → 与 B2 同构，之后运维路径合一
 ```
+
+### 裸机 Node 纪律（B2 接管与 D 兜底共用）
+
+本机铁律"绝不回退系统 Node、钉死 22.23.2"（`fvtt-ops-runtime.mjs`）平移到服务器裸机场景，但接管已有部署时**先适配后治理**：
+
+1. **接管时（B2）按现状运维**：用户裸装的 FVTT 跑在什么 Node 上（apt 的 18、nvm 的 20、官方 tarball…都见过）不影响启停/日志/探测类操作——这类 ops 不重启进程，零风险。**不擅自换运行时**。
+2. **完整恢复启动上下文**（接管第一步，全部可从 /proc 探测，不问用户）：`/proc/<PID>/cmdline`（node 路径 + 参数 + `--dataPath`）、`/proc/<PID>/cwd`（相对路径基准）、`/proc/<PID>/exe --version`（实际 Node 版本）、拉起方式判定 systemd → pm2 → tmux/screen → nohup 逐级查。**重启必须用同一拉起方式**（systemctl restart / pm2 restart / tmux 发键 / 同 cwd 同环境变量重跑）——mod 安装的"停服一次"依赖这条。
+3. **Node 版本漂移报告**：探测到的 Node ≠ 22.x（本机基线 22.23.2）→ 归入问点③（版本漂移），话术："你的 Foundry 现在跑在 Node 18 上，我们验证过的组合是 22.23.2；要不要我给服务器装一套我们钉版的 Node 并切换过去？"（治理选项见 4，不强制。）
+4. **治理 = 服务器侧钉版运行时**（用户同意后）：`nodejs.org/dist/v22.23.2/node-v22.23.2-linux-<arch>.tar.gz` 下载解压到 `/opt/arcane/runtime/node/22.23.2/`，SHA256 校验（**需给 `community-distribution.json` 补 linux-x64/arm64 两个条目**——现有四平台是桌面系的 win/mac，服务器裸机路径用不上）；停服 → 切 `arcane-foundry.service`（我们创建的 unit，ExecStart 指向钉版 node，`--dataPath` 沿用原数据目录）→ `/api/status` 验证 → 原拉起方式留作回滚。
+5. **全新裸机（D 兜底）**：直接按 4 的布局装——钉版 Node + `arcane-foundry.service` + 安装目录/数据目录分离（镜像卷布局的同构物），不出现"系统 Node"这个变量。
 
 ### 连入后的探测序列（全部只读、零写入、秒级）
 
@@ -81,7 +95,7 @@
 | # | 探测（SSH 在目标机上执行） | 判定什么 |
 |---|---|---|
 | P1 | `curl -sS -m 3 http://127.0.0.1:30000/api/status`（**loopback**，不受安全组影响） | FVTT 是否在跑；JSON 直接给 `version/world/systemVersion`（与本机 QA 同款判据） |
-| P2 | `ss -tlnp \| grep -w 30000` + `ps -eo args \| grep 'main.js --dataPath'` | 监听进程的**安装目录、数据目录、--world**——进程命令行直接暴露，这是 B2 裸机远程运维的关键输入 |
+| P2 | `ss -tlnp \| grep -w 30000` + `ps -eo args \| grep 'main.js --dataPath'` + `/proc/<PID>/{cmdline,cwd,exe}`（exe 加 `--version`） | 监听进程的**安装目录、数据目录、--world、工作目录、实际 Node 版本**——命令行与 /proc 全暴露，这是 B2 裸机远程运维的关键输入（拉起方式判定见"裸机 Node 纪律"） |
 | P3 | `docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}'` | B1（容器在跑/停着）还是别人的容器（felddy 等非 arcane 镜像）；arcane 容器可再认 `docker inspect` 的 compose 标签与 `/arcane` 路径 |
 | P4 | `systemctl list-unit-files \| grep -iE 'foundry\|fvtt'` + `systemctl cat <unit>` | 裸机装了 systemd 服务但停着（unit 文件里 ExecStart 同样暴露 `--dataPath`） |
 | P5 | `find /root /home /opt /srv -maxdepth 4 \( -name options.json -path '*/Config/*' \) -o -name main.js 2>/dev/null`（有界深度） | 没进程也没服务时的**已安装未运行**痕迹：`Config/options.json` 是数据目录铁标记，main.js 是安装目录标记 |
@@ -99,7 +113,7 @@
 
 1. 发现别人的 FVTT 容器：接管 or 迁移到 arcane 镜像？
 2. 发现已安装但停着：帮你启动它？
-3. 在跑但版本不是 13.351/5.3.3：现在升级对齐，还是先这样用？
+3. 版本漂移（FVTT≠13.351 / dnd5e≠5.3.3 / 裸机 Node≠22.x）：现在升级对齐，还是先这样用？Node 漂移的治理动作见"裸机 Node 纪律"第 4 条。
 
 对用户的汇报口径（小白话术，探测完一段说完）：
 
