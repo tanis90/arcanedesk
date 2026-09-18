@@ -1,5 +1,5 @@
 {
-  "comment": "provider 预设 + 模型视觉能力表。exact 是实测/官方文档确认的(2026-08-19 阿里云 Token Plan 用 scripts/probe-vision.mjs 实测;同日 Kimi 编程套餐 4 个短 id(k3/k3-256k/kimi-for-coding/-highspeed,来自 api.kimi.com/coding/v1 端点)与 gemini-3.7-flash 用 scripts/probe-provider-vision.mjs 实测;其余来自各家官方文档);patterns 是兜底启发式,命不中默认 false(保守,用户可在表单里手动改)。coding plan 套餐端点与按量端点是不同地址,别混。注意 kimi 短 id 只有 exact 兜底,patterns 里的 ^kimi-k* 前缀规则匹配不到它们。",
+  "comment": "provider 预设 + 模型视觉能力表。exact 是实测/官方文档确认的(2026-08-19 阿里云 Token Plan 用 scripts/probe-vision.mjs 实测;同日 Kimi 编程套餐 4 个短 id(k3/k3-256k/kimi-for-coding/-highspeed,来自 api.kimi.com/coding/v1 端点)与 gemini-3.7-flash 用 scripts/probe-provider-vision.mjs 实测;其余来自各家官方文档);patterns 是兜底启发式,命不中默认 false(保守,用户可在表单里手动改)。coding plan 套餐端点与按量端点是不同地址,别混。注意 kimi 短 id 只有 exact 兜底,patterns 里的 ^kimi-k* 前缀规则匹配不到它们。intern-inkstone(discovery-api.intern-ai.org.cn)的 10 个模型 2026-09-18 纯红 16x16 图实测:qwen3.8-27b/intern-s2/Agents-A1/deepseek-v4-flash-vision 答对颜色,glm-5.3/minimax-m3/Atria-Dawn-Preview/deepseek-v4-pro-0813 不能看图;该网关对 non-vision 模型会把图片替换成 attachment-omitted 文本注释,模型推理里自述看不见,可作下次探测的判据。",
   "providers": [
     {
       "id": "alibaba-token-plan",
@@ -153,6 +153,14 @@
       "api": "openai-completions",
       "baseUrl": "https://agentrouter.org/v1",
       "models": ["gpt-5.6-sol", "gpt-5.5"]
+    },
+    {
+      "id": "intern-inkstone",
+      "name": "书生·发现平台 InkStone",
+      "nameEn": "Intern InkStone (Discovery)",
+      "api": "openai-completions",
+      "baseUrl": "https://discovery-api.intern-ai.org.cn/v1",
+      "models": ["Agents-A1", "Atria-Dawn-Preview", "deepseek-v4-flash-0731", "deepseek-v4-flash-vision", "deepseek-v4-pro-0813", "glm-5.3", "intern-s2", "kimi-k2.6", "minimax-m3", "qwen3.8-27b"]
     }
   ],
   "vision": {
@@ -173,6 +181,14 @@
       "deepseek-v4-flash-0731": false,
       "deepseek-chat": false,
       "deepseek-reasoner": false,
+      "deepseek-v4-flash-vision": true,
+      "deepseek-v4-pro-0813": false,
+      "glm-5.3": false,
+      "intern-s2": true,
+      "agents-a1": true,
+      "atria-dawn-preview": false,
+      "minimax-m3": false,
+      "qwen3.8-27b": true,
       "kimi-k2.6": true,
       "kimi-k3": true,
       "doubao-seed-2-1-pro": true,
