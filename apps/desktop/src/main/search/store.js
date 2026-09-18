@@ -72,22 +72,19 @@ export class SearchStore {
       const rawBaseUrl = String(parsed.customBaseUrl ?? "").trim();
       const endpoint = validateProviderBaseUrl(rawBaseUrl);
       return {
-        mode: MODES.has(parsed.mode) ? parsed.mode : "off",
+        mode: MODES.has(parsed.mode) ? parsed.mode : "spark",
         byokBackend: BYOK_BACKENDS.has(parsed.byokBackend) ? parsed.byokBackend : "zai",
         customBaseUrl: endpoint.ok ? endpoint.baseUrl : "",
-        consent: parsed.consent && typeof parsed.consent === "object"
-          ? { target: String(parsed.consent.target ?? ""), at: Number(parsed.consent.at) || 0 }
-          : null,
         apiKey,
         ...(apiKey && credentialTarget ? { credentialTarget } : {}),
       };
     } catch {
-      // 新用户默认关闭：未配置时工具不注册，不产生任何搜索请求。
+      // 新用户默认 spark：有 Spark 凭据即可用，没有时 usable() 为 false——
+      // 工具不注册、零请求；自己填 Key 的 byok/custom 始终要显式选择+保存。
       return {
-        mode: "off",
+        mode: "spark",
         byokBackend: "zai",
         customBaseUrl: "",
-        consent: null,
         apiKey: "",
       };
     }
@@ -96,34 +93,10 @@ export class SearchStore {
   save() {
     const { apiKey, credentialTarget, ...configuration } = this.data;
     writeFileSync(this.filePath, JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       ...configuration,
       apiKeyProtected: this.secretStorage.protect(encodeBoundCredential(apiKey, credentialTarget)),
     }, null, 2));
-  }
-
-  /** 本次搜索实际接收方（spark = Arcane Spark provider 的 {apiKey,baseUrl} 或 null）。 */
-  #ownTarget() {
-    const base = effectiveBaseUrl(this.data, this.defaults);
-    return base ? consentTargetForBaseUrl(base) : "";
-  }
-
-  /** 当前配置的 consent 是否覆盖本次接收方；spark 模式 target 跟随 Spark 端点。 */
-  consentTarget(spark = null) {
-    if (this.data.mode === "spark") {
-      return spark?.baseUrl ? consentTargetForBaseUrl(spark.baseUrl) : "";
-    }
-    return this.#ownTarget();
-  }
-
-  consentSatisfied(spark = null) {
-    const target = this.consentTarget(spark);
-    return Boolean(target && this.data.consent?.target === target);
-  }
-
-  recordConsent(target) {
-    this.data.consent = { target: String(target ?? ""), at: Date.now() };
-    this.save();
   }
 
   /** 掩码视图（renderer 唯一可见形态）。 */
@@ -138,8 +111,6 @@ export class SearchStore {
       hasKey: Boolean(resolved.apiKey),
       keySource: followsSpark && resolved.apiKey ? "arcane-spark" : "search",
       sparkHasKey: Boolean(spark?.apiKey),
-      consentSatisfied: this.consentSatisfied(spark),
-      consentTarget: this.consentTarget(spark),
       defaults: { zaiBaseUrl: this.defaults.zaiBaseUrl, zaiSearchEngine: this.defaults.zaiSearchEngine },
     };
   }
@@ -181,7 +152,6 @@ export class SearchStore {
       mode,
       byokBackend,
       customBaseUrl: mode === "custom" ? endpoint.baseUrl : "",
-      consent: this.data.consent,
       apiKey,
       ...(credentialTarget ? { credentialTarget } : {}),
     };

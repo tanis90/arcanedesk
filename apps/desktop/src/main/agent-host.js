@@ -170,8 +170,6 @@ function modelGuidance(error) {
   switch (error.code) {
     case "budgetExhausted":
       return `Web search budget for this turn is exhausted (${error.meta?.used ?? "?"} searches used). Answer from the results you already collected, or ask the user to send a new message.`;
-    case "consentRequired":
-      return "Web search is awaiting the user's first-use confirmation (Arcane Desk settings → 联网搜索). Tell the user to confirm it there; meanwhile continue with local knowledge.";
     case "notConfigured":
       return "Web search is not configured. Ask the user to enable it in Arcane Desk settings (联网搜索).";
     case "quotaExceeded":
@@ -1249,7 +1247,7 @@ export class AgentHost {
       },
     });
 
-    // 联网搜索:仅 prep 激活(foundry-tool-policy),未配置 consent/key 时 execute
+    // 联网搜索:仅 prep 激活(foundry-tool-policy),未配置/缺凭据时 execute
     // 返回可恢复的结构化指引(isError),不 throw 打断 agent。
     const sparkForSearch = host.searchDeps?.spark ? host.searchDeps.spark() : null;
     const webSearch = host.searchDeps && host.searchDeps.store.usable(sparkForSearch) ? defineTool({

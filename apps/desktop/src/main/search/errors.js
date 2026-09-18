@@ -12,7 +12,6 @@ const IPC_KEYS = {
   timeout: "err.search.timeout",
   cancelled: "err.search.cancelled",
   budgetExhausted: "err.search.budgetExhausted",
-  consentRequired: "err.search.consentRequired",
   empty: "err.search.empty",
   notConfigured: "err.search.notConfigured",
   badRequest: "err.search.badRequest",

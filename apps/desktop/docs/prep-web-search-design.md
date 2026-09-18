@@ -8,8 +8,8 @@
 
 ```text
 ┌ renderer (chat.js / index.html) ────────────┐   ┌ main process ──────────────────────────┐
-│ 设置页 pane-search（ss.* 文案）              │   │ main.js                                  │
-│ consent 弹窗  web_search 工具卡片  用量行    │◄──┤ ipcMain: search:get/save-config          │
+│ 设置页 pane-search（探知珠状态行 + 模式卡）  │   │ main.js                                  │
+│ web_search 工具卡片  用量行                  │◄──┤ ipcMain: search:get/save-config          │
 └──────────────┬─────────────────────────────┘   │   │            sendToRenderer: search_usage │
                │ trusted IPC（结构化错误）        │   ▼                                         │
                │                                 │ agent-host.js buildTools()                │
@@ -50,7 +50,7 @@ src/main/search/
 
 | VoiceStore 语义 | SearchStore 对应 |
 | --- | --- |
-| `userData/config/voice.json` + `schemaVersion` | `userData/config/search.json` + `schemaVersion: 1` |
+| `userData/config/voice.json` + `schemaVersion` | `userData/config/search.json` + `schemaVersion: 2` |
 | `secretStorage.protect(encodeBoundCredential(key, target))` | 同一套（`secret-storage.js` + `bound-credential.js` 原样复用） |
 | provider = `zhipu` / `arcane-relay` | mode = `off` / `spark` / `byok` / `custom` |
 | relay 留空 key 跟随 Spark | `spark` 模式不存 key，运行时取 Spark provider 凭据（`resolveRelayCredentials` 同思路） |
@@ -58,22 +58,22 @@ src/main/search/
 | `update()` 掩码复用 / `KEY_REENTRY_REQUIRED` / 换服务商弃 key | 逐条照搬（换 backend 或换 custom endpoint 视同换 target，要求重输 key） |
 | `usable(spark)` 守卫 | `usable(spark)`：mode≠off 且凭据齐备，才注册工具 |
 
-新增字段：
+新增字段（schema v2；v1 的 `consent` 字段已废弃，加载时忽略）：
 
 ```jsonc
 {
-  "mode": "off",            // off | spark | byok | custom
+  "mode": "spark",          // off | spark | byok | custom;新用户默认 spark(有 Spark 凭据即用,
+                            // 没有时 usable()=false,工具不注册、零请求);byok/custom 始终显式选择
   "byokBackend": "zai",     // zai | brave（mode=byok 时有效）
   "customBaseUrl": "",      // mode=custom 时的兼容端点（HTTPS/loopback 校验同 voice）
-  "consent": { "target": "origin:https://api.bigmodel.cn", "at": 0, "schema": 1 }
   // apiKey/apiKeyProtected/credentialTarget 同 voice 的存储方式
 }
 ```
 
-**consent 规则**：每次发起搜索前比较"本次实际接收方 target"（backend+endpoint 推导出的
-credential target）与 `consent.target`，不一致视为未确认——在工具 execute 里返回结构化
-`err.search.consentRequired`，renderer 收到后弹确认框，确认后写入新 target。这样"换后端/
-换 endpoint 需重新确认"不需要独立状态机，复用 credential-target 判定。
+**启用即知情，没有 consent 流程**：打开搜索 = 用户知道查询关键词会发给配置的接收方。
+披露收敛为设置页一行静态说明（`ss.note.privacy`：仅发送检索关键词、结果存本地会话）；
+"换后端/换 endpoint"靠既有的 credential-target 绑定与 KEY_REENTRY_REQUIRED 约束，
+不再叠加确认弹窗。
 
 ### 2.2 budget.js（run 级防护）
 
@@ -112,7 +112,7 @@ const webSearch = defineTool({
   （`agent-host.js:1272`）。主进程构造 prep host 时把 `"web_search"` 加入
   `main.js:771` 的 prep allowlist 数组；combat profile 不加即天然不注册。未配置
   （`store.usable() === false`）时即使 allowlist 包含也不注册——构建工具列表时查一次。
-- execute 流程：参数清洗 → budget 检查（去重/计数）→ consent 校验 → 取凭据 →
+- execute 流程：参数清洗 → budget 检查（去重/计数）→ 取凭据 →
   adapter 调用（`AbortSignal.timeout(15s)` + 透传 `signal` 支持取消）→ normalize →
   截断（snippet 500 字符 / toolResult 8KB）→ 组装统一结构 → `host.emit({ type:
   "search_usage", used, backend, runKey })` → `textResult(json)`。
@@ -168,9 +168,8 @@ quota_exceeded(429), timeout, cancelled, empty}`，上抛为 `I18nError("err.sea
 
 | Channel | 方向 | 入参 → 出参 |
 | --- | --- | --- |
-| `search:get-config` | renderer→main | `→ searchStore.toPublic(spark)`（掩码视图 + mode/backend/consent 状态 + 当前 provider 可复用检测结果） |
-| `search:save-config` | renderer→main | `input → searchStore.update(input, spark)`；返回 `{ok}` 或 `err()`；保存成功但 consent 不匹配时返回 `{ok, consentRequired: true}` 触发弹窗 |
-| `search:confirm-consent` | renderer→main | `{target} → {ok}`（写入 consent） |
+| `search:get-config` | renderer→main | `→ searchStore.toPublic(spark)`（掩码视图 + mode/backend/key 状态 + sparkHasKey） |
+| `search:save-config` | renderer→main | `input → searchStore.update(input, spark)`；返回 `{ok}` 或 `err()`（如 KEY_REENTRY_REQUIRED） |
 | renderer 事件 `search_usage` | main→renderer | `{used, backend, runKey, mode, sessionId}`（host.emit 通道） |
 
 错误 key 前缀 `err.search.*`，UI 文案 key 前缀 `ss.*`，两语言同步进
@@ -178,13 +177,15 @@ quota_exceeded(429), timeout, cancelled, empty}`，上抛为 `I18nError("err.sea
 
 ## 5. Renderer 变更
 
-1. **`index.html`**：settings tabs 增加「联网搜索」按钮与 `pane-search`，DOM 结构照
-   `pane-voice`（radio 组 + `pf-row` 表单 + 检测提示行 + 掩码输入），全部 `data-i18n`。
+1. **`index.html`**：settings tabs 增加「联网搜索」按钮与 `pane-search`：探知珠状态行
+   （`data-state=off|ready|needs-key`，就绪时金色同心涟漪，respects reduced-motion）+
+   四张模式卡（radiogroup，选卡即保存，无总保存按钮）+ 自带 Key 模式的凭据细节区
+   （backend/endpoint/key + 「保存凭据」），全部 `data-i18n`。
 2. **`chat.js`**：
    - tab 注册进现有 `settings:*` 切换逻辑（`chat.js:2813` 一带的 tab 数组）；
-   - 表单读写与 voice 相同的掩码语义（提交 `••••` 前缀 = 保持原值）；
-   - consent 弹窗：独立轻量 modal（参照 telemetry-consent 的样式与确认流），文案
-     `ss.consent.*` 按 mode/backend 动态拼接收方与币种；
+   - 凭据读写与 voice 相同的掩码语义（提交 `••••` 前缀 = 保持原值）；
+   - 模式卡点击即时 `saveSearchConfig({mode})`；状态行按 mode + sparkHasKey/hasKey
+     派生（`ss.state.*`）；缺 Spark 凭据时给「去模型页配置」动作（`openProviderSettings`）；
    - 工具卡片：`ensureToolCard/finishToolCard`（`chat.js:884/926`）已按 toolName 分发
      摘要，为 `web_search` 增加：标题行 `🔎 "query" · N 条结果 · 耗时 · backend`，折叠
      态默认，展开渲染 `details.sources` 列表（title 链接 + publishedAt），`meta.warnings`
@@ -226,7 +227,6 @@ model tool_call(query)
   → pi session → web_search.execute(params, signal)
     → budget: 归一化 key 命中缓存? ──是──► 返回缓存 toolResult (meta.cached)
     → budget: count++, ≥6 附加提示 / >10 返回 err.search.budgetExhausted
-    → consent target 校验（不匹配 → err.search.consentRequired）
     → store.credentialForUse(spark) → {apiKey, baseUrl, adapter}
     → adapter.search(...)  fetch + AbortSignal.timeout(15s) + signal
     → normalize → 截断(500/8KB) → capabilities.warnings
@@ -240,8 +240,8 @@ model tool_call(query)
   覆盖 zai/brave/spark/custom 的字段映射、空结果、429/503/超时/取消、headers 断言。
 - **budget 单测**：去重命中不计次、软提示从第 6 次出现、第 11 次硬断、run 重置、
   并发调用下计数原子性（Promise.all 场景）。
-- **store 单测**：掩码复用、KEY_REENTRY_REQUIRED、换 backend 弃 key、consent target
-  变化、safeStorage 不可用降级（照 voice-store 现有测试）。
+- **store 单测**：掩码复用、KEY_REENTRY_REQUIRED、换 backend 弃 key、新用户默认 spark
+  （无凭据零请求）、schema v2 不再持久化 consent、safeStorage 不可用降级（照 voice-store 现有测试）。
 - **集成**（mock fetch + 假 AgentHost）：prep allowlist 注册/未注册两态、事件到 renderer
   的 payload 形状、8KB 截断后 JSONL 可恢复。
 - **手工验收**：对齐 PRD §11 七条。
@@ -253,7 +253,7 @@ model tool_call(query)
 2. prep allowlist 临时加 `web_search`，跑真实 query 评测脚本（50–100 条，两网络环境）。
 
 **P1（首发）**
-1. `adapters/{spark,custom}.js`；renderer：pane-search、consent、卡片、用量行、ss.* 双语；
+1. `adapters/{spark,custom}.js`；renderer：pane-search（探知珠 + 模式卡 + 凭据区）、卡片、用量行、ss.* 双语；
 2. `search:*` IPC + trusted 守卫 + `err.search.*` 全量；THIRD_PARTY_NOTICES 与文件头出处；
 3. intl overlay 注入 zai 默认端点；Spark 服务端 `/v1/search` 上线联调；
 4. 集成测试 + 手工验收（PRD §11）。
@@ -282,6 +282,7 @@ model tool_call(query)
 | M3 | ops `226fe72` + 桌面 `87c19c3` | arcane-spark-edge `POST /v1/search`（z-ai 上游、双闸门计量、deductSearch）；桌面 zai adapter 对齐 bigmodel 文档 |
 | M4 | `f6bac45` | 设置页 tab、consent 弹窗、工具卡片、用量 chip、ss.*/err.search.* 双语 |
 | M5 | 本次 | prep system prompt 增量；Spark 链路本地 e2e（真 HTTP + 真 fetch，fixture 与 worker 输出逐字段一致）；全套 650/650 |
+| M6 | 本次 | 拆除 consent 流程（execute 闸、IPC、弹窗、事件、schema v2）；新用户默认 spark；设置页重设计为「探知珠状态行 + 模式卡选卡即保存」 |
 
 测试基线：desktop `npm test` 650/650、`tsc --noEmit` 干净；ops `services/arcane-spark-edge` `node --test test/*.test.mjs` 25/25。
 
@@ -298,8 +299,8 @@ model tool_call(query)
 
 ### 手工验收（对齐 PRD §11）
 
-- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费/第 6 次软提示/第 11 次硬断、429/402 文案 key、8KB 截断、consent 前零外发、双语占位符一致、en-US 布局待人工过一遍。
-- 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、consent 弹窗视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
+- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费/第 6 次软提示/第 11 次硬断、429/402 文案 key、8KB 截断、默认 spark 无凭据零外发（M6 测试）、双语占位符一致、en-US 布局待人工过一遍。
+- 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、设置页探知珠视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
 
 ### 实测已知怪癖（2026-09-18 真实流量）
 

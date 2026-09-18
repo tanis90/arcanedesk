@@ -1,7 +1,7 @@
 // search-e2e-spark.test.mjs — Spark 链路端到端(本地真 HTTP + 真 fetch):
 // 桌面 spark adapter ⇄ Arcane /v1/search 契约,fixture 与 arcane-spark-edge
 // transformSearchResponse 的输出逐字段一致(ops services/arcane-spark-edge)。
-// 验证:URL 归一化(/v1 追加)、Bearer 头、请求体形状、响应解析、budget/consent
+// 验证:URL 归一化(/v1 追加)、Bearer 头、请求体形状、响应解析、budget/去重缓存
 // 全链路。不碰网络(spark cred 指向 127.0.0.1,store 不校验 spark 端点)。
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -44,18 +44,9 @@ test("desktop spark adapter speaks the arcane-spark-edge /v1/search contract end
     const store = new SearchStore(join(dir, "search.json"), () => {}, testSecretStorage());
     const spark = { apiKey: "sk-spark-e2e", baseUrl: `http://127.0.0.1:${port}/v1` };
     store.update({ mode: "spark" }, spark);
-    assert.equal(store.consentTarget(spark), `origin:http://127.0.0.1:${port}`);
 
-    // consent 前:零外发。
     const budget = new SearchBudget();
     budget.reset("run");
-    await assert.rejects(
-      executeSearch({ query: "foundry v13 dnd5e" }, { store, spark, budget, runKey: "run" }),
-      (error) => error.code === "consentRequired",
-    );
-    assert.equal(received.length, 0);
-
-    store.recordConsent(`origin:http://127.0.0.1:${port}`);
     const first = await executeSearch(
       { query: "foundry v13 dnd5e", count: 5, freshness: "month", domains: ["foundryvtt.com"] },
       { store, spark, budget, runKey: "run" },
