@@ -76,6 +76,24 @@
 
 探测手段与现有 ops 对齐：`curl http://<host>:30000/api/status`（返回 `version/world/systemVersion`）、端口进程定位、数据目录列举。SSH 凭证走用户本机 ssh-agent / 密钥，skill 永不存储密码。
 
+### 目标接入：统一 SSH，不感知云厂商
+
+**不做任何云厂商集成**：不调 ECS/OpenAPI、不在 desktop 里存云 AccessKey、不按厂商分支。阿里云、腾讯云、华为云、AWS、甲骨文、自有 NAS、公司内网机——只要是个能 SSH 的 Linux，走完全相同的路径。厂商差异在 SSH 会话内收敛为三个现场探测，而不是三套代码：
+
+| 差异点 | 处理（SSH 会话内探测，每次部署现测） |
+|---|---|
+| 发行版/包管理器 | `cat /etc/os-release` → apt/yum 分支，决定 docker-ce 安装命令（国内网络用阿里云 docker-ce 镜像源） |
+| 网络位置 | 对候选源做 HEAD 连通性/延迟探测（docker 安装源：mirrors.aliyun.com vs download.docker.com），选可达源 |
+| 防火墙/安全组 | 唯一出现"云知识"的地方，且只是**诊断文案**：health check 不通且 30000 未对外时提示"若服务器在阿里云/腾讯云等，需在控制台安全组放行 30000/TCP"——绝不自动开端口 |
+
+**下载源选择跟 app 的 region flavor，不跟服务器物理位置**：cn 包（不管服务器在哪家云）一律 OSS 北京、intl 包一律 R2——与 mod 索引同源同纪律（`region.mjs` 单一事实源，业务代码零 if）。边缘情况（cn 包用户买海外 VPS，访问 OSS 稍慢）v1 接受；若实测成痛点，再加"双源 HEAD 探测选快者"的 fallback，属小改。
+
+SSH 凭证纪律（平移现有 ops 安全纪律）：
+
+- 用系统 `ssh`（Windows 10+ 自带 OpenSSH client）+ `~/.ssh/config` 别名 + ssh-agent；skill 只持有目标别名，永不存储密码/私钥、永不改 known_hosts。
+- 首次连接的 host key 确认由用户完成，skill **不自动 accept**——部署会话遇到新 fingerprint 时展示给用户核对后再继续。
+- 目标机范围：v1 仅 Linux（x64/arm64，覆盖全部主流云）。本机 Docker Desktop（Windows/macOS）作为 local target 扩展列 M4 可选。
+
 ## 4. 镜像与编排设计
 
 ### Dockerfile 骨架（放在 `apps/desktop/distribution/server-image/`）
