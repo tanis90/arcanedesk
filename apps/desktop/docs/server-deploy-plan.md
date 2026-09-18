@@ -286,6 +286,12 @@ intl R2 arcane-desk-intl（dl.arcanedesk.app）:
 3. `docker load` → `docker inspect` 断言 image ID 与清单一致 → `docker compose up -d`。
 4. 升级后清理旧 tag 镜像（`docker image rm` 旧 revision，skill 负责），避免磁盘堆积。
 
+**下载路径纪律：mirror 制品一律在目标机上下载**（skill 经 SSH 下发 curl/wget，容器内 mod-manager 同理从容器内拉镜像索引），ArcaneDesk 客户端只承担 skill 执行与 SSH 控制通道，不经用户电脑中转、不在客户端落盘。三个边界：
+
+- **同区域加速（cn）**：目标机是阿里云 ECS 且与桶同区域时，经元数据服务（`100.100.100.200`）取 region 探测，切 **OSS 内网 endpoint**（`arcane-package.oss-cn-beijing-internal.aliyuncs.com`）——免公网流量费且更快；探测不到/跨区域/非阿里云机器用公网 endpoint。两个 endpoint 是同一对象，SHA256 校验不变。
+- **极端兜底（显式分支，非默认）**：目标机出网被完全限制（罕见）→ 唯一允许经客户端中转的场景：客户端下载后 `rsync/scp` 上服务器，**落盘后仍在服务器侧验 SHA256**。
+- **例外——用户自供的 Foundry zip**：它本来就在用户手里（或由用户提供限时 URL），`scp` 上服务器或服务器 curl 限时 URL；mirror 制品不走这条路。
+
 为什么这条链是安全的：registry pull 的信任来自 registry 域名 + manifest 签名；tarball 链的信任来自**我们自己索引钉死的 SHA256 + image ID 双断言**——与我们分发 dnd5e zip（107MB）、desktop 安装包完全同一信任模型，甚至比匿名 `docker pull` 更强。未来若用户明确要 `docker pull` 体验，加一条 CI 步骤推 Docker Hub 即可（intl 受益），不影响本通道。
 
 docker 本体的安装在探测 D 分支处理（cn 用阿里云源装 docker-ce）；用户侧零 registry 概念、零加速器配置——"arcane mirror 是唯一第一方镜像"纪律保持完整。
