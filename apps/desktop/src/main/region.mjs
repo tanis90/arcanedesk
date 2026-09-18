@@ -21,6 +21,9 @@ const REGION_DEFAULTS = Object.freeze({
     websiteUrl: "https://arcanedesk.bitterbebop.cn",
     telemetryEndpoint: "https://api.arcanedesk.bitterbebop.cn",
     sparkBaseUrl: "https://llm.arcanedesk.bitterbebop.cn/v1",
+    // 联网搜索 BYOK 智谱默认端点（PRD prep-web-search §9.4）：国内 bigmodel。
+    searchZaiBaseUrl: "https://open.bigmodel.cn/api/paas/v4/web_search",
+    searchZaiEngine: "search_pro",
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
@@ -36,6 +39,9 @@ const REGION_DEFAULTS = Object.freeze({
     websiteUrl: "https://arcanedesk.app/en",
     telemetryEndpoint: "https://api.arcanedesk.app",
     sparkBaseUrl: "https://llm.arcanedesk.app/v1",
+    // 国际包默认智谱海外站（api.z.ai），与国内 bigmodel 同一线格式。
+    searchZaiBaseUrl: "https://api.z.ai/api/paas/v4/web_search",
+    searchZaiEngine: "search-prime",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
     bundledSkillsDir: "generated/skills-intl/prep",
@@ -55,6 +61,8 @@ const REGION_ENV_KEYS = Object.freeze({
   websiteUrl: "ARCANE_WEBSITE_URL",
   telemetryEndpoint: "ARCANE_TELEMETRY_ENDPOINT",
   sparkBaseUrl: "ARCANE_SPARK_BASE_URL",
+  searchZaiBaseUrl: "ARCANE_SEARCH_ZAI_BASE_URL",
+  searchZaiEngine: "ARCANE_SEARCH_ZAI_ENGINE",
   skillsUpdateBaseUrl: "ARCANE_SKILLS_UPDATE_BASE_URL",
   modIndexUrl: "ARCANE_MOD_INDEX_URL",
 });
