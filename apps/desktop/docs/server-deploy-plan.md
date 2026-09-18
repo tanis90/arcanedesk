@@ -74,9 +74,37 @@
 │     → 用户没选 → Docker 部署（默认轨道）：装 compose → 拉镜像 → up → 健康等待
 │       → 建 world 用户 + 设默认密码 → 交付：服务器 URL、GM 初始凭据、玩家 join 链接
 └─ D. 目标机无 docker
-      → 先装 docker（cn 用阿里云镜像源装 docker-ce）；确实装不上（内核过老/受限容器环境）
-        → 裸机兜底安装：我们钉版 Node 22.23.2 + arcane-foundry.service（见裸机 Node 纪律）
-        → 与 B2 同构，之后运维路径合一
+      → 装 docker：装前预检 + 四层降级（见"Docker 安装保障"）
+      → 仍装不上（内核过老/OpenVZ/无 root）→ 二选一：裸机兜底安装（钉版 Node +
+        arcane-foundry.service，见裸机 Node 纪律）或建议控制台换 Ubuntu 22.04/24.04
+        镜像重装（C/D 分支机器 P1-P5 全空=无任何数据，重装零损失，往往比硬装更快）
+```
+
+### Docker 安装保障（预检 → 四层降级 → 免拉取验证）
+
+不追求"保证装上"，追求三件事：**装前把不可装的情形快速识别**（fail fast，不瞎折腾）、**安装路径四层降级**（上层失败自动落下一层）、**验证与运行全程不依赖 registry 拉取**（cn 没有 hello-world 可拉）。
+
+**装前预检**（P6/P7 之上的可装性判定，全部只读）：
+
+| 检查 | 判定 |
+|---|---|
+| `os-release` 发行版/版本 | 支持矩阵：Ubuntu 20.04+ / Debian 11+ / Alibaba Cloud Linux 2/3 / Rocky / Alma 8+ / Anolis / openEuler（apt 或 yum 系均可）；不认识 → 直接跳兜底 |
+| `uname -r` 内核 | ≥4.x 最好；3.10（CentOS 7 系）只能装旧版 docker-ce，标记受限 |
+| `uname -m` 架构 | x86_64 / aarch64；其余 → 兜底 |
+| `systemd-detect-virt` | kvm/xen/hyperv/vmware/`none`（物理机）→ OK；**openvz/lxc → 高危**（无独立内核，docker 大概率起不来，直接走兜底话术） |
+| `/proc/filesystems` 有 overlay、`/sys/fs/cgroup` 存在 | 存储与 cgroup 前提 |
+| `sudo -n true` / root | 无特权 → 兜底或换机 |
+| `df /var/lib` | ≥10G |
+| `rpm -qa`/`dpkg -l` 残留 docker 包 | 有半装残留 → 先清理修复再装，避免配置打架 |
+
+**四层降级**（逐层尝试，失败自动落层，全程向用户只报"正在装 Docker，用方式 N"）：
+
+1. **docker-ce 官方仓库**：cn 走 `mirrors.aliyun.com/docker-ce`（apt/yum 源），intl 走 download.docker.com——最标准，但依赖外部源可达。
+2. **发行版自带包**：Ubuntu/Debian 的 `docker.io`、Alibaba Cloud Linux 的 `docker`——来自发行版自己的源，外部依赖最少。我们的用法只有 `docker load` + `run`，不需要最新版。
+3. **静态二进制自管**：`docker-<ver>.tgz` 静态包解压 `/usr/local/bin` + 自写 systemd unit——不挑发行版（内核合格即可）。**该包与 compose 二进制（均为 Apache-2.0，可自由再分发）一并钉版镜像进我们 OSS 的 server 目录**，与镜像 tarball 同一供应链——第三层零外部依赖，这是"arcane mirror 是唯一第一方镜像"纪律的自然延伸。
+4. **裸机兜底 / 换镜像**：内核过老的 OpenVZ VPS、受限容器环境、无 root——装不上就不硬装（裸机纪律或建议重装系统）。
+
+**装后验证（免 pull）**：`docker info` 正常 → `docker load` 我们的镜像 tarball → `docker run --rm <镜像> node --version` 断言 22.23.2（**我们自己的镜像就是 hello-world**）→ `compose up` → healthcheck。整条链不出现 `docker pull`。
 ```
 
 ### 冲突处理：迁移 / 新起一套（Docker 的灵活性）
@@ -224,6 +252,8 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 cn  OSS arcane-package:
   desktop/arcane-desk/server/<revision>/arcane-fvtt-<tag>.tar.gz   # 不可变
   desktop/arcane-desk/server/<revision>/{server-release.json, docker-compose.yml, README.md}
+  desktop/arcane-desk/server/<revision>/runtime/docker-<ver>-<arch>.tgz        # docker 静态包（Apache-2.0，可再分发）
+  desktop/arcane-desk/server/<revision>/runtime/docker-compose-<ver>-<arch>    # compose 二进制
   desktop/arcane-desk/server/latest.json                            # 唯一可变指针
 intl R2 arcane-desk-intl（dl.arcanedesk.app）:
   desktop/arcane-desk-intl/server/...（同构）
@@ -277,7 +307,8 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 1. 检查配方 revision 递增（照 skills-publish 纪律）。
 2. 构建：单源复制 mod-manager（来自 skills 树）→ docker build → 本地起容器冒烟（挂测试 zip、假索引、断言 `/api/status`）。
 3. `docker save | gzip` 出 tar.gz（**sizeGate：>300MB 直接失败**），记录 SHA256 与 image ID，生成 `server-release.json`。
-4. tar.gz + `server-release.json` + compose 上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
+4. 钉版下载 docker 静态包与 compose 二进制（linux x64/arm64，SHA256 校验后原样入桶 `runtime/` 前缀）——它们是 Docker 安装第三层降级的弹药。
+5. tar.gz + `server-release.json` + compose 文件 + `runtime/` 静态包上传 OSS/R2（不可变 revision 目录）→ HEAD 验收（带 `_cb=` cache-bust，吸取 8c902ec 边缘负缓存事故）→ 切 `latest.json` 指针。
 
 与 skill 发布的联动：skills-publish 成功后可选触发 server-image 重建（mod-manager 单源跟随），或依赖入口脚本启动自更新兜底——v1 先做后者（简单），联动重建列 M3。
 
