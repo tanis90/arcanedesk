@@ -177,7 +177,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_execute_action", label: "Execute Action",
-      description: "Use a discovered action reference. Pass either actionRef for one action or actions for a combat sequence, never both. Outside combat execute one spell or attack; during combat execute only the current actor and read current turn first. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
+      description: "Use a discovered action reference. Pass either actionRef for one action or actions for a combat sequence, never both. Outside combat execute one spell or attack; during combat execute only the current actor, acting on the injected turn snapshot or a fresh turn read. Narrative records spell consumption while the DM resolves fiction. Summoning awaits auto pack support. Partial or indeterminate receipts must never be retried automatically.",
       parameters: Type.Union([
         exact({ ...actionFields, resolution: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("narrative")])), advance: Type.Optional(Type.Boolean()) }),
         exact({ actions: Type.Array(exact(actionFields), { minItems: 1, maxItems: 20 }), advance: Type.Optional(Type.Boolean()) }),
@@ -199,7 +199,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_play_context", label: "Play Context",
-      description: "Read lightweight current HP, resources, conditions and available action IDs for the same focus as static context. Use turn before and after combat actions. Status instructions need no preliminary read. Operation view inspects a known receipt without retrying it.",
+      description: "Read lightweight current HP, resources, conditions and available action IDs for the same focus as static context. Each DM message arrives with an injected snapshot of this turn view; call turn yourself to re-check after any write of yours (including a rejected one) or when a message carries no snapshot. Status instructions need no preliminary read. Operation view inspects a known receipt without retrying it.",
       parameters: Type.Union([
         exact({ view: Type.Optional(Type.Union([Type.Literal("current"), Type.Literal("turn")])) }),
         exact({ view: Type.Literal("operation"), operationRef: ref() }),
