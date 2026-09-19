@@ -1,6 +1,6 @@
 # 跑团现场注入（投递时 turn 同步）规范（草案）
 
-日期：2026-09-19 会话收敛。状态：**草案**，§9 三项待确认拍板后冻结实施。
+日期：2026-09-19 会话收敛。状态：**草案**，§9 三项已按推荐值采纳（用户未逐项拍板，任一项可推翻后修订），确认后冻结实施。
 行号以 `main@18602fd` 为准；路径相对 `apps/desktop`。
 
 ## 1. 一句话
@@ -40,7 +40,7 @@ main 分支现状是三层结构：
 
 - 复用 `FoundryServices.readPlay({ view: "turn" })`（`foundry-services.js:125-145`）：同一渲染器、同一 `turnSnapshot` 赋值路径（`:134`）。模型只见一种格式。
 - 注入块形态：明确分隔符 + 单调序号 + 时间戳 + readPlay 输出原文；标识为系统注入数据、非 DM 发言。
-- 通道与持久化：**待确认 Q1**（§9）。
+- 通道与持久化：v1 预拼在投递文本前，随会话历史持久化（§9 Q1）。
 - 读在写队列之外（沿用 foundry-input-context 纪律）；超时 3s，失败即不注入、不回填、静默降级——模型按 prompt 回退条款自行 pull。
 
 ### ③ 证据与门禁：零改动
@@ -52,7 +52,7 @@ main 分支现状是三层结构：
 ### ④ 范围
 
 - 仅跑团模式（profile）且世界就绪时注入；备团模式不注入（prep 的 READ_REF_INVALID 体系另行评估，不在本 spec 范围）。
-- 战斗与非战斗均注入（非战斗返回 turn:null + 场景动态状态，现场问答免 pull）——**待确认 Q2**（§9）。
+- 战斗与非战斗均注入（非战斗返回 turn:null + 场景动态状态，现场问答免 pull）——§9 Q2。
 - steer / followUp 投递同样注入（用户侧投递的统一语义：含打断补充）。
 
 ## 5. Prompt 与工具描述变更
@@ -79,7 +79,7 @@ intl 管线：combat.md 改动同步走 generated/system-prompts-intl 生成流�
 - 会话恢复后 `turnSnapshot` 引用失效 → 按既有语义重建一次，不重放写。
 - operation store 不为注入读取记账（read 无台账，与工具读一致）。
 - 遥测新增：注入 attempt / success / timeout / latency；对比指标：模型可见调用数、首动作延迟、`TURN_CONTEXT_REQUIRED` 触发率、页面终验拒绝率。既有警告适用：少工具 ≠ 已证实更快，用数据裁决。
-- 开关：`ARCANE_TURN_INJECTION` 环境变量，默认值**待确认 Q3**（§9）。
+- 开关：`ARCANE_TURN_INJECTION` 环境变量，默认开（`=0` 关闭）；发布前跑一轮备团 benchmark 同模型对比，不达标回滚——§9 Q3。
 
 ## 7. 验收
 
@@ -101,8 +101,8 @@ intl 管线：combat.md 改动同步走 generated/system-prompts-intl 生成流�
 4. **per-step 注入**（agent loop 每次迭代、LLM 调用前读）——延后。仅额外覆盖"DM 在模型响应中途插手"（罕见，页面终验兜底）；需要 pi SDK pre-call 钩子（现有钩子面仅 `pi.on("tool_call")` 与 steer 通道，无 pre-call）。升级条件：开始维护 pi fork / 页面终验拒绝率显著 / 跑团响应变长。届时读逻辑不变，仅触发点从投递事件改为每次迭代。
 5. **contextRef 改为 scope 稳定**（战斗开场首条消息也免领队读）——延后。牵扯 execute args 的 CAS 溯源，风险与收益不成比例；每场战斗仅首条消息受益。
 
-## 9. 待确认
+## 9. 设计决策（按推荐值采纳，可推翻）
 
-- **Q1 注入通道与持久化**：预拼投递文本（零 SDK 依赖、fork/replay 天然一致）vs 独立合成消息 vs 临时不持久化。
-- **Q2 注入范围**：跑团恒注入（含非战斗）vs 仅战斗中。
-- **Q3 开关默认值**：默认开 + benchmark 门槛 vs 默认关待评估后翻转。
+- **Q1 注入通道与持久化 → 预拼投递文本，随历史持久化**。零 SDK 依赖、fork/重放天然一致，是唯一不动 pi 边界的选项；代价（用户通道混技术块、历史每消息一份快照）由 prompt 防串台条款与"最新块优先"规则消化。独立合成消息与临时不持久化都依赖 SDK 注入机制，与 §8.4 per-step 属同级边界突破——若将来做 per-step，通道决策随之一并重开。
+- **Q2 注入范围 → 跑团恒注入**。非战斗块很小（turn:null + 场景动态），换非战斗现场问答零工具调用；且"仅战斗中"存在判断悖论（判断战斗态本身要读；用 staticSnapshot 判断则本场未读手册的会话漏注入）。
+- **Q3 开关 → 默认开 + benchmark 门槛**。`ARCANE_TURN_INJECTION=0` 可关；发布前备团 benchmark 同模型对比 + 遥测（TURN_CONTEXT_REQUIRED 触发率、首动作延迟、模型可见调用数），不达标回滚。
