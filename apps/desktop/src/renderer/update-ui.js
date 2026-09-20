@@ -101,7 +101,7 @@
         busyLabel: t("update.popover.restarting"),
       }));
     } else if (state.status === "downloading") {
-      const busy = el("button", null, t("update.popover.downloading"));
+      const busy = /** @type {HTMLButtonElement} */ (el("button", null, t("update.popover.downloading")));
       busy.disabled = true;
       actions.appendChild(busy);
     }
@@ -110,8 +110,13 @@
 
   // 动作按钮：点击后 ~1.5s 忙碌反馈再收起浮层（药丸继续承载状态）。
   // busyLabel 按动作区分——重启按钮不能闪「正在下载」。
+  /**
+   * @param {string} label
+   * @param {() => void} onClick
+   * @param {{ extraClass?: string, busyLabel?: string }} [options]
+   */
   function actionButton(label, onClick, { extraClass, busyLabel } = {}) {
-    const btn = el("button", extraClass ?? null, label);
+    const btn = /** @type {HTMLButtonElement} */ (el("button", extraClass ?? null, label));
     btn.addEventListener("click", () => {
       btn.disabled = true;
       btn.textContent = busyLabel ?? t("update.popover.downloading");
@@ -164,7 +169,7 @@
   }
 
   async function manualCheck() {
-    const button = document.getElementById("update-check-button");
+    const button = /** @type {HTMLButtonElement|null} */ (document.getElementById("update-check-button"));
     const status = document.getElementById("update-settings-status");
     if (!button || !status) return;
     button.disabled = true;

@@ -89,6 +89,12 @@ interface ArcaneBridge {
   fetchProviderModels(input: any): Promise<any>;
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite(): Promise<any>;
+  /** 应用内更新（auto-update-design §5.3）：药丸/浮层的动作与状态订阅。 */
+  checkUpdates(): Promise<any>;
+  downloadUpdate(): Promise<any>;
+  installUpdate(): Promise<any>;
+  updateState(): Promise<any>;
+  onUpdateState(callback: (state: any) => void): () => void;
   /** Packaged app version shown in Settings → General. */
   getAppVersion(): Promise<string>;
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */

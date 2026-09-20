@@ -74,7 +74,7 @@ async function main() {
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(args.port, "127.0.0.1", resolve);
+    server.listen(args.port, "127.0.0.1", () => resolve(null));
   });
   console.log(`e2e feed server listening on http://127.0.0.1:${args.port}`);
   console.log(`  feed : http://127.0.0.1:${args.port}/update/<channel>/latest*.yml`);
