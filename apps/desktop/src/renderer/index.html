@@ -162,6 +162,59 @@
       white-space: nowrap;
       flex: none;
     }
+    /* 应用内更新药丸（auto-update-design §5.3）：frameless 下 .chat-header button 已 no-drag。
+       高度对齐右侧 .seg-switch（无框 24px ≈ 有框 25.25px 的视觉质量），不随字体度量漂移。 */
+    .update-pill {
+      font: inherit;
+      font-size: var(--fs-meta);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--accent-contrast);
+      background: var(--accent);
+      border: none;
+      border-radius: 999px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .update-pill:disabled { cursor: default; opacity: 0.85; }
+    .update-popover {
+      position: fixed;
+      top: 44px;
+      left: 96px;
+      z-index: 60;
+      width: 300px;
+      background: var(--bg-soft);
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+      padding: 14px 16px;
+      color: var(--text-strong);
+    }
+    .update-popover h4 { margin: 0 0 10px; font-size: 13px; }
+    .update-popover .update-versions { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; margin-bottom: 10px; }
+    .update-popover .update-versions .dim { color: var(--muted); }
+    .update-popover .update-progress-track {
+      height: 6px; border-radius: 999px; background: var(--border-soft); overflow: hidden; margin: 6px 0 4px;
+    }
+    .update-popover .update-progress-fill { height: 100%; background: var(--accent); transition: width 0.2s ease; }
+    .update-popover .update-progress-text { font-size: 11.5px; color: var(--muted); margin-bottom: 10px; }
+    .update-popover .update-error { font-size: 12px; color: #c0492f; margin-bottom: 10px; word-break: break-all; }
+    .update-popover .update-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .update-popover .update-actions button {
+      font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 7px;
+      border: 1px solid var(--border-soft); background: var(--accent); color: var(--accent-contrast); cursor: pointer;
+    }
+    .update-popover .update-actions button.link {
+      background: transparent; color: var(--accent-dim); border: none; text-decoration: underline; padding: 5px 0;
+    }
+    .update-popover .update-ready-note { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .update-settings-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .update-settings-row button { font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border-soft); background: transparent; color: var(--text-strong); cursor: pointer; }
+    .update-settings-row button:disabled { opacity: 0.6; cursor: default; }
     .header-spacer { flex: 1; }
     .chip {
       font-size: var(--fs-meta);
@@ -1548,7 +1601,7 @@
 <body data-mode="prep">
   <header class="chat-header">
     <button class="icon-btn" id="sessions-toggle" title="会话列表" data-i18n-title="header.sessions.title">☰</button>
-    <span class="brand"><span class="logo"><img src="logo-mark.png" alt="" draggable="false"/></span><span class="wordmark">ArcaneDesk</span></span>
+    <span class="brand"><span class="logo"><img src="logo-mark.png" alt="" draggable="false"/></span><span class="wordmark">ArcaneDesk</span><button id="update-pill" class="update-pill" type="button" data-i18n-title="update.pill.title" data-i18n-dynamic hidden></button></span>
     <div class="seg-switch" id="mode-switch" title="切换模式:备团 = 跑团前准备,战斗 = 接管 Foundry" data-i18n-title="header.mode.switchTitle">
       <i class="seg-thumb" aria-hidden="true"></i>
       <button class="seg active" id="mode-seg-prep" type="button" title="备团:整理资料、生成内容" data-i18n="header.mode.prepShort" data-i18n-title="header.mode.prepTitle">备团</button>
@@ -1564,6 +1617,7 @@
       </button>
     </span>
   </header>
+  <div id="update-popover" class="update-popover" data-i18n-dynamic hidden role="dialog" aria-live="polite"></div>
   <div id="panel-titlebar" aria-hidden="true"></div>
   <div id="permission-center" aria-live="polite"></div>
   <section id="telemetry-consent-card" hidden aria-labelledby="telemetry-consent-title">
@@ -1815,6 +1869,15 @@
             <div id="web-permission-list"></div>
           </section>
           <section>
+            <h3 data-i18n="update.settings.title">软件更新</h3>
+            <p class="settings-note" data-i18n="update.settings.note">发现新版本时，左上角会出现更新标记；下载与安装都由你手动触发。</p>
+            <p class="settings-note">Arcane Desk <span id="update-settings-version"></span></p>
+            <div class="update-settings-row">
+              <button id="update-check-button" type="button" data-i18n="update.settings.check">检查更新</button>
+              <span id="update-settings-status" class="settings-note" aria-live="polite"></span>
+            </div>
+          </section>
+          <section>
             <h3 data-i18n="settings.general.version">版本</h3>
             <p class="settings-note">Arcane Desk <span id="app-version"></span></p>
           </section>
@@ -1835,6 +1898,7 @@
   <link rel="stylesheet" href="conversations/navigation.css"/>
   <script src="conversations/activity-view.js"></script>
   <script src="conversations/navigation-view.js"></script>
+  <script src="update-ui.js"></script>
   <script src="chat.js"></script>
   <script src="voice.js"></script>
 </body>

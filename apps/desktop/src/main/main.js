@@ -30,6 +30,7 @@ import { DisplayMediaController, installDevicePermissionDenials } from "./permis
 import { err, errorToIpc } from "./i18n-error.mjs";
 import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
+import { AppUpdater, buildFeedUrl, readReleaseChannel } from "./app-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 import { PanelSurfaceController } from "./panel-surface-controller.js";
@@ -983,6 +984,19 @@ app.whenReady().then(async () => {
   });
   // 启动后后台刷新一次;失败静默保留现状,绝不阻塞启动。
   skillsUpdater.refresh().catch((error) => console.error("[skills] unexpected refresh failure:", error));
+  // 应用内自动更新通道（auto-update-design §5）：仅打包实例启用；显式
+  // ARCANE_ENABLE_UPDATE_CHECK=1 可在 dev/E2E 强制打开，ARCANE_DISABLE_UPDATE_CHECK=1 可静默关闭。
+  // feed URL 只来自 region 默认值 / ARCANE_UPDATE_FEED_BASE_URL；channel 构建期烘进
+  // generated/desktop-release.json。状态经 arcane:event 总线单向推给渲染层，不落盘。
+  const appUpdater = (app.isPackaged || process.env.ARCANE_ENABLE_UPDATE_CHECK === "1")
+    && process.env.ARCANE_DISABLE_UPDATE_CHECK !== "1"
+    ? new AppUpdater({
+      feedUrl: buildFeedUrl(REGION.updateFeedBaseUrl, readReleaseChannel()),
+      currentVersion: app.getVersion(),
+      onState: (state) => sendToRenderer({ type: "update_state", state }),
+    }).start()
+    : null;
+  if (!appUpdater) console.log("[app-update] updater disabled (unpackaged or disabled by env)");
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");
@@ -1120,6 +1134,27 @@ app.whenReady().then(async () => {
   ipcMain.handle("notifications:get", event => isTrustedChatIpc(event) ? { ok: true, ...desktopNotifications.status() } : { ok: false });
   ipcMain.handle("notifications:set", (event, enabled) => isTrustedChatIpc(event) ? desktopNotifications.setEnabled(enabled) : { ok: false });
   ipcMain.handle("notifications:take-target", event => isTrustedChatIpc(event) ? desktopNotifications.takeTarget() : null);
+  // 应用内更新（auto-update-design §5.2）：check/download/install 全显式，渲染层刷新后
+  // 用 update:state 拉快照，不依赖事件时序。未启用（dev/禁用环境变量）时一律空响应。
+  const updateUnavailable = { ok: false, code: "UPDATER_DISABLED" };
+  ipcMain.handle("update:check", async (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    return { ok: true, state: await appUpdater.check() };
+  });
+  ipcMain.handle("update:download", async (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    return { ok: true, state: await appUpdater.download() };
+  });
+  ipcMain.handle("update:install", (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    return { ok: true, state: appUpdater.install() };
+  });
+  ipcMain.handle("update:state", event => isTrustedChatIpc(event)
+    ? (appUpdater ? { ok: true, state: appUpdater.snapshot() } : { ok: true, state: { status: "disabled", currentVersion: app.getVersion() } })
+    : { ok: false });
   // Region 派生的对外链接（官网/社区支持）：renderer 不持有任何硬编码域名。
   ipcMain.handle("app:links", event => isTrustedChatIpc(event)
     ? { ok: true, region: REGION.region, websiteUrl: REGION.websiteUrl, supportLinks: REGION.supportLinks }

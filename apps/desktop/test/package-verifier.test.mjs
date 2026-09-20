@@ -174,13 +174,14 @@ test("intl packaged layout requires the english system prompts baseline", () => 
   const layout = packagedLayout("intl");
   assert.deepEqual(
     [...layout.exact.get("generated")].sort(),
-    ["desktop-release.json", "region.json", "renderer-assets", "system-prompts-intl"],
+    ["app-update.yml", "desktop-release.json", "region.json", "renderer-assets", "system-prompts-intl"],
   );
   assert.equal(layout.exact.has("generated/skills-intl"), false);
   assert.deepEqual(layout.exact.get("generated/system-prompts-intl"), ["combat.md", "prep.md"]);
   for (const rel of [
     "generated/system-prompts-intl/combat.md",
     "generated/system-prompts-intl/prep.md",
+    "generated/app-update.yml",
   ]) {
     assert.equal(layout.required.includes(rel), true, rel);
   }
@@ -188,9 +189,11 @@ test("intl packaged layout requires the english system prompts baseline", () => 
 
 test("cn packaged layout keeps the base generated contract", () => {
   const layout = packagedLayout("cn");
-  assert.deepEqual(layout.exact.get("generated"), ["desktop-release.json", "region.json", "renderer-assets"]);
+  assert.deepEqual(layout.exact.get("generated"), ["desktop-release.json", "region.json", "app-update.yml", "renderer-assets"]);
   assert.equal(layout.exact.has("generated/system-prompts-intl"), false);
   assert.equal(layout.required.includes("generated/system-prompts-intl/combat.md"), false);
+  assert.equal(layout.required.includes("generated/app-update.yml"), true);
+  assert.equal(layout.required.includes("node_modules/electron-updater/out/main.js"), true);
 });
 
 test("verifyPackagedApp accepts a fully staged intl package (P1 regression)", (t) => {

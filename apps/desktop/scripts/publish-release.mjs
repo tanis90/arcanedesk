@@ -4,11 +4,23 @@
 // 职责（顺序固定）：
 //   1. 组装 staging 树（--from-dist 按 artifact 名自动分拣，或 --staging 直读平台子目录；
 //      --signed-dir 用签名副本覆盖同名 artifact，实现先签后发）
-//   2. 计算 bytes/sha256，合并 generated/desktop-release.json 生成 release.json
+//   2. 计算 bytes/sha256/sha512，合并 generated/desktop-release.json 生成 release.json
 //   3. 上传到 region 对应的对象存储 desktop/arcane-desk[-intl]/releases/<id>/（路径版本化、不可变）
 //   4. 上传后全量 verify：每个 URL HEAD，200 且 content-length == bytes（镜像契约规则 3）
-//   5. 更新 desktop/arcane-desk[-intl]/latest.json（唯一可覆盖对象，no-cache）
+//   5. 更新 desktop/arcane-desk[-intl]/latest.json（唯一可覆盖对象，no-cache）；
+//      同一步生成 update/<channel>/latest.yml + latest-mac.yml（electron-updater feed）
+//      一并上传 verify——含 Windows .exe 且 windowsInstallersSigned=false 时硬失败
+//      （--allow-unsigned-feed 仅限应急）
 //   6. 回写仓库元数据 distribution/releases/<id>.json + distribution/desktop-latest[-intl].json
+//
+// 子命令：
+//   --promote-release <id>   回滚/复切：从桶读 release.json 重切 latest + 重生成 feed
+//   --finalize               分阶段发布收口（CI 分片 + 本地签名 exe）
+//   --backfill-feeds <id>    存量版本（pre-feed manifest，如 0.4.3）feed 回填：从桶读
+//                            manifest，逐件锚定 sha512——优先 --assets-dir 本地已签名
+//                            字节，缺件回源桶内已发布字节下载现算（两种来源都要求
+//                            与 manifest sha256 逐件一致）。只写 update/<channel>/*.yml，
+//                            不触碰 latest.json 与不可变版本目录；feed 可覆写可重跑。
 //
 // 发布双轨（国际化方案 D5）：--region cn|intl，默认读 generated/region.json，再回落 cn。
 //   cn   → 阿里云 OSS arcane-package 桶，公网 <bucket>.oss-cn-beijing.aliyuncs.com
@@ -91,6 +103,7 @@ const CONTENT_TYPES = {
   ".dmg": "application/x-apple-diskimage",
   ".zip": "application/zip",
   ".exe": "application/x-msdownload",
+  ".yml": "application/yaml; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".json": "application/json; charset=utf-8",
@@ -109,11 +122,14 @@ function parseArgs(argv) {
     else if (a === "--staging") args.staging = takeValue(a, i++);
     else if (a === "--release-id") args.releaseId = takeValue(a, i++);
     else if (a === "--promote-release") args.promoteRelease = takeValue(a, i++);
+    else if (a === "--backfill-feeds") args.backfillFeeds = takeValue(a, i++);
+    else if (a === "--assets-dir") args.assetsDir = takeValue(a, i++);
     else if (a === "--channel") args.channel = takeValue(a, i++);
     else if (a === "--region") args.region = takeValue(a, i++);
     else if (a === "--signed-dir") args.signedDir = takeValue(a, i++);
     else if (a === "--platforms") args.platforms = takeValue(a, i++).split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--skip-latest") args.skipLatest = true;
+    else if (a === "--allow-unsigned-feed") args.allowUnsignedFeed = true;
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--no-repo-metadata") args.noRepoMetadata = true;
     else if (a === "--finalize") args.finalize = true;
@@ -123,6 +139,9 @@ function parseArgs(argv) {
   if (args.fromDist && args.staging) throw new Error("use only one of --from-dist or --staging");
   if (args.promoteRelease && (args.fromDist || args.staging || args.releaseId || args.skipLatest || args.signedDir)) {
     throw new Error("--promote-release cannot be combined with staging, release-id, signed-dir, or skip-latest options");
+  }
+  if (args.backfillFeeds && (args.fromDist || args.staging || args.releaseId || args.promoteRelease || args.skipLatest || args.signedDir || args.finalize)) {
+    throw new Error("--backfill-feeds cannot be combined with staging, release-id, promote-release, signed-dir, finalize, or skip-latest options");
   }
   if (args.finalize) {
     if (args.promoteRelease || args.fromDist || args.platforms) {
@@ -137,7 +156,7 @@ function parseArgs(argv) {
   }
   const unsupportedPlatforms = args.platforms?.filter((platform) => !PLATFORM_DIRS.includes(platform)) ?? [];
   if (unsupportedPlatforms.length) throw new Error(`unsupported platform(s): ${unsupportedPlatforms.join(", ")}`);
-  if (!args.promoteRelease && !args.fromDist && !args.staging) {
+  if (!args.promoteRelease && !args.fromDist && !args.staging && !args.backfillFeeds) {
     args.fromDist = path.join(desktopRoot, "dist");
   }
   return args;
@@ -157,6 +176,11 @@ export {
   kindFor,
   contentTypeFor,
   sha256File,
+  sha512File,
+  buildUpdateFeedObjects,
+  feedRelativePath,
+  assertFeedGate,
+  deriveWindowsSignedFlag,
   BASE_URL,
 };
 
@@ -239,6 +263,158 @@ async function sha256File(file) {
   const hash = crypto.createHash("sha256");
   await pipeline(fs.createReadStream(file), hash);
   return hash.digest("hex");
+}
+
+// electron-updater 契约：sha512 必须 base64（其 hashFile 默认 base64 编码比对）。
+async function sha512File(file) {
+  const hash = crypto.createHash("sha512");
+  await pipeline(fs.createReadStream(file), hash);
+  return hash.digest("base64");
+}
+
+// windowsInstallersSigned：发布含 Windows .exe 时，它们是否全部来自签名目录。
+// applySignedOverlay 在给了 signedDir 却缺任一签名件时直接抛错，所以 staging 走到
+// 这里时「exe 的目录 == signedDir」即等价于「全部被签名副本覆盖」。无 Windows .exe
+// 时取 true（未签名门禁只看「含 .exe 且 === false」）。
+function deriveWindowsSignedFlag(staged, signedDir) {
+  const installers = staged.filter(({ platform, file }) => platform.startsWith("windows") && /\.exe$/i.test(file));
+  if (!installers.length) return true;
+  if (!signedDir) return false;
+  const resolved = path.resolve(signedDir);
+  return installers.every(({ file }) => path.dirname(path.resolve(file)) === resolved);
+}
+
+// ---- electron-updater feed（update/<channel>/latest*.yml）------------------
+// 客户端契约已按 electron-updater 6.8.9 dist 实证（见 docs/auto-update-design.md §8）：
+// 频道文件名只由平台决定（win: latest.yml / mac: latest-mac.yml），架构不进文件名；
+// 架构选择在客户端下载阶段按 process.arch 匹配 files[].url 路径名，匹配不到回退
+// 第一个文件。因此每个 feed 必须列齐该平台全部架构产物——单架构 feed 会让另一
+// 架构静默装错包（如 arm64 装上 x64），不得按架构拆文件。
+
+const FEED_PLATFORM_GROUPS = Object.freeze({
+  "latest.yml": (f) => f.platform.startsWith("windows") && /\.exe$/i.test(f.name),
+  "latest-mac.yml": (f) => f.platform.startsWith("macos") && /\.zip$/i.test(f.name),
+});
+
+function isFeedFile(f) {
+  return Object.values(FEED_PLATFORM_GROUPS).some((pick) => pick(f));
+}
+
+function updateFeedPrefix(target, channel) {
+  return `${target.latestKey.slice(0, target.latestKey.lastIndexOf("/"))}/update/${channel}`;
+}
+
+// feed 内相对路径：按 URL 标准从 update/<channel>/ 解析回版本目录（纯函数）。
+// 拒绝任何落不到本桶前缀内的地址——feed 内容不含绝对 URL、不可外跳。
+function feedRelativePath(target, channel, entry) {
+  const prefix = `${target.baseUrl}/`;
+  if (typeof entry.url !== "string" || !entry.url.startsWith(prefix)) {
+    throw new Error(`release file url outside bucket base (${target.baseUrl}): ${entry.url}`);
+  }
+  const rel = entry.url.slice(prefix.length); // desktop/arcane-desk[-intl]/releases/<id>/<platform>/<name>
+  return path.posix.relative(updateFeedPrefix(target, channel), rel); // ../../releases/...
+}
+
+// 手写 YAML（不新增依赖）：标量全部 JSON 双引号转义；releaseDate 沿用 electron-builder
+// 习惯的未引号 ISO 形式（js-yaml 会解析成 Date，electron-updater 不做逻辑使用）。
+function updateFeedYaml({ version, releaseDate, primary, files }) {
+  const lines = [
+    `version: ${JSON.stringify(version)}`,
+    `path: ${JSON.stringify(primary.url)}`,
+    `sha512: ${JSON.stringify(primary.sha512)}`,
+    `releaseDate: ${releaseDate}`,
+    "files:",
+    ...files.flatMap((f) => [
+      `  - url: ${JSON.stringify(f.url)}`,
+      `    sha512: ${JSON.stringify(f.sha512)}`,
+      `    size: ${f.size}`,
+    ]),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+// 由 release manifest 构造 feed 上传对象（纯函数；sha512 缺失即抛错——由调用方
+// 先从本地字节（backfill）或桶内字节（promote/finalize）补齐）。
+function buildUpdateFeedObjects(release, target) {
+  const version = release.product?.version;
+  const channel = release.channel;
+  if (!version || !channel) {
+    throw new Error(`release manifest missing product.version/channel; cannot build update feeds (${release.manifestUrl ?? release.releaseId})`);
+  }
+  const objects = [];
+  for (const [channelFile, pick] of Object.entries(FEED_PLATFORM_GROUPS)) {
+    const entries = (release.files ?? []).filter(pick).map((f) => ({
+      url: feedRelativePath(target, channel, f),
+      sha512: f.sha512,
+      size: f.bytes,
+    }));
+    if (!entries.length) continue; // 本次发布未含该平台产物：保留桶上既有 feed 不动
+    const missing = entries.filter((e) => typeof e.sha512 !== "string" || !e.sha512);
+    if (missing.length) {
+      throw new Error(
+        `${channelFile} requires sha512 for every entry (missing for ${missing.map((m) => m.url).join(", ")}); `
+        + `run --backfill-feeds for pre-feed releases`,
+      );
+    }
+    const primary = entries.find((e) => !e.url.includes("arm64")) ?? entries[0];
+    const body = updateFeedYaml({ version, releaseDate: release.publishedAt, primary, files: entries });
+    objects.push({
+      key: `${updateFeedPrefix(target, channel)}/${channelFile}`,
+      body,
+      bytes: Buffer.byteLength(body),
+      cache: "no-cache",
+      contentType: CONTENT_TYPES[".yml"],
+    });
+  }
+  return objects;
+}
+
+// 未签名门禁：feed 直达已安装用户，比下载页敏感。manifest 带 windowsInstallersSigned
+// === false 且含 Windows .exe 时拒绝切 latest / 上传 feed；显式 --allow-unsigned-feed
+// 仅限应急。manifest 缺该字段（pre-feed 存量版本）不触发——完整性由 sha512 锚定。
+function assertFeedGate(release, { allowUnsignedFeed = false } = {}) {
+  if (allowUnsignedFeed) return;
+  const hasWindowsInstaller = (release.files ?? []).some((f) => f.platform.startsWith("windows") && /\.exe$/i.test(f.name));
+  if (!hasWindowsInstaller) return;
+  if (release.windowsInstallersSigned === false) {
+    throw new Error(
+      `refusing to publish update feeds for unsigned Windows installers (release ${release.releaseId}); `
+      + `re-sign via --signed-dir, or pass --allow-unsigned-feed for emergencies only`,
+    );
+  }
+}
+
+// 切 latest 同批：latest 指针 + update feeds 一起上传、一起 verify，任一失败即发布失败。
+async function uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed = false } = {}) {
+  assertFeedGate(release, { allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
+  await uploadObject(client, latestObject);
+  for (const feed of feedObjects) await uploadObject(client, feed);
+  if (!(await verifyObject(target, latestObject))) {
+    throw new Error("latest.json failed verification; do NOT announce this release");
+  }
+  for (const feed of feedObjects) {
+    if (!(await verifyObject(target, feed))) {
+      throw new Error(`update feed ${feed.key} failed verification; do NOT announce this release`);
+    }
+  }
+}
+
+// feed 相关条目缺 sha512（pre-feed 旧分片/旧 manifest）时，从桶内已发布字节现算
+// 补齐内存对象——manifest 属不可变对象永不回写。调用前相关对象必须已在桶上。
+async function fillMissingFeedSha512(files) {
+  for (const f of files) {
+    if (typeof f.sha512 === "string" && f.sha512) continue;
+    if (!isFeedFile(f)) continue;
+    const res = await fetch(f.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`cannot fetch ${f.url} to compute sha512: HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length !== f.bytes) {
+      throw new Error(`bucket bytes for ${f.name} (${buffer.length}) != manifest bytes (${f.bytes}); refusing to compute sha512`);
+    }
+    f.sha512 = crypto.createHash("sha512").update(buffer).digest("base64");
+    console.log(`computed sha512 from published bytes: ${f.platform}/${f.name}`);
+  }
 }
 
 // 平台内重建 SHA256SUMS.txt：对 overlay 后的实际发布文件算 hash，
@@ -353,7 +529,12 @@ function amzDateOf(date) {
 }
 
 async function createR2Client(overrides = {}) {
-  const conf = loadR2Credentials(overrides.confFile);
+  // 完整显式覆盖（accountId/accessKeyId/secretAccessKey 三键齐备）= 测试/干跑语境：
+  // 不 consult 环境变量与 ~/.ossutil 的 ops 凭证——CI 上凭证测试要用注入值而不是本机配置。
+  const fullyOverridden = Boolean(overrides.accountId && overrides.accessKeyId && overrides.secretAccessKey);
+  const conf = fullyOverridden
+    ? { accountId: undefined, accessKeyId: undefined, secretAccessKey: undefined }
+    : loadR2Credentials(overrides.confFile);
   const accountId = overrides.accountId ?? conf.accountId;
   const accessKeyId = overrides.accessKeyId ?? conf.accessKeyId;
   const secretAccessKey = overrides.secretAccessKey ?? conf.secretAccessKey;
@@ -532,6 +713,11 @@ async function promoteRelease(args) {
   }
   if (!release.files?.length) throw new Error(`release ${releaseId} has no files`);
 
+  // pre-feed 旧 manifest 可能缺 sha512 / windowsInstallersSigned：sha512 现算补齐
+  // （feed 派生对象需要），门禁只对显式 false 生效；二者都不回写不可变 manifest。
+  await fillMissingFeedSha512(release.files);
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+
   const latest = {
     schemaVersion: 1,
     channel: release.channel,
@@ -555,14 +741,79 @@ async function promoteRelease(args) {
       "utf8",
     );
   }
+  const feedObjects = buildUpdateFeedObjects(release, target);
   if (args.dryRun) {
-    console.log(`dry-run: release ${releaseId} is complete; latest upload skipped`);
+    console.log(`dry-run: release ${releaseId} is complete; ${feedObjects.length} update feed(s) ready; latest upload skipped`);
     return;
   }
   const client = await createStorageClient(target);
-  await uploadObject(client, latestObject);
-  if (!(await verifyObject(target, latestObject))) throw new Error("latest.json failed verification");
+  await uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
   console.log(`latest now points to verified release ${releaseId} (${target.clientKind})`);
+}
+
+// --backfill-feeds <release-id>：pre-feed 存量版本（0.4.3）的 feed 回填。从桶读
+// manifest，逐件锚定 sha512——优先 --assets-dir 本地字节（sha256 与 manifest 一致
+// 才采用），缺件回源桶内已发布字节下载现算（同一 sha256 锚定，下错即失败）。
+// 只写 update/<channel>/*.yml，不触碰 latest.json 与不可变版本目录；可重复执行。
+async function backfillReleaseFeeds(args) {
+  const releaseId = args.backfillFeeds;
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) {
+    throw new Error(`unsafe release id: ${releaseId}`);
+  }
+  const target = resolveTarget(resolvePublishRegion(args));
+  const manifestUrl = `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`;
+  const response = await fetch(manifestUrl, { cache: "no-store" });
+  if (!response.ok) throw new Error(`cannot load release manifest: HTTP ${response.status} ${manifestUrl}`);
+  const release = await response.json();
+  if (release.releaseId !== releaseId || !release.product?.version || !release.channel) {
+    throw new Error(`release manifest is invalid or mismatched: ${manifestUrl}`);
+  }
+  const assetsDir = args.assetsDir ? path.resolve(args.assetsDir) : null;
+  if (assetsDir && !fs.existsSync(assetsDir)) throw new Error(`--assets-dir not found: ${assetsDir}`);
+  // 完整性锚定：sha256 一致 ⇒ 字节 == 桶上已发布件 ⇒ 算的 sha512 可进 feed。
+  for (const f of release.files ?? []) {
+    if (!isFeedFile(f)) continue;
+    const local = assetsDir ? path.join(assetsDir, f.name) : null;
+    if (local && fs.existsSync(local)) {
+      const [sha256, stat] = await Promise.all([sha256File(local), fsp.stat(local)]);
+      if (sha256 !== f.sha256 || stat.size !== f.bytes) {
+        throw new Error(
+          `local bytes for ${f.name} do not match published manifest `
+          + `(local sha256 ${sha256.slice(0, 12)}… vs manifest ${String(f.sha256).slice(0, 12)}…); refusing to backfill from mismatched bytes`,
+        );
+      }
+      f.sha512 = await sha512File(local);
+      console.log(`anchored sha512 on local bytes: ${f.platform}/${f.name}`);
+      continue;
+    }
+    const res = await fetch(f.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`cannot fetch ${f.url} (and no matching local bytes in --assets-dir): HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length !== f.bytes) {
+      throw new Error(`bucket bytes for ${f.name} (${buffer.length}) != manifest bytes (${f.bytes}); refusing to compute sha512`);
+    }
+    const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+    if (sha256 !== f.sha256) {
+      throw new Error(`bucket bytes for ${f.name} fail sha256 anchor (${sha256.slice(0, 12)}… vs manifest ${String(f.sha256).slice(0, 12)}…)`);
+    }
+    f.sha512 = crypto.createHash("sha512").update(buffer).digest("base64");
+    console.log(`anchored sha512 on published bytes: ${f.platform}/${f.name}`);
+  }
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
+  if (args.dryRun) {
+    for (const feed of feedObjects) console.log(`--- ${feed.key} (${feed.bytes} bytes) ---\n${feed.body}`);
+    console.log(`dry-run: ${feedObjects.length} update feed(s) for ${releaseId} (${target.clientKind}); upload skipped`);
+    return;
+  }
+  const client = await createStorageClient(target);
+  for (const feed of feedObjects) await uploadObject(client, feed);
+  for (const feed of feedObjects) {
+    if (!(await verifyObject(target, feed))) {
+      throw new Error(`update feed ${feed.key} failed verification`);
+    }
+  }
+  console.log(`backfilled ${feedObjects.length} update feed(s) for ${releaseId} (${target.clientKind})`);
 }
 
 // ---- 分阶段发布·阶段 2：finalize（设计见 docs/phased-release-design.md）-----
@@ -659,8 +910,8 @@ async function finalizeRelease(args) {
   const installers = await Promise.all(
     collectFinalizeInstallers(path.resolve(args.staging), args.signedDir).map(async ({ platform, file }) => {
       const name = path.basename(file);
-      const [sha256, stat] = await Promise.all([sha256File(file), fsp.stat(file)]);
-      return { platform, name, bytes: stat.size, sha256, kind: kindFor(name), contentType: contentTypeFor(name), file };
+      const [sha256, sha512, stat] = await Promise.all([sha256File(file), sha512File(file), fsp.stat(file)]);
+      return { platform, name, bytes: stat.size, sha256, sha512, kind: kindFor(name), contentType: contentTypeFor(name), file };
     }),
   );
 
@@ -708,12 +959,20 @@ async function finalizeRelease(args) {
   }
   files.sort((a, b) => a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
 
+  // 分片产物（mac zip 等 feed 相关件）缺 sha512 时（旧分片 schema），此时它们已在
+  // 桶上，按已发布字节现算补齐（新分片由 stage-release 直接携带 sha512）。
+  await fillMissingFeedSha512(files);
+
   const publishedAt = new Date().toISOString().replace(/\.\d+Z$/, "Z");
   const release = {
     ...manifest,
     channel,
     releaseId,
     publishedAt,
+    windowsInstallersSigned: deriveWindowsSignedFlag(
+      installers.map(({ platform, file }) => ({ platform, file })),
+      args.signedDir,
+    ),
     manifestUrl: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`,
     files: files.map(({ file, body, ...entry }) => entry),
   };
@@ -736,8 +995,10 @@ async function finalizeRelease(args) {
     await fsp.mkdir(releasesDir, { recursive: true });
     await fsp.writeFile(path.join(releasesDir, `${releaseId}.json`), releaseBody, "utf8");
   }
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
   if (args.dryRun) {
-    console.log("dry-run: skip upload & verify");
+    console.log(`dry-run: ${feedObjects.length} update feed(s) ready; skip upload & verify`);
     return;
   }
 
@@ -822,8 +1083,7 @@ async function finalizeRelease(args) {
       cache: "no-cache",
       contentType: CONTENT_TYPES[".json"],
     };
-    await uploadObject(client, latestObject);
-    if (!(await verifyObject(target, latestObject))) throw new Error("latest.json failed verification; do NOT announce this release");
+    await uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
     if (!args.noRepoMetadata) {
       await fsp.writeFile(path.join(desktopRoot, "distribution", target.repoLatestFile), latestBody, "utf8");
     }
@@ -835,6 +1095,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.promoteRelease) {
     await promoteRelease(args);
+    return;
+  }
+  if (args.backfillFeeds) {
+    await backfillReleaseFeeds(args);
     return;
   }
   if (args.finalize) {
@@ -865,13 +1129,14 @@ async function main() {
   const files = [];
   for (const { platform, file } of staging) {
     const name = path.basename(file);
-    const [sha256, stat] = await Promise.all([sha256File(file), fsp.stat(file)]);
+    const [sha256, sha512, stat] = await Promise.all([sha256File(file), sha512File(file), fsp.stat(file)]);
     files.push({
       kind: kindFor(name),
       platform,
       name,
       bytes: stat.size,
       sha256,
+      sha512,
       contentType: contentTypeFor(name),
       url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/${name}`,
     });
@@ -883,6 +1148,7 @@ async function main() {
     channel,
     releaseId,
     publishedAt,
+    windowsInstallersSigned: deriveWindowsSignedFlag(staging, args.signedDir),
     manifestUrl: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`,
     files,
   };
@@ -950,8 +1216,10 @@ async function main() {
     }
   }
 
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
   if (args.dryRun) {
-    console.log("dry-run: skip upload & verify");
+    console.log(`dry-run: ${feedObjects.length} update feed(s) ready; skip upload & verify`);
     return;
   }
 
@@ -981,10 +1249,7 @@ async function main() {
   if (failures) throw new Error(`${failures} object(s) failed verification; do NOT announce this release`);
 
   if (!args.skipLatest) {
-    await uploadObject(client, plan.latestObject);
-    if (!(await verifyObject(target, plan.latestObject))) {
-      throw new Error("latest.json failed verification; do NOT announce this release");
-    }
+    await uploadLatestWithFeeds(client, target, plan.latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
   }
   console.log(`release ${releaseId} published and verified: ${release.manifestUrl}`);
 }

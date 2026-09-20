@@ -26,6 +26,9 @@ const REGION_DEFAULTS = Object.freeze({
     searchZaiEngine: "search_pro",
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
+    // electron-updater feed 基址（auto-update-design §3）：channel 由调用方拼在路径里。
+    updateFeedBaseUrl:
+      "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/update",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
     // 服务器轨道发布物（镜像 tar.gz + server-release.json + compose）的根前缀，
     // 见 docs/server-deploy-plan.md §5；部署 skill 经 ARCANE_SERVER_RELEASE_BASE 消费。
@@ -47,6 +50,7 @@ const REGION_DEFAULTS = Object.freeze({
     searchZaiBaseUrl: "https://api.z.ai/api/paas/v4/web_search",
     searchZaiEngine: "search-prime",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
+    updateFeedBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/update",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
     serverDeployBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/server",
     bundledSkillsDir: "skills/prep",
@@ -69,6 +73,7 @@ const REGION_ENV_KEYS = Object.freeze({
   searchZaiBaseUrl: "ARCANE_SEARCH_ZAI_BASE_URL",
   searchZaiEngine: "ARCANE_SEARCH_ZAI_ENGINE",
   skillsUpdateBaseUrl: "ARCANE_SKILLS_UPDATE_BASE_URL",
+  updateFeedBaseUrl: "ARCANE_UPDATE_FEED_BASE_URL",
   modIndexUrl: "ARCANE_MOD_INDEX_URL",
   serverDeployBaseUrl: "ARCANE_SERVER_RELEASE_BASE",
 });
