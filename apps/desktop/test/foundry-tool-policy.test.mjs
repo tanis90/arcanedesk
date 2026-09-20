@@ -86,7 +86,7 @@ test("real Pi prep session activates web_search when search is configured", asyn
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPool("prep", customTools);
-  assert.equal(expected.length, 24); // 23 基线 + web_search
+  assert.equal(expected.length, 27); // 26 基线 + web_search
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
     customTools, tools: expected });

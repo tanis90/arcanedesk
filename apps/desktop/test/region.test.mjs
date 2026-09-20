@@ -41,7 +41,7 @@ test("region defaults snapshot: intl 默认值全部指向 .app / 海外存储",
     searchZaiEngine: "search-prime",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
-    bundledSkillsDir: "generated/skills-intl/prep",
+    bundledSkillsDir: "skills/prep",
     systemPromptsDir: "generated/system-prompts-intl",
     supportLinks: [
       {

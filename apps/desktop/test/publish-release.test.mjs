@@ -174,7 +174,9 @@ test("R2 client requires credentials", async () => {
   delete process.env.R2_ACCESS_KEY_ID;
   delete process.env.R2_SECRET_ACCESS_KEY;
   try {
-    await assert.rejects(() => createR2Client(), /missing R2 credentials/);
+    // 本机 ops conf 可能存在（intl 本地发布），注入不存在的 conf 验证无凭证报错语义。
+    const absentConf = path.join(os.tmpdir(), "arcane-release-absent.conf");
+    await assert.rejects(() => createR2Client({ confFile: absentConf }), /missing R2 credentials/);
   } finally {
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[key];

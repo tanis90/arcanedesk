@@ -61,7 +61,7 @@
 ### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
 
 - G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
-  `choiceRequirements`（fill `choices.skills/tools/languages`），通配符池
+  `choiceRequirements`（fill 键约定后被 2026-09-16 槽位寻址取代为 `key` + `choices.bySlot`），通配符池
   （`languages:*`）用系统自带 `Trait.mixedChoices` 展开为具体 key 再下发——候选与
   匹配共用一套词汇表，模型拿到的是可执行枚举不是通配符；注册表不可用时回退原始池
   + 前缀匹配。实证：人类额外语言池原生就是 `languages:*`，不展开模型无从填写。
@@ -100,7 +100,8 @@
 
 ### 专精落地检测与回执活动计数（2026-09-15）
 
-- 专精槽独立 fill 键 `choices.expertise`：与 choices.skills 共用词汇表（skills:/tool:
+- 专精槽独立 fill 键 `choices.expertise`（后被 2026-09-16 槽位寻址取代为专精槽自己的
+  bySlot key，机制不变）：与 choices.skills 共用词汇表（skills:/tool:
   key）但不共消费队列——take() 每值只消费一次，同 key 双填在唯一性约束下本就不可表达
   （v5 B2 模型发 4 熟练 + 2 新 key，dnd5e 原生对未熟练目标静默丢弃 1→2 从不 0→2，
   模型被迫裸写 `skills.slt.value:2` 补锅，读取 before=0 实锤）。
@@ -251,6 +252,36 @@
   不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
   不与历史报告求可比（用户裁决）。
 
+### autoGrantedSpells 与 weapon 族 trait 池（2026-09-17）
+
+- plan 新增 `autoGrantedSpells`：本次 advance 会经固定 ItemGrant 自动授予的法术清单
+  （职业/子职业/种族链 ≤目标等级；ItemChoice 自选池不在其列）。月之术法案实证：术士
+  known 6 自选撞上白送的 9 个，写入去重静默烧掉一个名额（granted 5 ≠ budget 6，卡面
+  14 合法但少一个有效自选）。纯增量信息下发，harness 填值器排除、skill 教模型避开，
+  回执 spellsBySource 的 subclass/race 桶口径不变。否决备选：oracle 容忍重合（把浪费
+  合法化）；包数据改 ItemChoice（违背规则原文）。
+- trait 选择池白名单加 `weapon:`：剑圣宗 L3 近战武器 21 选 1 实证（monk sweep 唯一红案，
+  修后 10/10 绿）。下游零改动——expandTraitPool 经 `Trait.mixedChoices` 族无关展开、
+  weaponProf 是集合添加幂等（无 0/1/2 踩踏语义，不入 default 模式重复选取守卫）、
+  traitLanded 审计经 actorKeyPath 族无关解析。armor/saves/senses 仍落 uncovered，
+  等矩阵案例驱动。
+
+### 三环施法者 spellBudget（2026-09-17）
+
+- 本条取代 2026-09-14 spellBudget 记录的"第三施法者（奥法骑士/诡术贼）v1 放弃"。实证缺口：
+  扩展层扫描（`e2e-advance-matrix.mjs --subclasses-of fighter`）中奥法骑士落卡 3 环位
+  0 环法照绿——环级法术在原生数据里无 advancement 载体（子职业 `system.spellcasting.
+  progression="third"` 只驱动系统自动派生槽位），plan 无槽、表无行、oracle 无查。
+- 全量核实：全世界 Item 包扫 `spellcasting.progression`，2014 仅奥法骑士/诡术师两个
+  子职业引入施法，共用同一 PHB 三环表（wikidot PHB 转录逐行核对）；四象宗武僧等为气点
+  施法无环位，正确不命中。2024 子职业无此配置（未调研形态，不下发）。
+- 实现：plan 侧 `spellBudgetForClass` 收 subclassData，职业不施法而子职业 progression
+  非空时按三环表下发 `known` + `source:"subclass"` + `maxSpellLevel`（progression 环位
+  公式 `min(4, ceil(L/6))`）+ `spellListClassUuid`（法师列表，browse eligibility 回传
+  它）；戏法不下发——走子职业自带 ItemChoice 槽，避免双口径。学派限制（EK 防护/塑能、
+  AT 附魔/幻术、AT 固定 Mage Hand）是自然语言规则，以 `note` 提示不校验。法术选取复用
+  additionalItems（known 语义），advance 侧零改动。
+
 ### subclass-uuid 候选池（2026-09-14）
 
 - `choiceRequirements` 中 `valueFormat:"subclass-uuid"` 的要求现挂 `candidates`（uuid）+
@@ -294,6 +325,25 @@
   skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
 - 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
   的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+
+### advance choices 槽位寻址（2026-09-16）
+
+- `choices` 从共享桶（skills/tools/feats/abilityScore/languages/expertise 各键）改为槽位
+  寻址：plan 的 `choiceRequirements[].key` 原样抄为 `choices.bySlot` 的键，一槽一值
+  互不抢占；`subclass-uuid` 仍填顶层入参。实证（会话 01a0a8f6 五连拒）：职业 ASI
+  （allowFeat）的 `take("choices.feats")` 盲抓共享桶第一个剩余值，把半精灵变体特性
+  UUID 当职业专长消费，种族 ItemChoice 恒 `need 1, have 0`；共享键也无法表达职业 ASI
+  与种族 ASI 两组不同加点（旧 spec backlog 已记）。本条取代 G1 记录的 fill 键约定与
+  专精记录的 `choices.expertise` 独立键——机制决定（先熟练后专精、双层防护）不变。
+- 混合 ASI（半精灵魅力+2 固定 + 2 浮动点）：fixed 由运行时并入 assignments——dnd5e
+  原生只在 `options.initial` 下注入 fixed，我们不传 initial，旧代码直接丢 +2。plan 侧
+  fixed 部分进 `automaticSteps` 摘要（`fixed ability bonuses: cha+2`），只向模型要浮动
+  点；校验要求浮动点 total===points、每项 ≤cap、非 locked。
+- 未知槽位写入前拒 `CHOICE_SLOT_UNKNOWN` 并列出合法槽位，取代 UNCONSUMED_CHOICE 警告
+  （槽位寻址下值不可能"剩下"）；`fillAllocation` 聚合随之废除，`choicesTemplate` 给每个
+  bySlot 键一个填空骨架（trait/池槽 `[]`、ASI 槽 `{ abilityScore: {} }`）。
+- 回执 abilities 分解口径：race 列 = 种族 stepSet 的 ASI assignments 合计（含 fixed），
+  asi 列 = 职业+子职业合计。D3 记录的"选择型种族 v1 走 SET 补终值"执行路径由本条收口。
 
 ### 跑团模式回执从简（2026-09-16）
 

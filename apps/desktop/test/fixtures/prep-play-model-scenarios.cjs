@@ -19,7 +19,7 @@ module.exports = async function scenarios({ evaluate, sourceId, targetId, combat
       sendToRenderer() {}, providerStore: store, runtimeReady: Promise.resolve({ nodeBinary: process.env.ARCANE_QA_NODE }),
       profile: { mode, getCwd: () => workDir, ...(mode === "prep" ? { builtinTools: true, systemPrompt: "append", fence: true, getSkillPaths: () => [] } : {}) },
       getLocale: () => "zh-CN", log() {}, operationStorageDir: path.join(workDir, mode, "operations"),
-      taskStorageDir: path.join(workDir, mode, "tasks"), resources: new revision.ResourceCoordinator(),
+      taskStorageDir: path.join(workDir, mode, "tasks"),
       scheduler: new revision.ExecutionScheduler({ capacity: 1 }) });
     mkdirSync(path.join(workDir, mode, "tasks"), { recursive: true });
     setHost(host); await host.start({ fresh: true });

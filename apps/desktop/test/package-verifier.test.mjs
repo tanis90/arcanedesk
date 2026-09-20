@@ -170,19 +170,15 @@ function stagePackagedApp(t, region, { skipIntlBaselines = false } = {}) {
   return { appRoot, data };
 }
 
-test("intl packaged layout requires the composed english baselines", () => {
+test("intl packaged layout requires the english system prompts baseline", () => {
   const layout = packagedLayout("intl");
   assert.deepEqual(
     [...layout.exact.get("generated")].sort(),
-    ["desktop-release.json", "region.json", "renderer-assets", "skills-intl", "system-prompts-intl"],
+    ["desktop-release.json", "region.json", "renderer-assets", "system-prompts-intl"],
   );
-  assert.deepEqual(layout.exact.get("generated/skills-intl"), ["prep"]);
-  assert.deepEqual(layout.exact.get("generated/skills-intl/prep"), exactDirectories.get("skills/prep"));
+  assert.equal(layout.exact.has("generated/skills-intl"), false);
   assert.deepEqual(layout.exact.get("generated/system-prompts-intl"), ["combat.md", "prep.md"]);
   for (const rel of [
-    "generated/skills-intl/prep/bundle.json",
-    "generated/skills-intl/prep/arcane-fvtt-mods/SKILL.md",
-    "generated/skills-intl/prep/arcane-module-reader/SKILL.md",
     "generated/system-prompts-intl/combat.md",
     "generated/system-prompts-intl/prep.md",
   ]) {
@@ -193,9 +189,8 @@ test("intl packaged layout requires the composed english baselines", () => {
 test("cn packaged layout keeps the base generated contract", () => {
   const layout = packagedLayout("cn");
   assert.deepEqual(layout.exact.get("generated"), ["desktop-release.json", "region.json", "renderer-assets"]);
-  assert.equal(layout.exact.has("generated/skills-intl"), false);
   assert.equal(layout.exact.has("generated/system-prompts-intl"), false);
-  assert.equal(layout.required.includes("generated/skills-intl/prep/bundle.json"), false);
+  assert.equal(layout.required.includes("generated/system-prompts-intl/combat.md"), false);
 });
 
 test("verifyPackagedApp accepts a fully staged intl package (P1 regression)", (t) => {
@@ -215,14 +210,14 @@ test("verifyPackagedApp rejects an intl package missing the composed baselines (
   const result = verifyPackagedApp(appRoot, { electronRuntime: data.electronRuntime });
   const text = result.errors.join("\n");
   assert.match(text, /generated contents differ/);
-  assert.match(text, /missing required file: generated\/skills-intl\/prep\/bundle\.json/);
+  assert.match(text, /missing required file: generated\/system-prompts-intl\/combat\.md/);
 });
 
 test("verifyPackagedApp rejects stale intl baselines leaking into a cn package (P1)", (t) => {
   const { appRoot, data } = stagePackagedApp(t, "cn");
-  const stray = path.join(appRoot, "generated", "skills-intl", "prep");
+  const stray = path.join(appRoot, "generated", "system-prompts-intl");
   fs.mkdirSync(stray, { recursive: true });
-  fs.writeFileSync(path.join(stray, "bundle.json"), "{}");
+  fs.writeFileSync(path.join(stray, "combat.md"), "placeholder");
   const result = verifyPackagedApp(appRoot, { electronRuntime: data.electronRuntime });
   assert.match(result.errors.join("\n"), /generated contents differ/);
 });

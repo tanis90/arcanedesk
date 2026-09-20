@@ -27,8 +27,8 @@ const REGION_DEFAULTS = Object.freeze({
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
-    // 包内基线目录（相对 app 根的 POSIX 路径）：intl 为构建期组合产物
-    // （compose-intl-skills.mjs：cn 脚本单源 + prep-intl 翻译覆盖）。
+    // 包内基线目录（相对 app 根的 POSIX 路径）：skills 为中文单源 skills/prep，
+    // 两个 flavor 相同（skill 是模型侧指令，不随界面语言分叉）。
     bundledSkillsDir: "skills/prep",
     systemPromptsDir: "system-prompts",
     supportLinks: Object.freeze([
@@ -44,7 +44,7 @@ const REGION_DEFAULTS = Object.freeze({
     searchZaiEngine: "search-prime",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
-    bundledSkillsDir: "generated/skills-intl/prep",
+    bundledSkillsDir: "skills/prep",
     systemPromptsDir: "generated/system-prompts-intl",
     supportLinks: Object.freeze([
       Object.freeze({

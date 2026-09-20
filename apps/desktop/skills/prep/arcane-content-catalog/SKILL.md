@@ -33,16 +33,17 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
 ## advancement_plan 契约
 
 - `automaticSteps` 由 `foundry_actor_advance` 自动完成，不手工重复添加。
-- `choiceRequirements` 是唯一的填写清单：每条带 `fill`（填到 advance 入参的哪个键）、
-  `valueFormat`、`count`/`cap` 和候选池；只填这些要求，从池里选，不凭记忆。
-  `valueFormat:"trait-key"` 的池（技能/工具/语言，含种族侧）已展开为具体 key
-  （如 `languages:standard:elvish`）并附本地化 `candidateNames`；`fill` 对应
-  `choices.skills`/`choices.tools`/`choices.languages`，照抄池中的 key 即可。
-  专精槽（带 `mode:"expertise"` 与 `note`）独立吃 `choices.expertise`：每个值必须是
-  卡面已有、或本次调用 choices.skills/choices.tools 里已选的熟练项——先填熟练槽再填
-  专精槽，非法值会在写入前整体拒绝并点名。
-  多个普通槽位共用一个 choices 键时，`fillAllocation` 给出该键总值与槽位消耗顺序，
-  一次填够总数。
+- `choiceRequirements` 是唯一的填写清单：每条带 `key`、`valueFormat`、`count`/`cap`
+  和候选池；写入时把 `key` 原样抄进 advance 的 `choices.bySlot`（`choicesTemplate`
+  给每个 key 一个骨架：trait/池槽是 `[]`，ASI 槽是 `{ abilityScore: {} }`），只填
+  这些要求，从池里选，不凭记忆。`valueFormat:"trait-key"` 的池（技能/工具/语言，含
+  种族侧）已展开为具体 key（如 `languages:standard:elvish`）并附本地化
+  `candidateNames`，照抄池中的 key 即可。ASI 槽填 `{ abilityScore: {...} }` 浮动加点
+  （`automaticSteps` 摘要里的种族固定加成自动并入，不重复加）；`asi-or-feat` 槽二选一
+  `{ abilityScore: … }` 或 `{ feat: "<uuid>" }`；`subclass-uuid` 那条的 `key` 是
+  `subclassUuid`，填顶层入参，不进 bySlot。专精槽（带 `mode:"expertise"` 与 `note`）
+  同此键法：每个值必须是卡面已有、或本次调用前面槽位已选的熟练项，非法值会在写入前
+  整体拒绝并点名。
 - `automaticSteps` 的 `summary` 带具体值：种族 ASI 逐属性列明（如 `str+1, dex+1…`）、
   体型、职业 scale 骰（如 `scale: 2d6`）、HP 公式；种族移动速度在顶层 `race.movement`
   （种族条目直接携带，不走 advancement 步骤）。这些都不需要翻种族/职业原文核对。
@@ -50,7 +51,12 @@ description: 在 Foundry 中需要查找职业、子职、种族、法术、特�
   游）、`book` 法术书容量（法师），选满这个数。准备施法者（2014 牧师/德鲁伊/圣武士/
   奇械）改发 `fullList`：他们能会的全部法术候选（带 uuid/名称/环位，上限为最高法术位
   环）——这类职业"会"整个职业法术列表，准备是 DM 与玩家游戏时决定的页签标记，工具
-  不管理；建卡时给 advance 传 `fullSpellList:true` 一次授满。
+  不管理；建卡时给 advance 传 `fullSpellList:true` 一次授满。子职业引入的施法（2014
+  奥法骑士/诡术师）发 `source:"subclass"` + `known` + `spellListClassUuid`（列表挂在
+  法师职业上）+ `maxSpellLevel`；戏法不在此预算，走子职业自身的选择槽。
+- `autoGrantedSpells` 是本次升级会**自动授予**的法术清单（子职业固定赠法术、种族法术，
+  带 uuid/名称/环位/来源）：known/戏法自选时避开它们——重复选择会被写入去重，白白
+  烧掉一个自选名额。
 - 子职业两次调用约定：先不带 `subclassUuid` 拿计划（`subclass-uuid` 步骤自带
   `candidates`/`candidateNames` 池，按职业与规则版本过滤）；定下后带它重调一次，子职业
   自身的授予/选择步骤（`subclass:` 前缀）才进输出。
