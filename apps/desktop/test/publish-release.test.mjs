@@ -83,6 +83,7 @@ test("publish targets: cn keeps OSS, intl goes to R2 behind dl.arcanedesk.app", 
     latestKey: "desktop/arcane-desk/latest.json",
     repoLatestFile: "desktop-latest.json",
     skillsRoot: "desktop/arcane-desk/skills",
+    serverRoot: "desktop/arcane-desk/server",
   });
   assert.deepEqual(resolveTarget("intl"), {
     clientKind: "r2",
@@ -92,6 +93,7 @@ test("publish targets: cn keeps OSS, intl goes to R2 behind dl.arcanedesk.app", 
     latestKey: "desktop/arcane-desk-intl/latest.json",
     repoLatestFile: "desktop-latest-intl.json",
     skillsRoot: "desktop/arcane-desk-intl/skills",
+    serverRoot: "desktop/arcane-desk-intl/server",
   });
   assert.throws(() => resolveTarget("us"), /unknown publish region/);
 });

@@ -27,7 +27,9 @@
     "dist:mac": "node scripts/dist.mjs --mac dmg zip",
     "predist:win": "npm run prepare:dist",
     "dist:win": "node scripts/dist.mjs --win nsis zip",
-    "publish:release": "node scripts/publish-release.mjs"
+    "publish:release": "node scripts/publish-release.mjs",
+    "build:server-image": "node scripts/build-server-image.mjs",
+    "publish:server-image": "node scripts/publish-server-image.mjs"
   },
   "dependencies": {
     "@arcanedesk/foundry-sdk": "0.1.0",

@@ -46,3 +46,25 @@ selected by `publish-release.mjs --region intl` (default: the
 - Signed artifacts are overlaid before hashing and upload via `--signed-dir`
   (sign-first-then-publish); overwriting an already published object to inject
   a signature is forbidden.
+
+# Server image contract (OSS cn / R2 intl)
+
+The server deployment track (docs/server-deploy-plan.md §5) ships the
+`arcane/arcane-fvtt` docker image as a plain mirror artifact — no registry is
+involved anywhere.
+
+- Immutable objects:
+  `desktop/arcane-desk[-intl]/server/<revision>/arcane-fvtt-<tag>-<arch>.tar.gz`
+  plus `server-release.json`, `docker-compose.yml`, and `README.md` in the
+  same revision directory. One tarball per architecture (`amd64`, `arm64`);
+  consumers select by `uname -m`.
+- Mutable object: `desktop/arcane-desk[-intl]/server/latest.json` only.
+- `server-release.json` pins, per architecture: tarball bytes, sha256, and the
+  docker image ID. The deploy skill must verify the tarball hash, then
+  `docker load`, then assert the loaded image ID before `compose up`.
+- Same revision discipline as the skills channel: the image recipe revision
+  (`distribution/server-image/image-revision.json`) must be strictly newer than
+  the remote pointer; existing revision directories are never re-uploaded.
+- Same HEAD-verification-with-cache-bust discipline as releases/skills.
+- The image never contains the Foundry VTT application (user-supplied-only);
+  the runtime fetches it from the mounted zip or the user-provided timed URL.

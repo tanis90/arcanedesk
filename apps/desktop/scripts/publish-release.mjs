@@ -48,6 +48,7 @@ const TARGETS = Object.freeze({
     latestKey: LATEST_KEY,
     repoLatestFile: "desktop-latest.json",
     skillsRoot: "desktop/arcane-desk/skills",
+    serverRoot: "desktop/arcane-desk/server",
   }),
   intl: Object.freeze({
     clientKind: "r2",
@@ -57,6 +58,7 @@ const TARGETS = Object.freeze({
     latestKey: "desktop/arcane-desk-intl/latest.json",
     repoLatestFile: "desktop-latest-intl.json",
     skillsRoot: "desktop/arcane-desk-intl/skills",
+    serverRoot: "desktop/arcane-desk-intl/server",
   }),
 });
 
