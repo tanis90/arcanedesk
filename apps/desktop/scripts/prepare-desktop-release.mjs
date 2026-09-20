@@ -76,7 +76,13 @@ if (!["cn", "intl"].includes(buildRegion)) {
 }
 
 const commit = resolveSourceCommit();
-const latestFile = path.join(desktopRoot, "distribution", "desktop-latest.json");
+// rollback 链按 region 各自回指：读本区 latest 指针文件，否则 cn 先发版会把
+// intl 基座的 previousReleaseId 带成 cn 的 release id（跨区错链）。
+const latestFile = path.join(
+  desktopRoot,
+  "distribution",
+  buildRegion === "intl" ? "desktop-latest-intl.json" : "desktop-latest.json",
+);
 const previousReleaseId = fs.existsSync(latestFile) ? readJson(latestFile).releaseId ?? null : null;
 const sourceLabel = /^0+$/.test(commit) ? "working-tree" : commit.slice(0, 8);
 // intl 默认 releaseId 带 -intl 后缀（国际化方案 D5），与 cn 版本目录/GitHub tag 区分；

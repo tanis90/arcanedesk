@@ -11,6 +11,7 @@ import {
   verifyMacSums,
 } from "../scripts/stage-release.mjs";
 import {
+  assertBaseManifestFresh,
   collectFinalizeInstallers,
   headStatus,
   loadJournal,
@@ -200,4 +201,20 @@ test("parseArgs enforces finalize option combinations", () => {
     () => parseArgs(["--finalize", "--fragment", "f", "--staging", "wexe", "--signed-dir", "s", "--promote-release", "x"]),
     /cannot be combined/,
   );
+});
+
+test("finalize refuses a stale base manifest version (0.5.0 cn incident)", () => {
+  const stale = { product: { version: "0.4.3" } };
+  assert.throws(
+    () => assertBaseManifestFresh(stale, "0.5.0-411e6f7b"),
+    /product\.version \(0\.4\.3\) != release id version \(0\.5\.0\)/,
+  );
+  assert.throws(
+    () => assertBaseManifestFresh(stale, "0.5.0-411e6f7b-intl"),
+    /prepare:desktop-release/,
+  );
+  // 基座一致、非版本型 releaseId、缺 product 块的非版本 id：均放行
+  assert.doesNotThrow(() => assertBaseManifestFresh({ product: { version: "0.5.0" } }, "0.5.0-411e6f7b"));
+  assert.doesNotThrow(() => assertBaseManifestFresh({ product: { version: "0.5.0" } }, "hotfix-2026-09-20"));
+  assert.doesNotThrow(() => assertBaseManifestFresh({}, "custom-id"));
 });

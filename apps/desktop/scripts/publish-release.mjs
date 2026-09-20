@@ -884,6 +884,19 @@ async function fetchMacSumsMap(target, releaseId, platform) {
   return map;
 }
 
+// 基座新鲜度守卫（0.5.0 cn 事故）：releaseId 形如 <version>-<sha8>[-intl] 时，
+// 本地基座的 product.version 必须一致——finalize 合并的是 generated/ 基座，
+// 忘跑 prepare 会把上一版的 version/source.commit 合进本版 release.json 与 feed。
+export function assertBaseManifestFresh(manifest, releaseId) {
+  const idVersion = releaseId.match(/^(\d+\.\d+\.\d+)(?:[-.].+)?$/)?.[1];
+  if (idVersion && manifest.product?.version !== idVersion) {
+    throw new Error(
+      `generated/desktop-release.json product.version (${manifest.product?.version}) != release id version (${idVersion}); `
+      + `rerun npm run prepare:desktop-release (with matching ARCANE_BUILD_REGION) before --finalize`,
+    );
+  }
+}
+
 async function finalizeRelease(args) {
   const region = resolvePublishRegion(args);
   const target = resolveTarget(region);
@@ -893,6 +906,7 @@ async function finalizeRelease(args) {
   }
   const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
   const releaseId = args.releaseId ?? manifest.releaseId;
+  assertBaseManifestFresh(manifest, releaseId);
   const channel = args.channel ?? "private-beta";
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) throw new Error(`unsafe release id: ${releaseId}`);
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) throw new Error(`unsafe release channel: ${channel}`);

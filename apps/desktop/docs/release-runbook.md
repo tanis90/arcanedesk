@@ -35,16 +35,21 @@ check. Rollback revalidates an existing release and changes only `latest.json`.
 
 ## GitHub credentials
 
-The `desktop-release` GitHub Environment owns these secrets:
+The `Stage Arcane Desktop Release` workflow publishes to both regions from CI
+and reads these repository-level secrets:
 
-- `OSS_RELEASE_KEY_ID`
-- `OSS_RELEASE_KEY_SECRET`
+- `OSS_RELEASE_KEY_ID` / `OSS_RELEASE_KEY_SECRET` (cn, Aliyun OSS)
+- `CF_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (intl, R2)
 
-They belong to the dedicated RAM user `ArcaneDeskGithubRelease`, which has only
-the custom `ArcaneDeskReleasePublish` policy. That policy grants bucket metadata
-and list access plus Put/Get under `desktop/arcane-desk/*`; it grants no Delete
-permission. Secrets must never be printed, persisted in repository files, or
-shared with the legacy release identity.
+Their values are the same credentials the local ops file
+`~/.ossutil/arcane-release.conf` carries (`[ArcaneDeskRelease]` for cn,
+`[ArcaneDeskIntlRelease]` for the R2 token scoped to Object Read & Write on
+`arcane-desk-intl`). Set them with `gh secret set`, never printing values.
+The original plan of a dedicated `desktop-release` GitHub Environment with a
+least-privilege RAM user (`ArcaneDeskGithubRelease`, no Delete permission)
+was never created; migrating these five secrets into that environment is the
+intended tightening. Secrets must never be printed, persisted in repository
+files, or shared with the legacy release identity.
 
 ## macOS signing and notarization
 
@@ -159,6 +164,13 @@ cloud, stage from CI, finalize locally:
    `--finalize` rebuilds the windows SHA256SUMS from the signed installers,
    merges the fragment into a full `release.json`, cross-checks mac hashes
    against the published CI sums, uploads, and HEAD-verifies every object.
+   The `prepare:desktop-release` call in step 4 is mandatory, not optional:
+   `--finalize` merges the local `generated/desktop-release.json` base, and a
+   stale base silently ships the previous version's `product.version` /
+   `source.commit` into `release.json` and the update feeds (this happened to
+   cn on 0.5.0 and had to be patched in place). A guard now hard-fails when
+   the base `product.version` disagrees with the `<version>-` prefix of the
+   release id; rerun prepare with the matching `ARCANE_BUILD_REGION`.
    Rerun-after-crash is safe: already-uploaded objects are skipped, an
    already-finalized release id is refused (`--promote-release` instead), and
    a re-signed installer is rejected outright.

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "channel": "private-beta",
-  "releaseId": "0.4.3-1b1e90da",
-  "version": "0.4.3",
-  "publishedAt": "2026-09-20T04:46:15Z",
-  "manifest": "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/0.4.3-1b1e90da/release.json"
+  "releaseId": "0.5.0-411e6f7b",
+  "version": "0.5.0",
+  "publishedAt": "2026-09-20T14:05:48Z",
+  "manifest": "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/0.5.0-411e6f7b/release.json"
 }
