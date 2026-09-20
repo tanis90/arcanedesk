@@ -5,8 +5,9 @@
 //   （未签名安装包入桶是红线，Windows 安装器只能由本地签名后经 finalize 上传）。
 // - 上传对象不可变：已存在且 HEAD 长度一致 → 视为已 staged 跳过（重跑续传）；
 //   长度不一致 → 硬错误（版本目录被别的内容占用）。
-// - 产出 manifest 分片（fragment）：已上传每个文件的 name/bytes/sha256/kind，
-//   供本地 finalize 合成全量 release.json，mac 产物不必落地本地。
+// - 产出 manifest 分片（fragment）：已上传每个文件的 name/bytes/sha256/sha512/kind，
+//   供本地 finalize 合成全量 release.json（mac 产物不必落地本地）；sha512 供
+//   electron-updater feed 使用，finalize 不再为分片件回源下载。
 
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -20,6 +21,7 @@ import {
   uploadObject,
   verifyUrl,
   sha256File,
+  sha512File,
   headStatus,
 } from "./publish-release.mjs";
 import { REGION_IDS } from "../src/main/region.mjs";
@@ -114,11 +116,12 @@ export function buildFragment({ releaseId, region, files }) {
     releaseId,
     region,
     files: files
-      .map(({ platform, name, bytes, sha256 }) => ({
+      .map(({ platform, name, bytes, sha256, sha512 }) => ({
         platform,
         name,
         bytes,
         sha256,
+        sha512,
         kind: kindFor(name),
         contentType: contentTypeFor(name),
       }))
@@ -137,8 +140,8 @@ async function main() {
 
   const files = await Promise.all(entries.map(async ({ platform, file }) => {
     const name = path.basename(file);
-    const [sha256, stat] = await Promise.all([sha256File(file), fsp.stat(file)]);
-    return { platform, name, bytes: stat.size, sha256, file };
+    const [sha256, sha512, stat] = await Promise.all([sha256File(file), sha512File(file), fsp.stat(file)]);
+    return { platform, name, bytes: stat.size, sha256, sha512, file };
   }));
 
   const objects = files.map((f) => ({
