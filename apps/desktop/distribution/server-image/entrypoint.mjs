@@ -22,7 +22,6 @@ import path from "node:path";
 import { FOUNDRY_VERSION } from "./pins.mjs";
 import { REGION_DEFAULTS } from "./region-defaults.mjs";
 import { extractZip, listZipEntries, readZipEntryText } from "./mod-manager/archive-zip.mjs";
-import { runCli } from "./mod-manager/mod-manager.mjs";
 
 const foundryRoot = process.env.ARCANE_FOUNDRY ?? "/arcane/foundry";
 const dataDir = process.env.ARCANE_DATA ?? "/arcane/data";
@@ -123,6 +122,8 @@ async function installFoundry() {
 // 首启装 dnd5e：读 region 索引定位条目，然后走 mod-manager 与 skill 侧完全相同
 // 的 inspect → stage → commit 三步（字节级校验、原子替换、备份目录都在其中）。
 // 此时服务尚未启动，"commit 前停服"的纪律天然满足。
+// mod-manager 是懒加载的：它的依赖闭包里有原生模块(classic-level)，顶层 import
+// 会让整个镜像被预编译平台绑架——跳过 mod 或 dnd5e 已就位时不应感知它。
 async function installDnd5e() {
   if (process.env.ARCANE_SKIP_MODS === "1") {
     log("mods", "ARCANE_SKIP_MODS=1 — skipping first-boot dnd5e install");
@@ -145,6 +146,7 @@ async function installDnd5e() {
   if (!entry) throw new Error(`mod index has no dnd5e entry (expected ${modIndexUrl})`);
 
   log("mods", `installing dnd5e ${entry.version} via mod-manager`);
+  const { runCli } = await import("./mod-manager/mod-manager.mjs");
   const inspected = await runCli([
     "inspect", "--manifest-url", entry.manifestUrl, "--data-dir", dataDir, "--allow-missing-data-dir",
   ]);
