@@ -48,6 +48,7 @@ const exactDirectories = new Map([
     "publish-release.mjs",
     "publish-skills.mjs",
     "sign-windows.mjs",
+    "stage-release.mjs",
     "vendor-module-builder.mjs",
     "verify-package.mjs",
     "verify-source.mjs",

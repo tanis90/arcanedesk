@@ -1,17 +1,13 @@
 name: Release Arcane Desktop
 
-# Official four-platform Desktop build and release entrypoint. Dispatches as a
-# build-only validation by default (skip_oss=true). Immutable OSS objects are
-# uploaded and fully verified before latest.json may be changed.
-# 国际化方案 D5 发布双轨：每个平台构建 cn（OSS arcane-package）与 intl
-# （Cloudflare R2 arcane-desk-intl / dl.arcanedesk.app）两个 flavor，intl 包名
-# 带 -intl 后缀、默认 releaseId 带 -intl 后缀，两侧 latest 指针互不影响。
-# D5「先签后发」纪律（评审 P3）：skip_oss 默认 true，随手 dispatch 不会把未签名
-# 构件发到任何区域；只有显式关闭 skip_oss 才进入发布链路。
-# Windows 签名无法在 CI 完成（Certum SimplySign 私钥不可导出）：带签名的正式发版
-# 走本地先签后发（sign-windows.mjs + publish-release.mjs --signed-dir，流程见
-# apps/desktop/docs/release-runbook.md）；skip_oss=false 的 CI 发布腿发出的
-# Windows 安装包为未签名。
+# Official four-platform Desktop build entrypoint — build only, never publishes.
+# 分阶段发布·阶段 0（设计见 apps/desktop/docs/phased-release-design.md）：
+# 阶段 1 Stage Arcane Desktop Release 上传 mac 与 windows zip；阶段 2 本地
+# sign-windows.mjs 签名后 publish-release.mjs --finalize 收口。CI 全量发布
+# （未签名 Windows 直接上线）的旧 publish job 已按拍板移除——紧急场景的答案是
+# 不发。国际化方案 D5 发布双轨：每平台构建 cn（OSS）与 intl（R2）两个 flavor，
+# intl 包名带 -intl 后缀、默认 releaseId 带 -intl 后缀，两侧 latest 互不影响。
+# Windows 产物拆 -exe / -pkg 两种 artifact：本地 finalize 只需下载安装器。
 on:
   workflow_dispatch:
     inputs:
@@ -19,26 +15,6 @@ on:
         description: "Release id (default: <version>-<commit8>)"
         required: false
         type: string
-      channel:
-        description: "Release channel"
-        required: true
-        default: private-beta
-        type: string
-      update_latest:
-        description: "Update desktop/arcane-desk/latest.json after verification"
-        required: true
-        default: true
-        type: boolean
-      create_github_release:
-        description: "Create a GitHub Release with the same artifacts"
-        required: true
-        default: true
-        type: boolean
-      skip_oss:
-        description: "Build-only validation (no upload, no latest switch, no GitHub Release). Default ON per D5 sign-first; signed releases publish locally per runbook (Windows signs out-of-CI), so turning this OFF publishes unsigned Windows installers."
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: read
@@ -48,11 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ARCANE_RELEASE_CHANNEL: ${{ inputs.channel || 'private-beta' }}
-  RELEASE_CHANNEL: ${{ inputs.channel || 'private-beta' }}
   RELEASE_ID: ${{ inputs.release_id || '' }}
-  UPDATE_LATEST: ${{ inputs.update_latest || false }}
-  CREATE_GITHUB_RELEASE: ${{ inputs.create_github_release || false }}
 
 jobs:
   build:
@@ -263,170 +235,29 @@ jobs:
         with:
           subject-checksums: staging/${{ matrix.platform }}/SHA256SUMS.txt
 
-      - name: Upload build artifact
+      - name: Upload build artifact (mac)
+        if: ${{ startsWith(matrix.platform, 'macos') }}
         uses: actions/upload-artifact@v7
         with:
           name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-${{ github.sha }}
           path: staging/${{ matrix.platform }}/*
           if-no-files-found: error
           retention-days: 7
-
-  publish:
-    name: Publish ${{ matrix.region }} (+ optional GitHub Release)
-    needs: build
-    if: ${{ !inputs.skip_oss }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: desktop-release
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        region: [cn, intl]
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install locked workspace dependencies
-        run: npm ci --workspaces --include-workspace-root
-
-      - name: Audit production dependencies and generate release SBOM
-        shell: bash
-        run: |
-          npm audit --omit=dev
-          mkdir -p release-audit
-          npm sbom --package-lock-only --omit=dev --sbom-format=cyclonedx > release-audit/sbom.cdx.json
-
-      - name: Regenerate release manifest at pinned commit
-        env:
-          ARCANE_SOURCE_COMMIT: ${{ github.sha }}
-          ARCANE_BUILD_REGION: ${{ matrix.region }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 显式 release_id 在 intl 腿加 -intl 后缀，避免与 cn 的 GitHub tag/版本目录撞名
-          release_id="$RELEASE_ID"
-          if [[ "${{ matrix.region }}" == "intl" && -n "$release_id" && "$release_id" != *-intl ]]; then
-            release_id="${release_id}-intl"
-          fi
-          if [[ -n "$release_id" ]]; then export ARCANE_RELEASE_ID="$release_id"; fi
-          npm run prepare:desktop-release --workspace arcane-desktop
-
-      - name: Download platform artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: staging
-          pattern: arcane-desk-*-${{ matrix.region }}-*
-          merge-multiple: false
-
-      - name: Flatten staging into platform directories
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p publish-staging
-          for dir in staging/arcane-desk-*; do
-            platform=$(basename "$dir" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-[0-9a-f]{40}$/\1/')
-            mkdir -p "publish-staging/$platform"
-            cp "$dir"/* "publish-staging/$platform/"
-          done
-          find publish-staging -type f | sort
-
-      - name: Publish immutable release (${{ matrix.region }})
-        env:
-          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
-          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        shell: bash
-        run: |
-          # releaseId 以本腿 prepare 生成的 manifest 为准（已含 region 后缀规则）
-          args=(--staging publish-staging --channel "$RELEASE_CHANNEL" --region "${{ matrix.region }}" --skip-latest)
-          node apps/desktop/scripts/publish-release.mjs "${args[@]}"
-
-      - name: Stage uniquely named GitHub Release assets
-        if: ${{ inputs.create_github_release }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p github-release-assets
-          asset_count=0
-          for platform_dir in publish-staging/*; do
-            platform=$(basename "$platform_dir")
-            for source in "$platform_dir"/*; do
-              name=$(basename "$source")
-              if [[ "$name" == "SHA256SUMS.txt" ]]; then
-                name="SHA256SUMS-${platform}${{ matrix.region == 'intl' && '-intl' || '' }}.txt"
-              fi
-              target="github-release-assets/$name"
-              if [[ -e "$target" ]]; then
-                echo "duplicate GitHub Release asset name: $name" >&2
-                exit 1
-              fi
-              cp "$source" "$target"
-              asset_count=$((asset_count + 1))
-            done
-          done
-          if [[ "$asset_count" -ne 12 ]]; then
-            echo "expected 12 GitHub Release assets, staged $asset_count" >&2
-            exit 1
-          fi
-
-      - name: Create GitHub Release
-        if: ${{ inputs.create_github_release }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ matrix.region }}" in
-            intl) manifest_base="https://dl.arcanedesk.app/desktop/arcane-desk-intl" ;;
-            *) manifest_base="https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk" ;;
-          esac
-          release_id=$(node -e "console.log(require('./apps/desktop/generated/desktop-release.json').releaseId)")
-          release_flags=()
-          if [[ "$RELEASE_CHANNEL" != "stable" ]]; then release_flags+=(--prerelease); fi
-          printf -v release_notes '%s\n\n%s\n\n%s\n\n%s' \
-            "Automated release (${{ matrix.region }})." \
-            "Manifest: $manifest_base/releases/$release_id/release.json" \
-            "macOS: signed with a Developer ID certificate and notarized by Apple. Drag ArcaneDesk into Applications and launch it normally." \
-            "Windows: these builds are unsigned, so Microsoft Defender SmartScreen may warn on first launch; choose More info > Run anyway."
-          gh release create "$release_id" \
-            --title "Arcane Desk $release_id" \
-            --notes "$release_notes" \
-            --target "${{ github.sha }}" \
-            "${release_flags[@]}" \
-            github-release-assets/*
-
-      - name: Promote verified release to latest (${{ matrix.region }})
-        if: ${{ inputs.update_latest }}
-        env:
-          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
-          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        shell: bash
-        run: |
-          release_id=$(node -e "console.log(require('./apps/desktop/generated/desktop-release.json').releaseId)")
-          node apps/desktop/scripts/publish-release.mjs --promote-release "$release_id" --region "${{ matrix.region }}"
-
-      - name: Upload release metadata audit artifact
+      - name: Upload installer artifact (windows)
+        # 分阶段发布：本地 finalize 只下载 -exe（签名对象），zip 走 -pkg 由
+        # stage workflow 云端直传，mac 产物不落地本地。
+        if: ${{ startsWith(matrix.platform, 'windows') }}
         uses: actions/upload-artifact@v7
         with:
-          name: arcane-desk-release-metadata-${{ matrix.region }}-${{ github.sha }}
-          path: |
-            apps/desktop/distribution/releases/*.json
-            apps/desktop/distribution/desktop-latest*.json
-            release-audit/sbom.cdx.json
-          if-no-files-found: warn
-          retention-days: 30
+          name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-exe-${{ github.sha }}
+          path: staging/${{ matrix.platform }}/*.exe
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload package artifact (windows)
+        if: ${{ startsWith(matrix.platform, 'windows') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-pkg-${{ github.sha }}
+          path: staging/${{ matrix.platform }}/*.zip
+          if-no-files-found: error
+          retention-days: 7

@@ -114,11 +114,21 @@ function parseArgs(argv) {
     else if (a === "--skip-latest") args.skipLatest = true;
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--no-repo-metadata") args.noRepoMetadata = true;
+    else if (a === "--finalize") args.finalize = true;
+    else if (a === "--fragment") args.fragment = takeValue(a, i++);
     else throw new Error(`unknown option: ${a}`);
   }
   if (args.fromDist && args.staging) throw new Error("use only one of --from-dist or --staging");
   if (args.promoteRelease && (args.fromDist || args.staging || args.releaseId || args.skipLatest || args.signedDir)) {
     throw new Error("--promote-release cannot be combined with staging, release-id, signed-dir, or skip-latest options");
+  }
+  if (args.finalize) {
+    if (args.promoteRelease || args.fromDist || args.platforms) {
+      throw new Error("--finalize cannot be combined with promote-release, from-dist, or platforms");
+    }
+    if (!args.fragment) throw new Error("--finalize requires --fragment (stage-release output)");
+    if (!args.staging) throw new Error("--finalize requires --staging (windows installer directory)");
+    if (!args.signedDir) throw new Error("--finalize requires --signed-dir (signed installer overlay)");
   }
   if (args.region && !REGION_IDS.includes(args.region)) {
     throw new Error(`unsupported region: ${args.region} (expected ${REGION_IDS.join("/")})`);
@@ -142,6 +152,9 @@ export {
   createOssClient,
   createR2Client,
   createStorageClient,
+  kindFor,
+  contentTypeFor,
+  sha256File,
   BASE_URL,
 };
 
@@ -550,10 +563,280 @@ async function promoteRelease(args) {
   console.log(`latest now points to verified release ${releaseId} (${target.clientKind})`);
 }
 
+// ---- 分阶段发布·阶段 2：finalize（设计见 docs/phased-release-design.md）-----
+//
+// 分片（stage-release 产物）提供 mac 与 windows zip 的条目；本地只补签名后的
+// exe、按签名件重建 windows SHA256SUMS、合成全量 release.json 并收口。journal
+// 记录本命令上传过的每个对象：重跑时哈希一致跳过、哈希变化硬拦——Authenticode
+// 签名内嵌时间戳，重签字节必变，若放行会把桶里旧签名对象与 manifest 新哈希
+// 静默错配（HEAD 验证只比长度查不出同长错配）。
+
+function journalFileFor(releaseId) {
+  return path.join(desktopRoot, "generated", `release-journal-${releaseId}.json`);
+}
+
+export function loadJournal(releaseId, file = journalFileFor(releaseId)) {
+  if (!fs.existsSync(file)) return new Map();
+  const entries = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!Array.isArray(entries)) throw new Error(`journal is malformed: ${file}`);
+  return new Map(entries.map((entry) => [`${entry.region}:${entry.key}`, entry]));
+}
+
+async function saveJournal(releaseId, journal) {
+  await fsp.mkdir(path.join(desktopRoot, "generated"), { recursive: true });
+  await fsp.writeFile(journalFileFor(releaseId), `${JSON.stringify([...journal.values()], null, 2)}\n`, "utf8");
+}
+
+// 单次 HEAD：区分 404（待上传）与 200 长度比对（已上传/污染）。不重试——
+// verifyUrl 的重试语义仅用于上传后的最终验证。
+export async function headStatus(url) {
+  const bust = `_cb=${Date.now().toString(36)}`;
+  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}${bust}`, {
+    method: "HEAD",
+    cache: "no-store",
+    headers: { "accept-encoding": "identity" },
+  });
+  return { status: res.status, length: Number(res.headers.get("content-length")) };
+}
+
+// finalize 的 staging 只允许 exe（本地仅下载 -exe artifact），overlay 语义与
+// 全量发布共用 applySignedOverlay：缺任一签名件即失败。
+export function collectFinalizeInstallers(stagingDir, signedDir) {
+  const staged = [];
+  for (const platform of fs.readdirSync(stagingDir, { withFileTypes: true })) {
+    if (!platform.isDirectory()) continue;
+    const dir = path.join(stagingDir, platform.name);
+    for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!file.isFile()) continue;
+      if (!/\.exe$/i.test(file.name)) {
+        throw new Error(`finalize staging accepts installers only: ${platform.name}/${file.name} (other artifacts were staged from CI)`);
+      }
+      staged.push({ platform: platform.name, file: path.join(dir, file.name) });
+    }
+  }
+  if (!staged.length) throw new Error(`no installers found under ${stagingDir}`);
+  return applySignedOverlay(staged, signedDir);
+}
+
+async function fetchMacSumsMap(target, releaseId, platform) {
+  const url = `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/SHA256SUMS.txt`;
+  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}_cb=${Date.now().toString(36)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`mac SHA256SUMS cross-check failed: HTTP ${res.status} ${url}`);
+  const map = new Map();
+  for (const line of (await res.text()).split("\n").filter(Boolean)) {
+    const match = line.match(/^([0-9a-f]{64})\s{2}(.+)$/);
+    if (!match) throw new Error(`unparsable published sums line for ${platform}: ${line}`);
+    map.set(match[2], match[1]);
+  }
+  return map;
+}
+
+async function finalizeRelease(args) {
+  const region = resolvePublishRegion(args);
+  const target = resolveTarget(region);
+  const manifestPath = path.join(desktopRoot, "generated", "desktop-release.json");
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error("generated/desktop-release.json is missing; run npm run prepare:desktop-release first");
+  }
+  const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+  const releaseId = args.releaseId ?? manifest.releaseId;
+  const channel = args.channel ?? "private-beta";
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) throw new Error(`unsafe release id: ${releaseId}`);
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) throw new Error(`unsafe release channel: ${channel}`);
+
+  const fragment = JSON.parse(await fsp.readFile(path.resolve(args.fragment), "utf8"));
+  if (fragment.schemaVersion !== 1) throw new Error(`unsupported fragment schemaVersion: ${fragment.schemaVersion}`);
+  if (fragment.releaseId !== releaseId) throw new Error(`fragment releaseId ${fragment.releaseId} != ${releaseId}`);
+  if (fragment.region !== region) throw new Error(`fragment region ${fragment.region} != ${region}`);
+  const fragmentFiles = fragment.files ?? [];
+  if (!fragmentFiles.length) throw new Error("fragment carries no files");
+  if (fragmentFiles.some((f) => /\.exe$/i.test(f.name))) {
+    throw new Error("fragment must not carry installers (stage-release never uploads them)");
+  }
+
+  const installers = await Promise.all(
+    collectFinalizeInstallers(path.resolve(args.staging), args.signedDir).map(async ({ platform, file }) => {
+      const name = path.basename(file);
+      const [sha256, stat] = await Promise.all([sha256File(file), fsp.stat(file)]);
+      return { platform, name, bytes: stat.size, sha256, kind: kindFor(name), contentType: contentTypeFor(name), file };
+    }),
+  );
+
+  const files = fragmentFiles.map((f) => ({
+    ...f,
+    url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${f.platform}/${f.name}`,
+  }));
+  for (const installer of installers) {
+    files.push({ ...installer, url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${installer.platform}/${installer.name}` });
+  }
+
+  // mac 双源交叉校验：分片哈希必须与桶上 CI 清单一致（都在线，代价是两个小 GET）。
+  for (const platform of new Set(fragmentFiles.filter((f) => f.platform.startsWith("macos")).map((f) => f.platform))) {
+    const published = await fetchMacSumsMap(target, releaseId, platform);
+    for (const f of fragmentFiles.filter((x) => x.platform === platform && /\.(dmg|zip)$/i.test(x.name))) {
+      if (published.get(f.name) !== f.sha256) {
+        throw new Error(`fragment hash for ${platform}/${f.name} disagrees with published SHA256SUMS (${published.get(f.name)})`);
+      }
+    }
+  }
+
+  // windows SHA256SUMS：签名 exe（本地）+ zip（分片），按名字排序重建。
+  for (const platform of new Set(installers.map((i) => i.platform))) {
+    const platformInstallers = installers.filter((i) => i.platform === platform);
+    if (platformInstallers.length !== 1) {
+      throw new Error(`expected exactly one installer for ${platform}; got ${platformInstallers.map((i) => i.name).join(", ")}`);
+    }
+    const zips = fragmentFiles.filter((f) => f.platform === platform && /\.zip$/i.test(f.name));
+    if (zips.length !== 1) throw new Error(`fragment must carry exactly one zip for ${platform}`);
+    const body = `${[platformInstallers[0], ...zips]
+      .map((f) => ({ name: f.name, sha256: f.sha256 }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => `${f.sha256}  ${f.name}`)
+      .join("\n")}\n`;
+    files.push({
+      platform,
+      name: "SHA256SUMS.txt",
+      bytes: Buffer.byteLength(body),
+      sha256: crypto.createHash("sha256").update(body, "utf8").digest("hex"),
+      kind: "checksums",
+      contentType: CONTENT_TYPES[".txt"],
+      body,
+      url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/SHA256SUMS.txt`,
+    });
+  }
+  files.sort((a, b) => a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
+
+  const publishedAt = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+  const release = {
+    ...manifest,
+    channel,
+    releaseId,
+    publishedAt,
+    manifestUrl: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`,
+    files: files.map(({ file, body, ...entry }) => entry),
+  };
+  const releaseBody = `${JSON.stringify(release, null, 2)}\n`;
+  const latest = {
+    schemaVersion: 1,
+    channel,
+    releaseId,
+    version: manifest.product.version,
+    publishedAt,
+    manifest: release.manifestUrl,
+  };
+  const latestBody = `${JSON.stringify(latest, null, 2)}\n`;
+
+  console.log(`Finalize ${releaseId} (${channel}, ${target.clientKind}) — fragment ${fragmentFiles.length} + local ${installers.length} files`);
+  for (const f of files) console.log(`  ${f.platform}/${f.name}  ${f.bytes}  ${f.sha256.slice(0, 12)}…`);
+
+  if (!args.noRepoMetadata) {
+    const releasesDir = path.join(desktopRoot, "distribution", "releases");
+    await fsp.mkdir(releasesDir, { recursive: true });
+    await fsp.writeFile(path.join(releasesDir, `${releaseId}.json`), releaseBody, "utf8");
+  }
+  if (args.dryRun) {
+    console.log("dry-run: skip upload & verify");
+    return;
+  }
+
+  const client = await createStorageClient(target);
+  const journal = loadJournal(releaseId);
+  const manifestObject = {
+    key: `${target.releaseRoot}/${releaseId}/release.json`,
+    body: releaseBody,
+    bytes: Buffer.byteLength(releaseBody),
+    sha256: crypto.createHash("sha256").update(releaseBody, "utf8").digest("hex"),
+    cache: "public, max-age=31536000, immutable",
+    contentType: CONTENT_TYPES[".json"],
+    immutable: true,
+    mustBeNew: true,
+  };
+  const objects = [
+    ...installers.map((i) => ({
+      key: `${target.releaseRoot}/${releaseId}/${i.platform}/${i.name}`,
+      file: i.file,
+      bytes: i.bytes,
+      sha256: i.sha256,
+      cache: "public, max-age=31536000, immutable",
+      contentType: i.contentType,
+      immutable: true,
+    })),
+    ...files.filter((f) => f.kind === "checksums").map((f) => ({
+      key: `${target.releaseRoot}/${releaseId}/${f.platform}/${f.name}`,
+      body: f.body,
+      bytes: f.bytes,
+      sha256: f.sha256,
+      cache: "public, max-age=31536000, immutable",
+      contentType: f.contentType,
+      immutable: true,
+    })),
+    manifestObject,
+  ];
+
+  for (const obj of objects) {
+    const journalKey = `${region}:${obj.key}`;
+    const url = `${target.baseUrl}/${obj.key}`;
+    const recorded = journal.get(journalKey);
+    if (recorded && recorded.sha256 !== obj.sha256) {
+      throw new Error(
+        `local bytes changed since the last finalize attempt for ${obj.key} `
+        + `(journal ${recorded.sha256.slice(0, 12)}… != ${obj.sha256.slice(0, 12)}…); `
+        + `a re-signed installer poisons this release id — use a new --release-id`,
+      );
+    }
+    const head = await headStatus(url);
+    if (head.status === 200 && obj.mustBeNew) {
+      throw new Error(`release manifest already exists: ${obj.key} (this release id is finalized; run --promote-release instead)`);
+    }
+    if (head.status === 200 && head.length === obj.bytes) {
+      // 覆盖"上传后、记账前"的崩溃窗口：桶上长度一致即收养记账。
+      journal.set(journalKey, { region, key: obj.key, sha256: obj.sha256, bytes: obj.bytes });
+      await saveJournal(releaseId, journal);
+      console.log(`already uploaded ${obj.key}`);
+      continue;
+    }
+    if (head.status === 200) {
+      throw new Error(`object exists with different length: ${obj.key} (bucket ${head.length} != local ${obj.bytes}); use a new --release-id`);
+    }
+    if (head.status !== 404) throw new Error(`unexpected HEAD status ${head.status} for ${obj.key}`);
+    await uploadObject(client, obj);
+    journal.set(journalKey, { region, key: obj.key, sha256: obj.sha256, bytes: obj.bytes });
+    await saveJournal(releaseId, journal);
+  }
+
+  // 收口验证：分片对象 + 本地对象 + release.json 全量 HEAD。
+  let failures = 0;
+  for (const f of files) {
+    if (!(await verifyUrl(f.url, f.bytes, `${f.platform}/${f.name}`))) failures += 1;
+  }
+  if (!(await verifyUrl(`${target.baseUrl}/${manifestObject.key}`, manifestObject.bytes, manifestObject.key))) failures += 1;
+  if (failures) throw new Error(`${failures} object(s) failed verification; do NOT announce this release`);
+
+  if (!args.skipLatest) {
+    const latestObject = {
+      key: target.latestKey,
+      body: latestBody,
+      bytes: Buffer.byteLength(latestBody),
+      cache: "no-cache",
+      contentType: CONTENT_TYPES[".json"],
+    };
+    await uploadObject(client, latestObject);
+    if (!(await verifyObject(target, latestObject))) throw new Error("latest.json failed verification; do NOT announce this release");
+    if (!args.noRepoMetadata) {
+      await fsp.writeFile(path.join(desktopRoot, "distribution", target.repoLatestFile), latestBody, "utf8");
+    }
+  }
+  console.log(`release ${releaseId} finalized and verified: ${release.manifestUrl}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.promoteRelease) {
     await promoteRelease(args);
+    return;
+  }
+  if (args.finalize) {
+    await finalizeRelease(args);
     return;
   }
   const target = resolveTarget(resolvePublishRegion(args));

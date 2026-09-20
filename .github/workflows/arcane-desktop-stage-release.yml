@@ -1,0 +1,184 @@
+name: Stage Arcane Desktop Release
+
+# 分阶段发布·阶段 1（设计见 apps/desktop/docs/phased-release-design.md）：
+# 从 build run（Release Arcane Desktop）取 mac 全部产物与 windows -pkg（zip），
+# 上传版本目录里签名器不触碰的对象（mac dmg/zip/SHA256SUMS、windows zip），
+# 产出 manifest 分片 artifact，并创建 GitHub draft release 挂载已上传资产。
+# 不出 release.json、不碰 latest；Windows 安装器由本地签名后经
+# publish-release.mjs --finalize 收口并转正 draft。
+# 触发时机：本地已签名完成之后（先签后上云——签名是最脆环节，失败时零云端痕迹）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Build run id (Release Arcane Desktop) to relay artifacts from"
+        required: true
+        type: string
+      release_id:
+        description: "Release id (default: <version>-<commit8>; intl leg gains -intl suffix)"
+        required: false
+        type: string
+      channel:
+        description: "Release channel recorded at finalize"
+        required: true
+        default: private-beta
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arcane-desktop-stage-${{ inputs.release_id || inputs.build_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: Stage ${{ matrix.region }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        region: [cn, intl]
+    env:
+      OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
+      OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - name: Resolve build commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.build_run_id }}" --jq .head_sha)
+          if [ -z "$sha" ] || [ "$sha" = "null" ]; then
+            echo "build run ${{ inputs.build_run_id }} has no head sha" >&2
+            exit 1
+          fi
+          echo "BUILD_SHA=$sha" >> "$GITHUB_ENV"
+
+      - name: Check out source at the build commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BUILD_SHA }}
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Compute release id
+        run: |
+          set -euo pipefail
+          base="${{ inputs.release_id }}"
+          if [ -z "$base" ]; then
+            version=$(node -p "require('./apps/desktop/package.json').version")
+            base="${version}-${BUILD_SHA:0:8}"
+          fi
+          if [ "${{ matrix.region }}" = "intl" ] && [[ "$base" != *-intl ]]; then
+            base="${base}-intl"
+          fi
+          echo "RELEASE_ID=$base" >> "$GITHUB_ENV"
+
+      - name: Download mac artifacts from the build run
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: raw-mac
+          pattern: arcane-desk-macos-*-${{ matrix.region }}-*
+
+      - name: Download windows package artifacts from the build run
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+          path: raw-win
+          pattern: arcane-desk-windows-*-${{ matrix.region }}-pkg-*
+
+      - name: Flatten into platform staging tree
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          found=0
+          for dir in raw-mac/* raw-win/*; do
+            [ -d "$dir" ] || continue
+            platform=$(basename "$dir" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-(pkg-)?[0-9a-f]{40}$/\1/')
+            mkdir -p "staging/$platform"
+            cp "$dir"/* "staging/$platform/"
+            found=$((found + 1))
+          done
+          if [ "$found" -lt 3 ]; then
+            echo "expected at least 3 platform artifacts (2 mac + 1+ windows), found $found" >&2
+            exit 1
+          fi
+          # -exe artifact 绝不能出现在阶段 1：本地签名前的安装器不上桶。
+          if find staging -name '*.exe' | grep -q .; then
+            echo "installer artifacts must not be staged from CI" >&2
+            exit 1
+          fi
+          find staging -type f | sort
+
+      - name: Stage release objects
+        run: |
+          node apps/desktop/scripts/stage-release.mjs \
+            --staging staging \
+            --region "${{ matrix.region }}" \
+            --release-id "$RELEASE_ID" \
+            --out-fragment "fragment-${{ matrix.region }}.json"
+
+      - name: Upload fragment artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-fragment-${{ matrix.region }}-${{ env.RELEASE_ID }}
+          path: fragment-${{ matrix.region }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Create or append draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p gh-assets
+          intl_suffix=""
+          if [ "${{ matrix.region }}" = "intl" ]; then intl_suffix="-intl"; fi
+          for platform_dir in staging/*; do
+            platform=$(basename "$platform_dir")
+            for source in "$platform_dir"/*; do
+              name=$(basename "$source")
+              if [[ "$name" == SHA256SUMS* ]]; then
+                name="SHA256SUMS-$platform$intl_suffix.txt"
+              fi
+              target="gh-assets/$name"
+              if [ -e "$target" ]; then
+                echo "duplicate GitHub release asset name: $name" >&2
+                exit 1
+              fi
+              cp "$source" "$target"
+            done
+          done
+          if gh release view "$RELEASE_ID" --json isDraft --jq .isDraft | grep -q true; then
+            gh release upload "$RELEASE_ID" gh-assets/* --clobber
+          elif gh release view "$RELEASE_ID" >/dev/null 2>&1; then
+            echo "release $RELEASE_ID is already published; refusing to touch it" >&2
+            exit 1
+          else
+            gh release create "$RELEASE_ID" \
+              --draft \
+              --title "Arcane Desk $RELEASE_ID" \
+              --target "$BUILD_SHA" \
+              gh-assets/*
+          fi
