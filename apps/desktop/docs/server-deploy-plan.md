@@ -24,7 +24,7 @@
 | skill 部署 | 包内基线 + OSS/R2 OTA（latest.json 指针 → 不可变 revision 包，逐文件 SHA256） | `src/main/skills-updater.mjs`、`scripts/publish-skills.mjs` |
 | region 双轨 | 构建期 flavor（cn/intl），单一事实源默认值表 | `src/main/region.mjs:19-51` |
 | mod 安装 | mod-manager stage/commit，索引 bytes+sha256 字节级校验 | `skills/prep/arcane-fvtt-mods/scripts/mod-manager.mjs:1211-1218` |
-| 本机 ops | 探测 30000 → 启停 → 日志判定 | `skills/prep-intl/arcane-fvtt-ops/SKILL.md:30-63` |
+| 本机 ops | 探测 30000 → 启停 → 日志判定 | `skills/prep/arcane-fvtt-ops/SKILL.md` |
 | 连接 | 内嵌面板（URL + cookie，executeJavaScript 注入 SDK）；CLI 走 CDP | `src/main/main.js:59,322-412`、`packages/fvtt-cli/src/cli.ts:226-227` |
 
 服务器轨道要复用的资产全部已在 main：region 表、skills 指针协议、mod 索引与校验、ops 探测逻辑、数据目录契约（`Config/`、`Data/`、`Logs/`、`.arcane-*`）。
@@ -68,7 +68,7 @@
 
 ## 3. 探测-再-执行（deploy 决策树）
 
-新 skill：`arcane-fvtt-server`（cn/intl 双语，走 composer 覆盖树）。首步永远是探测，探测结果决定动作：
+新 skill：`arcane-fvtt-server`（**中文单源**——上游 `68db891` 已删除 prep-intl 覆盖树与 composer，cn/intl 两个 flavor 打包发布同一棵 `skills/prep` 树，模型跟随用户语言自适应）。首步永远是探测，探测结果决定动作：
 
 ```
 探测（local 或 --target ssh:user@host）
@@ -340,7 +340,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 | Node | 22.23.2（镜像内）/ 24.x 仅开发 | 镜像基础层 |
 | dnd5e | 5.3.3 | region mod 索引（cn OSS / intl R2） |
 | mod 集 | cn 35 包 / intl 5 包（dae 13.0.29、midi-qol 13.0.65…） | 同上，索引 generated 时间戳即版本 |
-| mod-manager | = skill bundle revision（cn 10 / intl 1） | 镜像 bootstrap + 启动自更新 |
+| mod-manager | = skill bundle revision（**单一计数器**——上游 `68db891` 后 cn/intl 同树同 revision，不再有 intl 独立计数） | 镜像 bootstrap + 启动自更新 |
 | skill 文本 | 同 revision | 不变：skill 仍在 desktop agent 侧，本方案不改 skill 分发 |
 | desktop App | 0.4.3 / Electron 44 / pi 0.84.3 | 不变（desktop 仍是控制面） |
 
@@ -396,7 +396,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 
 ## 9. 分支与里程碑
 
-分支 `feat/server-deploy`（实现时自 main 切；若 intl M4 skill packs 已合入则直接受益于 composer 双语机制，未合入也不阻塞——镜像轨道不依赖 skill 双语）。
+分支 `feat/server-deploy`（实现时自 main 切）。注：intl skill packs（M4 双树 + composer）已被上游 `68db891` 撤销、回归中文单源，本方案不再依赖任何双语机制——新 skill 只写一棵 `skills/prep` 中文树，cn/intl 同树发布（intl 仅 R2 前缀独立）。
 
 - **M1 镜像与发布**：Dockerfile/入口/healthcheck、compose、镜像 tar.gz 发布物与 CI（save/gzip/sizeGate/指针协议）、版本闸。
 - **M2 deploy skill**：`arcane-fvtt-server`（探测-再-执行决策树、Docker 部署、world 用户与默认密码初始化、连接信息与玩家 join 链接交付）。
@@ -417,7 +417,7 @@ region 接线：`region.mjs` 默认值表加 `serverDeployBaseUrl`（cn=OSS 前�
 
 ## 附录 A：首次接入话术（小白单一主路径，Windows / 全云厂商）
 
-`arcane-fvtt-server` skill 的逐字引导文案（实现进 `references/ssh-onboarding.md`，intl 包出英文版）。原则：**用户零选择**——分支全部由 skill 决定；用户全程只做两件事：跑一条 skill 给好的命令、输一次 yes + 一次密码。
+`arcane-fvtt-server` skill 的逐字引导文案（实现进 `references/ssh-onboarding.md`；中文单源，英文用户由模型自适应转述——上游已定的 skills 语言策略）。原则：**用户零选择**——分支全部由 skill 决定；用户全程只做两件事：跑一条 skill 给好的命令、输一次 yes + 一次密码。
 
 **厂商 → 默认登录名映射**（skill 内置，登录失败自动试下一候选）：
 
