@@ -38,6 +38,10 @@ const exactDirectories = new Map([
     "check-skills-revision.mjs",
     "desktop-release-metadata.mjs",
     "dist.mjs",
+    "e2e-drive-update.mjs",
+    "e2e-local-feed-server.mjs",
+    "e2e-make-feed.mjs",
+    "e2e-verify-version.mjs",
     "mac-adhoc-sign.mjs",
     "module-builder-vendor",
     "prepare-bundled-node.mjs",
@@ -52,6 +56,7 @@ const exactDirectories = new Map([
     "vendor-module-builder.mjs",
     "verify-package.mjs",
     "verify-source.mjs",
+    "verify-update-feed.mjs",
     "write-sha256sums.mjs",
   ]],
   ["distribution", {
