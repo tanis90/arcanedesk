@@ -26,6 +26,9 @@ const REGION_DEFAULTS = Object.freeze({
     searchZaiEngine: "search_pro",
     skillsUpdateBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/skills",
+    // electron-updater feed 基址（auto-update-design §3）：channel 由调用方拼在路径里。
+    updateFeedBaseUrl:
+      "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/update",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
     // 包内基线目录（相对 app 根的 POSIX 路径）：skills 为中文单源 skills/prep，
     // 两个 flavor 相同（skill 是模型侧指令，不随界面语言分叉）。
@@ -43,6 +46,7 @@ const REGION_DEFAULTS = Object.freeze({
     searchZaiBaseUrl: "https://api.z.ai/api/paas/v4/web_search",
     searchZaiEngine: "search-prime",
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
+    updateFeedBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/update",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
     bundledSkillsDir: "skills/prep",
     systemPromptsDir: "generated/system-prompts-intl",
@@ -64,6 +68,7 @@ const REGION_ENV_KEYS = Object.freeze({
   searchZaiBaseUrl: "ARCANE_SEARCH_ZAI_BASE_URL",
   searchZaiEngine: "ARCANE_SEARCH_ZAI_ENGINE",
   skillsUpdateBaseUrl: "ARCANE_SKILLS_UPDATE_BASE_URL",
+  updateFeedBaseUrl: "ARCANE_UPDATE_FEED_BASE_URL",
   modIndexUrl: "ARCANE_MOD_INDEX_URL",
 });
 

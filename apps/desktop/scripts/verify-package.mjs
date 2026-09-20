@@ -47,6 +47,7 @@ export const requiredFiles = [
   "distribution/community-distribution.json",
   "generated/desktop-release.json",
   "generated/region.json",
+  "generated/app-update.yml",
   "generated/renderer-assets/marked/lib/marked.umd.js",
   "generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js",
   "generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css",
@@ -66,6 +67,8 @@ export const requiredFiles = [
   "node_modules/katex/dist/katex.min.css",
   "node_modules/katex/dist/fonts/KaTeX_Main-Regular.woff2",
   "node_modules/mermaid/dist/mermaid.min.js",
+  "node_modules/electron-updater/package.json",
+  "node_modules/electron-updater/out/main.js",
 ];
 
 const forbiddenPaths = [
@@ -82,7 +85,7 @@ export const exactDirectories = new Map([
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
-  ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
+  ["generated", ["desktop-release.json", "region.json", "app-update.yml", "renderer-assets"]],
 ]);
 
 // generated/ 的精确清单随 region flavor 变化：intl 包必须携带英文 system prompts

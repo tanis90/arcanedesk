@@ -116,12 +116,32 @@ if (process.env.ARCANE_RELEASE_PUBLISHED_AT) manifest.publishedAt = process.env.
 
 const regionManifest = { schemaVersion: 1, region: buildRegion };
 
+// electron-updater 运行期硬依赖（auto-update-design §5.1/§5.4）：下载阶段必读
+// resources/app-update.yml 的 updaterCacheDirName（缺失 ENOENT），不走 builder publish
+// 则 electron-builder 不会生成它。占位 url 无发布语义，运行期被 setFeedURL 整体覆盖。
+const appUpdateManifest = {
+  provider: "generic",
+  url: "https://127.0.0.1/",
+  updaterCacheDirName: appPackage.productName,
+};
+
 const output = path.join(desktopRoot, "generated", "desktop-release.json");
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 fs.writeFileSync(
   path.join(desktopRoot, "generated", "region.json"),
   `${JSON.stringify(regionManifest, null, 2)}\n`,
+  "utf8",
+);
+fs.writeFileSync(
+  path.join(desktopRoot, "generated", "app-update.yml"),
+  [
+    `# ${appPackage.productName} auto-update runtime config (placeholder; overridden by setFeedURL at runtime).`,
+    `provider: ${appUpdateManifest.provider}`,
+    `url: ${appUpdateManifest.url}`,
+    `updaterCacheDirName: ${appUpdateManifest.updaterCacheDirName}`,
+    "",
+  ].join("\n"),
   "utf8",
 );
 
