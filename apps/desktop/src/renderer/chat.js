@@ -960,6 +960,10 @@ function summarizeArgs(toolName, args) {
         return t("chat.card.actionCount", { count: args.actions?.length ?? 1 });
       case "foundry_conditions_set":
         return (args.conditions ?? []).map(condition => `${condition.key}: ${condition.active ? "+" : "−"}`).join(", ");
+      case "web_search": {
+        const q = String(args.query ?? "").trim();
+        return q.length > 80 ? `“${q.slice(0, 80)}…”` : `“${q}”`;
+      }
       default:
         return "";
     }
@@ -1079,7 +1083,28 @@ function finishToolCard(toolCallId, toolName, event) {
     card.appendChild(body);
   }
   body.appendChild(el("div", "io-label", event.isError ? t("chat.card.error") : t("chat.card.output")));
-  body.appendChild(el("pre", null, shorten(text)));
+  if (toolName === "web_search" && !event.isError) {
+    // 搜索结果以链接列表呈现(publishedAt 悬浮提示);解析失败回落 pre。
+    try {
+      const parsed = JSON.parse(text);
+      const list = el("div", "ss-results");
+      for (const item of (parsed.results ?? [])) {
+        const link = el("a", "ss-result", item.title ?? item.url);
+        link.href = item.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+        if (item.publishedAt) link.title = item.publishedAt;
+        list.appendChild(link);
+      }
+      if (parsed.meta?.backend) {
+        const note = [parsed.results.length, parsed.meta.cached ? "· cached" : null].filter(Boolean).join(" ");
+        body.appendChild(el("div", "ss-results-note", `${parsed.meta.backend} · ${note}`));
+      }
+      body.appendChild(list);
+    } catch {
+      body.appendChild(el("pre", null, shorten(text)));
+    }
+  } else {
+    body.appendChild(el("pre", null, shorten(text)));
+  }
   // 完成且无回执详情的卡片收起,保持时间线干净;有 receipt 或错误时保持展开。
   if (!event.isError && !receipt) card.classList.remove("open");
   scrollToEnd();
@@ -1471,7 +1496,19 @@ function onEvent(event) {
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
       break;
+    case "search_usage": {
+      const chip = document.getElementById("search-usage");
+      if (chip) {
+        chip.hidden = false;
+        chip.textContent = t("ss.usage.line", {
+          count: event.data?.used ?? 0,
+          backend: t(`ss.backend.${event.data?.backend ?? "custom"}`),
+        });
+      }
+      break;
+    }
     case "agent_end":
+      { const chip = document.getElementById("search-usage"); if (chip) chip.hidden = true; }
       closeWorkBlock();
       if (!selectedTaskId) setBusy(false);
       // Metadata is patched in place by receiveEvent, including background tasks.
@@ -2611,6 +2648,7 @@ async function refreshSettings() {
   void refreshNotificationSettings();
   const settings = await window.arcane.getSettings();
   refreshVoiceSettings(); // 语音分区与 provider 同页,一并刷新
+  void refreshSearchSettings(); // 探知珠状态依赖 spark 凭据,打开设置时回刷
   refreshWebPermissions();
   refreshLocaleSetting();
   refreshTelemetryConsent();
@@ -3155,6 +3193,111 @@ document.getElementById("vs-save").addEventListener("click", async () => {
   }
 });
 
+// ---------- 设置:联网搜索(prep web search) ----------
+// 探知珠 + 模式卡:选卡即保存;自带 Key 的模式才有「保存凭据」。
+const ssStateEl = document.getElementById("ss-state");
+const ssStateText = document.getElementById("ss-state-text");
+const ssStateAction = /** @type {HTMLButtonElement} */ (document.getElementById("ss-state-action"));
+const ssModesEl = document.getElementById("ss-modes");
+const ssCards = /** @type {HTMLElement[]} */ ([...ssModesEl.querySelectorAll(".ss-mode-card")]);
+const ssDetail = document.getElementById("ss-detail");
+const ssBackendRow = document.getElementById("ss-backend-row");
+const ssBackend = /** @type {HTMLSelectElement} */ (document.getElementById("ss-backend"));
+const ssEndpointRow = document.getElementById("ss-endpoint-row");
+const ssEndpoint = /** @type {HTMLInputElement} */ (document.getElementById("ss-endpoint"));
+const ssApikeyLabel = document.getElementById("ss-apikey-label");
+const ssApikey = /** @type {HTMLInputElement} */ (document.getElementById("ss-apikey"));
+const ssSave = /** @type {HTMLButtonElement} */ (document.getElementById("ss-save"));
+const ssStatus = document.getElementById("ss-status");
+let lastSearchCfg = null;
+
+function renderSearchUi() {
+  const cfg = lastSearchCfg;
+  if (!cfg) return;
+  const mode = cfg.mode ?? "spark";
+  // 模式卡选中态
+  for (const card of ssCards) {
+    const active = card.dataset.mode === mode;
+    card.classList.toggle("active", active);
+    card.setAttribute("aria-checked", String(active));
+  }
+  // 凭据细节区:只有自带 Key 的两种模式展开
+  const ownKey = mode === "byok" || mode === "custom";
+  ssDetail.hidden = !ownKey;
+  ssBackendRow.hidden = mode !== "byok";
+  ssEndpointRow.hidden = mode !== "custom";
+  ssApikeyLabel.textContent = t(mode === "custom" ? "ss.custom.key" : "ss.apikey");
+  // 探知珠状态行
+  let state = "off";
+  let text = t("ss.state.off");
+  if (mode === "spark") {
+    state = cfg.sparkHasKey ? "ready" : "needs-key";
+    text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.spark");
+  } else if (ownKey) {
+    if (cfg.hasKey) {
+      state = "ready";
+      text = mode === "byok"
+        ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
+        : t("ss.state.ready.custom");
+    } else {
+      state = "needs-key";
+      text = t("ss.state.needsKey.own");
+    }
+  }
+  ssStateEl.dataset.state = state;
+  ssStateText.textContent = text;
+  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey);
+}
+
+async function refreshSearchSettings() {
+  const cfg = await window.arcane.getSearchConfig();
+  if (!cfg) return;
+  lastSearchCfg = cfg;
+  ssBackend.value = cfg.byokBackend ?? "zai";
+  ssEndpoint.value = cfg.customBaseUrl ?? "";
+  ssApikey.value = ""; // 留空/掩码语义同 provider:留空 = 保持已保存的 Key
+  renderSearchUi();
+}
+
+/** 保存并回刷;失败时把结构化错误写到状态行。 */
+async function persistSearchConfig(payload) {
+  const result = await window.arcane.saveSearchConfig(payload);
+  if (!result?.ok) {
+    ssStatus.textContent = result?.error ? fmtIpc(result.error) : t("common.unknownError");
+    return false;
+  }
+  await refreshSearchSettings();
+  ssStatus.textContent = t("ss.status.saved");
+  return true;
+}
+
+// 选卡即保存:模式选择没有「保存」按钮,和无障碍 radiogroup 语义对齐。
+ssModesEl.addEventListener("click", (event) => {
+  const origin = event.target instanceof Element ? event.target : null;
+  const card = /** @type {HTMLElement | null} */ (origin?.closest(".ss-mode-card"));
+  if (!card || !ssModesEl.contains(card)) return;
+  const mode = card.dataset.mode;
+  if (!mode || mode === lastSearchCfg?.mode) return;
+  ssStatus.textContent = "";
+  void persistSearchConfig({ mode });
+});
+
+// 凭据保存:自带 Key 的两种模式共用(掩码回显、换接收方要求重填)。
+ssSave.addEventListener("click", () => {
+  const mode = lastSearchCfg?.mode;
+  ssStatus.textContent = "";
+  void persistSearchConfig({
+    mode,
+    byokBackend: ssBackend.value,
+    apiKey: ssApikey.value,
+    customBaseUrl: mode === "custom" ? ssEndpoint.value.trim() : "",
+  });
+});
+
+ssStateAction.addEventListener("click", () => openProviderSettings("arcane-spark"));
+
+refreshSearchSettings();
+
 // ---------- 设置:通用(界面语言) ----------
 const localeSelect = /** @type {HTMLSelectElement} */ (document.getElementById("locale-select"));
 
@@ -3199,6 +3342,7 @@ window.ArcaneI18n.onLocaleChange(() => {
   if (currentModelLabel) updateModelLabels(currentModelLabel);
   window.__arcaneRefreshVoice?.();
   renderPermissionRequest();
+  renderSearchUi(); // 探知珠状态行是动态文案,跟着新语言重渲染
   if (displaySourceRequest) showDisplaySourcePicker(displaySourceRequest);
   if (settingsBackdrop.classList.contains("open")) refreshSettings();
   activityView?.render();

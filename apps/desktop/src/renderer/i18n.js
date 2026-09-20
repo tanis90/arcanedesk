@@ -64,6 +64,9 @@
     scope.querySelectorAll("[data-i18n-alt]").forEach((node) => {
       /** @type {HTMLElement} */ (node).setAttribute("alt", t(node.dataset.i18nAlt));
     });
+    scope.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+      /** @type {HTMLElement} */ (node).setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+    });
   }
 
   function setLocale(next) {

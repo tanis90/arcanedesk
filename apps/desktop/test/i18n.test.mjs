@@ -4,7 +4,7 @@
 //   3) user-facing JS string literals contain no unextracted Chinese
 //   4) renderer files remain compatible with classic <script> loading
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -71,7 +71,7 @@ test("site permissions live inside General instead of a dedicated settings tab",
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const paneRefs = [...html.matchAll(/class="tab(?: active)?" data-pane="([^"]+)"/g)]
     .map((match) => match[1]);
-  assert.deepEqual(paneRefs, ["pane-model", "pane-voice", "pane-general"]);
+  assert.deepEqual(paneRefs, ["pane-model", "pane-voice", "pane-search", "pane-general"]);
   assert.doesNotMatch(html, /id="pane-permissions"/);
   assert.match(
     html,
@@ -304,4 +304,18 @@ test("agent system prompts carry a reply-language directive for en-US UI", () =>
   const agentHost = readFileSync(path.join(appRoot, "src/main/agent-host.js"), "utf8");
   assert.match(agentHost, /systemPromptOverride: \(\) => \[systemPrompt, languageDirective\]/);
   assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[prepPreamble, languageDirective\]/);
+});
+
+test("intl system prompt source tree passes the CJK leakage gate", () => {
+  // 与 prepare-desktop-release.mjs 的 assertNoCjkLeak 同一规则：intl 包只携带
+  // 英文 prompt 基线。该门禁原本只在 intl 构建时执行，中文别名写进
+  // system-prompts-intl 后要烧掉整轮 release 构建才暴露（2026-09-18 事故），
+  // 故前移到常规 CI。
+  const CJK_PATTERN = /[㐀-䶿一-鿿豈-﫿]/;
+  const intlDir = path.join(appRoot, "system-prompts-intl");
+  for (const name of readdirSync(intlDir)) {
+    const body = readFileSync(path.join(intlDir, name), "utf8");
+    const leak = body.split("\n").findIndex((line) => CJK_PATTERN.test(line));
+    assert.ok(leak === -1, `system-prompts-intl/${name} leaks CJK at line ${leak + 1}`);
+  }
 });

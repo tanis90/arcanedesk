@@ -61,4 +61,4 @@ If /game is still loading, call world_status once to wait for initialization. If
 
 ## Known names
 
-阿弗林/牧师/Alverin maps to Alverin Silvershade (a Token may show Alverin); 格蕾斯 maps to Grace; 汉娜 maps to Hannah; 阿拉米尔/Aramil/Alamir maps to Aramil. Defer to actually discovered Tokens; with duplicate names or multiple Tokens, disambiguate by the DM's instruction.
+Alverin (also called Priest) maps to Alverin Silvershade — a Token may show Alverin; Aramil (also Aramir) maps to Aramil; Grace and Hannah map to Tokens with those names. Defer to actually discovered Tokens; with duplicate names or multiple Tokens, disambiguate by the DM's instruction.

@@ -67,7 +67,6 @@
       "generated/desktop-release.json",
       "generated/region.json",
       "generated/renderer-assets/**/*",
-      "generated/skills-intl/**/*",
       "generated/system-prompts-intl/**/*",
       "LICENSE",
       "NOTICE",

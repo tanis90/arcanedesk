@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "channel": "private-beta",
-  "releaseId": "0.4.3-db02825f-intl",
+  "releaseId": "0.4.3-1b1e90da-intl",
   "version": "0.4.3",
-  "publishedAt": "2026-09-11T11:10:40Z",
-  "manifest": "https://dl.arcanedesk.app/desktop/arcane-desk-intl/releases/0.4.3-db02825f-intl/release.json"
+  "publishedAt": "2026-09-20T05:09:28Z",
+  "manifest": "https://dl.arcanedesk.app/desktop/arcane-desk-intl/releases/0.4.3-1b1e90da-intl/release.json"
 }

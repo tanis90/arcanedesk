@@ -208,6 +208,7 @@ const KNOWN_PROVIDER_IDS = new Set([
   "anthropic",
   "google",
   "agentrouter",
+  "intern-inkstone",
 ]);
 
 export function providerFamily(providerId) {
