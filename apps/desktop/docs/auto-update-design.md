@@ -133,7 +133,9 @@ files:
      无法为它重生成 feed。一次性处理：用本地已签名字节（仓库根
      `github-release-assets-{cn,intl}/`）计算 sha512，本地生成该版本的 2 个
      feed 并直接上传 + verify（脚本提供 `--backfill-feeds <release-id>`，步骤
-     同时记入 runbook）。仅 0.4.3 需要，0.4.4 起无此问题。
+     同时记入 runbook）。仅 0.4.3 需要，0.4.4 起无此问题。**已定（2026-09-20）：
+     M1 阶段即对 cn/intl 两桶执行回填上传**——0.4.3 客户端没有 updater、不消费
+     feed，上传为零线上风险，价值是提前用真桶验证「生成→上传→verify」全链路。
 4. **未签名门禁（关键）**：切 latest 时若本次发布含 Windows NSIS `.exe` 且
    `windowsInstallersSigned === false`，默认**硬失败**——拒绝把未签名更新推给
    已安装用户（feed 是推送到用户手里的通道，比下载页敏感得多）。显式
@@ -303,8 +305,10 @@ app ready 后初始化 AppUpdater；注册四个 IPC handler，遵循现有
   - ready 跨启动：下载完成后重启应用，再点下载秒回 ready（pending 缓存命中）；
   - install 守卫：未 ready 调 `update:install` 无副作用；
   - 浮层交互：动作点击后自动收起、下载中关浮层不停、ready 不自动弹开。
-- **真机矩阵**：win-x64 / win-arm64 / mac-x64 / mac-arm64 × cn / intl
-  （feed 指向各自 region 桶）。arm64 Windows 真机是验收前置，需要确认在手。
+- **真机矩阵**：win-x64 / mac-x64 / mac-arm64 × cn / intl（feed 指向各自 region
+  桶）。**win-arm64 真机不在手（2026-09-20 确认），接受降级**：首期该架构只做
+  构建侧保障——产物构建、CI 通过、feed 双架构照常发布（选件正确性由 §8
+  findFile 机制 + 本地 E2E 覆盖逻辑），真机验收推迟到设备到位后随后续版本补验。
   Windows 侧另验 assisted NSIS（oneClick: false + 自定义安装目录）下
   quitAndInstall 换装后目录保持。
 - **runbook**：release-runbook.md 增补——feed 对象与切换语义、回滚操作不变
@@ -384,6 +388,7 @@ app ready 后初始化 AppUpdater；注册四个 IPC handler，遵循现有
 - 安装包体积（Electron + mermaid + node runtime，150MB+ 量级）带来的下载
   体验：本期接受全量下载；差分（blockmap 发布期重算）留作后续。中途退出丢
   下载进度（无断点续传）。
-- win-arm64 真机是否在手：验收矩阵前置，缺则该架构首期只做构建侧保障。
+- ~~win-arm64 真机是否在手~~ → 2026-09-20 确认不在手，接受降级：首期只做
+  构建侧保障，真机验收设备到位后补（§7）。
 - 更新结果的遥测上报（check/download/install 成败）：可跟随 skills-updater
   的 onRefreshResult 先例接现有遥测入口，非本期必需。
