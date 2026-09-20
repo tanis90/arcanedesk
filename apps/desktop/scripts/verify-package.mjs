@@ -51,7 +51,6 @@ export const requiredFiles = [
   "distribution/community-distribution.json",
   "generated/desktop-release.json",
   "generated/region.json",
-  "generated/app-update.yml",
   "generated/renderer-assets/marked/lib/marked.umd.js",
   "generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js",
   "generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css",
@@ -89,7 +88,7 @@ export const exactDirectories = new Map([
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
-  ["generated", ["desktop-release.json", "region.json", "app-update.yml", "renderer-assets"]],
+  ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
 ]);
 
 // generated/ 的精确清单随 region flavor 变化：intl 包必须携带英文 system prompts
@@ -230,6 +229,16 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
       errors.push(`${relative} contents differ: expected ${wanted.join(", ")}; got ${actual.join(", ")}`);
     }
+  }
+
+  // app-update.yml 是 extraResources 落在 resources/ 根（appRoot 的兄弟，与
+  // runtime/node 同级），不在 asar 应用目录内；electron-updater 运行期必读它，
+  // 缺 updaterCacheDirName 会在更新下载阶段 ENOENT。
+  const appUpdateYml = path.join(path.dirname(appRoot), "app-update.yml");
+  if (!fs.existsSync(appUpdateYml) || !fs.statSync(appUpdateYml).isFile()) {
+    errors.push("missing required file: app-update.yml (resources root)");
+  } else if (!fs.readFileSync(appUpdateYml, "utf8").includes("updaterCacheDirName:")) {
+    errors.push("resources root app-update.yml is missing updaterCacheDirName");
   }
 
   for (const candidates of electronLicensePaths(appRoot)) {

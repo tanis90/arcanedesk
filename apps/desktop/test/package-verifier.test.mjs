@@ -163,6 +163,13 @@ function stagePackagedApp(t, region, { skipIntlBaselines = false } = {}) {
     license: "https://raw.githubusercontent.com/nodejs/node/v22.23.2/LICENSE",
   }));
 
+  // extraResources 的 app-update.yml 落在 resources/ 根（appRoot 的兄弟，与
+  // runtime/node 同级），不在应用目录内。
+  fs.writeFileSync(
+    path.join(root, "resources", "app-update.yml"),
+    "provider: generic\nurl: https://127.0.0.1/\nupdaterCacheDirName: Arcane Desk\n",
+  );
+
   // win32 宿主强制 Electron 许可证文件（位于 resources 上一级），其余平台仅警告。
   for (const file of ["LICENSE.electron.txt", "LICENSES.chromium.html"]) {
     fs.writeFileSync(path.join(root, file), "placeholder");
@@ -174,25 +181,25 @@ test("intl packaged layout requires the english system prompts baseline", () => 
   const layout = packagedLayout("intl");
   assert.deepEqual(
     [...layout.exact.get("generated")].sort(),
-    ["app-update.yml", "desktop-release.json", "region.json", "renderer-assets", "system-prompts-intl"],
+    ["desktop-release.json", "region.json", "renderer-assets", "system-prompts-intl"],
   );
   assert.equal(layout.exact.has("generated/skills-intl"), false);
   assert.deepEqual(layout.exact.get("generated/system-prompts-intl"), ["combat.md", "prep.md"]);
   for (const rel of [
     "generated/system-prompts-intl/combat.md",
     "generated/system-prompts-intl/prep.md",
-    "generated/app-update.yml",
   ]) {
     assert.equal(layout.required.includes(rel), true, rel);
   }
+  assert.equal(layout.required.includes("generated/app-update.yml"), false);
 });
 
 test("cn packaged layout keeps the base generated contract", () => {
   const layout = packagedLayout("cn");
-  assert.deepEqual(layout.exact.get("generated"), ["desktop-release.json", "region.json", "app-update.yml", "renderer-assets"]);
+  assert.deepEqual(layout.exact.get("generated"), ["desktop-release.json", "region.json", "renderer-assets"]);
   assert.equal(layout.exact.has("generated/system-prompts-intl"), false);
   assert.equal(layout.required.includes("generated/system-prompts-intl/combat.md"), false);
-  assert.equal(layout.required.includes("generated/app-update.yml"), true);
+  assert.equal(layout.required.includes("generated/app-update.yml"), false);
   assert.equal(layout.required.includes("node_modules/electron-updater/out/main.js"), true);
 });
 
@@ -229,4 +236,11 @@ test("verifyPackagedApp rejects a packaged region that mismatches --expected-reg
   const { appRoot, data } = stagePackagedApp(t, "intl");
   const result = verifyPackagedApp(appRoot, { electronRuntime: data.electronRuntime, expectedRegion: "cn" });
   assert.match(result.errors.join("\n"), /packaged region: expected cn; got intl/);
+});
+
+test("verifyPackagedApp rejects a package missing resources root app-update.yml", (t) => {
+  const { appRoot, data } = stagePackagedApp(t, "cn");
+  fs.rmSync(path.join(path.dirname(appRoot), "app-update.yml"));
+  const result = verifyPackagedApp(appRoot, { electronRuntime: data.electronRuntime });
+  assert.match(result.errors.join("\n"), /missing required file: app-update\.yml \(resources root\)/);
 });
