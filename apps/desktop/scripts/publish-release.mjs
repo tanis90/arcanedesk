@@ -527,7 +527,12 @@ function amzDateOf(date) {
 }
 
 async function createR2Client(overrides = {}) {
-  const conf = loadR2Credentials(overrides.confFile);
+  // 完整显式覆盖（accountId/accessKeyId/secretAccessKey 三键齐备）= 测试/干跑语境：
+  // 不 consult 环境变量与 ~/.ossutil 的 ops 凭证——CI 上凭证测试要用注入值而不是本机配置。
+  const fullyOverridden = Boolean(overrides.accountId && overrides.accessKeyId && overrides.secretAccessKey);
+  const conf = fullyOverridden
+    ? { accountId: undefined, accessKeyId: undefined, secretAccessKey: undefined }
+    : loadR2Credentials(overrides.confFile);
   const accountId = overrides.accountId ?? conf.accountId;
   const accessKeyId = overrides.accessKeyId ?? conf.accessKeyId;
   const secretAccessKey = overrides.secretAccessKey ?? conf.secretAccessKey;
