@@ -1,0 +1,98 @@
+name: Publish Arcane Server Image
+
+# 服务器轨道发布入口(docs/server-deploy-plan.md §8):构建 arcane/arcane-fvtt 镜像
+# (安装器+运行时,不含 Foundry 本体与 mod)、docker save|gzip 出 tar.gz、
+# 假 foundry zip 冒烟,然后按 region 发布到 server/ 前缀。
+# 与 skills 通道同一纪律:revision 严格更大、不可变对象禁重传、HEAD cache-bust
+# 验收全过才切 server/latest.json。全程零 docker pull(基础镜像在 runner 侧拉取,
+# 用户侧只有 docker load)。
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Target flavor: cn → OSS arcane-package; intl → R2 arcane-desk-intl"
+        required: true
+        default: cn
+        type: choice
+        options:
+          - cn
+          - intl
+      platforms:
+        description: "Architectures to build (comma separated)"
+        required: true
+        default: amd64
+        type: string
+      skip_latest:
+        description: "Upload and verify immutable objects without moving server/latest.json"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arcane-server-image-${{ inputs.region }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & publish server image (${{ inputs.region }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: desktop-release
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up Docker Buildx (arm64 emulation)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install locked workspace dependencies
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Verify Desktop source
+        run: npm run verify:source --workspace arcane-desktop
+
+      - name: Run Desktop tests
+        run: npm test --workspace arcane-desktop
+
+      - name: Build server image (per platform)
+        run: |
+          set -euo pipefail
+          platforms=$(echo "${{ inputs.platforms }}" | tr ',' ' ')
+          for platform in $platforms; do
+            node apps/desktop/scripts/build-server-image.mjs --platform "$platform" --smoke
+          done
+
+      - name: Publish server image (${{ inputs.region }})
+        env:
+          OSS_RELEASE_KEY_ID: ${{ secrets.OSS_RELEASE_KEY_ID }}
+          OSS_RELEASE_KEY_SECRET: ${{ secrets.OSS_RELEASE_KEY_SECRET }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--region "${{ inputs.region }}")
+          if [[ "${{ inputs.skip_latest }}" == "true" ]]; then args+=(--skip-latest); fi
+          node apps/desktop/scripts/publish-server-image.mjs "${args[@]}"
+
+      - name: Upload build artifacts for audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-image-${{ inputs.region }}
+          path: |
+            apps/desktop/generated/server-image/server-release.json
+            apps/desktop/generated/server-image/docker-compose.yml
+          retention-days: 90
+          if-no-files-found: error

@@ -207,6 +207,17 @@
   领域法术 = 10"改为"2014 牧师 ≤2 环全列表 = 34"（SRD 32 + 典礼术/借鉴才学，验收器按
   计数制，非 SRD 条目不参与 known-membership 校验）。
 
+### arcane-fvtt-server（2026-09-20）
+
+- 交互预算 5 点：接入三事实问 / 用户终端跑公钥安装命令 / 冲突三选一 / "停着要不要启动" /
+  激活面板用户自填 adminKey+license。安全组放行、下载源选择、发行版探测等全部是 skill
+  侧探测或并行提示，不占交互点。
+- 决策三分法：探测序列 P1-P7 只读采集（C 类技术细节，零问话）；冲突三选一与残余问点是
+  B 类用户偏好；license/adminKey/SSH 私钥是 A 类用户资产，agent 永不代填/永不接触
+  （私钥永不进对话，会话会被持久化快照重放）。
+- 部署形态：镜像 tar.gz 走 arcane mirror（零 docker pull/registry）；公网开放 30000 是
+  部署目的，安全边界是 FVTT 账号体系；CDP 调试端口绝不可公网暴露。
+
 ### arcane-actor-update（2026-09-14）
 
 - 法术授予不置 `system.prepared`：dnd5e 5.3.3 源码确认 prepared 只是法术书页签标记，

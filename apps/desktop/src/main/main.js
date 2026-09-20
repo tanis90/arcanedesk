@@ -61,7 +61,9 @@ const ARCANE_APP_ICON = path.join(
 // --dev:detach 打开两侧 DevTools(chat renderer + Foundry view)
 const isDev = process.argv.includes("--dev");
 
-const DEFAULT_FOUNDRY_URL = process.env.ARCANE_FOUNDRY_URL || "http://localhost:30000";
+// Foundry 连接目标是"对话状态"而不是设置项(server-deploy-plan §7):foundry_open 带
+// url 时用之;不带则用上一次打开的地址(跨重启持久化到 userData/panel-target.json);
+// 两者都没有时不回落任何隐式默认——工具返回错误,面板保持空态。
 const ARCANE_WEBSITE_URL = REGION.websiteUrl;
 const CHAT_WIDTH_RATIO = 0.3;
 const CHAT_MIN_WIDTH = 320;
@@ -94,7 +96,32 @@ if (app.isPackaged) {
 }
 
 let mainWindow = null;
-let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
+let foundryTargetUrl = null;
+
+// 上次打开地址的持久化(启动时读,成功打开时写)。文件损坏按"没有记忆"处理,
+// 不抛错——首次打开的面板行为等价于全新安装。
+function panelTargetFile() {
+  return path.join(app.getPath("userData"), "panel-target.json");
+}
+function readRememberedFoundryTarget() {
+  try {
+    const parsed = JSON.parse(readFileSync(panelTargetFile(), "utf8"));
+    return typeof parsed?.url === "string" && /^https?:\/\//i.test(parsed.url) ? parsed.url : null;
+  } catch {
+    return null;
+  }
+}
+function rememberFoundryTarget(url) {
+  try {
+    writeFileSync(panelTargetFile(), `${JSON.stringify({ url }, null, 2)}\n`);
+  } catch (error) {
+    console.log("[panel-target] failed to persist:", error?.message ?? error);
+  }
+}
+function resolvedFoundryTarget() {
+  if (foundryTargetUrl === null) foundryTargetUrl = readRememberedFoundryTarget();
+  return foundryTargetUrl;
+}
 // 右屏两个 view(foundry / md 阅读器)的生命周期归 panel-surface 控制器(spec §8),
 // main.js 只留只读访问,不再持有可变引用——否则 readerView 可见时下面这些直摸点会静默失效。
 let panelSurfaces = null; // whenReady 里建;建好之前没有任何面板可排
@@ -518,7 +545,25 @@ function layoutPanelSwitch() {
  * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
-  const target = /^https?:\/\//i.test(rawUrl ?? "") ? rawUrl : DEFAULT_FOUNDRY_URL;
+  const explicit = typeof rawUrl === "string" && rawUrl.trim() ? rawUrl.trim() : null;
+  if (explicit && !/^https?:\/\//i.test(explicit)) {
+    return {
+      ok: false,
+      error: err("err.panel.invalidUrl", { url: rawUrl ?? "" }),
+      summary: `ERROR: invalid URL: ${rawUrl}`,
+    };
+  }
+  const target = explicit ?? resolvedFoundryTarget();
+  if (!target) {
+    return {
+      ok: false,
+      error: err("err.panel.noTarget"),
+      summary:
+        "ERROR: no Foundry address to open yet — pass a url to foundry_open "
+        + "(e.g. http://localhost:30000 for the local server, or the deployed server URL); "
+        + "the panel has no implicit default",
+    };
+  }
   let origin;
   try {
     origin = new URL(target).origin;
@@ -531,6 +576,7 @@ async function openFoundryView(rawUrl) {
   }
 
   foundryTargetUrl = target;
+  rememberFoundryTarget(target);
 
   // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
   // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
@@ -846,8 +892,8 @@ app.whenReady().then(async () => {
     createReaderView,
     destroyReaderView: detachAndCloseView,
     // ① 重开面板要回到关闭前那个 Foundry 地址,而不是默认地址(spec §3.4 CLOSED 行"恢复关闭前内容")。
-    // foundryTargetUrl 初值就是 DEFAULT_FOUNDRY_URL,所以首次打开的行为与改造前一致;
-    // 而"关掉面板再打开就从远端 world 掉回 localhost:30000"是既有缺陷,在这里一并修掉。
+    // foundryTargetUrl 现在是"上一次打开的地址"(跨重启持久化);没有记忆时重开得到
+    // noTarget 错误而不是被拉去某个隐式默认——连接目标是对话状态(server-deploy-plan §7)。
     loadFoundry: () => openFoundryView(foundryTargetUrl),
     reloadFoundry: async () => {
       // 崩掉的 view 先经控制器重建(N3):只查 isDestroyed 会让崩溃的 Foundry

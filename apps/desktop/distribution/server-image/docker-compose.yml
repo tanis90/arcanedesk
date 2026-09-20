@@ -1,0 +1,32 @@
+# arcane-fvtt 服务器部署编排模板 —— 方案 docs/server-deploy-plan.md
+#
+# 用法（部署 skill 会代劳，也可手工）：
+#   1. 把 docker-compose.yml 与 .env 放同一目录（incoming/ 也在旁边）
+#   2. .env 写：ARCANE_FVTT_TAG=<server-release.json 里的 tag>（docker load 后的本地 tag）
+#   3. 首启前把 foundryvtt-<版本>.zip（Node.JS 构建）放进 incoming/
+#   4. docker compose up -d && docker compose logs -f
+#
+# 端口 30000 默认直接对公网开放——这是服务器部署的目的（玩家 /join 远程登录）；
+# 安全边界是 FVTT 自带的用户/密码体系，不是把端口藏起来。
+services:
+  arcane-fvtt:
+    image: arcane/arcane-fvtt:${ARCANE_FVTT_TAG:?set ARCANE_FVTT_TAG in .env}
+    container_name: arcane-fvtt
+    restart: unless-stopped
+    ports:
+      - "${ARCANE_FVTT_PORT:-30000}:30000"
+    environment:
+      ARCANE_REGION: ${ARCANE_REGION:-cn}
+      # 可选：foundryvtt.com Purchased Licenses 页的限时下载链（5 分钟有效，
+      # 生成就立即用；用了它就不要再往 incoming/ 放 zip）
+      # FOUNDRY_RELEASE_URL: ""
+      # 可选：自动加载的世界 id（省去每次从 /join 选世界）
+      # ARCANE_WORLD: ""
+    volumes:
+      - foundry:/arcane/foundry
+      - data:/arcane/data
+      - ./incoming:/arcane/incoming
+
+volumes:
+  foundry:
+  data:

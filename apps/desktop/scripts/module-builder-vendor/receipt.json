@@ -8,7 +8,8 @@
     "nativePlatforms": [
       "darwin-x64+arm64",
       "linux-x64",
-      "win32-x64"
+      "win32-x64",
+      "linux-arm64"
     ]
   },
   "lockSha256": "f8b8426e55d6be671af37c762bea787faa758e006872c8b7009d684008e60f4f",
@@ -52,6 +53,7 @@
     "node_modules/classic-level/iterator.js": "759db2894ea62d9a69b1d1d6cc3de1925dcaf18e7b19334a177910dbe87a5b16",
     "node_modules/classic-level/package.json": "b554d432149434474c764e37e325a26e2e4b465cf632a842b77c90ead33433a5",
     "node_modules/classic-level/prebuilds/darwin-x64+arm64/classic-level.node": "e311fd4aadf58e151dcb19b0144fbbb468ef08fb73d77bca806e7320725ef26c",
+    "node_modules/classic-level/prebuilds/linux-arm64/classic-level.armv8.node": "d81eaacbec70a75c872c5da37e0dd8e7b3d65b565a1b55953b7b4b532608bfb0",
     "node_modules/classic-level/prebuilds/linux-x64/classic-level.musl.node": "d987896212d3daea0c18997fb4fa5323381bac7dd05bec18920951738029320b",
     "node_modules/classic-level/prebuilds/linux-x64/classic-level.node": "48843c7375f755db2b80d37bc26b075b74df584820b26dd1dc9cd7b323575143",
     "node_modules/classic-level/prebuilds/win32-x64/classic-level.node": "3537a4724d84912b85ff873d0e4f2665580ba7bc917d4f19aa2ed164a76ea7cf",

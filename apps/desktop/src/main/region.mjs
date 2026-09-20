@@ -30,6 +30,10 @@ const REGION_DEFAULTS = Object.freeze({
     updateFeedBaseUrl:
       "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/update",
     modIndexUrl: "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json",
+    // 服务器轨道发布物（镜像 tar.gz + server-release.json + compose）的根前缀，
+    // 见 docs/server-deploy-plan.md §5；部署 skill 经 ARCANE_SERVER_RELEASE_BASE 消费。
+    serverDeployBaseUrl:
+      "https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/server",
     // 包内基线目录（相对 app 根的 POSIX 路径）：skills 为中文单源 skills/prep，
     // 两个 flavor 相同（skill 是模型侧指令，不随界面语言分叉）。
     bundledSkillsDir: "skills/prep",
@@ -48,6 +52,7 @@ const REGION_DEFAULTS = Object.freeze({
     skillsUpdateBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/skills",
     updateFeedBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/update",
     modIndexUrl: "https://dl.arcanedesk.app/mods/index-en.json",
+    serverDeployBaseUrl: "https://dl.arcanedesk.app/desktop/arcane-desk-intl/server",
     bundledSkillsDir: "skills/prep",
     systemPromptsDir: "generated/system-prompts-intl",
     supportLinks: Object.freeze([
@@ -70,6 +75,7 @@ const REGION_ENV_KEYS = Object.freeze({
   skillsUpdateBaseUrl: "ARCANE_SKILLS_UPDATE_BASE_URL",
   updateFeedBaseUrl: "ARCANE_UPDATE_FEED_BASE_URL",
   modIndexUrl: "ARCANE_MOD_INDEX_URL",
+  serverDeployBaseUrl: "ARCANE_SERVER_RELEASE_BASE",
 });
 
 /**

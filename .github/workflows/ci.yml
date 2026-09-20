@@ -64,6 +64,9 @@ jobs:
       - name: Check skills revision bump
         run: node apps/desktop/scripts/check-skills-revision.mjs origin/${{ github.base_ref }}
 
+      - name: Check server image revision bump
+        run: node apps/desktop/scripts/check-server-image-revision.mjs origin/${{ github.base_ref }}
+
   dependency-review:
     name: Review dependency changes
     if: github.event_name == 'pull_request'

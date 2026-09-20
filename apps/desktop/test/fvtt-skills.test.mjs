@@ -16,7 +16,11 @@ const desktopPackage = path.join(desktopRoot, "package.json");
 test("distribution pins a verified Node artifact for every supported desktop target", async () => {
   const distribution = JSON.parse(await readFile(distributionFile, "utf8"));
   const artifacts = distribution.core.nodeArtifacts;
-  assert.deepEqual(Object.keys(artifacts).sort(), ["darwin-arm64", "darwin-x64", "win-arm64", "win-x64"]);
+  // 桌面四平台之外,linux-x64/arm64 服务于服务器裸机兜底轨道(server-deploy-plan §3)。
+  assert.deepEqual(
+    Object.keys(artifacts).sort(),
+    ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win-arm64", "win-x64"],
+  );
   for (const artifact of Object.values(artifacts)) {
     assert.match(artifact.file, new RegExp(`^node-v${distribution.core.node}-`));
     assert.match(artifact.sha256, /^[a-f0-9]{64}$/);

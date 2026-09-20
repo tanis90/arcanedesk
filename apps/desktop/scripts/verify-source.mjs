@@ -35,6 +35,8 @@ const exactDirectories = new Map([
     "archive-zip.mjs",
     "archive.mjs",
     "audit-package-mirror.mjs",
+    "build-server-image.mjs",
+    "check-server-image-revision.mjs",
     "check-skills-revision.mjs",
     "desktop-release-metadata.mjs",
     "dist.mjs",
@@ -43,6 +45,7 @@ const exactDirectories = new Map([
     "e2e-make-feed.mjs",
     "e2e-verify-version.mjs",
     "mac-adhoc-sign.mjs",
+    "make-fake-foundry-zip.mjs",
     "module-builder-vendor",
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
@@ -50,6 +53,7 @@ const exactDirectories = new Map([
     "prepare-renderer-assets.mjs",
     "prepare-world-profile.mjs",
     "publish-release.mjs",
+    "publish-server-image.mjs",
     "publish-skills.mjs",
     "sign-windows.mjs",
     "stage-release.mjs",
@@ -61,8 +65,9 @@ const exactDirectories = new Map([
   ]],
   ["distribution", {
     required: ["community-distribution.json", "intl-mod-curation.json", "oss-release-contract.md"],
-    // promote-release 回写的 latest 指针镜像：cn/intl 各自可选，随拍板先后出现
-    optional: [/^desktop-latest(?:-intl)?\.json$/],
+    // promote-release 回写的 latest 指针镜像：cn/intl 各自可选，随拍板先后出现；
+    // server-image/ 是服务器轨道的镜像配方（见 docs/server-deploy-plan.md §4）
+    optional: [/^desktop-latest(?:-intl)?\.json$/, /^server-image$/],
   }],
 ]);
 

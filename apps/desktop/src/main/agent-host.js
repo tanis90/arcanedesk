@@ -1074,7 +1074,7 @@ export class AgentHost {
         "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world).",
       parameters: Type.Object({
         url: Type.Optional(
-          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000. Defaults to the local server." })
+          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000. Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
         ),
       }),
       execute: async (_toolCallId, params, signal) => {
