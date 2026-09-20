@@ -45,7 +45,10 @@ function readRevision(root, ref, relativeFile) {
   }
 }
 
-/** 返回 { changedFiles, baseRevision, headRevision };规则不满足时抛错。 */
+/**
+ * @param {{ repoRoot?: string, baseRef?: string }} [options]
+ * @returns {{ changedFiles: string[], baseRevision: number, headRevision: number }}
+ */
 function checkServerImageRevision({ repoRoot: root = repoRoot, baseRef } = {}) {
   if (!baseRef) throw new TypeError("checkServerImageRevision requires a baseRef");
   let diff;
