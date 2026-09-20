@@ -11,6 +11,11 @@
 # 和 pins.mjs），不要手工 docker build 本目录——那会绕过单源纪律。
 FROM node:22.23.2-slim
 
+# 官方 Node.JS 构建的 zip 内含符号链接(node_modules/.bin/*),vendored yauzl 的
+# 安全姿态拒绝 symlink(那是 mod 防线)——本体是用户自供的可信工件,改用 unzip
+# 解压并保留符号链接;版本预检同样走 unzip -p。
+RUN apt-get update     && apt-get install -y --no-install-recommends unzip     && rm -rf /var/lib/apt/lists/*
+
 COPY build/pins.mjs /arcane/pins.mjs
 COPY build/region-defaults.mjs /arcane/region-defaults.mjs
 COPY build/mod-manager/ /arcane/mod-manager/

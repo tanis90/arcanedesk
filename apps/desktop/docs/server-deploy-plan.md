@@ -281,7 +281,7 @@ ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 
 - tag：`arcane/arcane-fvtt:13.351-r<N>`，N=镜像配方 revision（配方文件改动必 bump，同 skill bundle revision 纪律）。
 - 发布物 `server-release.json`：tarball 的 bytes+SHA256、**镜像 image ID**（config digest，`docker load` 后 `docker inspect` 比对）、配方 revision、foundry/node/dnd5e 版本、mod-manager 对应 skill revision、minAppVersion、sizeGate 上限。
-- 校验链：下载 tarball 按清单 bytes+SHA256 逐字节核对（mod-manager `stageModule` 同款）→ `docker load` → `docker inspect` 断言 image ID 与清单一致 → 才允许 `compose up`。
+- 校验链：下载 tarball 按清单 bytes+SHA256 逐字节核对（mod-manager `stageModule` 同款）→ `docker load` → `docker inspect` 断言标签 `io.arcane.recipe-revision` 与清单 revision 一致 → 才允许 `compose up`。imageId 仅作参考信息记录（Docker Desktop 报 OCI index digest、经典 daemon load 后落在平台 manifest digest，跨 daemon 不可比——真机验收实证）。
 
 ## 5. 分发：镜像压缩包进 mirror，skill 展开
 

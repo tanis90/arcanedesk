@@ -69,7 +69,11 @@ skill 预检:`unzip -p <zip> resources/app/package.json` 读版本比对(容器�
 1. `curl` `latest.json` → `<revision>/server-release.json` → 按 `uname -m` 选
    架构条目。
 2. 服务器侧下载 tar.gz(curl 模板)→ **bytes+SHA256 逐字节校验**。
-3. `docker load` → `docker inspect` 断言 image ID 与清单一致 → 才允许起容器。
+3. `docker load` → `docker inspect` 断言标签 `io.arcane.recipe-revision` 与
+   server-release.json 的 revision 一致 → 才允许起容器。**不要比较 imageId**:
+   Docker Desktop 的 inspect .Id 是 OCI index digest,经典 daemon load 后落在
+   平台 manifest digest,跨 daemon 天然不等(真机验收踩过);字节级锚点已由
+   tarball 的 SHA256 提供,语义锚点用配方标签。
 4. compose(up):30000 公网直开、双卷(foundry/data)、`restart:
    unless-stopped`、incoming 挂载放用户 zip、`ARCANE_REGION` 按 flavor。
 5. 首启等待:入口脚本装本体+首启 dnd5e(从 region mod 索引,字节级校验),健康

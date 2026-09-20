@@ -117,7 +117,8 @@ async function readModManagerRevision() {
   return meta.revision;
 }
 
-/** docker save | node gzip 流式落盘,返回 {bytes, sha256}。 */
+/** docker save | node gzip 流式落盘,返回 {bytes, sha256} —— 计数必须在 gzip 之后,
+ * 记的是落盘 tar.gz 本身的字节与哈希(server-release.json 的校验对象)。 */
 async function saveGzip(tag, outFile) {
   const child = (await import("node:child_process")).spawn("docker", ["save", tag], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   const hash = crypto.createHash("sha256");
@@ -129,7 +130,7 @@ async function saveGzip(tag, outFile) {
       callback(null, chunk);
     },
   });
-  const done = pipeline(child.stdout, counter, createGzip({ level: 6 }), (await import("node:fs")).createWriteStream(outFile));
+  const done = pipeline(child.stdout, createGzip({ level: 6 }), counter, (await import("node:fs")).createWriteStream(outFile));
   const [exit] = await Promise.all([
     new Promise((resolve) => child.on("exit", (code) => resolve(code))),
     done,
@@ -187,7 +188,15 @@ async function main() {
 
     if (!args.skipBuild) {
       console.log(`building ${fullTag} for ${platform}`);
-      await docker(["build", "-t", fullTag, "--platform", platform, ctx]);
+      // recipe-revision 标签是跨 daemon 稳定的断言锚点:Docker Desktop 的
+      // inspect .Id 是 OCI index digest,经典 daemon load 后落在平台 manifest
+      // digest——两边天然不等;字节级锚点是 tarball sha256,语义锚点用这个标签。
+      await docker([
+        "build", "-t", fullTag, "--platform", platform,
+        "--label", `io.arcane.recipe-revision=${revision}`,
+        "--label", `io.arcane.mod-manager-revision=${modManagerRevision}`,
+        ctx,
+      ]);
     }
     const imageId = await docker(["image", "inspect", fullTag, "--format", "{{.Id}}"]);
 

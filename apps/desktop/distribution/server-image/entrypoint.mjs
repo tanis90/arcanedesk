@@ -6,22 +6,48 @@
 //   2. 核对/安装 Foundry 本体到 ${ARCANE_FOUNDRY}/${FOUNDRY_VERSION}/：
 //      已有 main.js 则跳过；缺则按序取 挂载 zip → FOUNDRY_RELEASE_URL；
 //      版本/结构与 pins.mjs 钉版不符直接拒启（fail-closed）。
-//   3. 首启安装 dnd5e 系统（ARCANE_SKIP_MODS=1 可跳过——CI 冒烟用）：
-//      读 region 索引找 dnd5e 条目 → mod-manager inspect → stage → commit，
-//      与 skill 侧三步完全同一代码路径（索引 bytes/sha256 字节级校验都在里面）。
+//   3. 首启安装环境（ARCANE_SKIP_MODS=1 可跳过——CI 冒烟用）：
+//      cn 索引有 arcane-demo 世界 profile 时走 world-inspect → world-stage →
+//      world-commit（dnd5e 与策展 mod 一并装入，字节级校验都在协议内）；
+//      intl 无 worlds 则跳过。
 //   4. 清 Config/options.json.lock；options.json 缺失时写入 {port:30000} 最小骨架。
 //   5. 启动 node main.js --dataPath=<data> 并转发 SIGTERM/SIGINT（docker stop 走优雅停机）。
 //
 // 纪律：license key / adminKey 永不打印（用户在面板里自己完成激活）；
 // FOUNDRY_RELEASE_URL 下载完成即弃，绝不缓存或再分发（EULA）。
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
 import { FOUNDRY_VERSION } from "./pins.mjs";
 import { REGION_DEFAULTS } from "./region-defaults.mjs";
-import { extractZip, listZipEntries, readZipEntryText } from "./mod-manager/archive-zip.mjs";
+
+// 官方 Node.JS 构建的 zip 含符号链接(node_modules/.bin/*),vendored yauzl 的
+// symlink 拒绝是 mod 防线、不适用用户自供的本体——压缩包操作一律走镜像内
+// 的 unzip CLI(apt 层已装),符号链接原样保留。
+function unzip(args) {
+  return new Promise((resolve, reject) => {
+    execFile("unzip", args, { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
+      if (error) reject(new Error(`unzip ${args.join(" ")} failed: ${error.message}`));
+      else resolve(stdout);
+    });
+  });
+}
+async function unzipEntry(zipFile, entryName) {
+  const text = await unzip(["-p", zipFile, entryName]);
+  return text.length ? text : null;
+}
+
+// 官方包的版本写法与下载页不同源:zip 内 package.json 是三段("13.351.0"),
+// 我们的钉版沿用 community-distribution 的两段("13.351")。规范化到三段再比,
+// 既容忍尾段 0,也不放前缀误匹配("13.351"绝不等于"13.3519")。
+function normalizeVersion(value) {
+  const segments = String(value ?? "").split(".").map(Number);
+  if (segments.some((n) => !Number.isSafeInteger(n) || n < 0)) return null;
+  while (segments.length < 3) segments.push(0);
+  return segments.slice(0, 3).join(".");
+}
 
 const foundryRoot = process.env.ARCANE_FOUNDRY ?? "/arcane/foundry";
 const dataDir = process.env.ARCANE_DATA ?? "/arcane/data";
@@ -39,7 +65,18 @@ function log(step, message) {
 }
 
 async function ensureDirs() {
-  for (const dir of [path.join(foundryRoot, FOUNDRY_VERSION), dataDir, incomingDir, path.join(dataDir, "Config")]) {
+  // 数据目录契约(Config/Data/Logs;Data 下三件套):mod-manager 的 assertDataDirectory
+  // 要求 <data-dir>/Data/ 已存在,首启必须先铺好,否则 world 协议在 staging 前的
+  // 盘点阶段就会拒止。
+  const dirs = [
+    path.join(foundryRoot, FOUNDRY_VERSION),
+    incomingDir,
+    path.join(dataDir, "Config"),
+    path.join(dataDir, "Data", "systems"),
+    path.join(dataDir, "Data", "modules"),
+    path.join(dataDir, "Data", "worlds"),
+  ];
+  for (const dir of dirs) {
     await fsp.mkdir(dir, { recursive: true });
   }
 }
@@ -48,13 +85,15 @@ async function ensureDirs() {
 // 也可能在 resources/app/ 下（官方打包两个通道都有过），两个候选都认；
 // 版本号必须与 pins.mjs 的钉版完全一致，否则拒装。
 async function resolveZipLayout(zipFile) {
-  const entries = new Set((await listZipEntries(zipFile)).map((entry) => entry.name));
   for (const prefix of ["", "resources/app/"]) {
-    if (!entries.has(`${prefix}main.js`)) continue;
-    const packageEntry = `${prefix}package.json`;
-    if (entries.has(packageEntry)) {
-      const pkg = JSON.parse(await readZipEntryText(zipFile, packageEntry, 1024 * 1024));
-      if (pkg?.version !== FOUNDRY_VERSION) {
+    const mainJs = await unzipEntry(zipFile, `${prefix}main.js`).catch(() => null);
+    if (!mainJs) continue;
+    const packageJson = await unzipEntry(zipFile, `${prefix}package.json`).catch(() => null);
+    if (packageJson) {
+      const pkg = JSON.parse(packageJson);
+      const declared = normalizeVersion(pkg?.version);
+      const pinned = normalizeVersion(FOUNDRY_VERSION);
+      if (!declared || declared !== pinned) {
         throw new Error(
           `foundry zip is version ${String(pkg?.version)}, this image pins ${FOUNDRY_VERSION}; `
           + `download the matching Node.JS build from Purchased Licenses → Older Stable`,
@@ -99,7 +138,7 @@ async function installFoundry() {
 
   const layout = await resolveZipLayout(zipFile);
   log("foundry", `extracting ${path.basename(zipFile)} (main.js at ${layout.mainJs}) into ${installDir}`);
-  await extractZip(zipFile, installDir);
+  await unzip(["-q", "-o", zipFile, "-d", installDir]);
   // 解压目录可能是 zip 根布局，也可能是外层单目录包裹——统一收敛到 installDir/main.js。
   if (!(await fsp.stat(path.join(installDir, "main.js")).then(() => true).catch(() => false))) {
     const top = (await fsp.readdir(installDir, { withFileTypes: true })).filter((entry) => entry.isDirectory());
@@ -119,22 +158,22 @@ async function installFoundry() {
   return installDir;
 }
 
-// 首启装 dnd5e：读 region 索引定位条目，然后走 mod-manager 与 skill 侧完全相同
-// 的 inspect → stage → commit 三步（字节级校验、原子替换、备份目录都在其中）。
-// 此时服务尚未启动，"commit 前停服"的纪律天然满足。
-// mod-manager 是懒加载的：它的依赖闭包里有原生模块(classic-level)，顶层 import
-// 会让整个镜像被预编译平台绑架——跳过 mod 或 dnd5e 已就位时不应感知它。
-async function installDnd5e() {
+// 首启环境安装：dnd5e 是 system,mod-manager 的 module 通道(inspect/stage)不收
+// system——正确路径是 world 环境协议:cn 索引发布 arcane-demo 世界 + profile
+// (world-inspect → world-stage → world-commit),dnd5e 与策展 mod 作为 profile
+// 依赖一并装入,字节级校验/receipt 全在协议内。intl 索引暂无 worlds,跳过
+// (正式世界由用户经 arcane-fvtt-mods skill 或自建)。
+// mod-manager 懒加载:依赖闭包里有原生模块(classic-level),跳过或已就位时零感知。
+async function installDemoEnvironment() {
   if (process.env.ARCANE_SKIP_MODS === "1") {
-    log("mods", "ARCANE_SKIP_MODS=1 — skipping first-boot dnd5e install");
+    log("mods", "ARCANE_SKIP_MODS=1 — skipping first-boot environment install");
     return;
   }
-  const systemsDir = path.join(dataDir, "Data", "systems", "dnd5e");
-  const current = await fsp.readFile(path.join(systemsDir, "system.json"), "utf8")
-    .then((text) => JSON.parse(text)?.version)
-    .catch(() => null);
-  if (current) {
-    log("mods", `dnd5e ${current} already present; skipping`);
+  const demoWorldMarker = path.join(dataDir, "Data", "worlds", "arcane-demo", "world.json");
+  const dnd5eMarker = path.join(dataDir, "Data", "systems", "dnd5e", "system.json");
+  if (await fsp.stat(demoWorldMarker).then(() => true).catch(() => false)
+    && await fsp.stat(dnd5eMarker).then(() => true).catch(() => false)) {
+    log("mods", "demo environment already present; skipping");
     return;
   }
 
@@ -142,26 +181,42 @@ async function installDnd5e() {
   const response = await fetch(modIndexUrl, { redirect: "error" });
   if (!response.ok) throw new Error(`mod index fetch failed: HTTP ${response.status}`);
   const index = await response.json();
-  const entry = (index?.packages ?? []).find((pkg) => pkg?.id === "dnd5e");
-  if (!entry) throw new Error(`mod index has no dnd5e entry (expected ${modIndexUrl})`);
+  const worldEntry = (index?.worlds ?? []).find((entry) => entry?.defaultProfile);
+  if (!worldEntry) {
+    log("mods", "region index publishes no world profile — skipping first-boot environment (install via the arcane-fvtt-mods skill)");
+    return;
+  }
 
-  log("mods", `installing dnd5e ${entry.version} via mod-manager`);
   const { runCli } = await import("./mod-manager/mod-manager.mjs");
-  const inspected = await runCli([
-    "inspect", "--manifest-url", entry.manifestUrl, "--data-dir", dataDir, "--allow-missing-data-dir",
+  const plan = await runCli([
+    "world-inspect", "--world-id", String(worldEntry.id), "--data-dir", dataDir, "--allow-missing-data-dir",
   ]);
+  if (!plan?.actionable?.length) {
+    log("mods", "environment already current per world-inspect; skipping");
+    return;
+  }
+  log("mods", `staging world environment ${plan.id} r${plan.profile.revision} (${plan.actionable.length} artifact(s), ${plan.plannedArchiveBytes} bytes)`);
   const staged = await runCli([
-    "stage",
-    "--manifest-url", entry.manifestUrl,
-    "--expected-id", String(entry.id),
-    "--expected-version", String(entry.version),
-    "--expected-download-url", String(entry.zipUrl),
+    "world-stage",
+    "--world-id", String(worldEntry.id),
+    "--data-dir", dataDir,
+    "--expected-world-version", String(plan.version),
+    "--expected-world-sha256", String(plan.archiveSha256),
+    "--expected-profile-id", String(plan.profile.id),
+    "--expected-profile-revision", String(plan.profile.revision),
+    "--expected-profile-sha256", String(plan.profile.profileSha256),
+    "--expected-index-generated", String(plan.generated),
+    "--expected-resolution-sha256", String(plan.resolutionSha256),
   ]);
+  // expected-current-version 要的是"已安装版本"(missing → none),不是目标版本。
+  const installedWorld = plan.world?.installedVersion ?? null;
   const committed = await runCli([
-    "commit", "--stage-dir", staged.stageDir, "--data-dir", dataDir, "--expected-current-version", "none",
+    "world-commit",
+    "--stage-dir", String(staged.stageDir),
+    "--data-dir", dataDir,
+    "--expected-current-version", installedWorld ?? "none",
   ]);
-  log("mods", `dnd5e installed: ${committed.directory ?? systemsDir} (receipt kept)`);
-  void inspected;
+  log("mods", `environment installed: world ${committed.id ?? plan.id} v${committed.version ?? plan.version}, receipt ${committed.receiptPath ?? "kept"}`);
 }
 
 async function prepareDataDir() {
@@ -178,10 +233,12 @@ async function main() {
   log("boot", `region=${regionId} foundry=${FOUNDRY_VERSION} modIndex=${modIndexUrl}`);
   await ensureDirs();
   const installDir = await installFoundry();
-  await installDnd5e();
+  await installDemoEnvironment();
   await prepareDataDir();
 
-  const args = [path.join(installDir, "main.js"), "--dataPath", dataDir];
+  // Foundry 只认等号形式(--dataPath=<dir>):空格分隔时它的 argv 解析拿不到值,
+  // paths.mjs 会在 path.resolve(undefined) 上崩。
+  const args = [path.join(installDir, "main.js"), `--dataPath=${dataDir}`];
   if (process.env.ARCANE_WORLD) args.push("--world", process.env.ARCANE_WORLD);
   log("boot", `starting foundry: node ${args.join(" ")}`);
   const child = spawn(process.execPath, args, { stdio: "inherit" });
