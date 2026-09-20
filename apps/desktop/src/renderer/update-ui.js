@@ -91,10 +91,15 @@
       actions.appendChild(actionButton(t("update.popover.download"), () => window.arcane.downloadUpdate()));
     } else if (state.status === "error") {
       actions.appendChild(actionButton(t("update.popover.retry"), () => window.arcane.downloadUpdate()));
-      const fallback = actionButton(t("update.popover.manualFallback"), () => window.arcane.openArcaneWebsite(), "link");
+      const fallback = actionButton(t("update.popover.manualFallback"), () => window.arcane.openArcaneWebsite(), {
+        extraClass: "link",
+        busyLabel: t("update.popover.manualFallback"),
+      });
       actions.appendChild(fallback);
     } else if (state.status === "ready") {
-      actions.appendChild(actionButton(t("update.popover.install"), () => window.arcane.installUpdate()));
+      actions.appendChild(actionButton(t("update.popover.install"), () => window.arcane.installUpdate(), {
+        busyLabel: t("update.popover.restarting"),
+      }));
     } else if (state.status === "downloading") {
       const busy = el("button", null, t("update.popover.downloading"));
       busy.disabled = true;
@@ -104,11 +109,12 @@
   }
 
   // 动作按钮：点击后 ~1.5s 忙碌反馈再收起浮层（药丸继续承载状态）。
-  function actionButton(label, onClick, extraClass) {
+  // busyLabel 按动作区分——重启按钮不能闪「正在下载」。
+  function actionButton(label, onClick, { extraClass, busyLabel } = {}) {
     const btn = el("button", extraClass ?? null, label);
     btn.addEventListener("click", () => {
       btn.disabled = true;
-      btn.textContent = t("update.popover.downloading");
+      btn.textContent = busyLabel ?? t("update.popover.downloading");
       clearTimeout(busyTimer);
       busyTimer = setTimeout(closePopover, 1500);
       try { onClick(); } catch { /* IPC 失败由状态推送兜底 */ }
