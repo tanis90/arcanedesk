@@ -107,3 +107,14 @@
 - dnd5e 6.x:全线无人支持,等 midi-qol。
 
 **对 §4 的修正**:栈 A 成立条件 = 去 times-up + 解 ActiveAuras。ActiveAuras 是 recommends 非 requires,51 hook 无其专属 hook,光环归一/尺寸同步为我方 runtime 自有逻辑,替代深度待专项实测(光环实际施加引擎归属)。M4′ 估算 +0.5–1 人周。
+
+## 8. 补充:ActiveAuras 替代路线评估(auraeffects 化,2026-09-21)
+
+代码证据(runtime automation.js):双引擎现状——ActiveAuras 15 处(token 邻近光环异步引擎:`waitForActiveAurasStable` 信号量、updateToken 让位;**模板锚定光环**:`flags.ActiveAuras.IsAura` ×2 + zone 成员追踪);auraeffects 12 处(effect 类型 `auraeffects.aura`、`fromAura` 源/副本区分、socketlib RPC `applyAuraEffects`/`deleteEffects` 被我方直接调用)。
+
+**结论:可替代,方向正确,但属"光环引擎统一"改造(估 3–5 人天),非开关替换。**
+- token 光环:AE 2.1.1 全面覆盖且更强(墙阻挡、best-formula 取最优、可视化、token 附着 Region 计算);作者为 dnd5e 系统贡献者,v14-only 线与系统 Region 化同频。
+- **gap ①(最大)**:模板/绘图锚定光环(区域效应)在 AE 无现成等价——需以"我方 zone 成员追踪(本就自有)+ AE applyAuraEffects / v14 RegionBehavior"重建,是新代码;v14+dnd5e6 法术模板即 Region,语义反而更顺。
+- gap ②:15 处 AA 集成点(信号量/applied 副本/让位/清理绕补)全部重写或删除。
+- gap ③:存量世界 AA flag 光环(effect `flags.ActiveAuras.*`、模板 `IsAura`)转 AE 配置;我方 2,449 条 pack 受影响极小(catalogue 仅 1 处注释)。
+- 验收项:下一轮金本位副本实测加"保护光环 + 一个 zone 法术在 v14 走通"。
