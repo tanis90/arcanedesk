@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "comment": "国际版 mod 索引策展清单（国际化方案 D2/M3）。基线 Foundry 13.351：上游 latest 已全部转向 Foundry V14（midi-qol 14.x / dae 14.x / dnd5e 6.x），因此直连条目钉 F13 兼容线——tposney 系按 v13 大版本分支（自指 URL 稳定），socketlib/lib-wrapper 的 latest 仍兼容 F13 保持跟踪。dnd5e 的 F13 末版 5.3.3 自指 URL 指向 master 可变分支，只能镜像（mirror: true，改写 manifest/download 为 R2 版本化 URL）。自有开源 mod（group=arcane）指向 arcanedesk-fvtt-mods 仓库 main 分支的自指 manifest，download 钉 GitHub Release zip；main 是可变分支，周更的同版本哈希漂移报警即是防篡改闸门。新增包必须由人评估后显式加入；依赖闭包由 prepare-intl-index.mjs 强制校验。",
+  "comment": "国际版 mod 索引策展清单（国际化方案 D2/M3）。基线 Foundry 13.351：上游 latest 已全部转向 Foundry V14（midi-qol 14.x / dae 14.x / dnd5e 6.x），因此直连条目钉 F13 兼容线——tposney 系按 v13 大版本分支（自指 URL 稳定），socketlib/lib-wrapper 的 latest 仍兼容 F13 保持跟踪。dnd5e 的 F13 末版 5.3.3 自指 URL 指向 master 可变分支，只能镜像（mirror: true，改写 manifest/download 为 R2 版本化 URL）。自有开源 mod（group=arcane）指向 arcanedesk-fvtt-mods 仓库 main 分支的自指 manifest，download 钉 GitHub Release zip；main 是可变分支，周更的同版本哈希漂移报警即是防篡改闸门。新增包必须由人评估后显式加入；依赖闭包由 prepare-intl-index.mjs 强制校验。2026-09-21 批次：demo profile 上游 13 条全部直连（海外无墙，直连=零再分发，唯一镜像物 dnd5e 系统为 MIT）；钉版逐条与 cn 镜像一致（海内海外同一套验证过的组合），URL 一一实测 200；times-up 无 v13 分支且 tag manifest 版本错位（v13.1.9 tag 内是 13.1.8），master 才是干净 13.1.9，故钉 master 自指分支，上游跳 V14 时周更会以版本升级放行、需人工回钉（与 socketlib 跟踪策略同理）。tidy5e-sheet 不收录（sdenec 原仓无 13.x 线）。dnd5e-animations 不收录：3.2.0 包内实测 92 处动画引用全部指向 jb2a_patreon、免费版引用为 0，配免费 JB2A 完全哑火（cn profile 同样哑火，建议复核）。",
   "packages": [
     {
       "id": "arcane-spells-2014",
@@ -44,6 +44,84 @@
       "kind": "module",
       "group": "library",
       "manifestUrl": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json"
+    },
+    {
+      "id": "times-up",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://gitlab.com/tposney/times-up/raw/master/package/module.json"
+    },
+    {
+      "id": "itemacro",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/Foundry-Workshop/Item-Macro/releases/download/v3.0.1/module.json"
+    },
+    {
+      "id": "ActiveAuras",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/kandashi/Active-Auras/releases/download/0.12.7/module.json"
+    },
+    {
+      "id": "ATL",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/kandashi/Active-Token-Lighting/releases/download/v1.1.1/module.json"
+    },
+    {
+      "id": "auraeffects",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/roth-michael/Aura-Effects/releases/download/1.5.2/module.json"
+    },
+    {
+      "id": "dfreds-convenient-effects",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/dfreds/dfreds-convenient-effects/releases/download/v8.2.5/module.json"
+    },
+    {
+      "id": "lib-dfreds-migrations",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/dfreds/lib-dfreds-migrations/releases/download/v1.0.2/module.json"
+    },
+    {
+      "id": "lib-dfreds-ui-extender",
+      "kind": "module",
+      "group": "core",
+      "manifestUrl": "https://github.com/dfreds/lib-dfreds-ui-extender/releases/download/v2.2.0/module.json"
+    },
+    {
+      "id": "foundryvtt-actor-studio",
+      "kind": "module",
+      "group": "ui",
+      "manifestUrl": "https://github.com/geoidesic/foundryvtt-actor-studio/releases/download/2.9.8/module.json"
+    },
+    {
+      "id": "dice-so-nice",
+      "kind": "module",
+      "group": "fx",
+      "manifestUrl": "https://gitlab.com/riccisi/foundryvtt-dice-so-nice/-/raw/5.2.5/module/module.json"
+    },
+    {
+      "id": "sequencer",
+      "kind": "module",
+      "group": "fx",
+      "manifestUrl": "https://github.com/fantasycalendar/FoundryVTT-Sequencer/releases/download/3.6.11/module.json"
+    },
+    {
+      "id": "autoanimations",
+      "kind": "module",
+      "group": "fx",
+      "manifestUrl": "https://github.com/theripper93/autoanimations/releases/download/6.8.5/module.json"
+    },
+    {
+      "id": "JB2A_DnD5e",
+      "kind": "module",
+      "group": "fx",
+      "manifestUrl": "https://github.com/Jules-Bens-Aa/JB2A_DnD5e/releases/download/0.8.8/module.json"
     }
   ]
 }
