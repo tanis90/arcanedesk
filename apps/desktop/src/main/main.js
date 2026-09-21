@@ -85,6 +85,15 @@ if (!app.isPackaged) app.setName("arcane-desktop");
 if (process.platform === "win32") {
   app.setAppUserModelId(app.isPackaged ? ARCANE_APP_ID : `${ARCANE_APP_ID}.development`);
 }
+// 单实例:重复打开(开始菜单/任务栏/快捷方式)不养第二个进程——拿不到锁就当场退,
+// 第一实例(可能正收在托盘里)经 second-instance 把窗口叫回前台。
+// 位置跟在 setName 之后:锁按 app 身份(userData)划界,dev 与已装正式版互不挡;
+// app.exit 不走 before-quit 拦截——第二实例从未启动,没有可收拾的现场。
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+} else {
+  app.on("second-instance", () => restoreMainWindow());
+}
 // 打包版的 pi agent 目录收进 app 私有 userData,不与本机 pi CLI 共享 ~/.pi/agent——
 // 否则 pi CLI 的 settings.json 默认模型(如 kimi-coding/k3)与同 cwd 会话会漏进 app。
 // (SDK 的环境变量名见 dist/config.js:ENV_AGENT_DIR = PI_CODING_AGENT_DIR;
@@ -156,7 +165,7 @@ function enableBackgroundEntry() {
     ]));
     backgroundTray.on("click", restoreMainWindow);
     return true;
-  } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
+  } catch (error) { console.error("[tray] enableBackgroundEntry failed:", error); backgroundTray?.destroy(); backgroundTray = null; return false; }
 }
 function requestExit() {
   if (exitRequested) return;
@@ -898,6 +907,9 @@ app.whenReady().then(async () => {
   installDevicePermissionDenials(webSession);
 
   createWindow();
+  // 托盘从启动就注册:关窗 = 收进托盘(见 close 处理),图标不该到第一次关窗才出现。
+  // 注册失败不留图标也无所谓——close 时会重试,仍不行才走 requestExit。
+  enableBackgroundEntry();
   // 右屏 surface 状态机(spec §3/§8):两个 view 的创建、显隐、销毁与 bounds 分发全在这里。
   // hooks 引用的 foundryRuntime / prepUiCwd / modeController 都是惰性调用(用户点击或 agent 工具),
   // 不存在初始化时序问题。
