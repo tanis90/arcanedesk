@@ -977,6 +977,9 @@ app.whenReady().then(async () => {
     console.log,
     secretStorage,
     providerStore.baseUrlForProvider("arcane-spark") ?? DEFAULT_NEW_API_BASE_URL,
+    // prompt/热词预设跟随界面语言(resolveLocale 同为 ui.json + 系统语言,热切换后
+    // 立即反映到下一次识别与设置页回显,无需重启)
+    () => resolveLocale(),
   );
   const prepStore = new PrepStore(configPath("prep.json"));
   // 联网搜索（PRD prep-web-search）：凭据存储同 voice；智谱 BYOK 默认端点按
@@ -1675,14 +1678,15 @@ app.whenReady().then(async () => {
     if (buffer.length < 1000) return { ok: false, error: err("err.voice.tooShort") };
     if (buffer.length > 25 * 1024 * 1024) return { ok: false, error: err("err.voice.tooLarge") };
     const credentials = voiceStore.credentialForUse(spark);
+    const effective = voiceStore.effective();
     try {
       const result = await transcribe({
         provider: voiceStore.data.provider,
         apiKey: credentials.apiKey,
         baseUrl: credentials.baseUrl,
         wavBuffer: buffer,
-        prompt: voiceStore.data.prompt,
-        hotwords: voiceStore.data.hotwords,
+        prompt: effective.prompt,
+        hotwords: effective.hotwords,
       });
       return { ok: true, text: result.text, latency: result.latency };
     } catch (error) {
