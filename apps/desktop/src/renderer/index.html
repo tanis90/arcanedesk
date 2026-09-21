@@ -180,6 +180,8 @@
       cursor: pointer;
       line-height: 1;
     }
+    /* display: inline-flex 会盖掉 UA 的 [hidden] 规则，无新版本时 hidden 必须真的隐藏。 */
+    .update-pill[hidden] { display: none; }
     .update-pill:disabled { cursor: default; opacity: 0.85; }
     .update-popover {
       position: fixed;

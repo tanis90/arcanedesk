@@ -31,7 +31,13 @@
   function renderPill() {
     const node = pill();
     if (!node) return;
-    const visible = state && ["available", "downloading", "ready", "error"].includes(state.status);
+    // 胶囊当且仅当确有新版本时点亮:available/downloading/ready 必握有 version;
+    // error 只在更新动作失败(仍有 version,可点开重试)时展示,
+    // 例行检查失败(断网/feed 异常,version 为空)不打扰——那时根本没有新版本。
+    const visible = state && (
+      ["available", "downloading", "ready"].includes(state.status)
+      || (state.status === "error" && Boolean(state.version))
+    );
     node.hidden = !visible;
     if (visible) {
       node.textContent = pillLabel(state);

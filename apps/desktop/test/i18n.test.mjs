@@ -105,6 +105,13 @@ test("voice settings expose one neutral three-state connection control", () => {
   assert.doesNotMatch(html, /Arcane Spark[^<]*(推荐|Recommended)/i);
 });
 
+test("update pill stays hidden without a newer version", () => {
+  const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
+  assert.match(html, /id="update-pill"[^>]*hidden/);
+  // .update-pill sets display: inline-flex, which would override the UA [hidden] rule.
+  assert.match(html, /\.update-pill\[hidden\]\s*\{\s*display:\s*none;/);
+});
+
 test("first launch paints prep mode with a light theme before async startup", () => {
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const themeInit = readFileSync(path.join(appRoot, "src/renderer/theme-init.js"), "utf8");
