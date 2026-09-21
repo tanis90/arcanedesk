@@ -80,6 +80,30 @@
 ## 6. M0 遗留与紧后工单
 
 1. 栈 A 端到端验证(金本位新副本 + dnd5e 5.3.3 + midi 14 + auto2014 0.4.0 装入 v14 栈)——当前副本已被 6.0.3 单向迁移,须重开副本。
-2. 旧 effect 校验拒绝(20+ 条/auraeffects.aura 类)清单化与清洗策略。
+2. 旧 effect 校验拒绝(20+ 条/auraeffects.aura 类)清单化与清洗策略(装 auraeffects 2.1.1 后可能自愈,待验证)。
 3. display-vision 的 CanvasVisibility patch 在 core 14 的复核(小模块项)。
 4. midi-qol dnd5e 6.x 支持的盯梢(变更点:gitlab v14 分支 module.json 的 relationships.systems)。
+
+## 7. 补充:依赖线兼容上限盘点(2026-09-21,官方 manifest 实测)
+
+以本模块 `recommends` 全线(含 midi 的 requires:socketlib/lib-wrapper)逐个拉取官方 manifest:
+
+| 模块 | 最新版 | core 兼容 | dnd5e 兼容 | v14 现状 |
+|---|---|---|---|---|
+| ActiveAuras | 0.12.7 | 12–**13(max)** | — | 无 v14 版 |
+| times-up | 13.1.9 | 12–13.999 | — | **作者声明永不出 v14**(功能归 core+dae) |
+| midi-qol | 14.0.12 | 14–14.999 | **5.2.4–5.3.99** | dnd5e 6.x 未支持(全线真瓶颈) |
+| dae | 14.0.14 | verified 14.367 | 未声明 | ✅ |
+| socketlib / lib-wrapper | v1.1.4 / 1.13.5.1 | verified 14 | — | ✅ |
+| auraeffects | 2.1.1 | **min 14 / max 14** | — | 按核心代际分线(1.5.2=F13 线) |
+| ATL | v1.1.1(即我方钉版) | verified 13,无上限 | — | 14 可载未验证 |
+| itemacro | 1.9.0 | verified 11,无上限 | — | 可载 |
+| foundryvtt-actor-studio | 未查 | — | — | 低风险待查 |
+
+**三档天花板:**
+- 完整线原样:**FVTT 13.351 + dnd5e 5.3.3(= 当前基线即天花板)**,被 ActiveAuras(max 13)+ times-up(永不 v14)双钉死;
+- 去 times-up(core+dae 吸收,作者背书):仍钉 core 13(ActiveAuras);
+- 再去 ActiveAuras:**FVTT 14.368 + dnd5e 5.3.3**(midi 14/dae 14/socketlib/lib-wrapper/auraeffects 2.1.1 全通);
+- dnd5e 6.x:全线无人支持,等 midi-qol。
+
+**对 §4 的修正**:栈 A 成立条件 = 去 times-up + 解 ActiveAuras。ActiveAuras 是 recommends 非 requires,51 hook 无其专属 hook,光环归一/尺寸同步为我方 runtime 自有逻辑,替代深度待专项实测(光环实际施加引擎归属)。M4′ 估算 +0.5–1 人周。
