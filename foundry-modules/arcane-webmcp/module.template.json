@@ -2,7 +2,7 @@
   "id": "arcane-webmcp",
   "title": "Arcane WebMCP for Foundry VTT",
   "description": "Foundry VTT (FVTT) MCP integration that exposes guarded Arcane SDK tools to Codex through its built-in browser and the current authenticated /game page.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "authors": [
     {
       "name": "Arcane Desk"
