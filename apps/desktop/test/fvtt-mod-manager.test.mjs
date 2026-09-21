@@ -17,7 +17,6 @@ import {
   compareVersions,
   inspectWorldEnvironment,
   listInstalledModules,
-  MIRROR_INDEX_URL,
   resolveIndexUrl,
   runCli,
   stageModule,
@@ -636,10 +635,10 @@ test("world profiles resolve current stable packages independently from world ar
   assert.equal(secondReceipt.packages.find((entry) => entry.id === "demo-module").resolvedVersion, "2.1.0");
 });
 
-test("resolveIndexUrl: --index-url 参数 > ARCANE_MOD_INDEX_URL > 内置默认（M1 钉死的语义）", () => {
+test("resolveIndexUrl: --index-url 参数 > ARCANE_MOD_INDEX_URL；两者都缺失时报错，不静默回落", () => {
   const intl = "https://dl.arcanedesk.app/mods/index-en.json";
-  assert.equal(resolveIndexUrl(undefined, {}), MIRROR_INDEX_URL);
-  assert.equal(resolveIndexUrl("", {}), MIRROR_INDEX_URL);
+  assert.throws(() => resolveIndexUrl(undefined, {}), /mod index URL is required/);
+  assert.throws(() => resolveIndexUrl("", {}), /mod index URL is required/);
   assert.equal(resolveIndexUrl(undefined, { ARCANE_MOD_INDEX_URL: intl }), intl);
   assert.equal(resolveIndexUrl("  ", { ARCANE_MOD_INDEX_URL: intl }), intl);
   assert.equal(

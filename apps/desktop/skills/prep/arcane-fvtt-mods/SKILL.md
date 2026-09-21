@@ -68,12 +68,14 @@ Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意
   `module.json` / `system.json` / `world.json` 的 `id`、`version` 必须与它完全一致。archive 内保留的
   上游 `manifest` / `download` URL 允许不同，但仅在 ZIP bytes/SHA256 与包身份均已通过校验后，helper
   才会把已验证外部 manifest 的原始字节写入 staging。身份、哈希或外部 URL 不一致仍必须拒绝。
-- 默认镜像目录是 `https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json`。这是带
-  `generated` 时间的全局当前版本索引，不是名为 `latest.json` 的指针。国际版构建默认改用
-  R2 上的英文索引（`https://dl.arcanedesk.app/mods/index-en.json`）：helper 的索引地址按
-  `--index-url` 参数 > `ARCANE_MOD_INDEX_URL` 环境变量 > 内置默认解析，桌面端会把构建
-  region 的默认索引写进环境变量，命令行一般不需要显式传参；运维联调时才用 `--index-url`
-  显式指定。
+- 镜像索引地址以 `ARCANE_MOD_INDEX_URL` 为唯一事实来源：桌面端按构建 region 注入——cn 构建
+  `https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json`，intl 构建
+  `https://dl.arcanedesk.app/mods/index-en.json`（两者都由 region.mjs 默认值表登记，
+  测试锁定字面量一致）。查目录、看版本一律跑 helper，以 `catalog` / `world-catalog` 输出的
+  `indexUrl` 字段为准，不要绕开 helper 手动 curl 固定索引地址——索引是带 `generated` 时间的
+  全局当前版本，不是名为 `latest.json` 的指针。`--index-url` 参数仅运维联调显式指定时使用，
+  优先级高于环境变量；脱离桌面独立运行 CLI 时必须显式 `--index-url` 或导出同名环境变量，
+  两者都缺失 helper 直接报错，绝不静默回落任何内置镜像。
 - 索引中与 manifest URL 精确匹配的包必须逐字节核对 `bytes` 和 SHA256；不匹配即停止，
   不允许跳过校验。mirror 内容的验证基准只用索引声明的哈希；禁止混链校验（从 mirror 下载却拿
   其他来源的哈希验，mirror 为重打包，哈希本就不同，混链必误报）。

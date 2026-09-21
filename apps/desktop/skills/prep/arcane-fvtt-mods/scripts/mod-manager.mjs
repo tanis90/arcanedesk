@@ -15,13 +15,21 @@ import { writeModuleBundle, writeModuleArchive } from "@arcanedesk/foundry-pack-
 export const MIRROR_INDEX_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
 
 // 索引地址解析（国际化方案 D2/M3，名字与语义在 M1 规格钉死）：
-// --index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。
-// intl 构建由 main.js 把 region 默认值写进 ARCANE_MOD_INDEX_URL，子进程自然继承。
+// --index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量，两者都缺失时直接报错，没有静默
+// 内置默认——桌面端由 main.js 按 region 默认值表把构建对应的索引写进
+// ARCANE_MOD_INDEX_URL（cn=OSS 北京，intl=R2 英文索引），子进程自然继承；脱离桌面
+// 独立运行时必须显式选索引，任何 flavor 都不允许在缺配置时碰错区域的镜像。
 export function resolveIndexUrl(flagValue, env = process.env) {
   const flag = typeof flagValue === "string" && flagValue.trim() ? flagValue.trim() : null;
   const fromEnv = String(env.ARCANE_MOD_INDEX_URL ?? "").trim() || null;
   const value = flag ?? fromEnv;
-  return value ? httpsUrl(value, "mirror index URL") : MIRROR_INDEX_URL;
+  if (!value) {
+    throw new Error(
+      "mod index URL is required: pass --index-url or set ARCANE_MOD_INDEX_URL "
+        + "(Arcane Desk injects it per build region; a standalone run must choose explicitly)",
+    );
+  }
+  return httpsUrl(value, "mirror index URL");
 }
 
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
@@ -2104,7 +2112,7 @@ function usage() {
     "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
     "",
-    "镜像索引地址解析顺序：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量 > 内置默认（cn 镜像）。",
+    "镜像索引地址：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量（桌面端按构建 region 注入）；两者都缺失时报错。",
   ].join("\n");
 }
 
