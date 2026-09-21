@@ -82,7 +82,7 @@
 1. 栈 A 端到端验证(金本位新副本 + dnd5e 5.3.3 + midi 14 + auto2014 0.4.0 装入 v14 栈)——当前副本已被 6.0.3 单向迁移,须重开副本。
 2. 旧 effect 校验拒绝(20+ 条/auraeffects.aura 类)清单化与清洗策略(装 auraeffects 2.1.1 后可能自愈,待验证)。
 3. display-vision 的 CanvasVisibility patch 在 core 14 的复核(小模块项)。
-4. midi-qol dnd5e 6.x 支持的盯梢(变更点:gitlab v14 分支 module.json 的 relationships.systems)。
+4. midi-qol dnd5e 6.x 支持盯哨:**盯 `dnd6` 分支**(不是 v14 分支)——该分支最后提交 2026-09-15(dnd5e 6.0 发布后 5 天),tposney 已在移植;其 package/module.json 的 `relationships.systems` 上限放开(现仍 5.3.99)即为发版前兆;配套社区工单 #1573/#1579 在催。历史模式:`dnd3`/`v12dnd4`/`v13`/`v14`/`dnd6` 分支名即"每次大版本都跟"的证据。M6 排期按"manifest 放开 + 2–4 周 beta 沉淀"估(参照 4.x 大重构先例)。
 
 ## 7. 补充:依赖线兼容上限盘点(2026-09-21,官方 manifest 实测)
 
