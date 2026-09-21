@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* 与 index.html 同源的主题 token(月之暗面 / 羊皮纸),空态页要与整屋同色。 */
+  :root {
+    color-scheme: dark;
+    --bg: #0c0f16;
+    --border: #283042;
+    --text: #e9ecf3;
+    --muted: #98a0b3;
+    --faint: #626b7e;
+    --accent: #d6a94c;
+    --font-ui: "Segoe UI", "Microsoft YaHei", system-ui, "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    --font-display: "Palatino Linotype", "Book Antiqua", Georgia, "Songti SC", "STSong", "SimSun", serif;
+    --fs-meta: 11.5px;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f0e9d6;
+    --border: #d5c9ac;
+    --text: #2b2416;
+    --muted: #6f6450;
+    --faint: #a09377;
+    --accent: #2e4170;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.8 var(--font-ui);
+  }
+  .empty { max-width: 46ch; padding: 32px; text-align: center; }
+  .ornament { color: var(--accent); font-size: 15px; letter-spacing: 0.6em; text-indent: 0.6em; }
+  .ornament::before, .ornament::after {
+    content: "";
+    display: inline-block;
+    width: 56px;
+    height: 1px;
+    margin: 0 14px 4px;
+    background: var(--border);
+  }
+  h1 { margin: 18px 0 10px; font: 600 21px/1.5 var(--font-display); letter-spacing: 0.04em; }
+  .body { color: var(--muted); }
+  .body code { font-family: var(--font-ui); color: var(--text); }
+  .hint { margin-top: 14px; font-size: var(--fs-meta); color: var(--faint); letter-spacing: 0.04em; }
+</style></head>
+<body>
+  <div class="empty">
+    <div class="ornament" aria-hidden="true">✦</div>
+    <h1></h1>
+    <p class="body" role="status"></p>
+  </div>
+<script src="foundry-empty.js"></script></body></html>

@@ -1963,7 +1963,7 @@ stop.addEventListener("click", async () => {
 });
 togglePanelBtn.addEventListener("click", async () => {
   const result = await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel());
-  if (result?.ok === false && result.error) addStatus(result.error);
+  if (result?.ok === false && result.error) addStatus(fmtIpc(result.error));
 });
 
 input.addEventListener("input", () => {
@@ -3327,7 +3327,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
   chords: ["F5"],
   onTap: async () => {
     const result = await window.arcane.reloadPanel?.();
-    if (result?.ok === false && result.error) addStatus(result.error);
+    if (result?.ok === false && result.error) addStatus(fmtIpc(result.error));
   },
 });
 

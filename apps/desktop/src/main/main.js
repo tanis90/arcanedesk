@@ -539,6 +539,31 @@ function layoutPanelSwitch() {
 }
 
 /**
+ * 顶栏「面板」开关在还没有 Foundry 地址时的落点:面板照常打开,右屏落空态页,
+ * 提示用户在聊天里给出地址——这不是错误,不往 chat 抛状态行。
+ * 地址一旦出现(foundry_open 成功)就按正常导航覆盖掉这页;F5 也用它重落空态。
+ */
+async function showFoundryEmptyState() {
+  panelSurfaces.showFoundry();
+  const contents = foundryView()?.webContents;
+  if (contents && !contents.isDestroyed() && !contents.isCrashed()) {
+    const dict = globalThis.ARCANE_MESSAGES[resolveLocale()];
+    await contents.loadFile(path.join(__dirname, "../renderer/foundry-empty.html"), {
+      query: {
+        title: dict["panel.empty.title"],
+        body: dict["panel.empty.body"],
+        theme: resolveTheme(),
+      },
+    }).catch(() => {});
+  }
+  return {
+    ok: true,
+    state: panelSurfaces.state,
+    summary: "panel opened on the empty state: no Foundry address provided yet",
+  };
+}
+
+/**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
@@ -892,15 +917,23 @@ app.whenReady().then(async () => {
     createReaderView,
     destroyReaderView: detachAndCloseView,
     // ① 重开面板要回到关闭前那个 Foundry 地址,而不是默认地址(spec §3.4 CLOSED 行"恢复关闭前内容")。
-    // foundryTargetUrl 现在是"上一次打开的地址"(跨重启持久化);没有记忆时重开得到
-    // noTarget 错误而不是被拉去某个隐式默认——连接目标是对话状态(server-deploy-plan §7)。
-    loadFoundry: () => openFoundryView(foundryTargetUrl),
+    // foundryTargetUrl 现在是"上一次打开的地址"(跨重启持久化);还没有任何地址时不报错、
+    // 也不拉去某个隐式默认——面板照常打开,落空态页提示在聊天里给地址(server-deploy-plan §7)。
+    loadFoundry: () => {
+      const target = resolvedFoundryTarget();
+      return target ? openFoundryView(target) : showFoundryEmptyState();
+    },
     reloadFoundry: async () => {
       // 崩掉的 view 先经控制器重建(N3):只查 isDestroyed 会让崩溃的 Foundry
       // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
       // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
       const view = panelSurfaces.ensureFoundryView();
-      return loadFoundryPage(/^https?:/.test(view.webContents.getURL()) ? view.webContents.getURL() : foundryTargetUrl);
+      const target = /^https?:/.test(view.webContents.getURL())
+        ? view.webContents.getURL()
+        : resolvedFoundryTarget();
+      // 空态页上的 F5:没有地址可刷,重落空态(顺带吃上最新主题/语言),不算错误。
+      if (!target) return showFoundryEmptyState();
+      return loadFoundryPage(target);
     },
     // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
     readNote: rawPath => loadNotePayload(rawPath, noteBaseDir()),
