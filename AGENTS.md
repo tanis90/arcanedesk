@@ -1,7 +1,8 @@
 # Agent rules — V14 升级期双栈隔离纪律
 
-适用期:Foundry V14 升级线开发期间(方案见 `apps/desktop/docs/v14-upgrade-plan.md`)。本文是纪律层;
-构造性隔离(marker 断言、双向 generation 门禁)是该方案 M0/M1 的代码工单,纪律不能替代它们。
+适用期:Foundry V14 升级线开发期间(方案见 `apps/desktop/docs/v14-upgrade-plan.md`)。
+**当前状态(2026-09-21):升级暂缓、触发器制重启(方案 v2 §0),但 v14 QA 栈与金本位快照保留、本纪律全文持续生效。**
+本文是纪律层;构造性隔离(marker 断言、双向 generation 门禁)是该方案 M0/M1 的代码工单,纪律不能替代它们。
 
 ## 受保护资产(任何操作不得影响)
 
