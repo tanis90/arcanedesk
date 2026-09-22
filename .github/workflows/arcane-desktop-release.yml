@@ -154,6 +154,7 @@ jobs:
         run: |
           set -euo pipefail
           app_dir="apps/desktop/dist/mac-arm64/ArcaneDesk.app/Contents/Resources/app"
+          runtime_flag=""
           if [[ "${{ matrix.platform }}" == "macos-x64" ]]; then
             app_dir="apps/desktop/dist/mac/ArcaneDesk.app/Contents/Resources/app"
           fi
