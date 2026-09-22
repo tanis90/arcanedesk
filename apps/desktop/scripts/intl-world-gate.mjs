@@ -16,6 +16,8 @@ import { pathToFileURL } from "node:url";
 import { extractZip } from "./archive-zip.mjs";
 import { scanText } from "./intl-world-policy.mjs";
 
+const TEXT_SUFFIXES = new Set([".json", ".js", ".mjs", ".md", ".html", ".css", ".txt", ".svg"]);
+
 // 位图/媒体文件整体豁免:压缩字节做宽松 utf8 解码只会产出策略无关的噪音
 // (snappy/png/webp 的随机字节会松散解出 CJK 假阳性,见搭建实测),而位图本身
 // 不承载词表语义。SVG 是文本,不豁免。
@@ -36,7 +38,8 @@ export async function scanWorldDirectory(rootDir) {
       const relative = path.relative(rootDir, absolute).split(path.sep).join("/");
       // 二进制(主要是 LevelDB)不做 utf8 严格校验:宽松解码仍能还原有效 CJK/ASCII 序列。
       const text = await fsp.readFile(absolute, "utf8").catch(() => "");
-      for (const violation of scanText(text)) {
+      const isText = TEXT_SUFFIXES.has(path.extname(entry.name).toLowerCase());
+      for (const violation of scanText(text, { binary: !isText })) {
         violations.push({ file: relative, ...violation });
       }
     }

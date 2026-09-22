@@ -38,9 +38,16 @@ function lower(text) {
   return String(text ?? "").toLowerCase();
 }
 
-/** 单段文本扫描:返回违规列表([{ kind, term }]),不抛错。 */
-export function scanText(text) {
-  const haystack = lower(text);
+/**
+ * 单段文本扫描:返回违规列表([{ kind, term }]),不抛错。
+ * binary:true 用于 LevelDB 等二进制快照的宽松 utf8 解码结果:CJK 只认
+ * 「≥2 连续汉字」或「紧贴引号/字母数字的单字」——真实内容(JSON 字符串里的
+ * 名字/文案)永远是这两种形态;孤立单字且邻居是空格/控制字节的是 LevelDB
+ * 块尾 CRC 等随机字节的解码噪音(纯 JSON 重写后仍存在,搭建实测)。
+ */
+export function scanText(text, { binary = false } = {}) {
+  const raw = String(text ?? "");
+  const haystack = lower(raw);
   const violations = [];
   for (const term of COS_TERMS) {
     if (haystack.includes(term)) violations.push({ kind: "cos-term", term });
@@ -48,7 +55,19 @@ export function scanText(text) {
   for (const id of FORBIDDEN_MODULE_IDS) {
     if (haystack.includes(lower(id))) violations.push({ kind: "forbidden-module", term: id });
   }
-  if (CJK_PATTERN.test(String(text ?? ""))) violations.push({ kind: "cjk", term: "CJK character" });
+  if (binary) {
+    let flagged = false;
+    for (const match of raw.matchAll(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g)) {
+      const index = match.index ?? 0;
+      const before = raw[index - 1] ?? "";
+      const after = raw[index + 1] ?? "";
+      if (CJK_PATTERN.test(before) || CJK_PATTERN.test(after)) { flagged = true; break; }
+      if (/["A-Za-z0-9]/.test(before) || /["A-Za-z0-9]/.test(after)) { flagged = true; break; }
+    }
+    if (flagged) violations.push({ kind: "cjk", term: "CJK character" });
+  } else if (CJK_PATTERN.test(raw)) {
+    violations.push({ kind: "cjk", term: "CJK character" });
+  }
   return violations;
 }
 

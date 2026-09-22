@@ -130,6 +130,20 @@ test("scanText: CoS 词、cn 专属模块与 CJK 各自命中；非 SRD 法术�
   assert.deepEqual(scanText("Fireball hits the goblin for 8d6"), []);
 });
 
+test("scanText binary 模式:孤立单字 CJK 是 LevelDB CRC 解码噪音放行,真实内容形态仍拦", () => {
+  // 块尾 CRC 随机字节松散解码出的孤立汉字(邻居是空格/控制字节)。
+  assert.deepEqual(scanText("}}        誹   7", { binary: true }), []);
+  // JSON 字符串里的真实中文:引号/字母邻居或 ≥2 连续。
+  assert.deepEqual(scanText('"火球术 Fireball"', { binary: true }), [
+    { kind: "cjk", term: "CJK character" },
+  ]);
+  assert.deepEqual(scanText('name":"血"', { binary: true }), [
+    { kind: "cjk", term: "CJK character" },
+  ]);
+  // 文本文件模式零容忍不变。
+  assert.deepEqual(scanText("a誹b"), [{ kind: "cjk", term: "CJK character" }]);
+});
+
 test("gate: 真实 zip 解包扫描命中 CoS 内容，干净世界零违规", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "arcane-world-gate-test-"));
   const worldDir = path.join(root, "world");
