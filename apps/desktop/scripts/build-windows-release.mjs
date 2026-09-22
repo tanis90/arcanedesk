@@ -73,11 +73,16 @@ function usage() {
  * @param {{ cwd?: string, env?: Record<string, string> }} [options]
  */
 function run(cmd, argv, options = {}) {
+  // Windows 上 npm 是 npm.cmd：Node ≥20.12 的安全策略禁止无 shell 直接 spawn
+  // .cmd/.bat（status=null 且零输出即死）。npm 调用单独走 shell；参数均为固定
+  // 字面量，无注入面。node.exe（verify-package 等）无需 shell。
+  const needsShell = process.platform === "win32" && cmd === "npm";
   const result = spawnSync(cmd, argv, {
     cwd: options.cwd,
     env: options.env ? { ...process.env, ...options.env } : process.env,
     stdio: "inherit",
     windowsHide: true,
+    shell: needsShell,
   });
   if (result.status !== 0) throw new Error(`${cmd} ${argv.join(" ")} failed with exit ${result.status}`);
 }
