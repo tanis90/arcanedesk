@@ -54,7 +54,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Set up Docker Buildx (arm64 emulation)
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install locked workspace dependencies
         run: npm ci --workspaces --include-workspace-root
@@ -88,7 +88,7 @@ jobs:
           node apps/desktop/scripts/publish-server-image.mjs "${args[@]}"
 
       - name: Upload build artifacts for audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: server-image-${{ inputs.region }}
           path: |
