@@ -16,7 +16,10 @@ import { pathToFileURL } from "node:url";
 import { extractZip } from "./archive-zip.mjs";
 import { scanText } from "./intl-world-policy.mjs";
 
-const TEXT_SUFFIXES = new Set([".json", ".js", ".mjs", ".md", ".html", ".css", ".txt"]);
+// 位图/媒体文件整体豁免:压缩字节做宽松 utf8 解码只会产出策略无关的噪音
+// (snappy/png/webp 的随机字节会松散解出 CJK 假阳性,见搭建实测),而位图本身
+// 不承载词表语义。SVG 是文本,不豁免。
+const RASTER_SUFFIXES = new Set([".png", ".webp", ".jpg", ".jpeg", ".gif", ".bmp", ".mp3", ".ogg", ".wav", ".webm", ".mp4"]);
 
 /** 扫描一个已解包的世界目录;返回 [{ file, kind, term }],不抛错。 */
 export async function scanWorldDirectory(rootDir) {
@@ -29,14 +32,13 @@ export async function scanWorldDirectory(rootDir) {
         continue;
       }
       if (!entry.isFile()) continue;
+      if (RASTER_SUFFIXES.has(path.extname(entry.name).toLowerCase())) continue;
       const relative = path.relative(rootDir, absolute).split(path.sep).join("/");
       // 二进制(主要是 LevelDB)不做 utf8 严格校验:宽松解码仍能还原有效 CJK/ASCII 序列。
       const text = await fsp.readFile(absolute, "utf8").catch(() => "");
-      const isText = TEXT_SUFFIXES.has(path.extname(entry.name).toLowerCase());
       for (const violation of scanText(text)) {
         violations.push({ file: relative, ...violation });
       }
-      if (!isText && text.includes("\uFFFD")) continue; // 占位解码失败属正常二进制噪音
     }
   };
   await walk(path.resolve(rootDir));
