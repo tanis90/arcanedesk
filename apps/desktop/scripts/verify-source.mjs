@@ -68,7 +68,7 @@ const exactDirectories = new Map([
     "write-sha256sums.mjs",
   ]],
   ["distribution", {
-    required: ["community-distribution.json", "intl-mod-curation.json", "oss-release-contract.md"],
+    required: ["community-distribution.json", "intl-mod-curation.json", "intl-world-distribution.json", "oss-release-contract.md"],
     // promote-release 回写的 latest 指针镜像：cn/intl 各自可选，随拍板先后出现；
     // server-image/ 是服务器轨道的镜像配方（见 docs/server-deploy-plan.md §4）
     optional: [/^desktop-latest(?:-intl)?\.json$/, /^server-image$/],
