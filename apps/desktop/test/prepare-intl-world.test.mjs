@@ -117,14 +117,16 @@ async function runGenerator(root, entries, distribution, extra = {}) {
   });
 }
 
-test("scanText: CoS 词、非 SRD 词、cn 专属模块与 CJK 各自命中，干净 SRD 文本零违规", () => {
+test("scanText: CoS 词、cn 专属模块与 CJK 各自命中；非 SRD 法术名按口径放行；干净文本零违规", () => {
   assert.deepEqual(scanText("Count Strahd von Zarovich"), [{ kind: "cos-term", term: "strahd" }]);
-  assert.deepEqual(scanText("casts Vicious Mockery"), [{ kind: "non-srd-term", term: "vicious mockery" }]);
   assert.deepEqual(
     scanText("depends on arcane-dnd5e-2014-automation"),
     [{ kind: "forbidden-module", term: "arcane-dnd5e-2014-automation" }],
   );
   assert.deepEqual(scanText("火球术"), [{ kind: "cjk", term: "CJK character" }]);
+  // 2026-09-21 口径:法术名字+机制可分发、描述文本不分发(模块 contentRef 架构天然满足),
+  // 非 SRD 法术名不再是违规项。
+  assert.deepEqual(scanText("casts Vicious Mockery and Misty Step"), []);
   assert.deepEqual(scanText("Fireball hits the goblin for 8d6"), []);
 });
 

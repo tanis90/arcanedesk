@@ -1,14 +1,16 @@
 // intl-world-policy — intl demo world 的内容纪律:词表与文本扫描(纯 node builtin)。
 //
-// 世界由我们自己从 SRD 5.1(dnd5e SRD compendium + arcane-spells-2014)搭建,词表是
-// 安全网不是主控制。三类拦截:
-//   1. CoS 专有名称——cn demo 是施特拉德世界,重建时一个都不能漏(付费冒险内容);
-//   2. 常见非 SRD 法术名——防误从 PHB 全量 compendium 导入;
-//   3. cn 侧专属/出海剔除模块的 id 引用(arcane-dnd5e-2014-automation、汉化系、Patreon 素材)。
-// 加一条 CJK 检查(intl 世界必须 0 中文字符,与 cn 版世界审计同一基线)。
+// 内容分发口径(2026-09-21 拍板):法术/特性名字与机制可以进 intl 产物——机制不受
+// 版权保护,社区通行;**描述性文本(法术描述/风味文本)不分发**。arcane-spells-2014
+// 的架构天然满足:contentRef 只引用用户本地 dnd5e 系统的展示数据,模块自身
+// description 字段默认空串。因此词表不拦非 SRD 法术名。
+// 仍拦截的三类:
+//   1. CoS 专有名称——付费冒险的表达性内容(角色/地名),一个都不能漏;
+//   2. cn 侧专属/出海剔除模块的 id 引用(arcane-dnd5e-2014-automation、汉化系、Patreon 素材);
+//   3. CJK——intl 世界 0 中文字符(产品口径,与 cn 版世界审计同一基线)。
 //
 // 本模块禁止 import 任何非 builtin 依赖:prepare-intl-index.mjs 在 CI 里按
-// 「只依赖 node 内置模块」的约定运行(worldflow 不装依赖),它要复用这里的扫描;
+// 「只依赖 node 内置模块」的约定运行(workflow 不装依赖),它要复用这里的扫描;
 // 解包级扫描在 intl-world-gate.mjs(仅本地/测试运行)。
 
 export const COS_TERMS = Object.freeze([
@@ -17,18 +19,6 @@ export const COS_TERMS = Object.freeze([
   "ravenloft",
   "ireena",
   "vallaki",
-]);
-
-export const NON_SRD_TEXT_TERMS = Object.freeze([
-  // 只收录确证非 SRD 5.1 的名字;拿不准的不进词表(误报比漏报更伤 demo 流水线)。
-  "vicious mockery",
-  "misty step",
-  "thorn whip",
-  "absorb elements",
-  "toll the dead",
-  "sword burst",
-  "lightning lure",
-  "word of radiance",
 ]);
 
 export const FORBIDDEN_MODULE_IDS = Object.freeze([
@@ -54,9 +44,6 @@ export function scanText(text) {
   const violations = [];
   for (const term of COS_TERMS) {
     if (haystack.includes(term)) violations.push({ kind: "cos-term", term });
-  }
-  for (const term of NON_SRD_TEXT_TERMS) {
-    if (haystack.includes(term)) violations.push({ kind: "non-srd-term", term });
   }
   for (const id of FORBIDDEN_MODULE_IDS) {
     if (haystack.includes(lower(id))) violations.push({ kind: "forbidden-module", term: id });
