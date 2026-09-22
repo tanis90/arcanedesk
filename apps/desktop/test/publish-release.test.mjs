@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  assertPublishChannelMatchesManifest,
   createR2Client,
   parseArgs,
   platformForFile,
@@ -71,6 +72,20 @@ test("release publisher parses --region and --signed-dir", () => {
   assert.throws(
     () => parseArgs(["--promote-release", "0.1.0", "--signed-dir", "signed"]),
     /cannot be combined/,
+  );
+});
+
+test("release publisher refuses publish channel that differs from the baked manifest channel", () => {
+  assert.doesNotThrow(() =>
+    assertPublishChannelMatchesManifest({ channel: "private-beta" }, "private-beta"));
+  // 0.6.0 intl 事故形态：包烙 development、feed 发 private-beta，客户端静默收不到更新。
+  assert.throws(
+    () => assertPublishChannelMatchesManifest({ channel: "development" }, "private-beta"),
+    /channel \(development\) != publish channel \(private-beta\)/,
+  );
+  assert.throws(
+    () => assertPublishChannelMatchesManifest({}, "private-beta"),
+    /channel \(missing\)/,
   );
 });
 

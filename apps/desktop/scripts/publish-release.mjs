@@ -912,6 +912,21 @@ export function assertSourceCommitMatchesReleaseId(manifest, releaseId) {
   }
 }
 
+// 发布 channel 守卫（0.6.0 事故，2026-09-22 定位）：包内烙入的 channel（prepare 期
+// ARCANE_RELEASE_CHANNEL 写入，客户端运行期拿它拼 feed URL 的轨道名）必须与本次
+// 发布 --channel 一致。不一致时 feed 发在客户端永不轮询的轨道上，已装用户静默
+// 永远收不到更新，且无任何线上报错。
+export function assertPublishChannelMatchesManifest(manifest, channel) {
+  const baked = String(manifest?.channel ?? "");
+  if (baked !== channel) {
+    throw new Error(
+      `generated/desktop-release.json channel (${baked || "missing"}) != publish channel (${channel}); `
+      + `clients poll update/${baked || "<none>"}/latest.yml and would never see this release; `
+      + `rebuild with ARCANE_RELEASE_CHANNEL=${channel} before publishing`,
+    );
+  }
+}
+
 // 合并多份 stage 分片（mac 来自 CI stage workflow，windows zip 来自本机
 // stage-release）：逐片校验 schemaVersion/releaseId/region；分片集合本应互不
 // 相交，跨片同名同平台重复即拒绝——重复意味着同一对象被两个来源各自声明。
@@ -951,6 +966,7 @@ async function finalizeRelease(args) {
   const channel = args.channel ?? "private-beta";
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) throw new Error(`unsafe release id: ${releaseId}`);
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) throw new Error(`unsafe release channel: ${channel}`);
+  assertPublishChannelMatchesManifest(manifest, channel);
 
   const fragments = await Promise.all(args.fragments.map(async (file) =>
     JSON.parse(await fsp.readFile(path.resolve(file), "utf8"))));
@@ -1170,6 +1186,7 @@ async function main() {
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) {
     throw new Error(`unsafe release channel: ${channel}`);
   }
+  assertPublishChannelMatchesManifest(manifest, channel);
 
   const staging = args.staging
     ? await stageFromStagingDir(args.staging, args.platforms, args.signedDir)

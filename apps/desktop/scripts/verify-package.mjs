@@ -266,6 +266,11 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     if (options.expectedRegion && regionManifest.region !== options.expectedRegion) {
       errors.push(`packaged region: expected ${options.expectedRegion}; got ${regionManifest.region}`);
     }
+    // channel 校验：发布腿必须确认包烙的是目标轨道——烙错轨道的包装出去后，
+    // 客户端轮询的是另一条永不发布的 feed，静默永远收不到更新（0.6.0 事故）。
+    if (options.expectedChannel && releaseManifest.channel !== options.expectedChannel) {
+      errors.push(`packaged release channel: expected ${options.expectedChannel}; got ${String(releaseManifest.channel ?? "missing")}`);
+    }
     const directPackages = directDependencyPackages(appRoot, appPackage);
     const electronRuntime = options.electronRuntime ?? inspectElectronRuntime(
       packagedElectronPath(appRoot, appPackage.productName),
@@ -302,11 +307,13 @@ if (invokedPath === import.meta.url) {
   let runtimeFromManifest = false;
   let expectedNodePlatform = null;
   let expectedRegion = null;
+  let expectedChannel = null;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--runtime-from-manifest") runtimeFromManifest = true;
     else if (value === "--expected-node-platform") expectedNodePlatform = argv[++index] ?? null;
     else if (value === "--expected-region") expectedRegion = argv[++index] ?? null;
+    else if (value === "--expected-channel") expectedChannel = argv[++index] ?? null;
     else if (value.startsWith("--")) {
       console.error(`unknown option: ${value}`);
       process.exit(2);
@@ -320,8 +327,12 @@ if (invokedPath === import.meta.url) {
     console.error(`--expected-region must be one of cn/intl; got: ${expectedRegion}`);
     process.exit(2);
   }
+  if (expectedChannel && !/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(expectedChannel)) {
+    console.error(`--expected-channel is not a safe channel name: ${expectedChannel}`);
+    process.exit(2);
+  }
   if (!appRootArg) {
-    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>]");
+    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>] [--expected-channel <channel>]");
     process.exit(2);
   }
   // 交叉构建（x64 runner 打 arm64 包）无法执行目标 exe：改用包内 manifest 的
@@ -336,6 +347,7 @@ if (invokedPath === import.meta.url) {
     : {};
   options.expectedNodePlatform = expectedNodePlatform;
   options.expectedRegion = expectedRegion;
+  options.expectedChannel = expectedChannel;
   const result = verifyPackagedApp(appRootArg, options);
   const stream = result.ok ? process.stdout : process.stderr;
   stream.write(`${JSON.stringify(result, null, 2)}\n`);

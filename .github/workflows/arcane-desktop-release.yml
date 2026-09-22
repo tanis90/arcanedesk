@@ -41,6 +41,7 @@ jobs:
     env:
       ARCANE_RELEASE_ID: ${{ inputs.release_id }}
       ARCANE_SOURCE_COMMIT: ${{ github.sha }}
+      ARCANE_RELEASE_CHANNEL: private-beta
     strategy:
       fail-fast: false
       matrix:
@@ -160,7 +161,8 @@ jobs:
           node apps/desktop/scripts/verify-package.mjs \
             "$app_dir" $runtime_flag \
             --expected-node-platform "${{ matrix.node_platform }}" \
-            --expected-region "${{ matrix.region }}"
+            --expected-region "${{ matrix.region }}" \
+            --expected-channel private-beta
           if [[ "${{ matrix.platform }}" == macos-* ]]; then
             suffix=""
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then suffix="-arm64"; fi

@@ -184,8 +184,10 @@ locally:
 
    ```bash
    gh run download <stage-run-id> -n release-fragment-cn-<id> -D fragments
-   ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=cn \
+   ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=cn ARCANE_RELEASE_CHANNEL=private-beta \
      npm run prepare:desktop-release --workspace arcane-desktop
+   # ARCANE_RELEASE_CHANNEL 不能省：prepare 默认 development，finalize 的 channel
+   # 守卫会拒绝发布（这是 0.6.0 事故的防线，不是障碍）。
    node apps/desktop/scripts/publish-release.mjs --finalize \
      --staging apps/desktop/windows-release-build/installers/cn \
      --signed-dir apps/desktop/dist-signed \

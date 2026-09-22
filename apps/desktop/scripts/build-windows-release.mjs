@@ -135,11 +135,14 @@ async function main() {
     console.log(`\n=== build ${label} ===`);
     // 与被删的 CI 腿同一组 env：ARCANE_RELEASE_ID 传 base（intl 后缀由 region.json
     // 驱动 artifactName 宏，包内 manifest 的 releaseId 由 finalize 的 --release-id 覆写）。
+    // channel 必须与 publish-release 的 --channel 同轨：烙错轨道的包发布后客户端
+    // 轮询另一条永不发布的 feed，静默永远收不到更新（0.6.0 事故）。
     const env = {
       ARCANE_BUNDLED_NODE_PLATFORM: `win-${v.arch}`,
       ARCANE_BUILD_REGION: v.region,
       ARCANE_SOURCE_COMMIT: head,
       ARCANE_RELEASE_ID: baseId,
+      ARCANE_RELEASE_CHANNEL: "private-beta",
       CSC_IDENTITY_AUTO_DISCOVERY: "false",
     };
     run("npm", ["run", "dist:win", "--", `--${v.arch}`], { cwd: desktopRoot, env });
@@ -157,7 +160,7 @@ async function main() {
     if (!fs.statSync(unpackedApp).isDirectory()) throw new Error(`unpacked app dir missing: ${unpackedApp}`);
     const verifyArgv = [path.join("scripts", "verify-package.mjs"), unpackedApp];
     if (v.arch === "arm64") verifyArgv.push("--runtime-from-manifest"); // 交叉构建：runner 架构 ≠ 目标架构
-    verifyArgv.push("--expected-node-platform", `win-${v.arch}`, "--expected-region", v.region);
+    verifyArgv.push("--expected-node-platform", `win-${v.arch}`, "--expected-region", v.region, "--expected-channel", "private-beta");
     run(process.execPath, verifyArgv, { cwd: desktopRoot });
 
     const platformDir = path.join(outDir, "stage", `staging-${v.region}`, `windows-${v.arch}`);
