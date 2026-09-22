@@ -161,7 +161,10 @@ async function main() {
       if (!fs.existsSync(file)) throw new Error(`expected build output missing: ${file}`);
     }
 
-    const unpackedApp = path.join(distDir, `win-${v.arch}-unpacked`, "resources", "app");
+    // electron-builder 的解包目录名：宿主架构 x64 是 win-unpacked（无架构后缀），
+    // 交叉构建的 arm64 才是 win-arm64-unpacked（与 CI workflow 的 app_dir 口径一致）。
+    const unpackedDir = v.arch === "x64" ? "win-unpacked" : `win-${v.arch}-unpacked`;
+    const unpackedApp = path.join(distDir, unpackedDir, "resources", "app");
     if (!fs.statSync(unpackedApp).isDirectory()) throw new Error(`unpacked app dir missing: ${unpackedApp}`);
     const verifyArgv = [path.join("scripts", "verify-package.mjs"), unpackedApp];
     if (v.arch === "arm64") verifyArgv.push("--runtime-from-manifest"); // 交叉构建：runner 架构 ≠ 目标架构
