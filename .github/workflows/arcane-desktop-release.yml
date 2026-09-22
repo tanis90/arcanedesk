@@ -2,12 +2,14 @@ name: Release Arcane Desktop
 
 # Official four-platform Desktop build entrypoint — build only, never publishes.
 # 分阶段发布·阶段 0（设计见 apps/desktop/docs/phased-release-design.md）：
-# 阶段 1 Stage Arcane Desktop Release 上传 mac 与 windows zip；阶段 2 本地
+# 阶段 1 Stage Arcane Desktop Release 上传 mac 产物；Windows 全程本机
 # sign-windows.mjs 签名后 publish-release.mjs --finalize 收口。CI 全量发布
 # （未签名 Windows 直接上线）的旧 publish job 已按拍板移除——紧急场景的答案是
 # 不发。国际化方案 D5 发布双轨：每平台构建 cn（OSS）与 intl（R2）两个 flavor，
 # intl 包名带 -intl 后缀、默认 releaseId 带 -intl 后缀，两侧 latest 互不影响。
-# Windows 产物拆 -exe / -pkg 两种 artifact：本地 finalize 只需下载安装器。
+# 2026-09 重构：Windows 腿整体撤出 CI（mac 仍必须云端——签名/公证凭证在
+# secrets 里不可本地化；Windows 产物未签名本就不需要 CI），本机走
+# scripts/build-windows-release.mjs 构建+校验，消掉构件跨境下载与签名等待。
 on:
   workflow_dispatch:
     inputs:
@@ -66,30 +68,6 @@ jobs:
             arch: x64
             node_platform: darwin-x64
             builder: dist:mac
-            region: intl
-          - platform: windows-x64
-            os: windows-latest
-            arch: x64
-            node_platform: win-x64
-            builder: dist:win
-            region: cn
-          - platform: windows-x64
-            os: windows-latest
-            arch: x64
-            node_platform: win-x64
-            builder: dist:win
-            region: intl
-          - platform: windows-arm64
-            os: windows-latest
-            arch: arm64
-            node_platform: win-arm64
-            builder: dist:win
-            region: cn
-          - platform: windows-arm64
-            os: windows-latest
-            arch: arm64
-            node_platform: win-arm64
-            builder: dist:win
             region: intl
 
     steps:
@@ -155,8 +133,6 @@ jobs:
         env:
           ARCANE_BUNDLED_NODE_PLATFORM: ${{ matrix.node_platform }}
           ARCANE_BUILD_REGION: ${{ matrix.region }}
-          # Windows has no signing certificate configured; macOS uses the Developer ID pinned in package.json
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(matrix.platform, 'windows') && 'false' || 'true' }}
         run: npm run ${{ matrix.builder }} --workspace arcane-desktop -- --${{ matrix.arch }}
 
       - name: Notarize and staple DMG (macOS)
@@ -176,15 +152,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app_dir="apps/desktop/dist/win-unpacked/resources/app"
-          runtime_flag=""
-          if [[ "${{ matrix.platform }}" == "macos-arm64" ]]; then
-            app_dir="apps/desktop/dist/mac-arm64/ArcaneDesk.app/Contents/Resources/app"
-          elif [[ "${{ matrix.platform }}" == "macos-x64" ]]; then
+          app_dir="apps/desktop/dist/mac-arm64/ArcaneDesk.app/Contents/Resources/app"
+          if [[ "${{ matrix.platform }}" == "macos-x64" ]]; then
             app_dir="apps/desktop/dist/mac/ArcaneDesk.app/Contents/Resources/app"
-          elif [[ "${{ matrix.platform }}" == "windows-arm64" ]]; then
-            app_dir="apps/desktop/dist/win-arm64-unpacked/resources/app"
-            runtime_flag="--runtime-from-manifest"
           fi
           test -d "$app_dir"
           node apps/desktop/scripts/verify-package.mjs \
@@ -210,7 +180,7 @@ jobs:
           suffix=""
           if [[ "${{ matrix.region }}" == "intl" ]]; then suffix="-intl"; fi
           copied=0
-          for ext in dmg zip exe; do
+          for ext in dmg zip; do
             for file in *.${ext}; do
               case "$file" in
                 *-${{ matrix.arch }}${suffix}.*)
@@ -241,23 +211,5 @@ jobs:
         with:
           name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-${{ github.sha }}
           path: staging/${{ matrix.platform }}/*
-          if-no-files-found: error
-          retention-days: 7
-      - name: Upload installer artifact (windows)
-        # 分阶段发布：本地 finalize 只下载 -exe（签名对象），zip 走 -pkg 由
-        # stage workflow 云端直传，mac 产物不落地本地。
-        if: ${{ startsWith(matrix.platform, 'windows') }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-exe-${{ github.sha }}
-          path: staging/${{ matrix.platform }}/*.exe
-          if-no-files-found: error
-          retention-days: 7
-      - name: Upload package artifact (windows)
-        if: ${{ startsWith(matrix.platform, 'windows') }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: arcane-desk-${{ matrix.platform }}-${{ matrix.region }}-pkg-${{ github.sha }}
-          path: staging/${{ matrix.platform }}/*.zip
           if-no-files-found: error
           retention-days: 7

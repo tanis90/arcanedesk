@@ -127,3 +127,30 @@ dispatch（阶段 1 无构建，仅 CI 中继上传，数分钟）。
 - **旧 CI publish job 删除**而非保留改名：新流程下它只会发出未签名 Windows 包。
 - **windows zip 走云端**：zip 不需要签名，由阶段 1 直接上传；本地只经手需要
   变换字节的 4 个 exe。
+
+## 2026-09-21 重构：Windows 构建撤出 CI，全本机
+
+0.6.0 发版（三次实跑的经验）暴露两处结构性摩擦，均指向同一根源——
+Windows 未签名构建放在 CI，产物却必须回到本机签名：
+
+1. 构件跨境下载：810MB 的 exe 从 GitHub 拉到本机，0.4.3/0.5.1/0.6.0 三次
+   都是最慢、最易挂死的一段（0.6.0 时一对下载任务挂死一小时零产出）。
+2. 签名等待窗口：构建→下载→签名的数小时间隔里 SimplySign 会话会过期。
+
+重构后的分工：mac 留 CI（Developer ID 证书与公证凭证是 GH secrets，不可
+本地化）；Windows 全本机——`build-windows-release.mjs` 编排四变体构建，
+逐项复刻 CI 腿的门禁（钉提交 sha8==HEAD、tracked 树干净、同组构建 env、
+每变体 verify-package），产物直接落本机树，签名紧随其后。zip 经本机
+stage-release 出第二份 fragment；finalize 的 `--fragment` 改为可重复参数，
+mac（CI）与 windows（本机）分片在收口处合并，跨片重复即拒绝。
+
+顺带沉淀的三条硬守卫（都有事故对应）：基座 `product.version` 与 release id
+版本前缀一致（0.5.0 cn 事故）；基座 `source.commit` 与 release id 的 sha8
+一致（0.6.0 intl 未遂——发版中途 HEAD 被另一会话推进）；分片不相交
+（结构性约束显式化）。
+
+代价（记录在案）：本机产物没有 GitHub Actions provenance attestation
+（个人机器无 OIDC 主体）；下游目前无消费方，release.json 的 sha256/sha512
+锚仍是完整性契约。runner→OSS 北京路由断裂（0.6.0 当日）的本地 staging
+逃生口已写进 runbook，与新流程天然兼容——分片合并让「mac 云端 + windows
+本机」与「全部本机」两种 staging 组合都成立。

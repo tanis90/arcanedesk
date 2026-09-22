@@ -1,8 +1,9 @@
 name: Stage Arcane Desktop Release
 
 # 分阶段发布·阶段 1（设计见 apps/desktop/docs/phased-release-design.md）：
-# 从 build run（Release Arcane Desktop）取 mac 全部产物与 windows -pkg（zip），
-# 上传版本目录里签名器不触碰的对象（mac dmg/zip/SHA256SUMS、windows zip），
+# 从 build run（Release Arcane Desktop）取 mac 全部产物，
+# 上传版本目录里签名器不触碰的对象（mac dmg/zip/SHA256SUMS）；windows zip
+# 由本机 build-windows-release.mjs + stage-release.mjs 另出分片（2026-09 重构），
 # 产出 manifest 分片 artifact，并创建 GitHub draft release 挂载已上传资产。
 # 不出 release.json、不碰 latest；Windows 安装器由本地签名后经
 # publish-release.mjs --finalize 收口并转正 draft。
@@ -100,31 +101,24 @@ jobs:
           path: raw-mac
           pattern: arcane-desk-macos-*-${{ matrix.region }}-*
 
-      - name: Download windows package artifacts from the build run
-        uses: actions/download-artifact@v8
-        with:
-          run-id: ${{ inputs.build_run_id }}
-          github-token: ${{ github.token }}
-          path: raw-win
-          pattern: arcane-desk-windows-*-${{ matrix.region }}-pkg-*
-
       - name: Flatten into platform staging tree
         run: |
           set -euo pipefail
           mkdir -p staging
           found=0
-          for dir in raw-mac/* raw-win/*; do
+          for dir in raw-mac/*; do
             [ -d "$dir" ] || continue
             platform=$(basename "$dir" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-(pkg-)?[0-9a-f]{40}$/\1/')
             mkdir -p "staging/$platform"
             cp "$dir"/* "staging/$platform/"
             found=$((found + 1))
           done
-          if [ "$found" -lt 3 ]; then
-            echo "expected at least 3 platform artifacts (2 mac + 1+ windows), found $found" >&2
+          if [ "$found" -ne 2 ]; then
+            echo "expected exactly 2 mac platform artifacts, found $found" >&2
             exit 1
           fi
-          # -exe artifact 绝不能出现在阶段 1：本地签名前的安装器不上桶。
+          # Windows 构建已撤出 CI（2026-09 重构），本工作流只见 mac；exe 红线
+          # 保留兜底：任何安装器都不该从 CI 上桶。
           if find staging -name '*.exe' | grep -q .; then
             echo "installer artifacts must not be staged from CI" >&2
             exit 1

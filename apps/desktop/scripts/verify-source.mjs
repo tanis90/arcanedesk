@@ -36,6 +36,7 @@ const exactDirectories = new Map([
     "archive.mjs",
     "audit-package-mirror.mjs",
     "build-server-image.mjs",
+    "build-windows-release.mjs",
     "check-server-image-revision.mjs",
     "check-skills-revision.mjs",
     "desktop-release-metadata.mjs",

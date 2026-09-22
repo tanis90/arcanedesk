@@ -12,9 +12,11 @@ import {
 } from "../scripts/stage-release.mjs";
 import {
   assertBaseManifestFresh,
+  assertSourceCommitMatchesReleaseId,
   collectFinalizeInstallers,
   headStatus,
   loadJournal,
+  mergeFragmentFiles,
   parseArgs,
 } from "../scripts/publish-release.mjs";
 
@@ -191,10 +193,10 @@ test("parseArgs enforces finalize option combinations", () => {
     finalize: true,
     staging: "wexe",
     signedDir: "signed",
-    fragment: "fragment-cn.json",
+    fragments: ["fragment-cn.json"],
     region: "cn",
   });
-  assert.throws(() => parseArgs(["--finalize", "--staging", "wexe", "--signed-dir", "s"]), /requires --fragment/);
+  assert.throws(() => parseArgs(["--finalize", "--staging", "wexe", "--signed-dir", "s"]), /requires at least one --fragment/);
   assert.throws(() => parseArgs(["--finalize", "--fragment", "f", "--signed-dir", "s"]), /requires --staging/);
   assert.throws(() => parseArgs(["--finalize", "--fragment", "f", "--staging", "wexe"]), /requires --signed-dir/);
   assert.throws(
@@ -217,4 +219,65 @@ test("finalize refuses a stale base manifest version (0.5.0 cn incident)", () =>
   assert.doesNotThrow(() => assertBaseManifestFresh({ product: { version: "0.5.0" } }, "0.5.0-411e6f7b"));
   assert.doesNotThrow(() => assertBaseManifestFresh({ product: { version: "0.5.0" } }, "hotfix-2026-09-20"));
   assert.doesNotThrow(() => assertBaseManifestFresh({}, "custom-id"));
+});
+
+test("mergeFragmentFiles merges disjoint fragments and rejects duplicates", () => {
+  const mac = {
+    schemaVersion: 1, releaseId: "0.6.1-1a2b3c4d", region: "cn",
+    files: [
+      { platform: "macos-x64", name: "Arcane-Desk-0.6.1-mac-x64.dmg", bytes: 1, sha256: "a", sha512: "b" },
+      { platform: "macos-x64", name: "Arcane-Desk-0.6.1-mac-x64.zip", bytes: 2, sha256: "c", sha512: "d" },
+    ],
+  };
+  const win = {
+    schemaVersion: 1, releaseId: "0.6.1-1a2b3c4d", region: "cn",
+    files: [
+      { platform: "windows-x64", name: "Arcane-Desk-0.6.1-win-x64.zip", bytes: 3, sha256: "e", sha512: "f" },
+    ],
+  };
+  const merged = mergeFragmentFiles([mac, win], { releaseId: "0.6.1-1a2b3c4d", region: "cn" });
+  assert.equal(merged.length, 3);
+
+  // 同一对象被两个来源声明 → 拒绝
+  assert.throws(
+    () => mergeFragmentFiles([mac, { ...win, files: [...win.files, { ...win.files[0] }] }], { releaseId: "0.6.1-1a2b3c4d", region: "cn" }),
+    /duplicate fragment entry across fragments: windows-x64\/Arcane-Desk-0\.6\.1-win-x64\.zip/,
+  );
+  // 分片携带 exe → 拒绝（分片永远不含安装器）
+  assert.throws(
+    () => mergeFragmentFiles([{ ...win, files: [{ platform: "windows-x64", name: "Arcane-Desk-0.6.1-win-x64.exe", bytes: 1 }] }], { releaseId: "0.6.1-1a2b3c4d", region: "cn" }),
+    /must not carry installers/,
+  );
+  // 逐片校验 releaseId/region
+  assert.throws(
+    () => mergeFragmentFiles([{ ...win, releaseId: "0.6.1-other990" }], { releaseId: "0.6.1-1a2b3c4d", region: "cn" }),
+    /fragment releaseId/,
+  );
+  assert.throws(
+    () => mergeFragmentFiles([{ ...win, region: "intl" }], { releaseId: "0.6.1-1a2b3c4d", region: "cn" }),
+    /fragment region/,
+  );
+});
+
+test("finalize refuses a base manifest whose source commit mismatches the release id (0.6.0 intl near-miss)", () => {
+  const manifest = { product: { version: "0.6.1" }, source: { commit: "66040a344e9cc25e5f9993f3cbd8194ab1591798" } };
+  assert.throws(
+    () => assertSourceCommitMatchesReleaseId(manifest, "0.6.1-1a2b3c4d"),
+    /source\.commit \(66040a34\) != release id sha8 \(1a2b3c4d\)/,
+  );
+  assert.doesNotThrow(() => assertSourceCommitMatchesReleaseId(manifest, "0.6.1-66040a34"));
+  assert.doesNotThrow(() => assertSourceCommitMatchesReleaseId(manifest, "0.6.1-66040a34-intl"));
+  // 非版本-提交型 id：不设卡；版本-提交型 id 但缺 source：同样拦截
+  assert.doesNotThrow(() => assertSourceCommitMatchesReleaseId(manifest, "hotfix-2026-09"));
+  assert.throws(
+    () => assertSourceCommitMatchesReleaseId({ product: { version: "0.6.1" } }, "0.6.1-1a2b3c4d"),
+    /source\.commit \(missing\)/,
+  );
+});
+
+test("finalize parseArgs accepts repeated --fragment and still guards the empty case", () => {
+  const base = ["--finalize", "--staging", "s", "--signed-dir", "d"];
+  const two = parseArgs([...base, "--fragment", "a.json", "--fragment", "b.json"]);
+  assert.deepEqual(two.fragments, ["a.json", "b.json"]);
+  assert.throws(() => parseArgs(base), /requires at least one --fragment/);
 });

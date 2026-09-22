@@ -133,7 +133,7 @@ function parseArgs(argv) {
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--no-repo-metadata") args.noRepoMetadata = true;
     else if (a === "--finalize") args.finalize = true;
-    else if (a === "--fragment") args.fragment = takeValue(a, i++);
+    else if (a === "--fragment") (args.fragments ??= []).push(takeValue(a, i++));
     else throw new Error(`unknown option: ${a}`);
   }
   if (args.fromDist && args.staging) throw new Error("use only one of --from-dist or --staging");
@@ -147,7 +147,7 @@ function parseArgs(argv) {
     if (args.promoteRelease || args.fromDist || args.platforms) {
       throw new Error("--finalize cannot be combined with promote-release, from-dist, or platforms");
     }
-    if (!args.fragment) throw new Error("--finalize requires --fragment (stage-release output)");
+    if (!args.fragments?.length) throw new Error("--finalize requires at least one --fragment (stage-release output; repeatable, mac from CI + windows zips from local)");
     if (!args.staging) throw new Error("--finalize requires --staging (windows installer directory)");
     if (!args.signedDir) throw new Error("--finalize requires --signed-dir (signed installer overlay)");
   }
@@ -897,6 +897,46 @@ export function assertBaseManifestFresh(manifest, releaseId) {
   }
 }
 
+// 提交钉死守卫（0.6.0 intl 未遂事故）：releaseId 形如 <version>-<sha8>[-intl] 时，
+// 本地基座的 source.commit 必须与之同源——发版中途 HEAD 被其它会话推进后忘钉
+// ARCANE_SOURCE_COMMIT 的 prepare 会把别人的提交烤进 release.json。
+export function assertSourceCommitMatchesReleaseId(manifest, releaseId) {
+  const sha8 = releaseId.match(/^\d+\.\d+\.\d+-([0-9a-f]{8})(?:-intl)?$/)?.[1];
+  if (!sha8) return; // 非版本-提交型 release id（自定义/工作树构建）：不设卡
+  const commit = String(manifest.source?.commit ?? "");
+  if (!commit.startsWith(sha8)) {
+    throw new Error(
+      `generated/desktop-release.json source.commit (${commit.slice(0, 8) || "missing"}) != release id sha8 (${sha8}); `
+      + `rerun npm run prepare:desktop-release with ARCANE_SOURCE_COMMIT pinned to the release commit`,
+    );
+  }
+}
+
+// 合并多份 stage 分片（mac 来自 CI stage workflow，windows zip 来自本机
+// stage-release）：逐片校验 schemaVersion/releaseId/region；分片集合本应互不
+// 相交，跨片同名同平台重复即拒绝——重复意味着同一对象被两个来源各自声明。
+export function mergeFragmentFiles(fragments, { releaseId, region }) {
+  const files = [];
+  for (const fragment of fragments) {
+    if (fragment.schemaVersion !== 1) throw new Error(`unsupported fragment schemaVersion: ${fragment.schemaVersion}`);
+    if (fragment.releaseId !== releaseId) throw new Error(`fragment releaseId ${fragment.releaseId} != ${releaseId}`);
+    if (fragment.region !== region) throw new Error(`fragment region ${fragment.region} != ${region}`);
+    const part = fragment.files ?? [];
+    if (!part.length) throw new Error("fragment carries no files");
+    if (part.some((f) => /\.exe$/i.test(f.name))) {
+      throw new Error("fragment must not carry installers (stage-release never uploads them)");
+    }
+    files.push(...part);
+  }
+  const seen = new Set();
+  for (const f of files) {
+    const key = `${f.platform}/${f.name}`;
+    if (seen.has(key)) throw new Error(`duplicate fragment entry across fragments: ${key}`);
+    seen.add(key);
+  }
+  return files;
+}
+
 async function finalizeRelease(args) {
   const region = resolvePublishRegion(args);
   const target = resolveTarget(region);
@@ -907,19 +947,14 @@ async function finalizeRelease(args) {
   const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
   const releaseId = args.releaseId ?? manifest.releaseId;
   assertBaseManifestFresh(manifest, releaseId);
+  assertSourceCommitMatchesReleaseId(manifest, releaseId);
   const channel = args.channel ?? "private-beta";
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) throw new Error(`unsafe release id: ${releaseId}`);
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) throw new Error(`unsafe release channel: ${channel}`);
 
-  const fragment = JSON.parse(await fsp.readFile(path.resolve(args.fragment), "utf8"));
-  if (fragment.schemaVersion !== 1) throw new Error(`unsupported fragment schemaVersion: ${fragment.schemaVersion}`);
-  if (fragment.releaseId !== releaseId) throw new Error(`fragment releaseId ${fragment.releaseId} != ${releaseId}`);
-  if (fragment.region !== region) throw new Error(`fragment region ${fragment.region} != ${region}`);
-  const fragmentFiles = fragment.files ?? [];
-  if (!fragmentFiles.length) throw new Error("fragment carries no files");
-  if (fragmentFiles.some((f) => /\.exe$/i.test(f.name))) {
-    throw new Error("fragment must not carry installers (stage-release never uploads them)");
-  }
+  const fragments = await Promise.all(args.fragments.map(async (file) =>
+    JSON.parse(await fsp.readFile(path.resolve(file), "utf8"))));
+  const fragmentFiles = mergeFragmentFiles(fragments, { releaseId, region });
 
   const installers = await Promise.all(
     collectFinalizeInstallers(path.resolve(args.staging), args.signedDir).map(async ({ platform, file }) => {
@@ -1037,6 +1072,7 @@ async function finalizeRelease(args) {
       cache: "public, max-age=31536000, immutable",
       contentType: i.contentType,
       immutable: true,
+      mustBeNew: false, // 同字节续传合法（崩溃重跑）；只有 release.json 必须是新的
     })),
     ...files.filter((f) => f.kind === "checksums").map((f) => ({
       key: `${target.releaseRoot}/${releaseId}/${f.platform}/${f.name}`,
@@ -1046,6 +1082,7 @@ async function finalizeRelease(args) {
       cache: "public, max-age=31536000, immutable",
       contentType: f.contentType,
       immutable: true,
+      mustBeNew: false,
     })),
     manifestObject,
   ];

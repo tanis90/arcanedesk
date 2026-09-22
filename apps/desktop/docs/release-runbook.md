@@ -107,137 +107,138 @@ xcrun stapler validate dist/Arcane-Desk-*-mac-arm64.dmg
 When the certificate or API key is rotated, re-export a clean p12 (Developer
 ID identity only) and update the five secrets; no workflow change is needed.
 
-## Windows code signing (phased: CI stages, local finalizes)
+## Windows code signing (Windows builds locally; CI stages mac only)
 
-Windows installers are signed locally, never in CI. The certificate is a
-Certum OV code signing certificate (`CN=Qi Yang`, thumbprint pinned in
-`scripts/sign-windows.mjs`, valid until 2027-09-07) whose private key lives in
-Certum's SimplySign cloud and is non-exportable — the certificate store
-reports `SimplySign CSP` / `私钥不能导出` — so it cannot become a p12 GitHub
-secret. Signing runs on a machine with SimplySign Desktop installed and logged
-in; a signing session may ask for an OTP confirmation in the SimplySign mobile
-app.
+Windows installers are built AND signed locally; CI never touches them
+(2026-09 restructure — before that, CI built unsigned Windows artifacts that
+had to be downloaded across the ocean, the slowest and most fragile leg of
+every release, and the hours between build and signing let the SimplySign
+session expire). The certificate is a Certum OV code signing certificate
+(`CN=Qi Yang`, thumbprint pinned in `scripts/sign-windows.mjs`, valid until
+2027-09-07) whose private key lives in Certum's SimplySign cloud and is
+non-exportable — the certificate store reports `SimplySign CSP` /
+`私钥不能导出` — so it cannot become a p12 GitHub secret. Signing runs on a
+machine with SimplySign Desktop installed and logged in; a signing session
+may ask for an OTP confirmation in the SimplySign mobile app.
 
-The phased sequence is build in CI, sign locally BEFORE anything touches the
-cloud, stage from CI, finalize locally:
+The sequence: mac builds in CI (signing/notarization secrets cannot leave
+it), Windows builds on the local machine, sign locally BEFORE anything
+touches the cloud, stage (mac from CI, windows zips from local), finalize
+locally:
 
-1. Dispatch `Release Arcane Desktop` at the commit to ship. All eight matrix
-   legs must pass; macOS artifacts come out signed and notarized, Windows
-   installers unsigned. The workflow produces `-exe` (installer-only) and
-   `-pkg` (zip) artifacts for Windows so the local machine never downloads
-   what it will not transform.
-2. Download only the four installers (about 820MB) and sign them:
+1. Dispatch `Release Arcane Desktop` at the commit to ship. The four mac
+   matrix legs must pass; artifacts come out signed and notarized.
+2. Dispatch `Stage Arcane Desktop Release` with `build_run_id` (and the same
+   explicit `release_id`, if any). It uploads the mac objects into
+   `releases/<id>/<platform>/`, emits `release-fragment-<region>` artifacts
+   (mac-only), and opens the draft GitHub releases with the mac assets.
+   If the runner-to-OSS-Beijing route is broken (seen 2026-09-21: multipart
+   uploads stall with `ResponseTimeoutError` while R2 works), staging can
+   run locally instead — download the mac artifacts from the build run, lay
+   them out as `staging/<platform>/`, run `stage-release.mjs --staging ...
+   --region cn --release-id <id>` from this machine, then create the draft
+   yourself with the staged assets.
+3. Build and verify all four Windows variants locally. The orchestrator pins
+   the release commit (its sha8 must equal HEAD, tracked tree clean),
+   replicates the CI env, and runs `verify-package` per variant — the same
+   gate that caught the app-update.yml layout bug:
 
    ```bash
-   run_id=<run-id>
-   for artifact in $(gh api repos/tanis90/arcanedesk/actions/runs/$run_id/artifacts --paginate -q '.artifacts[].name' | grep -- '-exe-'); do
-     platform=$(echo "$artifact" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-exe-[0-9a-f]{40}$/\1/')
-     region=$(echo "$artifact" | sed -E 's/^arcane-desk-(.+)-(cn|intl)-exe-[0-9a-f]{40}$/\2/')
-     gh run download "$run_id" -n "$artifact" -D "staging-wexe/$region/$platform"
-   done
-   node apps/desktop/scripts/sign-windows.mjs --in staging-wexe/cn --in staging-wexe/intl
+   npm ci --workspaces --include-workspace-root   # if the tree moved
+   npm run build:sdk
+   node apps/desktop/scripts/build-windows-release.mjs --release-id <id>
    ```
 
-   If SimplySign died (black window, `certutil` hangs), restart the app and
-   log in again — nothing cloud-side has happened yet, so re-running this step
-   is free. Do NOT delete `apps/desktop/dist-signed` or pass `--force` on a
-   release id already being finalized: re-signing changes bytes, and the
-   finalize journal hard-rejects changed bytes for that release id.
-3. Dispatch `Stage Arcane Desktop Release` with `build_run_id` (and the same
-   explicit `release_id`, if any). It uploads every object the signer never
-   touches (mac dmg/zip/SHA256SUMS + windows zips) into
-   `releases/<id>/<platform>/`, emits `release-fragment-<region>` artifacts,
-   and opens the draft GitHub releases with the staged assets.
-4. Download the fragments and finalize each region (cn shown; intl mirrors
-   with the `-intl` release id and `--region intl`):
+   Output tree: `windows-release-build/installers/` (unsigned exes, flat),
+   `windows-release-build/stage/staging-<region>/windows-<arch>/*.zip`, and
+   unsigned-baseline SHA256SUMS under `records/`.
+4. Sign immediately (the session-expiry window is now minutes, not hours):
+
+   ```bash
+   node apps/desktop/scripts/sign-windows.mjs \
+     --in apps/desktop/windows-release-build/installers
+   ```
+
+   If SimplySign died (black window, `certutil` hangs, signtool reports no
+   certificates), restart the app and log in again — nothing cloud-side has
+   happened yet, so re-running this step is free. Do NOT delete
+   `apps/desktop/dist-signed` or pass `--force` on a release id already being
+   finalized: re-signing changes bytes, and the finalize journal hard-rejects
+   changed bytes for that release id.
+5. Stage the windows zips from the local machine (one fragment per region;
+   bucket idempotency makes this rerunnable):
+
+   ```bash
+   node apps/desktop/scripts/stage-release.mjs \
+     --staging apps/desktop/windows-release-build/stage/staging-cn \
+     --region cn --release-id <id> \
+     --out-fragment apps/desktop/generated/frag-win/fragment-win-cn.json
+   # intl mirrors: staging-intl, --region intl, --release-id <id>-intl
+   ```
+
+6. Finalize each region with BOTH fragments (cn shown; intl mirrors with the
+   `-intl` release id and `--region intl`). The `--staging` dir must be
+   exe-only with platform subdirs — move the region's exes from the flat
+   `installers/` tree into `installers/cn/windows-x64/` and
+   `installers/cn/windows-arm64/` first:
 
    ```bash
    gh run download <stage-run-id> -n release-fragment-cn-<id> -D fragments
    ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=cn \
      npm run prepare:desktop-release --workspace arcane-desktop
    node apps/desktop/scripts/publish-release.mjs --finalize \
-     --staging staging-wexe/cn --signed-dir apps/desktop/dist-signed \
+     --staging apps/desktop/windows-release-build/installers/cn \
+     --signed-dir apps/desktop/dist-signed \
      --fragment fragments/fragment-cn.json \
-     --region cn --release-id <id> --channel private-beta --skip-latest
+     --fragment apps/desktop/generated/frag-win/fragment-win-cn.json \
+     --region cn --release-id <id> --channel private-beta
    ```
 
+   `--fragment` is repeatable; entries must be disjoint across fragments.
    `--finalize` rebuilds the windows SHA256SUMS from the signed installers,
-   merges the fragment into a full `release.json`, cross-checks mac hashes
-   against the published CI sums, uploads, and HEAD-verifies every object.
-   The `prepare:desktop-release` call in step 4 is mandatory, not optional:
+   merges the fragments into a full `release.json`, cross-checks mac hashes
+   against the published CI sums, uploads, HEAD-verifies every object, and —
+   unless `--skip-latest` — promotes `latest.json` and the update feeds in
+   the same breath.
+   The `prepare:desktop-release` call is mandatory, not optional:
    `--finalize` merges the local `generated/desktop-release.json` base, and a
    stale base silently ships the previous version's `product.version` /
    `source.commit` into `release.json` and the update feeds (this happened to
-   cn on 0.5.0 and had to be patched in place). A guard now hard-fails when
-   the base `product.version` disagrees with the `<version>-` prefix of the
-   release id; rerun prepare with the matching `ARCANE_BUILD_REGION`.
+   cn on 0.5.0 and had to be patched in place). Guards now hard-fail when the
+   base `product.version` disagrees with the `<version>-` prefix of the
+   release id, or when `source.commit` disagrees with the id's sha8 (a HEAD
+   moved by another session mid-release); rerun prepare with the matching
+   `ARCANE_BUILD_REGION` and `ARCANE_SOURCE_COMMIT`.
    Rerun-after-crash is safe: already-uploaded objects are skipped, an
    already-finalized release id is refused (`--promote-release` instead), and
    a re-signed installer is rejected outright.
-5. Promote each region after verification, then complete the GitHub releases:
+7. Complete the GitHub releases (drafts hold mac assets only; windows assets
+   all come from the local machine now):
 
    ```bash
-   node apps/desktop/scripts/publish-release.mjs --promote-release <id> --region cn
-   node apps/desktop/scripts/publish-release.mjs --promote-release <id>-intl --region intl
-
    base=https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/<id>
    curl -s "$base/windows-x64/SHA256SUMS.txt" -o SHA256SUMS-windows-x64.txt
    curl -s "$base/windows-arm64/SHA256SUMS.txt" -o SHA256SUMS-windows-arm64.txt
    gh release upload <id> \
+     apps/desktop/windows-release-build/stage/staging-cn/windows-x64/Arcane-Desk-<version>-win-x64.zip \
+     apps/desktop/windows-release-build/stage/staging-cn/windows-arm64/Arcane-Desk-<version>-win-arm64.zip \
      apps/desktop/dist-signed/Arcane-Desk-<version>-win-x64.exe \
      apps/desktop/dist-signed/Arcane-Desk-<version>-win-arm64.exe \
      SHA256SUMS-windows-x64.txt SHA256SUMS-windows-arm64.txt
-   gh release edit <id> --draft=false --notes-file notes.txt
+   gh release edit <id> --draft=false --prerelease --notes-file notes.txt
    # the intl leg mirrors with -intl asset names, its release id, and the R2 base
    ```
 
-6. Commit the repo metadata the publisher wrote
+8. Commit the repo metadata the publisher wrote
    (`distribution/desktop-latest*.json`) and delete the transient
    `distribution/releases/` audit directory — `verify-source.mjs` forbids it
    in the source tree, so leaving it behind breaks local
    `npm test`/`typecheck`/`start`.
 
-Operational notes:
-
-- Only the NSIS `.exe` installer is signed; the `.zip` artifact keeps an
-  unsigned unpacked binary inside (same scope as the 0.4.3 first signing).
-- SmartScreen: an OV certificate builds reputation per file over time. Early
-  downloads may still see "Windows protected your PC"; the signature plus
-  timestamp keeps the installer valid and attributable after the certificate
-  expires.
-- signtool discovery order: `--signtool`/`ARCANE_SIGNTOOL`, the Windows SDK
-  (`Windows Kits`10`bin` with a version and arch segment), electron-builder's
-  winCodeSign cache, then `PATH`. Installing the SDK "Signing Tools for
-  Windows" component is the stable option.
-
-## Build-only verification
-
-Dispatch `Release Arcane Desktop` — it is always build-only (the workflow no
-longer has any publishing mode). All eight matrix jobs must pass source
-typechecking, Electron packaging, package-resource verification, checksum
-generation, provenance attestation, and artifact upload. No OSS credential is
-read.
-
-## Immutable gray release
-
-Run the phased sequence with `--skip-latest` on the finalize step (as written
-above): both regions' objects are uploaded and verified, the manifests are
-complete, but the public download pointers stay on the previous release. This
-is the default posture for a new release until it has been spot-checked.
-
-## Formal release
-
-A formal release is the same phased sequence plus promotion: run
-`--promote-release` per region and flip the draft GitHub releases (step 5
-above). Non-`stable` channels publish GitHub prereleases. There is no longer
-any CI path that publishes a release by itself — an unsigned Windows installer
-can no longer reach a bucket from a workflow.
-
-Current Desktop artifacts: macOS builds are Developer ID signed and notarized,
-so Gatekeeper opens them without any prompt. Windows installers are
-Authenticode-signed with a Certum OV certificate — SmartScreen may still warn
-until reputation builds, and the `.zip` artifact contains an unsigned
-unpacked binary.
+Trade-off recorded: Windows artifacts built locally have no GitHub Actions
+provenance attestation (no OIDC subject on a personal machine). Nothing
+downstream consumes those attestations today; the release.json sha256/sha512
+anchors remain the integrity contract.
 
 ## Auto-update feeds (electron-updater)
 
