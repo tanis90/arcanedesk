@@ -27,25 +27,62 @@ implementation.
 
 ## Current tools
 
-The combat-facing surface contains:
+The play-facing surface (mirror of the Desktop 跑团/combat mode tool set) is
+the primary family:
+
+- `arcane_static_context`: read the full static manual (all focused Tokens and
+  their supported abilities as stable actionRefs) once per combat or Scene.
+- `arcane_play_context`: lightweight dynamic HP/resources/conditions and
+  available actionRefs; `view=turn` is the mandatory read before and after
+  every combat action; `view=operation` inspects one prior write receipt.
+- `arcane_execute_action`: execute discovered abilities by actionRef (single
+  or combat sequence) with GM gating, module-enforced read-turn-first, a
+  durable requestId ledger, and non-replayable partial/indeterminate receipts.
+- `arcane_conditions_set`: set or remove named conditions (Chinese aliases
+  accepted), including explicitly ending concentration, on token/name/selected
+  play targets.
+
+The Turn Protocol v2 trio stays registered as a validated transitional
+surface; new clients should prefer the play family:
 
 - `arcane_probe`: report the WebMCP page, bridge, SDK, and Foundry identity.
 - `arcane_world_info`: read the current world, system, GM, and module status.
-- `arcane_battle_context`: read the active combat and callable action catalog.
-- `arcane_turn_context`: read the active actor, resources, actions, and targets.
-- `arcane_execute_turn_receipts`: inspect durable execution receipts after an
-  interrupted response.
-- `arcane_execute_turn`: execute one currently available action without
-  automatically advancing the turn.
+- `arcane_battle_context` / `arcane_turn_context` / `arcane_execute_turn`
+  (plus `arcane_execute_turn_receipts`): the pre-play combat surface from the
+  2026-09-03 spike.
 
 The pre-release build also includes `arcane_write_probe_state` and
 `arcane_write_probe`. They only exercise module-owned test state and exist to
 validate WebMCP write review, idempotency, and interrupted-call recovery. They
 do not modify actors, scenes, items, chat, or combat.
 
-The module intentionally does not expose the SDK's broad maintenance actions
-as a generic pass-through tool. New write tools require explicit schemas,
-authorization, stale-state checks, durable request IDs, and recovery receipts.
+New write tools are added individually with explicit schemas, GM gating,
+stale-state checks, durable request IDs, and recovery receipts — never as a
+generic pass-through of the SDK's maintenance actions.
+
+## Threat model and safety posture
+
+The tool surface is **not an access-control boundary**: a GM session already
+carries full Foundry power, and a fully-controlling browser client can operate
+the Foundry UI directly. What the narrow, guarded surface buys is different:
+
+- **Injection containment.** World content (chat, journals) is untrusted text
+  a browsing agent will read. A hijacked agent can at worst take valid combat
+  actions and set conditions through bounded, receipted tools instead of
+  arbitrary world mutations.
+- **Agent-error containment.** A small, precisely-shaped action space keeps a
+  hallucinating model from finding destructive affordances.
+- **Execution reliability.** Read-turn-first enforcement, requestId
+  idempotency, fingerprint-checked replay, and durable receipts make
+  interrupted calls recoverable without duplicate execution.
+
+All tools except `arcane_probe` require the active Foundry user to be a GM,
+checked live on every call. Play writes additionally require a current
+`arcane_static_context` in the page session and, in combat, a fresh
+`view=turn` read before every execution; the SDK runtime re-validates stale
+manuals, turn drift, and world identity as a second layer. WebMCP annotations
+are descriptive metadata; the module enforces its own authorization,
+validation, serialization, and idempotency rules.
 
 ## Build and verify
 
@@ -72,14 +109,14 @@ WebMCP for Foundry VTT** in a test world, open that world's `/game` page in the
 Codex built-in browser, and inspect the page's Site tools. Runtime diagnostics
 are also available as `globalThis.arcaneWebMcp` in page developer tools.
 
-## Security boundary
+## Legacy turn-tool boundary
 
-All current tools require the active Foundry user to be a GM. The execution
-tool binds each request to the exact bridge session, module/runtime versions,
-runtime hash, world, battle, round, turn, source token, action, and a durable
-request ID. It rejects stale or mismatched state and never advances the turn.
-WebMCP annotations are descriptive metadata; the module enforces its own
-authorization, validation, serialization, and idempotency rules.
+The Turn Protocol v2 execution tool (`arcane_execute_turn`) binds each request
+to the exact bridge session, module/runtime versions, runtime hash, world,
+battle, round, turn, source token, action, and a durable request ID, and never
+advances the turn. The play family instead binds identity in module state
+(static/turn snapshots) so the model never echoes possibly-stale values; see
+[`docs/play-tools-design-2026-09-21.md`](docs/play-tools-design-2026-09-21.md).
 
 ## Validation status
 

@@ -15,12 +15,18 @@ import {
   createTurnExecutor,
   registerTurnExecutionSetting,
 } from "./turn-execution.js";
+import {
+  createPlayLedger,
+  registerPlayLedgerSetting,
+} from "./play-ledger.js";
+import { createPlayTools } from "./play-session.js";
 
 const MODULE_VERSION = packageJson.version;
 const MAX_ATTEMPTS = 40;
 const RETRY_DELAY_MS = 250;
 let writeProbeStore;
 let turnExecutor;
+let playTools;
 function createBridgeSessionId() {
   const cryptoApi = globalThis.crypto;
   if (cryptoApi?.randomUUID) {
@@ -77,6 +83,10 @@ async function start() {
     ...sdkMetadata,
   };
   turnExecutor = createTurnExecutor({ runtime, identity: bridgeIdentity });
+  playTools = createPlayTools({
+    runtime,
+    ledger: createPlayLedger({}),
+  });
   let result;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
@@ -86,6 +96,7 @@ async function start() {
         moduleVersion: MODULE_VERSION,
         writeProbeStore,
         turnExecutor,
+        playTools,
         bridgeIdentity,
       });
     } catch (error) {
@@ -103,7 +114,7 @@ async function start() {
         `[${MODULE_ID}] registered Site tools: ${result.tools.join(", ")}`,
       );
       globalThis.ui?.notifications?.info?.(
-        `Arcane WebMCP ready: ${result.tools.length} tools (1 guarded test write)`,
+        `Arcane WebMCP ready: ${result.tools.length} tools (4 guarded writes)`,
       );
       return diagnostic;
     }
@@ -127,6 +138,7 @@ Hooks.once("init", () => {
   try {
     registerWriteProbeSetting();
     registerTurnExecutionSetting();
+    registerPlayLedgerSetting();
     writeProbeStore = createWriteProbeStore();
   } catch (error) {
     publishDiagnostic(
