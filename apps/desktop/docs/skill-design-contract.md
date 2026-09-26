@@ -152,6 +152,18 @@
 - 逐次下载确认、无预声明哈希时再确认、单项超 250 MB 确认：全部取消，并入计划确认门。
 - 覆盖冲突：自动时间戳备份即授权，备份成功才继续，备份位置写进报告。
 
+### arcane-module-to-fvtt / arcane-module-style-marking（2026-09-26）
+
+- 两个新 skill 收编自真实模组建设项目的 `.pi/skills/`。交互预算：module-to-fvtt 恒定 2 次
+  （阶段 0 决策清单一页合并确认，每项带推荐默认值；完工后偏差清单随报告一次评审），
+  style-marking 恒定 0 次（人工确认清单是交付物不是交互点，信号够不着的段落不猜不问）。
+- style-marking 的写入脚本移植为 Node（mark-apply.mjs，仅 node builtins）：bundle 全平台
+  分发，ps1 只能跑 Windows；三阶段纪律（先全部断言 → 时间戳备份 → 剥除比对核验）原样保留。
+- 模组 PDF 版面 JSON 走 `mineru-open-api extract -f json`（精准模式，需 Token）；免 Token 的
+  flash-extract 只有 md 没有 bbox，信号 B（版面几何）不可用——前提写进 SKILL.md。
+- 服务器启停、锁文件、端口清理归 arcane-fvtt-ops，module-to-fvtt 不碰进程；脚本一律
+  用 ARCANE_FVTT_NODE 运行，与 ops 的环境约定同源。
+
 ### arcane-module-reader（2026-08-31）
 
 - 交互预算恒定 1 次：CLI 就绪后先跑 `auth --show`（纯本地查询）探测，按结果二选一——
