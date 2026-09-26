@@ -1906,7 +1906,8 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
-  // 顶栏 FVTT/文档切换:只切已存在的内容,目标从未打开时返回 empty,提示在 chat 侧显示。
+  // 顶栏 FVTT/文档切换:只切已存在的内容。foundry 从未打开时返回 empty(提示在切换丸上
+  // 闪烁);reader 从未打开时不再报空,控制器直接切去阅读器的空态兜底页。
   ipcMain.handle("panel:switch", (event, target) => {
     if (!isTrustedChatIpc(event)) return { ok: false };
     try { return panelSurfaces.switchSurface(target); }

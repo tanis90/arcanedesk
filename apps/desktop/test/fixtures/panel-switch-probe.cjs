@@ -48,6 +48,27 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     console.log("PROBE foundry-open order:", order());
     assert.equal(await pillEval("document.body.dataset.surface"), "foundry", "pill tracks foundry surface");
 
+    // ③ 无文档时点"文档":不报空,落阅读器兜底空态页
+    await pillEval('document.getElementById("seg-reader").click()');
+    await until(async () => Boolean(reader()), "reader view created for the empty state");
+    await until(async () => reader()?.getVisible() === true, "empty reader visible");
+    assert.equal(foundry().getVisible(), false, "foundry hidden under the empty reader");
+    await until(async () => (await pillEval("document.body.dataset.surface")) === "reader", "pill tracks the empty reader");
+    await until(async () => {
+      try {
+        return await reader().webContents.executeJavaScript(
+          'document.getElementById("reader-empty").hidden === false && document.querySelector("#reader-empty .empty-title").textContent.length > 0');
+      } catch { return false; }
+    }, "the empty fallback renders");
+    const readerSegText = await pillEval('document.getElementById("seg-reader").textContent');
+    assert.ok(["文档", "Docs"].includes(readerSegText), "无文档不再闪烁 deny 文案");
+    console.log("PROBE empty-reader order:", order());
+
+    // 切回 FVTT,继续后面的用例
+    await pillEval('document.getElementById("seg-foundry").click()');
+    await until(async () => foundry()?.getVisible() === true, "back to foundry");
+    await until(async () => (await pillEval("document.body.dataset.surface")) === "foundry", "pill tracks foundry again");
+
     // ② 打开笔记 → READER_F
     const anchors = await evaluate(
       `(() => { const box = document.createElement("div"); box.className = "msg assistant"; box.id = "probe-note";
@@ -74,7 +95,7 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     assert.equal(foundry().getVisible(), false, "foundry hidden under reader");
     console.log("PROBE click-reader order:", order());
 
-    console.log("PASS panel switch probe: pill page clicks drive both surfaces");
+    console.log("PASS panel switch probe: pill page clicks drive both surfaces, and a missing document lands on the empty fallback");
   } finally {
     await new Promise((resolve) => site.close(resolve));
   }

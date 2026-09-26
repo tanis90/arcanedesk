@@ -580,12 +580,18 @@ test("openPanel and closePanel are idempotent", async () => {
 
 // ---------- 顶栏 FVTT/文档切换(switchSurface) ----------
 
-test("switchSurface from CLOSED reports empty for both targets and creates nothing", async () => {
+test("switchSurface from CLOSED: foundry reports empty; reader lands on the empty doc state", async () => {
   const h = harness();
   assert.deepEqual(h.controller.switchSurface("foundry"), { ok: false, empty: "foundry", state: STATE.CLOSED });
-  assert.deepEqual(h.controller.switchSurface("reader"), { ok: false, empty: "reader", state: STATE.CLOSED });
+
+  const result = h.controller.switchSurface("reader");
+  assert.equal(result.ok, true, "无文档不再报空:落阅读器空态兜底页");
+  assert.equal(h.controller.state, STATE.READER_C);
   assert.equal(h.calls.loadFoundry, 0, "切换绝不主动拉起 FVTT 加载");
-  assert.equal(h.views.length, 0, "切换不创建任何 view");
+  assert.equal(h.calls.readNote.length, 0, "空态不读任何文件");
+  assert.equal(h.live("foundry").length, 0);
+  assert.equal(assertSingleVisible(h, "empty reader from CLOSED").label, "reader");
+  assert.equal(h.content().empty, true, "推给页面的是空态 payload");
 });
 
 test("switchSurface rejects an unknown target", async () => {
@@ -594,17 +600,28 @@ test("switchSurface rejects an unknown target", async () => {
   assert.equal(h.controller.switchSurface("settings").empty, undefined);
 });
 
-test("FOUNDRY without a note: reader target is empty, foundry target is a no-op", async () => {
+test("FOUNDRY without a note: reader target lands on the empty doc state and round-trips back", async () => {
   const h = harness();
   await h.controller.openPanel();
-  const before = h.events.length;
 
-  assert.equal(h.controller.switchSurface("reader").empty, "reader");
-  assert.equal(h.controller.state, STATE.FOUNDRY, "空切换不改变状态");
+  const toReader = h.controller.switchSurface("reader");
+  assert.equal(toReader.ok, true, "无文档不再报空:落阅读器空态兜底页");
+  assert.equal(h.controller.state, STATE.READER_F, "底下有活 Foundry,origin 记 foundry");
+  assert.equal(h.controller.origin, "foundry");
+  assert.equal(h.calls.loadFoundry, 1, "空态只是显隐切换,不触发额外加载");
+  assert.equal(h.calls.readNote.length, 0, "空态不读任何文件");
+  assert.equal(assertSingleVisible(h, "empty reader over foundry").label, "reader");
+  assert.equal(h.live("foundry")[0].destroyed, false, "Foundry 隐藏保活");
+  assert.equal(h.content().empty, true);
 
-  const result = h.controller.switchSurface("foundry");
-  assert.equal(result.ok, true, "已在目标表面:幂等");
-  assert.equal(h.events.length, before, "空切换与幂等切换都不发事件");
+  const back = h.controller.switchSurface("foundry");
+  assert.equal(back.ok, true);
+  assert.equal(h.controller.state, STATE.FOUNDRY);
+  assert.equal(assertSingleVisible(h, "back to foundry").label, "foundry");
+
+  const eventsBefore = h.events.length;
+  assert.equal(h.controller.switchSurface("foundry").ok, true, "已在目标表面:幂等");
+  assert.equal(h.events.length, eventsBefore, "幂等切换不发事件");
 });
 
 test("READER_F round-trips through switchSurface without loads or rereads", async () => {
@@ -662,15 +679,31 @@ test("switchSurface rebuilds a crashed hidden reader and rereads by snapshot (N4
   assert.equal(assertSingleVisible(h, "crashed reader switch").destroyed, false);
 });
 
-test("switchSurface after closePanel finds nothing (views are destroyed on close)", async () => {
+test("switchSurface after closePanel: foundry reports empty, reader reopens on the empty doc state", async () => {
   const h = harness();
   await h.controller.openPanel();
   h.controller.showReader("notes/a.md");
   h.controller.closePanel();
 
   assert.equal(h.controller.switchSurface("foundry").empty, "foundry");
-  assert.equal(h.controller.switchSurface("reader").empty, "reader");
+  const result = h.controller.switchSurface("reader");
+  assert.equal(result.ok, true, "view 已随关面板销毁,笔记现场不在,落阅读器空态兜底页");
+  assert.equal(h.controller.state, STATE.READER_C);
+  assert.equal(h.content().empty, true);
+});
+
+test("the empty doc state with no Foundry underneath round-trips through close/reopen", async () => {
+  const h = harness();
+  h.controller.switchSurface("reader"); // CLOSED → 空态 READER_C
+  assert.equal(h.controller.state, STATE.READER_C);
+
+  h.controller.closePanel();
   assert.equal(h.controller.state, STATE.CLOSED);
+
+  await h.controller.openPanel();
+  assert.equal(h.controller.state, STATE.READER_C, "重开恢复空态,不拉起 FVTT");
+  assert.equal(h.calls.loadFoundry, 0);
+  assert.equal(h.content().empty, true);
 });
 
 test("panel_status carries the current surface for the renderer switch", async () => {

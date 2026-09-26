@@ -83,7 +83,8 @@
     transition: transform 0.18s ease;
   }
   body[data-surface="reader"] .seg-thumb { transform: translateX(100%); }
-  /* 目标从未打开过的瞬间提示:文字替换 + 摇晃,不遮挡面板 */
+  /* FVTT 从未加载时的瞬间提示:文字替换 + 摇晃,不遮挡面板。
+     reader 侧没有 deny:无文档时控制器直接切去空态兜底页。 */
   @keyframes deny {
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-2px); }
@@ -103,8 +104,8 @@
       var params = new URLSearchParams(location.search);
       var lang = params.get("lang") === "en-US" ? "en-US" : "zh-CN";
       var MESSAGES = {
-        "zh-CN": { doc: "文档", denyFoundry: "未加载", denyReader: "先打开文档" },
-        "en-US": { doc: "Docs", denyFoundry: "Not loaded", denyReader: "Open a doc first" },
+        "zh-CN": { doc: "文档", denyFoundry: "未加载" },
+        "en-US": { doc: "Docs", denyFoundry: "Not loaded" },
       };
       var t = MESSAGES[lang];
       var segs = {
@@ -128,7 +129,7 @@
         var seg = segs[target];
         if (!seg) return;
         var original = target === "reader" ? t.doc : "FVTT";
-        var hint = target === "reader" ? t.denyReader : t.denyFoundry;
+        var hint = target === "reader" ? t.doc : t.denyFoundry; /* reader 不会报空:无文档时落兜底页 */
         clearTimeout(flashTimer);
         seg.textContent = hint;
         seg.classList.remove("deny");

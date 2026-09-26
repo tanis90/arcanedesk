@@ -182,11 +182,12 @@ interface ArcaneMdApi {
   findNotePaths(text: string): Array<{ start: number; end: number; path: string }>;
 }
 
-/** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)。
+/** 阅读器页收到的一份内容:{ name, text, truncated } 或 { error }(§5.5 文案键)或
+    { empty: true }(空态兜底:从未打开过文档时切换丸切过来的落点)。
     path 让页面分辨"同一份被唤回"与"换了一份"(§2)。 */
 type ArcaneReaderPayload = {
   path?: string | null;
-} & ({ name: string; text: string; truncated: boolean; error?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined });
+} & ({ name: string; text: string; truncated: boolean; error?: undefined; empty?: undefined } | { error: string; name?: undefined; text?: undefined; truncated?: undefined; empty?: undefined } | { empty: boolean; name?: undefined; text?: undefined; truncated?: undefined; error?: undefined });
 
 /** preload-reader.cjs 暴露给 md-reader.html 的方法桥:全是单向订阅,页面拿不到任何文件系统能力。 */
 interface ArcaneReaderApi {

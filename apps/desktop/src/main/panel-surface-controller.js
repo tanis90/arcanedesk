@@ -147,6 +147,8 @@ export class PanelSurfaceController {
       }
       return this.showReader(restore.path);
     }
+    // 关闭时停在无文档的阅读器空态:重开仍落空态,不改成拉起 FVTT
+    if (restore?.surface === SURFACE_READER && restore.empty) return this.#enterEmptyReader();
     return this.#hooks.loadFoundry();
   }
 
@@ -165,6 +167,7 @@ export class PanelSurfaceController {
           surface: this.#surface,
           origin: this.#origin,
           path: this.#readerPath,
+          empty: this.#surface === SURFACE_READER && !this.#readerPath, // 空态兜底:重开仍落空态
           absolute: this.#readerAbsolute,
           baseDir: this.#readerBaseDir,
         };
@@ -186,7 +189,9 @@ export class PanelSurfaceController {
 
   /**
    * 只切换两个已存在的内容:不主动拉起 FVTT 加载、不读新文件。
-   * 目标从未打开(或已随关面板/崩溃销毁)时返回 { ok:false, empty },提示交给 chat。
+   * 目标从未打开(或已随关面板/崩溃销毁)时:foundry 如实报空({ ok:false, empty },
+   * 提示由切换丸闪烁展示);reader 不再报空——落进阅读器的空态兜底页,之后点 chat 里的
+   * 笔记链接照常进内容(② 内容寻址不受空态影响)。
    */
   switchSurface(target) {
     if (target !== SURFACE_FOUNDRY && target !== SURFACE_READER) {
@@ -199,8 +204,9 @@ export class PanelSurfaceController {
       this.showFoundry();
       return { ok: true, state: this.state };
     }
-    // reader:离开后阅读器保活在 Foundry 之下(readerPath 仍在);崩毁则重建并按快照重读(N4/N5)
-    if (!this.#readerPath) return { ok: false, empty: "reader", state: this.state };
+    // reader:从未打开过文档 → 空态兜底页
+    if (!this.#readerPath) return this.#enterEmptyReader();
+    // 离开后阅读器保活在 Foundry 之下(readerPath 仍在);崩毁则重建并按快照重读(N4/N5)
     if (!isUsable(this.#readerView)) {
       this.#ensureReaderView();
       this.#readerPayload = this.#rereadNotePayload();
@@ -345,6 +351,26 @@ export class PanelSurfaceController {
     this.layout();
     this.#pushReaderContent();
     return { ok: true, state: this.state, error: payload.error ?? null };
+  }
+
+  /**
+   * 无文档时的 reader surface(切换丸点"文档"但从未打开过笔记):创建阅读器并推空态
+   * 兜底页,不读任何文件。origin 照常按"底下有没有活 Foundry"快照;之后 ② 点笔记
+   * 走 #enterReader 正常覆盖空态。
+   */
+  #enterEmptyReader() {
+    if (!this.#open || this.#surface !== SURFACE_READER) {
+      this.#origin = isUsable(this.#foundryView) ? SURFACE_FOUNDRY : "closed";
+    }
+    this.#surface = SURFACE_READER;
+    this.#readerPayload = { empty: true };
+    this.#setOpen(true);
+    this.#ensureReaderView();
+    this.#applyVisibility();
+    this.#emitStatus();
+    this.layout();
+    this.#pushReaderContent();
+    return { ok: true, state: this.state };
   }
 
   /** F5 与页面重载共用的重读:快照在则按"打开时的目录"复检(N4),不在则按原始路径重解析。 */

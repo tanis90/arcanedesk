@@ -410,6 +410,8 @@ globalThis.ARCANE_MESSAGES = {
     "reader.error.outside": "这份笔记不在当前工作目录内。阅读器只读取工作目录里的文件。",
     "reader.error.encoding": "这个文件不是 UTF-8 文本，无法阅读。",
     "reader.truncated": "文件超过 2 MB，只显示开头部分。",
+    "reader.empty.title": "还没有打开的文档。",
+    "reader.empty.body": "点左边聊天里的笔记链接，文档会在这里打开。",
 
     // ---------- 设置:语音 ----------
     "sv.title": "语音识别",
@@ -933,6 +935,8 @@ globalThis.ARCANE_MESSAGES = {
     "reader.error.outside": "This note is outside the current working directory. The reader only reads files inside it.",
     "reader.error.encoding": "This file is not UTF-8 text, so it cannot be read.",
     "reader.truncated": "The file is larger than 2 MB; only the beginning is shown.",
+    "reader.empty.title": "No document is open.",
+    "reader.empty.body": "Click a note link in the chat on the left, and the document will open here.",
 
     // ---------- settings: voice ----------
     "sv.title": "Voice Recognition",

@@ -140,6 +140,29 @@
       font-size: var(--fs-meta);
       line-height: 1.9;
     }
+    /* 空态兜底:从未打开过文档时切换丸切过来的落点。不是错误,居中留白即可,
+       语气对齐 foundry-empty(标题衬线 + 一句指引)。 */
+    .reader-empty {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      padding: 32px;
+      text-align: center;
+    }
+    .reader-empty .empty-title {
+      font-family: var(--font-head);
+      font-weight: 600;
+      font-size: 18px;
+      color: var(--text-strong);
+      margin-bottom: 8px;
+    }
+    .reader-empty .empty-body {
+      max-width: 46ch;
+      color: var(--muted);
+      font-size: var(--fs-meta);
+      line-height: 1.9;
+    }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -149,6 +172,10 @@
     <article id="reader-doc" class="md-doc"></article>
   </main>
   <div id="reader-error" class="reader-error" role="alert" hidden><p></p></div>
+  <div id="reader-empty" class="reader-empty" hidden>
+    <p class="empty-title"></p>
+    <p class="empty-body" role="status"></p>
+  </div>
   <script src="../../generated/renderer-assets/marked/lib/marked.umd.js"></script>
   <script src="../../generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js"></script>
   <script src="../../generated/renderer-assets/katex/dist/katex.min.js"></script>
