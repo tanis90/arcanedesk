@@ -539,11 +539,13 @@ function noteInputState(commandId, state, meta = null, fromSnapshot = false) {
   if (previous === state) return;
   if (inputTerminalStates.includes(state)) inputStateByCommand.delete(commandId);
   else inputStateByCommand.set(commandId, state);
-  // 气泡迁移(仅备团实时事件):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
+  // 气泡迁移(仅备团实时事件):queued 移出对话流;投递/失败离开队列后在底部重建。
+  // cancelled 不重建、已有的也移除——排队中取消 = 从没发出去,不该在对话流里留痕
+  // (✎ 编辑的文本已回填 composer,更不会丢)。
   // 快照恢复不走这里——installSnapshot 的 inputs 循环自己负责落位(给历史节点打
   // data-command-id / 补回显),抢跑会在去重标记打好之前往底部重复建气泡。
   if (!fromSnapshot && currentMode === "prep") {
-    if (state === "queued") inputBubbleNode(commandId)?.remove();
+    if (state === "queued" || state === "cancelled") inputBubbleNode(commandId)?.remove();
     else ensureInputBubble(commandId);
   }
   syncQueueList();
@@ -559,7 +561,7 @@ async function queueAction(commandId, action) {
   const meta = inputMetaByCommand.get(commandId);
   if (!meta?.inputId) return;
   if (action === "edit") {
-    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 事件自动把气泡放回对话流。
+    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 不落气泡——没发出去过。
     const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, "cancel");
     if (result?.ok && typeof meta.text === "string") {
       input.value = meta.text;
