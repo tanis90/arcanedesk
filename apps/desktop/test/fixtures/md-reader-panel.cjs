@@ -137,6 +137,9 @@ module.exports = async ({ window, evaluate, ui, until, project }) => {
     assert.ok(foundry(), "READER_F keeps the Foundry view alive (§3.5 invariant 2)");
     assert.equal(foundry().getVisible(), false, "the hidden Foundry view must not stay visible");
     assert.equal(assertOneVisible("READER_F"), 1);
+    // 悬浮切换丸压在标题栏拖拽带上:缺口必须保持 no-drag,否则 Windows 窗口级
+    // 拖拽命中(HTCAPTION)先于药丸 view 吞掉点击,药丸永远点不动。
+    await ui('getComputedStyle(document.getElementById("panel-switch-notch")).getPropertyValue("-webkit-app-region") === "no-drag"');
 
     // ---------- ③ 切 FVTT:只做显隐,绝不重载 FVTT ----------
     await evaluate('window.arcane.switchPanelSurface("foundry")');

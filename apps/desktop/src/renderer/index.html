@@ -144,6 +144,16 @@
       -webkit-app-region: drag;
       z-index: 40;
     }
+    /* 悬浮切换丸(独立原生 view)与这条拖拽带重叠;Windows 拖拽区在窗口级命中
+       (HTCAPTION),会先于药丸 view 把点击吞掉,导致药丸永远点不动。在药丸位置
+       挖一块 no-drag 缺口放行点击——药丸 156×30 且水平居中于右屏(main 侧
+       layoutPanelSwitch),缺口略宽几 px 容错。 */
+    #panel-switch-notch {
+      width: 168px;
+      height: 100%;
+      margin: 0 auto;
+      -webkit-app-region: no-drag;
+    }
     /* 真全屏(F11):overlay 三键不绘制,带子收起,Foundry 回满高(main 侧 topOffset=0) */
     :root[data-frameless="1"] body.with-panel.is-fullscreen #panel-titlebar { display: none; }
     /* 法杖星芒 mark:透明底黑墨,暗色主题反白 */
@@ -1620,7 +1630,7 @@
     </span>
   </header>
   <div id="update-popover" class="update-popover" data-i18n-dynamic hidden role="dialog" aria-live="polite"></div>
-  <div id="panel-titlebar" aria-hidden="true"></div>
+  <div id="panel-titlebar" aria-hidden="true"><div id="panel-switch-notch"></div></div>
   <div id="permission-center" aria-live="polite"></div>
   <section id="telemetry-consent-card" hidden aria-labelledby="telemetry-consent-title">
     <div class="telemetry-consent-head">
