@@ -1828,7 +1828,7 @@ function pruneOutboxes() {
   }
 }
 const inputStateKeys = {
-  failed: "chat.input.failed", send_failed: "chat.input.sendFailed", cancelled: "chat.input.cancelled",
+  failed: "chat.input.failed", send_failed: "chat.input.sendFailed",
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
 function outboxFor(id) {
@@ -1841,7 +1841,9 @@ function updateInputReceipt(commandId, state) {
   if (!node) return;
   node.dataset.inputState = state;
   if (!["failed", "send_failed", "uncertain"].includes(state)) node.querySelector(".retry-input")?.remove();
-  if (!["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state)) {
+  // cancelled 不渲染回执:它只能来自用户自己的动作(队列 ×、✎ 编辑、⏹ 停止后的清扫),
+  // 系统故障走的是 failed——自己点掉的再来一行"已取消"只是噪音。
+  if (!["failed", "send_failed", "interrupted", "uncertain"].includes(state)) {
     node.querySelector(".input-state")?.remove();
     return;
   }

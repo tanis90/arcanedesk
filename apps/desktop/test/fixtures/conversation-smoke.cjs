@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
     for (const state of ["sending", "accepted", "queued", "dispatching", "context", "consumed", "handled", "failed", "cancelled", "interrupted"]) {
       receiptInput.state = state;
       await evaluate('resyncSelected()');
-      assert.equal(await evaluate('!!document.querySelector(".input-state")'), ["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state), "receipt visibility after snapshot: " + state);
+      assert.equal(await evaluate('!!document.querySelector(".input-state")'), ["failed", "send_failed", "interrupted", "uncertain"].includes(state), "receipt visibility after snapshot: " + state);
     }
     receiptInput.state = "consumed";
     await evaluate('switchMode("combat")');
