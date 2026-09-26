@@ -163,6 +163,11 @@
   flash-extract 只有 md 没有 bbox，信号 B（版面几何）不可用——前提写进 SKILL.md。
 - 服务器启停、锁文件、端口清理归 arcane-fvtt-ops，module-to-fvtt 不碰进程；脚本一律
   用 ARCANE_FVTT_NODE 运行，与 ops 的环境约定同源。
+- 条目来源优先级沿用 arcane-actor-update（2026-09-01）既有决策，覆盖建世界全流程：Item 条目
+  默认从 arcane-dnd5e-2014-automation 模块合集包拿，缺条目才回退 dnd5e.* 并在报告写明来源，
+  禁止凭记忆手写条目数据。module-to-fvtt 原稿只写"合集已有就引用、不重复自建"，漏了来源
+  优先级——工具流（browse/plan 去重模块包优先）天然遵守，手工 content_search/eval 路径现由
+  SKILL.md 阶段 3 与 dnd5e-pitfalls §5 补齐；怪物 Actor 模块包不收，引系统包。
 
 ### arcane-module-reader（2026-08-31）
 

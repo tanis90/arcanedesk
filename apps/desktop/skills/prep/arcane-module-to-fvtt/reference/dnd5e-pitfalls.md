@@ -69,8 +69,9 @@ await Actor.create({ name, type: 'character', folder: folderId, system: {
 
 ## 5. 合集引用
 
-- `foundry_compendium_browse` **不支持 Actor 类型**，找怪物用 `foundry_content_search(documentType='Actor', scope='compendium')`。
-- 同名内容常有 2014（dnd5e.monsters/items/spells）与 2024（dnd5e.actors24/equipment24/spells24）双版本，按模组风味选。
+- 来源优先级：Item 条目（法术/特性/专长/职业等）默认从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014 …" 合集包拿（按 `pack.metadata.packageName` 认；按类别选包清单见 arcane-actor-update「给人物添加法术 / 职业能力」），模块包缺条目或未安装才回退 `dnd5e.*` 系统包，并在报告写明实际来源。条目数据一律从 compendium 文档拷贝，禁止凭记忆手写字段。
+- `foundry_compendium_browse` **不支持 Actor 类型**，找怪物用 `foundry_content_search(documentType='Actor', scope='compendium')`。模块包不收怪物（summons 是召唤生物专用），怪物引系统包。
+- 系统包同名内容常有 2014（dnd5e.monsters/items/spells）与 2024（dnd5e.actors24/equipment24/spells24）双版本，按模组风味选。
 - 法术批解析用 browse 的 `names` 模式 + `rules` 窄化；个别法术只存在于某一版（如亡者丧钟只有 2014 版），miss 后换 rules 重试或按 identifier 模糊查（query）。
 
 ## 6. 场景与网格

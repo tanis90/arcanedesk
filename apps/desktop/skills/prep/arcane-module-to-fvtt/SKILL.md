@@ -49,6 +49,7 @@ description: 把已建立 Obsidian 资料库的 D&D 5e 模组系统性维护进 
 把模组拆成五类资产逐行列入验收表：Scene / Actor（自建 vs 引合集）/ Item / RollTable / Journal（DM 速查卡 + 玩家 handout + 规则卡）。自建还是引合集的判定：
 
 - 合集已有 → 引用，**不重复自建**。
+- 引用来源优先级：Item 条目（法术/特性/专长/职业等）默认从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014 …" 合集包拿，模块包缺条目或未安装才回退 `dnd5e.*` 系统包，并在报告写明实际来源；条目一律从 compendium 文档拷贝，不凭记忆手写。按类别选包清单与检索方法见 arcane-actor-update「给人物添加法术 / 职业能力」；工具流 browse/plan 去重已按模块包优先，手工 content_search/eval 路径遵守同一优先级。怪物 Actor 模块包不收，引系统包（见 reference/dnd5e-pitfalls.md §5）。
 - NPC 用合集底版 + 改名 + 模组描述（`system.details.biography.value`）。
 - 合集缺的内容（如非 SRD 怪物）→ 按模组原文处理，记偏差清单。
 
