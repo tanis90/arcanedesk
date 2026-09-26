@@ -42,6 +42,11 @@ export const requiredFiles = [
   "skills/prep/arcane-fvtt-server/references/deploy.md",
   "skills/prep/arcane-content-catalog/SKILL.md",
   "skills/prep/arcane-module-reader/SKILL.md",
+  "skills/prep/arcane-module-style-marking/SKILL.md",
+  "skills/prep/arcane-module-style-marking/scripts/mark-apply.mjs",
+  "skills/prep/arcane-module-to-fvtt/SKILL.md",
+  "skills/prep/arcane-module-to-fvtt/scripts/crop-token.mjs",
+  "skills/prep/arcane-module-to-fvtt/scripts/render-pdf-map.mjs",
   "skills/prep/arcane-dnd5e-rules/SKILL.md",
   "skills/prep/arcane-dnd5e-rules/NOTICE.md",
   "skills/prep/arcane-dnd5e-rules/references/character/classes/wizard.md",
@@ -84,7 +89,7 @@ const forbiddenPaths = [
 
 export const exactDirectories = new Map([
   ["system-prompts", ["combat.md", "prep.md"]],
-  ["skills/prep", ["arcane-actor-update", "arcane-content-catalog", "arcane-dnd5e-rules", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-server", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
+  ["skills/prep", ["arcane-actor-update", "arcane-content-catalog", "arcane-dnd5e-rules", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-server", "arcane-fvtt-setup", "arcane-module-reader", "arcane-module-style-marking", "arcane-module-to-fvtt", "bundle.json"]],
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
