@@ -1901,8 +1901,9 @@ async function sendSubmission(submission) {
   if (result?.ok) {
     outboxFor(id).delete(submission.context.commandId);
     if (selectedSessionId === id) {
-      const node = submissionNode(submission);
-      if (!["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
+      // 备团 queued 事件先于本 ack 到达,气泡已移入队列列表;只更新现存气泡,不得重建回对话流。
+      const node = inputBubbleNode(submission.context.commandId);
+      if (node && !["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
         updateInputReceipt(submission.context.commandId, result.compacted ? "handled" : "accepted");
       }
       if (result.compacted) setBusy(false);
