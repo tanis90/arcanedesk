@@ -77,8 +77,16 @@ const TITLEBAR_HEIGHT = 36;
 
 // 应用身份:userData 目录由 app 名决定(~/Library/Application Support/<name>)。
 // 打包版用 productName "ArcaneDesk";dev(npm start)保持 "arcane-desktop",
-// 继续用既有 userData,两份配置互不干扰。
-if (!app.isPackaged) app.setName("arcane-desktop");
+// 继续用既有 userData,两份配置互不干扰。dev 联调可用 ARCANE_USER_DATA_DIR 显式
+// 指向另一份 userData(如安装版),与其共享会话/项目/provider 配置——此时单实例锁
+// 也与该份数据互斥,目标安装版必须先退出。
+const devUserDataOverride = app.isPackaged
+  ? ""
+  : String(process.env.ARCANE_USER_DATA_DIR ?? "").trim();
+if (!app.isPackaged) {
+  if (devUserDataOverride) app.setPath("userData", devUserDataOverride);
+  else app.setName("arcane-desktop");
+}
 // Windows 任务栏按 Application User Model ID 识别和分组应用。开发版实际
 // 运行的是 electron.exe；不给独立 ID 时，Shell 会继续显示 Electron 图标。
 // dev 使用独立后缀，避免与已安装的正式版合并成同一个任务栏分组。
@@ -97,8 +105,10 @@ if (!app.requestSingleInstanceLock()) {
 // 打包版的 pi agent 目录收进 app 私有 userData,不与本机 pi CLI 共享 ~/.pi/agent——
 // 否则 pi CLI 的 settings.json 默认模型(如 kimi-coding/k3)与同 cwd 会话会漏进 app。
 // (SDK 的环境变量名见 dist/config.js:ENV_AGENT_DIR = PI_CODING_AGENT_DIR;
-//  getAgentDir() 每次调用时现读,这里设置即可覆盖全部内部路径)
-if (app.isPackaged) {
+//  getAgentDir() 每次调用时现读,这里设置即可覆盖全部内部路径)。
+// ARCANE_USER_DATA_DIR 指到安装版时同样收进该份 userData——模型/键位等 agent
+// 配置才跟着安装版走,而不是落回 ~/.pi/agent。
+if (app.isPackaged || devUserDataOverride) {
   const agentDir = path.join(app.getPath("userData"), "agent");
   mkdirSync(agentDir, { recursive: true });
   process.env.PI_CODING_AGENT_DIR = agentDir;
