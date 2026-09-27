@@ -31,6 +31,7 @@ const BASE_URL = 'https://arcane-package.oss-cn-beijing.aliyuncs.com';
 const INDEX_URL = `${BASE_URL}/index.json`;
 const INDEX_CACHE_CONTROL = 'no-cache, max-age=0, must-revalidate';
 
+/** @returns {never} */
 function fail(message) {
   console.error(`error: ${message}`);
   process.exit(1);
@@ -65,6 +66,11 @@ async function resolveAliyunBin() {
   }
 }
 
+/**
+ * @param {string} localPath
+ * @param {string} objectKey
+ * @param {{ cacheControl?: string }} [options]
+ */
 async function ossUpload(localPath, objectKey, { cacheControl } = {}) {
   const bin = await resolveAliyunBin();
   const args = ['oss', 'cp', localPath, `oss://${BUCKET}/${objectKey}`, '--force'];
@@ -74,6 +80,10 @@ async function ossUpload(localPath, objectKey, { cacheControl } = {}) {
   console.log(`uploaded oss://${BUCKET}/${objectKey}${stdout.includes('\n') ? '' : ` (${stdout.trim()})`}`);
 }
 
+/**
+ * @param {string | URL} url
+ * @param {{ cache?: RequestCache }} [options]
+ */
 async function fetchJson(url, { cache = 'no-store' } = {}) {
   const response = await fetch(url, { cache });
   if (!response.ok) fail(`GET ${url} -> HTTP ${response.status}`);
