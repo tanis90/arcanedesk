@@ -157,6 +157,11 @@ let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
 let prepareExit = null, backgroundTray = null, quitAllowed = false, exitRequested = false;
+// macOS Squirrel 的 quitAndInstall 先关全部窗口再退出（Electron 文档明确该序列）：
+// 关窗被托盘拦截(收进托盘)时 before-quit 永远不会触发，ShipIt 等不到进程退出，
+// 以 "App Still Running Error" 取消安装。用户点「重启并更新」即显式退出意图，
+// 由 update:install 置位，关窗拦截对此放行；退出清理仍走 requestExit 既有路径。
+let updateInstallRequested = false;
 function restoreMainWindow() {
   if (exitRequested) return;
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
@@ -876,7 +881,7 @@ function createWindow() {
     panelSwitchView = null;
   });
   mainWindow.on("close", event => {
-    if (quitAllowed) return;
+    if (quitAllowed || updateInstallRequested) return;
     event.preventDefault();
     if (enableBackgroundEntry()) mainWindow.hide();
     else requestExit();
@@ -1208,6 +1213,9 @@ app.whenReady().then(async () => {
   ipcMain.handle("update:install", (event) => {
     if (!isTrustedChatIpc(event)) return { ok: false };
     if (!appUpdater) return updateUnavailable;
+    // 仅在真正进入安装前置位（install 内部有 ready 守卫）：避免误置位后
+    // 普通关窗不再收进托盘。置位后无法撤回——quitAndInstall 没有取消语义。
+    if (appUpdater.snapshot().status === "ready") updateInstallRequested = true;
     return { ok: true, state: appUpdater.install() };
   });
   ipcMain.handle("update:state", event => isTrustedChatIpc(event)

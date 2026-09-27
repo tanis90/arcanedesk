@@ -246,6 +246,15 @@ app ready 后初始化 AppUpdater；注册四个 IPC handler，遵循现有
   换装重启；Windows NSIS assisted 安装器（oneClick: false）被更新流程以
   静默模式运行，沿用注册表记录的原安装目录（用户首装自选的目录不丢），
   per-user 安装无需提权。
+- **mac 关窗/退出拦截必须与 quitAndInstall 兼容（2026-09-27 实机事故）**：
+  Squirrel 的 `relaunchToInstallUpdate` 通过 `[NSApp terminate:]` 终止 app——
+  Electron 先关全部窗口、再发 `before-quit`；任何 `close`/`before-quit` 拦截
+  （本应用的「关窗收进托盘」与退出清理两段拦截）若不放行，终止序列就断在
+  第一步，ShipIt 等不到进程退出，以 `App Still Running Error` 取消安装
+  （日志在 `~/Library/Caches/<bundle-id>.ShipIt/ShipIt_stderr.log`）。
+  Windows NSIS 由外部安装器强杀进程，不受影响。因此 `update:install` 在
+  ready 态置 `updateInstallRequested`，关窗拦截对它放行（退出清理仍走
+  requestExit 既有路径，ShipIt 对秒级延迟有容忍）。
 
 ### 5.4 配置与打包
 
