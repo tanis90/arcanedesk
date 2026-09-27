@@ -17,6 +17,7 @@ import {
   compareVersions,
   inspectWorldEnvironment,
   listInstalledModules,
+  mirrorCatalog,
   resolveIndexUrl,
   runCli,
   stageModule,
@@ -675,4 +676,90 @@ test("CLI rejects an insecure --index-url before any network access", async () =
     runCli(["world-catalog", "--data-dir", os.tmpdir(), "--index-url", "not-a-url"]),
     /must be an absolute URL/,
   );
+});
+
+test("catalog marks itself as a local-vs-mirror reconciliation and reports mirror scope", () => {
+  const mirrorIndex = {
+    generated: "2026-09-27T05:30:28.016+00:00",
+    packages: [
+      { id: "dnd5e", version: "5.3.3", group: "system", bytes: 10, sha256: "a".repeat(64), zipUrl: "https://packages.example.test/dnd5e/5.3.3/dnd5e-5.3.3.zip", manifestUrl: "https://packages.example.test/dnd5e/5.3.3/system.json" },
+      { id: "demo-module", version: "2.0.0", group: "core", bytes: 20, sha256: "b".repeat(64), zipUrl: "https://packages.example.test/demo-module/2.0.0/demo-module-2.0.0.zip", manifestUrl: "https://packages.example.test/demo-module/2.0.0/module.json" },
+      { id: "mirror-only-module", version: "1.0.0", group: "ui", bytes: 30, sha256: "c".repeat(64), zipUrl: "https://packages.example.test/mirror-only-module/1.0.0/mirror-only-module-1.0.0.zip", manifestUrl: "https://packages.example.test/mirror-only-module/1.0.0/module.json" },
+    ],
+    worlds: [],
+    profiles: [],
+  };
+  const catalog = buildCatalog(mirrorIndex, { modules: [] });
+  assert.equal(catalog.kind, "local-vs-mirror");
+  assert.equal(catalog.mirrorModuleCount, 2);
+  assert.equal(catalog.rows.length, 0);
+});
+
+test("mirror-catalog enumerates the full mirror and flags default-profile modules", async () => {
+  const profileUrl = "https://packages.example.test/profiles/arcane-demo-full/2/profile.json";
+  const profile = {
+    schemaVersion: 1,
+    kind: "foundry-environment-profile",
+    id: "arcane-demo-full",
+    title: "Arcane Demo Full",
+    revision: 2,
+    packageChannel: "stable",
+    system: "dnd5e",
+    modules: ["demo-module"],
+  };
+  const profileBuffer = Buffer.from(JSON.stringify(profile));
+  const mirrorIndex = {
+    generated: "2026-09-27T05:30:28.016+00:00",
+    foundry: "13.351",
+    dnd5e: "5.3.3",
+    packages: [
+      { id: "dnd5e", version: "5.3.3", group: "system", bytes: 10, sha256: "a".repeat(64), zipUrl: "https://packages.example.test/dnd5e/5.3.3/dnd5e-5.3.3.zip", manifestUrl: "https://packages.example.test/dnd5e/5.3.3/system.json" },
+      { id: "demo-module", version: "2.0.0", group: "core", bytes: 20, sha256: "b".repeat(64), zipUrl: "https://packages.example.test/demo-module/2.0.0/demo-module-2.0.0.zip", manifestUrl: "https://packages.example.test/demo-module/2.0.0/module.json" },
+      { id: "optional-module", version: "1.0.0", group: "ui", bytes: 30, sha256: "c".repeat(64), zipUrl: "https://packages.example.test/optional-module/1.0.0/optional-module-1.0.0.zip", manifestUrl: "https://packages.example.test/optional-module/1.0.0/module.json" },
+    ],
+    worlds: [{
+      id: "arcane-demo",
+      title: "Arcane Demo",
+      version: "0.1.2",
+      manifestUrl: "https://packages.example.test/worlds/arcane-demo/0.1.2/world.json",
+      manifestBytes: 500,
+      manifestSha256: "d".repeat(64),
+      downloadUrl: "https://packages.example.test/worlds/arcane-demo/0.1.2/arcane-demo-0.1.2.zip",
+      bytes: 600,
+      sha256: "e".repeat(64),
+      defaultProfile: "arcane-demo-full",
+    }],
+    profiles: [{
+      id: "arcane-demo-full",
+      title: "Arcane Demo Full",
+      revision: 2,
+      profileUrl,
+      profileBytes: profileBuffer.length,
+      profileSha256: sha256(profileBuffer),
+    }],
+  };
+  const fakeFetch = async (url) => {
+    if (url === indexUrl) return bufferResponse(Buffer.from(JSON.stringify(mirrorIndex)), "application/json");
+    if (url === profileUrl) return bufferResponse(profileBuffer, "application/json");
+    return new Response("not found", { status: 404 });
+  };
+  const catalog = await mirrorCatalog({ fetchImpl: fakeFetch, indexUrl });
+  assert.equal(catalog.kind, "mirror-catalog");
+  assert.equal(catalog.packageCount, 3);
+  assert.equal(catalog.moduleCount, 2);
+  assert.equal(catalog.systemCount, 1);
+  assert.deepEqual(
+    catalog.packages.find((entry) => entry.id === "demo-module").defaultProfiles,
+    ["arcane-demo-full@2"],
+  );
+  assert.deepEqual(catalog.packages.find((entry) => entry.id === "optional-module").defaultProfiles, []);
+  assert.equal(catalog.worlds[0].id, "arcane-demo");
+  assert.deepEqual(catalog.profiles[0].modules, ["demo-module"]);
+});
+
+test("help is reachable as command and as a boolean option", async () => {
+  const direct = await runCli(["help"]);
+  assert.match(direct.usage, /mirror-catalog/);
+  const viaOption = await runCli(["catalog", "--help"]);
+  assert.match(viaOption.usage, /mirror-catalog/);
 });

@@ -20,6 +20,9 @@ helper 会无缓存读取固定的 OSS `index.json`，只选 `module.json` 包�
 
 `notInMirror` 是本地存在但索引没有的 module；不能据此宣称它们没有官方更新。
 
+要回答"镜像里有哪些可下载 mod（含本机未安装的）"，用 `mod-manager mirror-catalog`
+（枚举 index 全量，无需 Data 目录）；`catalog` 的 rows 只覆盖本机已装，不是镜像全量清单。
+
 ## 2. 给用户变更表格
 
 至少展示：

@@ -52,8 +52,10 @@ macOS Bash 调用形态：
   安装 dnd5e 等 system：读取 [references/demo-world.md](references/demo-world.md)。
 
 只读的 `bundle-inspect` 可检查构建输入，无需 Foundry 目录；其他只读的
-`local-inspect` / `inspect` / `catalog` / `world-inspect` / `world-catalog` 可以直接执行。这些命令默认要求
-Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
+`local-inspect` / `inspect` / `catalog` / `mirror-catalog` / `world-inspect` / `world-catalog` 可以直接执行。
+回答"镜像里有哪些可下载内容（含未安装的）"一律用 `mirror-catalog`（枚举 index 全量，无需 Data 目录）；
+`catalog` 只对本机【已安装】mod 与镜像对账，枚举不出未安装的镜像 mod。`catalog` / `inspect` / `world-*`
+等默认要求 Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
 `arcane-fvtt-setup` 全新安装流程在计划确认前传 `--allow-missing-data-dir`，输出带 `dataDirExists`
 标记；stage/commit 不接受该旗标，永远严格。下载前说明来源、
 目标与已知体积；写入 `<数据目录>/Data/modules`、`<数据目录>/Data/systems` 或

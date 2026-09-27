@@ -579,11 +579,13 @@ export function buildCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX
   rows.sort((a, b) => a.id.localeCompare(b.id));
   notInMirror.sort((a, b) => a.id.localeCompare(b.id));
   return {
+    kind: "local-vs-mirror",
     indexUrl,
     generated: index.generated,
     foundry: index.foundry ?? null,
     dnd5e: index.dnd5e ?? null,
     dataDirExists: installedValue?.dataDirExists ?? null,
+    mirrorModuleCount: mirrorModules.length,
     rows,
     updates: rows.filter((row) => row.status === "update"),
     notInMirror,
@@ -859,6 +861,69 @@ export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIR
     listInstalledWorlds(dataDir, { allowMissingDataDir }),
   ]);
   return buildWorldCatalog(index, installed, indexUrl);
+}
+
+// 镜像全量清单：从索引侧枚举（与 catalog 的"只对本机已装对账"互补），并标注默认集。
+export function buildMirrorCatalog(indexValue, profileValues = [], indexUrl = MIRROR_INDEX_URL) {
+  const index = validateMirrorIndex(indexValue);
+  const profiles = profileValues.map((value) => validateEnvironmentProfile(value));
+  const defaultByModule = new Map();
+  for (const profile of profiles) {
+    for (const moduleId of profile.modules) {
+      const list = defaultByModule.get(moduleId) ?? [];
+      list.push(`${profile.id}@${profile.revision}`);
+      defaultByModule.set(moduleId, list);
+    }
+  }
+  const packages = index.packages.map((entry) => ({
+    id: entry.id,
+    version: entry.version,
+    group: entry.group,
+    kind: isSystemIndexEntry(entry) ? "system" : "module",
+    bytes: entry.bytes,
+    sha256: entry.sha256,
+    manifestUrl: entry.manifestUrl,
+    downloadUrl: entry.zipUrl,
+    defaultProfiles: defaultByModule.get(entry.id) ?? [],
+  })).sort((a, b) =>
+    a.group.localeCompare(b.group) || a.id.localeCompare(b.id) || (compareVersions(a.version, b.version) ?? 0));
+  const worlds = index.worlds.map((entry) => ({
+    id: entry.id,
+    title: entry.title,
+    version: entry.version,
+    bytes: entry.bytes,
+    sha256: entry.sha256,
+    manifestUrl: entry.manifestUrl,
+    downloadUrl: entry.downloadUrl,
+    defaultProfile: entry.defaultProfile,
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    kind: "mirror-catalog",
+    indexUrl,
+    generated: index.generated,
+    foundry: index.foundry ?? null,
+    dnd5e: index.dnd5e ?? null,
+    packageCount: packages.length,
+    moduleCount: packages.filter((entry) => entry.kind === "module").length,
+    systemCount: packages.filter((entry) => entry.kind === "system").length,
+    packages,
+    worlds,
+    profiles: profiles.map((profile) => ({
+      id: profile.id,
+      title: profile.title,
+      revision: profile.revision,
+      system: profile.system,
+      modules: profile.modules,
+    })),
+  };
+}
+
+export async function mirrorCatalog({ fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL } = {}) {
+  const index = await loadIndex(fetchImpl, indexUrl);
+  const profiles = await Promise.all(
+    index.profiles.map(async (entry) => (await loadEnvironmentProfile(fetchImpl, entry)).profile),
+  );
+  return buildMirrorCatalog(index, profiles, indexUrl);
 }
 
 export async function inspectWorldEnvironment({ worldId, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
@@ -2074,7 +2139,7 @@ export async function commitWorldStage({ stageDir, dataDir, expectedCurrentVersi
   };
 }
 
-const BOOLEAN_OPTIONS = new Set(["allow-missing-data-dir"]);
+const BOOLEAN_OPTIONS = new Set(["allow-missing-data-dir", "help", "h"]);
 
 function parseCli(argv) {
   const [command, ...rest] = argv;
@@ -2098,17 +2163,24 @@ function parseCli(argv) {
 
 function usage() {
   return [
-    "Usage:",
-    "  mod-manager bundle-inspect --input <prepared-bundle.json>",
+    "mod-manager — Arcane Foundry 镜像与本机物料管理 CLI（help / --help / -h 打印本帮助）",
+    "",
+    "镜像全量清单（只读，无需 Foundry 目录）：",
+    "  mod-manager mirror-catalog [--index-url <url>]   # 枚举镜像全部可下载内容（mod/system/世界/profile），并标注默认安装集",
+    "",
+    "本机对账与检查（只读）：",
+    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 只对本机【已安装】mod 与镜像做版本对账；不含未安装的镜像 mod（全量清单用 mirror-catalog）",
+    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 镜像可下载世界全量 + 本机安装状态",
+    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 解析某世界的环境依赖计划",
+    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 检查单个 manifest 与本机状态",
+    "  mod-manager local-inspect --archive <zip> --data-dir <dir>   # 检查本地 zip 物料",
+    "  mod-manager bundle-inspect --input <prepared-bundle.json>   # 检查构建输入（离线）",
+    "",
+    "构建与安装（写操作，staging/commit 分开，确认字段必须逐项来自本次 inspect 输出）：",
     "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
-    "  mod-manager local-inspect --archive <zip> --data-dir <dir>",
     "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
-    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
-    "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
     "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>]",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
-    "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
-    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]",
     "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
     "",
@@ -2118,6 +2190,9 @@ function usage() {
 
 export async function runCli(argv = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
+  if (command === "help" || command === "--help" || command === "-h" || options.help || options.h) {
+    return { usage: usage() };
+  }
   switch (command) {
     case "bundle-inspect":
       return inspectPreparedModule({ inputPath: options.input });
@@ -2143,6 +2218,8 @@ export async function runCli(argv = process.argv.slice(2)) {
         indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
+    case "mirror-catalog":
+      return mirrorCatalog({ indexUrl: resolveIndexUrl(options["index-url"]) });
     case "stage":
       return stageModule({
         manifestUrl: options["manifest-url"],
@@ -2190,10 +2267,6 @@ export async function runCli(argv = process.argv.slice(2)) {
         dataDir: options["data-dir"],
         expectedCurrentVersion: options["expected-current-version"],
       });
-    case "help":
-    case "--help":
-    case "-h":
-      return { usage: usage() };
     default:
       throw new Error(`${command ? `unknown command: ${command}` : "command is required"}\n${usage()}`);
   }
