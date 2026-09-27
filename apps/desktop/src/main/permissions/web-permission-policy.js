@@ -102,6 +102,7 @@ export class WebPermissionPolicy {
   check(webContents, permission, requestingOrigin, details = {}) {
     const surface = this.surface(webContents);
     if (surface === "chat") {
+      if (permission === "clipboard-sanitized-write") return true;
       return permission === "media" && details.mediaType === "audio";
     }
 
@@ -119,6 +120,10 @@ export class WebPermissionPolicy {
   request(webContents, permission, callback, details = {}) {
     const surface = this.surface(webContents);
     if (surface === "chat") {
+      if (permission === "clipboard-sanitized-write") {
+        callback(true);
+        return;
+      }
       const mediaTypes = mediaTypesFromRequest(details);
       callback(permission === "media" && mediaTypes.length === 1 && mediaTypes[0] === "audio");
       return;
