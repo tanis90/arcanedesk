@@ -50,7 +50,6 @@ const exactDirectories = new Map([
     "mac-adhoc-sign.mjs",
     "make-fake-foundry-zip.mjs",
     "module-builder-vendor",
-    "oss-mirror-publish.mjs",
     "pack-world.mjs",
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
