@@ -305,8 +305,8 @@ export function joinPlayContext(data, staticSnapshot) {
 }
 
 /**
- * Port of Desktop normalizeFoundryWriteReceipt for the play actions (the
- * upload-image branch is unreachable here and intentionally omitted).
+ * Port of Desktop normalizeFoundryWriteReceipt for the play actions and the
+ * prep write family (the upload-image branch serves imageApply receipts).
  */
 export function normalizePlayWriteReceipt(value, { action, args } = {}) {
   if (!value || !["completed", "rejected", "partial", "indeterminate"].includes(value.status)) {
@@ -332,7 +332,7 @@ export function normalizePlayWriteReceipt(value, { action, args } = {}) {
   }
   steps = (steps ?? []).map((step) => {
     const state = step.state === "not-started" ? "not_started" : step.state;
-    return {
+    const normalized = {
       ...step,
       targets: step.targets ?? [],
       state,
@@ -340,6 +340,13 @@ export function normalizePlayWriteReceipt(value, { action, args } = {}) {
         ? `${step.step}: ${state}`
         : [step.slot, step.label].filter(Boolean).join(" ")),
     };
+    // imageApply produces upload steps whose targets are Data paths, not
+    // document UUIDs; publish them as dataPaths (Desktop parity).
+    if (step.step === "upload-image") {
+      normalized.dataPaths = step.targets ?? [];
+      normalized.targets = [];
+    }
+    return normalized;
   });
   return value.status === "completed"
     ? {
