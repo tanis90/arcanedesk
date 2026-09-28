@@ -76,6 +76,8 @@ skill 预检:`unzip -p <zip> resources/app/package.json` 读版本比对(容器�
    tarball 的 SHA256 提供,语义锚点用配方标签。
 4. compose(up):30000 公网直开、双卷(foundry/data)、`restart:
    unless-stopped`、incoming 挂载放用户 zip、`ARCANE_REGION` 按 flavor。
+   模板已钉 `hostname: arcane-fvtt`,**不要删**:license 绑定容器 hostname,
+   不钉则每次重建(升级必踩)license 失效、世界静默不启动。
 5. 首启等待:入口脚本装本体+首启 dnd5e(从 region mod 索引,字节级校验),健康
    判据 `/api/status` 返回钉版版本号。
 6. **V1-V3 网络验证**:
@@ -91,6 +93,17 @@ skill 预检:`unzip -p <zip> resources/app/package.json` 读版本比对(容器�
 
 升级 = 同链路新 revision:`docker load` 新 tar.gz → 改 `.env` 的 tag →
 `compose up -d` → 旧 revision 镜像由 skill `docker image rm` 清理。
+
+**license 绑定容器 hostname**(默认 = 容器 ID 前 12 位,重建即变):compose 模板
+已钉 `hostname: arcane-fvtt`,升级重建 license 不受影响。目标机若还是钉 hostname
+之前的旧 compose,先换成新模板再重建。已失效的症状:日志出现
+`Software license verification failed`、世界静默不启动,但容器 healthy、
+`/api/status` 正常——到面板重新激活一次即可,此后稳定。重建后核对:
+`docker inspect -f '{{.Config.Hostname}}'` 与 `Config/license.json` 的 `host`
+一致。r7 起 entrypoint 带世界活性看门狗:期望世界(`ARCANE_WORLD` 或
+options.json 的 world)长期未 active 会在日志打 `[arcane:watchdog] WARNING`
+(仅告警,不影响 healthy 判定);`ARCANE_WORLD` 指了不存在的世界则直接拒启
+(fail-closed)。
 
 ## §5 冲突处理(三选一,固定话术)
 

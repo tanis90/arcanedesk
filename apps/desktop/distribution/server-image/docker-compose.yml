@@ -12,6 +12,11 @@ services:
   arcane-fvtt:
     image: arcane/arcane-fvtt:${ARCANE_FVTT_TAG:?set ARCANE_FVTT_TAG in .env}
     container_name: arcane-fvtt
+    # license 绑定容器 hostname（默认 = 容器 ID 前 12 位，每次重建都变 → license 失效，
+    # 且失效后世界静默不启动、healthcheck 照常 healthy）。钉死 hostname，升级重建后
+    # license 依然有效。注意：从旧部署迁来时 license 绑的是旧 hostname，第一次用本
+    # 模板重建后需到面板重新激活一次，此后稳定。
+    hostname: arcane-fvtt
     restart: unless-stopped
     ports:
       - "${ARCANE_FVTT_PORT:-30000}:30000"
@@ -20,7 +25,9 @@ services:
       # 可选：foundryvtt.com Purchased Licenses 页的限时下载链（5 分钟有效，
       # 生成就立即用；用了它就不要再往 incoming/ 放 zip）
       # FOUNDRY_RELEASE_URL: ""
-      # 可选：自动加载的世界 id（省去每次从 /join 选世界）
+      # 可选：自动加载的世界 id（省去每次从 /join 选世界）。
+      # 注意：id 写错或世界未装入时 entrypoint 拒启（fail-closed），
+      # 启动后世界长期未 active 会有 [arcane:watchdog] WARNING 告警
       # ARCANE_WORLD: ""
     volumes:
       - foundry:/arcane/foundry

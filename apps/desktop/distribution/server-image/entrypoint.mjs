@@ -11,7 +11,9 @@
 //      world-commit（dnd5e 与策展 mod 一并装入，字节级校验都在协议内）；
 //      intl 无 worlds 则跳过。
 //   4. 清 Config/options.json.lock；options.json 缺失时写入 {port:30000} 最小骨架。
-//   5. 启动 node main.js --dataPath=<data> 并转发 SIGTERM/SIGINT（docker stop 走优雅停机）。
+//   5. 期望世界(ARCANE_WORLD 或 options.json 的 world)存在性 fail-closed 校验；
+//      启动 node main.js --dataPath=<data> 并转发 SIGTERM/SIGINT（docker stop 走优雅停机）；
+//      世界活性看门狗轮询 /api/status，长期未 active 打显著告警（license 失效/世界 id 错）。
 //
 // 纪律：license key / adminKey 永不打印（用户在面板里自己完成激活）；
 // FOUNDRY_RELEASE_URL 下载完成即弃，绝不缓存或再分发（EULA）。
@@ -229,6 +231,69 @@ async function prepareDataDir() {
   }
 }
 
+// 期望自动拉起的世界:ARCANE_WORLD 优先;否则 Foundry 自己的持久化配置
+// options.json 的 world 字段(init.mjs 的 launchDefaultWorld 消费它,容器重启
+// 世界自动续跑靠的就是这个字段)。
+async function resolveExpectedWorld() {
+  if (process.env.ARCANE_WORLD) return process.env.ARCANE_WORLD;
+  try {
+    const options = JSON.parse(await fsp.readFile(path.join(dataDir, "Config", "options.json"), "utf8"));
+    return typeof options?.world === "string" && options.world ? options.world : null;
+  } catch {
+    return null;
+  }
+}
+
+// 指了不存在的世界时 fail-closed(与本体版本校验同等纪律):Foundry 对此不报错,
+// 静默停在 setup 页,端口与 healthcheck 全部正常——宁可拒启让错误显眼。
+async function assertWorldExists(worldId, source) {
+  const marker = path.join(dataDir, "Data", "worlds", worldId, "world.json");
+  if (!(await fsp.stat(marker).then(() => true).catch(() => false))) {
+    throw new Error(`${source} 指定了世界 "${worldId}" 但 ${marker} 不存在;先装入该世界或修正配置再启动`);
+  }
+}
+
+// 世界活性看门狗(仅告警,不影响 HEALTHCHECK 判定)。两类静默故障的唯一可观测
+// 症状都是 /api/status 的 world 长期为空:①--world 传参形式错;②license 校验
+// 失败后 Foundry 跳过 launchDefaultWorld(needsSignature)——license 绑定容器
+// hostname,重建容器即失效,而容器 healthy、端口正常,只有日志一行 error。
+// healthcheck 不能断言 world(首启还没激活 license 时世界本就为空,变严会把
+// 正常首启判成 unhealthy),所以在 entrypoint 侧做只打日志的看门狗。
+function watchWorldActivation(expectedWorld) {
+  const statusUrl = process.env.ARCANE_STATUS_URL ?? "http://127.0.0.1:30000/api/status";
+  const graceMs = 120_000; // 首启装环境/世界迁移可能耗时,宽限期内保持安静
+  const intervalMs = 15_000;
+  const startedAt = Date.now();
+  let lastWarnAt = 0;
+  const timer = setInterval(async () => {
+    let activeId = null;
+    try {
+      const response = await fetch(statusUrl, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const status = await response.json();
+      const world = status?.world;
+      activeId = typeof world === "string" ? world : (world?.id ?? null);
+      if (!activeId && status?.active === true) activeId = expectedWorld;
+    } catch {
+      // 服务还没起来:按未激活处理,宽限期后开始告警
+    }
+    if (activeId) {
+      log("watchdog", `world active: ${activeId}`);
+      clearInterval(timer);
+      return;
+    }
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= graceMs && Date.now() - lastWarnAt >= 60_000) {
+      lastWarnAt = Date.now();
+      log("watchdog", `WARNING: expected world "${expectedWorld}" still not active after ${Math.round(elapsed / 1000)}s`
+        + ` — 世界未自动启动。常见原因:license 校验失败(license 绑定容器 hostname,重建容器即失效;`
+        + `日志里找 "Software license verification failed",需到面板重新激活)或世界 id 写错。`
+        + `在此之前服务会一直停在 setup/join 页`);
+    }
+  }, intervalMs);
+  timer.unref();
+}
+
 async function main() {
   log("boot", `region=${regionId} foundry=${FOUNDRY_VERSION} modIndex=${modIndexUrl}`);
   await ensureDirs();
@@ -237,11 +302,18 @@ async function main() {
   await prepareDataDir();
 
   // Foundry 只认等号形式(--dataPath=<dir>):空格分隔时它的 argv 解析拿不到值,
-  // paths.mjs 会在 path.resolve(undefined) 上崩。
+  // paths.mjs 会在 path.resolve(undefined) 上崩。--world 同理:空格分隔时值退化成
+  // 布尔 true(init.mjs parseArgs 只认 --key=value),Foundry 去找名为 "true" 的
+  // 世界并静默停在 setup 页。
+  const expectedWorld = await resolveExpectedWorld();
+  if (expectedWorld) {
+    await assertWorldExists(expectedWorld, process.env.ARCANE_WORLD ? "ARCANE_WORLD" : "Config/options.json 的 world 字段");
+  }
   const args = [path.join(installDir, "main.js"), `--dataPath=${dataDir}`];
-  if (process.env.ARCANE_WORLD) args.push("--world", process.env.ARCANE_WORLD);
+  if (process.env.ARCANE_WORLD) args.push(`--world=${process.env.ARCANE_WORLD}`);
   log("boot", `starting foundry: node ${args.join(" ")}`);
   const child = spawn(process.execPath, args, { stdio: "inherit" });
+  if (expectedWorld) watchWorldActivation(expectedWorld);
   const forward = (signal) => () => {
     if (!child.killed) child.kill(signal);
   };

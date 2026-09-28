@@ -239,13 +239,14 @@ HEALTHCHECK CMD node /arcane/healthcheck.mjs   # GET /api/status 断言 version=
 ENTRYPOINT ["node", "/arcane/entrypoint.mjs"]
 ```
 
-入口脚本职责（幂等，每次启动都跑）：核对本体版本 → 缺则按 §2 三路获取 → 首启调 mod-manager 按 region 索引装 dnd5e 5.3.3 + 策展 mod → 清 `options.json.lock` → `node main.js --dataPath=/arcane/data`。数据目录结构与本机完全同构（`Config/Data/Logs/.arcane-*`），mod 升级备份、receipt 机制原样生效。
+入口脚本职责（幂等，每次启动都跑）：核对本体版本 → 缺则按 §2 三路获取 → 首启调 mod-manager 按 region 索引装 dnd5e 5.3.3 + 策展 mod → 清 `options.json.lock` → 期望世界（`ARCANE_WORLD` 或 options.json 的 world 字段）不存在即拒启（fail-closed，与本体版本校验同等纪律——Foundry 对不存在的世界不报错、静默停在 setup 页）→ `node main.js --dataPath=/arcane/data`（`--world` 一律等号形式传参，空格分隔会被 Foundry 的 argv 解析退化成布尔 `true`）→ 世界活性看门狗轮询 `/api/status`，期望世界长期未 active 打显著告警（license 校验失败时 Foundry 静默跳过世界启动，这是唯一可观测症状；仅告警不影响 HEALTHCHECK 判定，否则首启未激活 license 的正常状态会被判 unhealthy）。数据目录结构与本机完全同构（`Config/Data/Logs/.arcane-*`），mod 升级备份、receipt 机制原样生效。
 
 ### compose 要点
 
 - 卷：`foundry`（本体）、`data`（数据目录）。**升级 FVTT = 换镜像 tag + 新本体版本目录，数据卷不动**。
 - 端口：**30000 默认直接对公网开放**——服务器部署的全部意义就是让玩家远程登录；安全边界是 FVTT 自带的用户/权限体系（world 用户 + 密码 + adminKey），不是把端口藏起来。
 - `restart: unless-stopped` + HEALTHCHECK：进程级自愈常在；网络路径本身（安全组/路由）在云侧，运行时没有需要"保活"的东西。
+- **钉死 `hostname: arcane-fvtt`**：license 绑定容器 hostname（默认 = 容器 ID 前 12 位，每次重建都变）。不钉则升级重建必失效，且失效表现静默——日志仅一行 `Software license verification failed`，世界不再自动启动，容器却 healthy。钉死后一次激活长期有效；从旧部署迁来时 license 绑的是旧 hostname，首次重建需到面板重新激活一次。
 - **默认不含 chromium sidecar**：ArcaneDesk 的控制通道（内嵌面板 + executeJavaScript 注入 SDK）走的就是公网 30000，与玩家同一入口，无需额外暴露面。
 - 镜像引用用**本地 tag**（`docker load` 后即持有 `arcane/arcane-fvtt:13.351-r<N>`），compose 引用该 tag；防漂移靠发布物的 SHA256 钉版（见下）。
 - 部署收尾顺手一件事：`options.json` 的 `hostname` 写成公网 IP——FVTT 游戏内"邀请链接"才会指对地址。
