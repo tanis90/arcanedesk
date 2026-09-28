@@ -20,6 +20,7 @@ import {
   registerPlayLedgerSetting,
 } from "./play-ledger.js";
 import { createPlayTools } from "./play-session.js";
+import { createPrepTools } from "./prep-session.js";
 
 const MODULE_VERSION = packageJson.version;
 const MAX_ATTEMPTS = 40;
@@ -27,6 +28,7 @@ const RETRY_DELAY_MS = 250;
 let writeProbeStore;
 let turnExecutor;
 let playTools;
+let prepTools;
 function createBridgeSessionId() {
   const cryptoApi = globalThis.crypto;
   if (cryptoApi?.randomUUID) {
@@ -44,6 +46,24 @@ const PAGE_LOADED_AT = new Date().toISOString();
 
 function delay(milliseconds) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
+}
+
+function countWriteTools(toolNames) {
+  return toolNames.filter((name) => ![
+    "arcane_probe",
+    "arcane_world_info",
+    "arcane_battle_context",
+    "arcane_turn_context",
+    "arcane_static_context",
+    "arcane_play_context",
+    "arcane_write_probe_state",
+    "arcane_execute_turn_receipts",
+    "arcane_content_search",
+    "arcane_compendium_browse",
+    "arcane_advancement_plan",
+    "arcane_actor_get",
+    "arcane_scene_get",
+  ].includes(name)).length;
 }
 
 function publishDiagnostic(result, extra = {}) {
@@ -83,9 +103,14 @@ async function start() {
     ...sdkMetadata,
   };
   turnExecutor = createTurnExecutor({ runtime, identity: bridgeIdentity });
+  const ledger = createPlayLedger({});
   playTools = createPlayTools({
     runtime,
-    ledger: createPlayLedger({}),
+    ledger,
+  });
+  prepTools = createPrepTools({
+    runtime,
+    ledger,
   });
   let result;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -97,6 +122,7 @@ async function start() {
         writeProbeStore,
         turnExecutor,
         playTools,
+        prepTools,
         bridgeIdentity,
       });
     } catch (error) {
@@ -114,7 +140,7 @@ async function start() {
         `[${MODULE_ID}] registered Site tools: ${result.tools.join(", ")}`,
       );
       globalThis.ui?.notifications?.info?.(
-        `Arcane WebMCP ready: ${result.tools.length} tools (4 guarded writes)`,
+        `Arcane WebMCP ready: ${result.tools.length} tools (${countWriteTools(result.tools)} guarded writes)`,
       );
       return diagnostic;
     }

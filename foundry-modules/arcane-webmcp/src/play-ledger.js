@@ -6,7 +6,18 @@ export const PLAY_LEDGER_SCHEMA_VERSION = 1;
 const MAX_RECORDS = 20;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const WORLD_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-const LEDGER_ACTIONS = Object.freeze(["executeAction", "conditionsSet"]);
+// Shared by the play and prep write families; the setting stays
+// playOperationLedger so existing worlds keep their receipt history.
+const LEDGER_ACTIONS = Object.freeze([
+  "executeAction",
+  "conditionsSet",
+  "actorCreate",
+  "actorEdit",
+  "actorGrantItems",
+  "actorAdvance",
+  "sceneApply",
+  "imageApply",
+]);
 const LEDGER_STATUSES = Object.freeze([
   "started",
   "completed",
@@ -107,10 +118,11 @@ export function registerPlayLedgerSetting({ gameRef = globalThis.game } = {}) {
 }
 
 /**
- * World-scoped durable receipt ledger shared by the play write tools. Mirrors
- * the Desktop FoundryOperationStore contract (replay by identity fingerprint,
- * dispatch journal persisted before execution, never replay after restart)
- * using the module's private Foundry setting like the turn ledger.
+ * World-scoped durable receipt ledger shared by the play and prep write
+ * tools. Mirrors the Desktop FoundryOperationStore contract (replay by
+ * identity fingerprint, dispatch journal persisted before execution, never
+ * replay after restart) using the module's private Foundry setting like the
+ * turn ledger.
  */
 export function createPlayLedger({
   gameRef = globalThis.game,
