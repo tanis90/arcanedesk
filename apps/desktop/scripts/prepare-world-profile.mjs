@@ -1,23 +1,38 @@
 #!/usr/bin/env node
+// prepare-world-profile — CN 镜像世界/profile 的索引合并工具(仅本地运行,
+// 内容闸口经 intl-world-gate 引入 classic-level)。
+//
+// 在身份/完整性校验之上叠加内容闸口:合并索引前解包世界 zip 跑
+// world-content-audit(users 凭证成对、messages 清空、世界外路径引用)——
+// 即使发布侧绕过 pack-world.mjs 手工上传,索引合并也不放行
+// (heroes-to-yuanshan@0.1.3 半截凭证事故的兜底闸)。
 
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { scanWorldZip } from "./intl-world-gate.mjs";
 
 const DEFAULT_BASE_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com";
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 function parseArgs(argv) {
-  const result = {};
-  for (let index = 0; index < argv.length; index += 2) {
+  const result = { booleans: new Set() };
+  for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
+    if (key === "--skip-content-gate") {
+      result.booleans.add("skip-content-gate");
+      continue;
+    }
     const value = argv[index + 1];
     if (!key?.startsWith("--") || !value || value.startsWith("--")) {
       throw new Error(`invalid argument near ${key ?? "end of command"}`);
     }
     result[key.slice(2)] = value;
+    index += 1;
   }
   return result;
 }
@@ -155,7 +170,29 @@ async function worldArtifact(world) {
     downloadUrl,
     bytes: archiveDocument.buffer.length,
     sha256: archiveSha256,
+    archiveBuffer: archiveDocument.buffer,
   };
+}
+
+/** 世界 zip 内容闸口:解包跑 world-content-audit,违规即拒绝合并索引。 */
+async function gateWorldArchive(world, archiveBuffer) {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "arcane-world-gate-"));
+  try {
+    const zipFile = path.join(tempRoot, `${world.id}-${world.version}.zip`);
+    await fs.writeFile(zipFile, archiveBuffer);
+    // CN 脱敏纪律:messages 必须清空;intl 词表/CJK 策略不适用(intlPolicy: false)。
+    const gate = await scanWorldZip(zipFile, tempRoot, { intlPolicy: false, requireEmptyMessages: true, requireUsers: true });
+    if (gate.violations.length) {
+      for (const violation of gate.violations) {
+        process.stderr.write(`BLOCKED ${violation.file}: [${violation.kind}] ${violation.term}\n`);
+      }
+      throw new Error(
+        `world ${world.id}@${world.version} failed content gate (${gate.violations.length} violations); repack with pack-world.mjs`,
+      );
+    }
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 export async function prepareWorldProfile({
@@ -168,6 +205,7 @@ export async function prepareWorldProfile({
   expectedCurrentWorldVersion,
   expectedCurrentProfileRevision,
   baseUrl = DEFAULT_BASE_URL,
+  skipContentGate = false,
 }) {
   const distribution = JSON.parse(await fs.readFile(path.resolve(distributionFile), "utf8"));
   const requestedWorldId = safeId(worldId, "world id");
@@ -244,7 +282,13 @@ export async function prepareWorldProfile({
   }
 
   const artifact = await worldArtifact(world);
-  const worldEntry = { ...artifact, defaultProfile: requestedProfileId };
+  if (skipContentGate) {
+    process.stderr.write("WARNING: --skip-content-gate 跳过世界内容闸口,仅限紧急运维使用\n");
+  } else {
+    await gateWorldArchive(world, artifact.archiveBuffer);
+  }
+  const { archiveBuffer, ...artifactFields } = artifact;
+  const worldEntry = { ...artifactFields, defaultProfile: requestedProfileId };
   const worldUnchanged = existingWorld && [
     "version", "manifestUrl", "manifestBytes", "manifestSha256", "downloadUrl", "bytes", "sha256", "defaultProfile",
   ].every((field) => existingWorld[field] === worldEntry[field]);
@@ -310,6 +354,7 @@ async function main() {
     expectedCurrentWorldVersion: requireString(args["expected-current-world-version"], "--expected-current-world-version"),
     expectedCurrentProfileRevision: requireString(args["expected-current-profile-revision"], "--expected-current-profile-revision"),
     baseUrl: args["base-url"] ?? DEFAULT_BASE_URL,
+    skipContentGate: args.booleans.has("skip-content-gate"),
   });
   process.stdout.write(`${JSON.stringify(result.plan, null, 2)}\n`);
 }

@@ -33,6 +33,8 @@ const MIRROR_PUBLIC_BASE = "https://dl.arcanedesk.app";
  * 世界目录打包（zip 根必须是 world.json；foundry-pack-builder 的
  * writeModuleArchive 校验 module.json，不适用于 world）。确定性输出：
  * 同一目录内容产出逐字节相同的 zip，manifest/zip 的哈希才可复现。
+ * 确定性来自每个 entry 显式固定 mtime——fflate 默认取 Date.now()，
+ * 不固定则同一内容每次打包哈希都不同（2026-09-28 实测确认）。
  * @returns {Promise<{ bytes: number }>}
  */
 export async function writeWorldArchive({ directory, archive }) {
@@ -48,7 +50,7 @@ export async function writeWorldArchive({ directory, archive }) {
       if (entry.isDirectory()) await walk(absolute);
       else if (entry.isFile()) {
         const relative = path.relative(source, absolute).split(path.sep).join("/");
-        files[relative] = new Uint8Array(await fsp.readFile(absolute));
+        files[relative] = [new Uint8Array(await fsp.readFile(absolute)), { mtime: "1980-01-02T00:00:00Z" }];
       }
     }
   };

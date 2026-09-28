@@ -51,6 +51,7 @@ const exactDirectories = new Map([
     "make-fake-foundry-zip.mjs",
     "module-builder-vendor",
     "oss-mirror-publish.mjs",
+    "pack-world.mjs",
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
     "prepare-intl-index.mjs",
@@ -66,6 +67,7 @@ const exactDirectories = new Map([
     "verify-package.mjs",
     "verify-source.mjs",
     "verify-update-feed.mjs",
+    "world-content-audit.mjs",
     "write-sha256sums.mjs",
   ]],
   ["distribution", {
