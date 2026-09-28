@@ -42,6 +42,32 @@ the primary family:
   accepted), including explicitly ending concentration, on token/name/selected
   play targets.
 
+The prep (备团) family mirrors the Desktop content-prep tool set and completes
+SDK tool-surface parity with the Desktop's two modes (19/19 model-entry
+actions; the remaining 24 SDK actions stay CLI-only by design):
+
+- `arcane_content_search` / `arcane_compendium_browse` /
+  `arcane_advancement_plan`: bounded discovery — world/compendium search,
+  type catalogs with exact UUIDs, and the native dnd5e level-up plan.
+- `arcane_actor_get` / `arcane_scene_get`: read exact documents; the module
+  strips the SDK readState and returns an opaque session **readRef**.
+- `arcane_actor_create` / `arcane_actor_update` / `arcane_actor_grant_items` /
+  `arcane_actor_advance`: guarded Actor writes. Non-creating writes must
+  exchange a current readRef; the module re-attaches the stored readState and
+  the SDK runtime re-validates every touched field (`READ_REF_STALE`).
+- `arcane_scene_apply`: create/update Scene metadata, grid, background, and
+  Token layout (updates require a Scene readRef; token edits require having
+  read tokens).
+- `arcane_image`: apply an existing Data-relative PNG/JPEG/WebP to an Actor,
+  Item, or image Journal page. WebMCP has no host byte channel: local uploads
+  and Base64 are rejected with `CAPABILITY_UNAVAILABLE`.
+
+Prep writes skip the Desktop approval dialog by design — GM gating plus the
+readRef optimistic lock plus the shared requestId ledger; rejected receipts
+have no side effects and may be corrected and retried with a NEW requestId.
+readRefs live in page-session memory: a reload invalidates them and a fresh
+read restores write access (Desktop session parity).
+
 The Turn Protocol v2 trio stays registered as a validated transitional
 surface; new clients should prefer the play family:
 
@@ -79,10 +105,11 @@ the Foundry UI directly. What the narrow, guarded surface buys is different:
 All tools except `arcane_probe` require the active Foundry user to be a GM,
 checked live on every call. Play writes additionally require a current
 `arcane_static_context` in the page session and, in combat, a fresh
-`view=turn` read before every execution; the SDK runtime re-validates stale
-manuals, turn drift, and world identity as a second layer. WebMCP annotations
-are descriptive metadata; the module enforces its own authorization,
-validation, serialization, and idempotency rules.
+`view=turn` read before every execution; prep writes require a session readRef
+for non-creating edits. The SDK runtime re-validates stale manuals, turn
+drift, read-state fields, and world identity as a second layer. WebMCP
+annotations are descriptive metadata; the module enforces its own
+authorization, validation, serialization, and idempotency rules.
 
 ## Build and verify
 

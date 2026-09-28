@@ -1,7 +1,16 @@
 # WebMCP 备团（prep）模式对齐计划（2026-09-24）
 
-> 状态：计划（未实现）。前置：play.v1 四件套已随模块 0.5.0 发布（见
-> [`play-tools-design-2026-09-21.md`](play-tools-design-2026-09-21.md)）。
+> 状态：**已实现（2026-09-28，模块 0.6.0）**，随 `feat/webmcp-prep-tools` 交付。
+> 11 个 action 全部收编：P1 读类五件、P2 建卡四件、P3 场景/图像两件一次完成；
+> readRef 会话乐观锁（`src/prep-session.js`）、play-ledger 白名单扩展
+> （六写收编，setting 名保持 `playOperationLedger`）、normalizePlayWriteReceipt
+> 补 upload-image 分支（dataPaths/targets 映射）均按本计划实施。审批层按 §3
+> 方案 (a) 直写。schema 逐字段对照 Desktop `foundry-tools.js` typebox 移植
+> （字符串字段无字符集限制——名字可含空格与 CJK，与 Desktop ref() 一致）。
+> 单测 57 项全绿（`test/prep-tools.test.js` 冻结守卫链/readRef 过期/世界漂移/
+> schema parity）。工具面 12 → 23，与 Desktop 两模式 SDK 工具面 100% 对齐。
+> 待办：真世界验证跑（可与 play 面 §9.2 合并）。前置：play.v1 四件套已随模块
+> 0.5.0 发布（见 [`play-tools-design-2026-09-21.md`](play-tools-design-2026-09-21.md)）。
 
 ## 1. 事实来源与范围
 
