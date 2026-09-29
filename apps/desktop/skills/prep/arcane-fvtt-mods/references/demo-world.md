@@ -29,6 +29,11 @@ mod-manager world-inspect --world-id arcane-demo --data-dir <数据目录>
 mod-manager world-catalog --data-dir <数据目录>
 ```
 
+输出的镜像侧世界清单在 `rows` 数组：每行含 `id`、`title`、`localVersion`、`mirrorVersion`、
+`status`、`downloadUrl`、`bytes`、`sha256`、`defaultProfile`；镜像无已发布 world 时 `rows` 为 `[]`。
+辅助列表 `updates`（可升级的行）、`notInMirror`（本机已装但镜像未发布）、`invalidLocal`
+（本机安装损坏）在为空时照常出现。
+
 `index.json` 没有目标 world/profile/package 时只说明发布数据不完整；不要回退到 Desktop 内置清单，
 也不要猜 OSS 路径。检查本机 Core 是否符合 world manifest 的兼容性与 `coreVersion` 要求；不符合时先路由到
 `arcane-fvtt-setup` 安装或切换 Core，不能让 Foundry 用错配 Core 自动迁移 Demo。

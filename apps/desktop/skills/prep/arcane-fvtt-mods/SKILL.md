@@ -75,7 +75,8 @@ macOS Bash 调用形态：
   `https://dl.arcanedesk.app/mods/index-en.json`（两者都由 region.mjs 默认值表登记，
   测试锁定字面量一致）。查目录、看版本一律跑 helper，以 `catalog` / `world-catalog` 输出的
   `indexUrl` 字段为准，不要绕开 helper 手动 curl 固定索引地址——索引是带 `generated` 时间的
-  全局当前版本，不是名为 `latest.json` 的指针。`--index-url` 参数仅运维联调显式指定时使用，
+  全局当前版本，不是名为 `latest.json` 的指针。取 helper 输出的字段时以该次实际 JSON 的顶层键
+  为准：`catalog` / `world-catalog` 的对账清单在 `rows` 数组，不在 `modules` / `worlds`。`--index-url` 参数仅运维联调显式指定时使用，
   优先级高于环境变量；脱离桌面独立运行 CLI 时必须显式 `--index-url` 或导出同名环境变量，
   两者都缺失 helper 直接报错，绝不静默回落任何内置镜像。
 - 索引中与 manifest URL 精确匹配的包必须逐字节核对 `bytes` 和 SHA256；不匹配即停止，
