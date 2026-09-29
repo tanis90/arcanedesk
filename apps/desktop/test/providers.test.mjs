@@ -297,7 +297,8 @@ test("real Pi payload sends Qwen off and on flags before the network boundary", 
   const model = { ...config.models[0], provider: "qwen-test", api: config.api, baseUrl: config.baseUrl };
   for (const reasoning of ["off", "low"]) {
     let payload;
-    const result = await streamSimple(model, { systemPrompt: "You are a concise assistant.", messages: [{ role: "user", content: "OK", timestamp: 0 }] }, {
+    // pi-ai 0.86+:低层 API 收 TranscriptContext,system prompt 作为首条 system 消息传入
+    const result = await streamSimple(model, { messages: [{ role: "system", content: "You are a concise assistant.", timestamp: 0 }, { role: "user", content: "OK", timestamp: 0 }] }, {
       apiKey: "dummy-no-network", reasoning,
       onPayload(value) { payload = value; throw Error("DRY_RUN_STOP_BEFORE_NETWORK"); },
     }).result();

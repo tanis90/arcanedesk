@@ -143,6 +143,8 @@ test("real Pi SDK consumes steering exactly once at the next model boundary", { 
     await h.first.promise;
     const next = h.coordinator.submit({ commandId: "second", text: "second input" });
     assert.equal(next.taskId, first.taskId);
+    // pi 0.87 起 SDK 队列确认为异步(queue_update 不再同步触发),让出一个 tick 再断言
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.coordinator.inputs.get(next.inputId).state, "queued");
     h.release.resolve();
     await h.coordinator.run;
