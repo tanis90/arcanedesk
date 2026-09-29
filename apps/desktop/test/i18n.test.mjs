@@ -55,12 +55,15 @@ test("every data-i18n reference in index.html exists", () => {
   }
 });
 
-test("prep guidance offers a deployed FVTT URL immediately after local Foundry", () => {
+test("home suggestion chips read: install → open local → read module → connect remote", () => {
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
+  const installIndex = html.indexOf('data-i18n="welcome.install.label"');
   const localIndex = html.indexOf('data-i18n="welcome.example1.label"');
+  const moduleIndex = html.indexOf('data-i18n="welcome.example3.label"');
   const remoteIndex = html.indexOf('data-i18n="welcome.remote.label"');
-  const nextGuidanceIndex = html.indexOf('data-i18n="welcome.example3.label"');
-  assert.ok(localIndex >= 0 && remoteIndex > localIndex && nextGuidanceIndex > remoteIndex);
+  assert.ok(
+    installIndex >= 0 && localIndex > installIndex && moduleIndex > localIndex && remoteIndex > moduleIndex,
+  );
   assert.match(
     html,
     /data-prompt="打开我已部署好了的 FVTT，网址是 "[^>]+data-i18n-prompt="welcome\.remote\.prompt"/,
@@ -116,7 +119,8 @@ test("first launch paints prep mode with a light theme before async startup", ()
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const themeInit = readFileSync(path.join(appRoot, "src/renderer/theme-init.js"), "utf8");
   const main = readFileSync(path.join(appRoot, "src/main/main.js"), "utf8");
-  assert.match(html, /<body data-mode="prep">/);
+  // 空会话首帧即主页布局:home class 直接烙进 HTML,不必等 chat.js 起步再居中
+  assert.match(html, /<body data-mode="prep" class="home">/);
   assert.match(html, /class="seg active" id="mode-seg-prep"/);
   assert.doesNotMatch(html, /class="seg active" id="mode-seg-combat"/);
   assert.match(themeInit, /theme\s*=\s*"light";/);

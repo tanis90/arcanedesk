@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld("arcane", {
   prepGetDir: () => ipcRenderer.invoke("prep:get-dir"),
   /** Pick a prep directory via OS dialog; switching dir starts a NEW prep session. */
   prepChooseDir: (context) => ipcRenderer.invoke("prep:choose-dir", context),
+  /** Switch to a recent prep directory picked from the in-app dropdown (no OS dialog); also starts a NEW prep session. */
+  prepSetDir: (context, path) => ipcRenderer.invoke("prep:set-dir", { ...context, path }),
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
   sessionNavigation: () => ipcRenderer.invoke("sessions:navigation"),

@@ -1088,6 +1088,13 @@ app.whenReady().then(async () => {
   // UI 只展示用户明确选择过的项目目录。prepFallbackWorkspace 只是让 Pi 在
   // 尚未选目录时也有稳定 cwd 的内部实现细节，不能冒充用户的备团项目。
   const prepUiCwd = () => prepStore.data.lastCwd ?? undefined;
+  // 下发给渲染层展示用的 cwd:host 真实工作目录,但内部 fallback 不下发
+  // (未选目录 → undefined → 目录 chip 出"选择目录"虚线请柬态)。
+  const prepFallbackResolved = path.resolve(prepFallbackWorkspace);
+  const prepDisplayCwd = host => {
+    const cwd = host.cwd();
+    return cwd === prepFallbackResolved ? undefined : cwd;
+  };
 
   /** md 阅读器相对路径的 resolve 基准(spec §4.2):当前活动会话的工作目录。
       战斗模式下同样按此规则——一律用 prep cwd 会让战斗会话里的相对路径静默解析到
@@ -1275,7 +1282,8 @@ app.whenReady().then(async () => {
       ...activityHostPayload(context.host),
       ...modeController.publicSnapshot(context),
       busy: context.host.busy,
-      cwd: context.mode === "prep" ? context.host.cwd() : undefined,
+      // UI 只展示真实项目目录;未选时给 undefined,渲染层出"选择目录"虚线 CTA
+      cwd: context.mode === "prep" ? prepDisplayCwd(context.host) : undefined,
       worldInfo: foundryRuntime.lastWorldInfo,
     };
   }
@@ -1301,7 +1309,8 @@ app.whenReady().then(async () => {
       stale,
       busy: host.busy,
       ...activityHostPayload(host),
-      cwd: context.mode === "prep" ? host.cwd() : undefined,
+      // 同上:UI 只认真实项目目录,不下发内部 fallback
+      cwd: context.mode === "prep" ? prepDisplayCwd(host) : undefined,
     };
   });
 
@@ -1322,14 +1331,48 @@ app.whenReady().then(async () => {
       return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
     }
     const nextHost = await hosts.prep.select(null, true);
-    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost) });
+    // 事件必须带 cwd:渲染层 installSnapshot 会按事件重置 chip,不带就被清成"选择备团目录"
+    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost), cwd: prepDisplayCwd(nextHost) });
+    return { ok: true, cwd, ...modeController.publicSnapshot(context) };
+  });
+  // 工作区下拉(kimi web 式"最近的文件夹"):不换系统对话框,直接切到传入目录;
+  // 与 choose-dir 同一语义——setCwd 持久化 + 起新空会话。内部 fallback 目录拒绝冒充用户项目。
+  ipcMain.handle("prep:set-dir", async (_event, request) => {
+    const validated = await validateModeRequest(request);
+    if (!validated.ok || validated.context.mode !== "prep") return staleModeResponse();
+    const context = validated.context;
+    if (!modeController.matches(context)) return staleModeResponse();
+    const dir = String(request?.path ?? "").trim();
+    try {
+      if (!path.isAbsolute(dir) || !statSync(dir).isDirectory()) throw new Error("Project directory is unavailable");
+    } catch (error) {
+      return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message };
+    }
+    if (path.resolve(dir) === prepFallbackResolved) {
+      return { ok: false, code: "PREP_FALLBACK_DIR", error: "Internal workspace is not a project directory" };
+    }
+    let cwd;
+    try {
+      cwd = prepStore.setCwd(dir);
+    } catch (error) {
+      return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
+    }
+    const nextHost = await hosts.prep.select(null, true);
+    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost), cwd: prepDisplayCwd(nextHost) });
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
   // Navigation spans modes; commands resolve an owned session rather than the selected view.
   async function navigationRows() {
     const result = await Promise.all(["prep", "combat"].map(async mode => {
-      return (await hosts[mode].listSessions()).map(row => ({ ...row, mode, projectKey: projectKey(row.cwd), activity: activityCenter.get(row.id) }));
+      return (await hosts[mode].listSessions()).map(row => ({
+        ...row,
+        mode,
+        projectKey: projectKey(row.cwd),
+        // 内部兜底工作区里的会话:侧边栏照列,但工作区下拉的"最近的文件夹"要跳过它
+        internal: mode === "prep" && typeof row.cwd === "string" && path.resolve(row.cwd) === prepFallbackResolved,
+        activity: activityCenter.get(row.id),
+      }));
     }));
     return result.flat();
   }
@@ -1402,7 +1445,7 @@ app.whenReady().then(async () => {
       for (const registry of Object.values(hosts)) { host = await registry.getOrLoad(sessionId); if (host) break; }
     } catch (error) { return { ok: false, code: error.code ?? "SESSION_LOAD_FAILED", error: error.message }; }
     if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
-    try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.cwd() }; }
+    try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.profile.mode === "prep" ? prepDisplayCwd(host) : undefined }; }
     catch (error) { return { ok: false, code: error.code ?? "HISTORY_LOAD_FAILED", error: error.message }; }
   });
   ipcMain.handle("sessions:identities", async event => {
@@ -1422,7 +1465,7 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message }; }
     }
     const nextHost = await hosts[context.mode].select(null, true, selection, directory);
-    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.profile.mode === "prep" ? prepDisplayCwd(nextHost) : undefined, ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
     const validated = await validateModeRequest(request);

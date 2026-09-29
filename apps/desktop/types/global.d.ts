@@ -39,6 +39,8 @@ interface ArcaneBridge {
   prepGetDir(): Promise<any>;
   /** Pick a prep directory via OS dialog; switching dir starts a NEW prep session. */
   prepChooseDir(context?: ArcaneModeContext): Promise<any>;
+  /** Switch prep directory to a known absolute path (recent-folders popup); same semantics as prepChooseDir. */
+  prepSetDir(context: ArcaneModeContext, path: string): Promise<any>;
   /** Session management (Pi SessionManager JSONL sessions). */
   sessionNavigation(): Promise<any>;
   setSessionPinned(sessionId: string, pinned: boolean): Promise<any>;

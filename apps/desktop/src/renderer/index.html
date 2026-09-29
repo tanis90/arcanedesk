@@ -345,12 +345,11 @@
       gap: 14px;
       align-items: center;
     }
-    /* 首屏唯一一次编排入场:星芒 → 标题 → 说明 → 示例,依次浮起 */
+    /* 首屏唯一一次编排入场:星芒 → 标题 → 说明,依次浮起(composer 与建议 chips 各自接续) */
     .welcome > * { animation: rise 0.5s ease both; }
     .welcome > *:nth-child(2) { animation-delay: 0.08s; }
     .welcome > *:nth-child(3) { animation-delay: 0.16s; }
     .welcome > *:nth-child(4) { animation-delay: 0.24s; }
-    .welcome > *:nth-child(5) { animation-delay: 0.32s; }
     @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .welcome .big-logo {
       width: 76px; height: 76px;
@@ -383,19 +382,35 @@
       border-top: 1px solid var(--border);
     }
     .welcome p { font-size: var(--fs-ui); line-height: 1.7; }
-    .examples { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    /* ---------- 主页建议 chips(ZCode 式):四字短签横排在 composer 下方,点击只填入不发送 ---------- */
+    .home-chips { display: none; }
+    body.home .home-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 2px 0;
+    }
     .example-chip {
       border: 1px solid var(--border);
       background: var(--panel);
       color: var(--muted);
-      border-radius: 8px;
-      padding: 7px 12px;
+      border-radius: 999px;
+      padding: 6px 15px;
       font-size: var(--fs-ui);
       cursor: pointer;
-      text-align: left;
-      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
     }
-    .example-chip:hover { border-color: var(--accent-dim); color: var(--text); background: var(--panel-2); }
+    /* hover 用投影而非位移:rise 入场 fill:both 会保留 transform:none,盖住 hover transform */
+    .example-chip:hover { border-color: var(--accent-dim); color: var(--text); background: var(--panel-2); box-shadow: 0 3px 10px var(--shadow); }
+    /* 阶梯入场,接续欢迎区 rise 编排(reduced-motion 由全局 0.01ms 兜底) */
+    body.home .home-chips .example-chip { animation: rise 0.5s ease both; }
+    body.home .home-chips .example-chip:nth-child(1) { animation-delay: 0.30s; }
+    body.home .home-chips .example-chip:nth-child(2) { animation-delay: 0.37s; }
+    body.home .home-chips .example-chip:nth-child(3) { animation-delay: 0.44s; }
+    body.home .home-chips .example-chip:nth-child(4) { animation-delay: 0.51s; }
+    body.home .home-chips .example-chip:nth-child(5) { animation-delay: 0.58s; }
     /* 引导语按模式分流(body[data-mode] 与模式开关同源) */
     body[data-mode="prep"] .example-chip[data-chip-mode="combat"],
     body[data-mode="combat"] .example-chip[data-chip-mode="prep"] { display: none; }
@@ -656,7 +671,7 @@
     #telemetry-consent-card {
       position: fixed;
       right: calc(var(--panel-w, 0px) + 12px);
-      bottom: 86px;
+      bottom: 58px;
       width: min(440px, calc(100% - var(--panel-w, 0px) - 24px));
       z-index: 54;
       padding: 13px;
@@ -872,7 +887,7 @@
       align-items: center;
       gap: 8px;
     }
-    .composer-bar #mic { margin-left: auto; } /* 右侧集群:🎙■↑ */
+    /* 右侧集群:模型 🎙 ■ ↑(auto margin 在 #model-picker 规则上) */
     .composer textarea::placeholder { color: var(--faint); }
     .composer button {
       border: none;
@@ -923,8 +938,8 @@
     .plus-item:hover { background: var(--panel-2); filter: none; }
     .plus-item:disabled { opacity: 0.45; cursor: default; }
     .plus-item .pi { flex: none; }
-    #voice-status { color: var(--accent-dim); }
-    #search-usage { color: var(--muted); font-size: var(--fs-meta); }
+    #voice-status { color: var(--accent-dim); white-space: nowrap; }
+    #search-usage { color: var(--muted); font-size: var(--fs-meta); white-space: nowrap; }
     /* ---------- 联网搜索设置页:探知珠状态行 + 模式卡(选卡即保存) ---------- */
     .ss-state { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); }
     .ss-orb { position: relative; width: 16px; height: 16px; flex: none; border-radius: 50%; background: var(--muted); opacity: 0.5; }
@@ -962,36 +977,165 @@
     #send { background: var(--accent); color: var(--accent-contrast); border-radius: 50%; font-size: 15px; }
     #stop { background: rgba(240, 112, 112, 0.15); color: var(--err); border: 1px solid rgba(240, 112, 112, 0.35); display: none; }
     .composer-wrap.busy #stop { display: inline-flex; }
-    .composer-hint {
-      margin-top: 6px;
-      font-size: var(--fs-micro);
-      color: var(--faint);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 2px;
-    }
-    .composer-hint .hint-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .composer-wrap { position: relative; }
 
-    /* ---------- composer 模型选择器(幽灵芯片:平时只留灰字,hover 显形;底部右侧弹出) ---------- */
+    /* ---------- 主页(空会话):composer 浮到视觉中心(ZCode 式)。
+       messages 与 composer-wrap 按比例分剩余空间(1 : 1.5,上小下大),
+       品牌块贴 messages 底部,卡片+chips 从 wrap 顶部起——整组落在视心略上方。 */
+    body.home .messages { justify-content: flex-end; }
+    body.home .welcome { margin: 0 auto; }
+    body.home .composer-wrap {
+      --home-w: min(672px, calc(100% - 32px));
+      flex: 1.5 1 0;
+      width: var(--home-w);
+      margin: 0 auto;
+      border-top: none;
+      background: transparent;
+      padding: 22px 0 0;
+    }
+    /* 侧边栏钉住时 activity.css 用 ID 选择器把 wrap 顶到内容区左缘(margin-left:264px,
+       优先级压过上面的 auto)。主页要的是相对内容区(栏以右)居中:左缘 = (窗宽+264-卡宽)/2 */
+    body.home.sidebar-pinned > #composer-wrap {
+      margin-left: max(264px, calc((100% + 264px - var(--home-w)) / 2));
+    }
+    body.home .composer {
+      border-radius: 14px;
+      box-shadow: 0 10px 30px var(--shadow);
+      animation: rise 0.5s ease 0.2s both;
+    }
+    body.home .composer:focus-within { box-shadow: 0 10px 30px var(--shadow), 0 0 0 2px var(--ring); }
+    /* 烛晕:主页聚焦时卡片背后浮起一圈暖光(本页唯一的大胆处,透明度极低) */
+    body.home .composer-wrap::before {
+      content: "";
+      position: absolute;
+      inset: -48px -72px;
+      z-index: -1;
+      background: radial-gradient(50% 55% at 50% 38%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 72%);
+      opacity: 0;
+      transition: opacity 0.45s ease;
+      pointer-events: none;
+    }
+    body.home .composer-wrap:focus-within::before { opacity: 1; }
+    /* 浮层锚在 wrap 上:卡片收窄居中后,菜单/弹层改贴卡片边缘 */
+    body.home #slash-popup { left: 0; right: 0; }
+    body.home #plus-menu { left: 0; }
+    body.home #model-popup { right: 0; }
+    /* 工作区 chip 浮在卡片上方(kimi web 式,仅备团空会话由 syncDirChip 放出);
+       下拉从这里向下展开、盖住卡片上沿 */
+    .composer-context:not([hidden]) {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+      margin: 0 2px 8px;
+    }
+    .composer-context .chip.dir {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-ui);
+      font-size: var(--fs-ui);
+      max-width: 300px;
+      padding: 4px 13px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border-color: color-mix(in srgb, var(--accent-dim) 45%, var(--border));
+      color: var(--text);
+    }
+    /* 目录名超长截断;文件夹与箭头都是描边 SVG(currentColor),随 chip 各态变色 */
+    .composer-context .chip.dir .dir-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .composer-context .chip.dir .dir-icon, .composer-context .chip.dir .caret { display: inline-flex; flex: none; }
+    .composer-context .chip.dir .caret { color: var(--faint); transition: transform 0.15s; }
+    .composer-context .chip.dir.open .caret { transform: rotate(180deg); }
+    .composer-context .chip.dir:hover { border-color: var(--accent); }
+    /* 未选目录 = 首启第一动作:虚线请柬,邀请点击 */
+    .composer-context .chip.dir.empty {
+      border-style: dashed;
+      border-color: var(--accent-dim);
+      color: var(--accent-dim);
+      background: transparent;
+    }
+    .composer-context .chip.dir.empty:hover {
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+    }
+    /* 最近文件夹下拉(kimi web 图2 式):名称一行 + 路径一行,当前项 ✓,底部"选择文件夹…" */
+    #dir-popup {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 2px);
+      z-index: 60;
+      width: 340px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 28px var(--shadow);
+      padding: 6px;
+    }
+    #dir-popup[hidden] { display: none; }
+    #dir-popup .dir-popup-head {
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      padding: 5px 8px 3px;
+    }
+    #dir-popup .dir-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 8px;
+      border: 0;
+      background: none;
+      border-radius: 7px;
+      cursor: pointer;
+      text-align: left;
+      color: var(--text);
+      font: inherit;
+    }
+    #dir-popup .dir-item:hover { background: var(--panel-2); }
+    #dir-popup .dir-item .dir-icon { display: inline-flex; flex: none; color: var(--faint); }
+    #dir-popup .dir-item .dir-text { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+    #dir-popup .dir-item .dir-name { font-size: var(--fs-ui); color: var(--text-strong); }
+    #dir-popup .dir-item .dir-path {
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #dir-popup .dir-item .dir-check { flex: none; color: var(--accent); font-size: var(--fs-meta); }
+    #dir-popup .dir-choose {
+      margin-top: 4px;
+      border-top: 1px solid var(--border-soft);
+      border-radius: 0 0 7px 7px;
+      color: var(--accent);
+    }
+
+    /* ---------- composer 底行模型选择器(幽灵芯片:平时只留灰字,hover 显形;向上弹出) ---------- */
     #model-picker {
       margin-left: auto;
       background: transparent;
       border: 1px solid transparent;
-      border-radius: 6px;
+      border-radius: 7px;
       color: var(--faint);
-      font-size: var(--fs-micro);
-      padding: 1px 7px;
+      font-size: var(--fs-meta);
+      padding: 0 9px;
+      /* 盖掉 .composer button 的 32px 正方形约束:这是文字按钮 */
+      width: auto;
+      height: 32px;
+      flex: none;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 4px;
       max-width: 240px;
     }
-    #model-picker:hover { background: var(--panel); border-color: var(--border); color: var(--text); }
+    /* 选择器已收进卡片(卡片底=panel),hover 用 panel-2 提亮;filter:none 盖掉 .composer button:hover 的 brightness,避免双重 hover */
+    #model-picker:hover { background: var(--panel-2); border-color: var(--border); color: var(--text); filter: none; }
     #model-picker-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #model-picker .caret { font-size: 8px; flex: none; }
+    #model-picker .caret { display: inline-flex; flex: none; }
     #model-popup {
       position: absolute;
       right: 12px;
@@ -1605,12 +1749,12 @@
       .indicator .ind-label { display: none; }   /* 只留状态点,含义看 tooltip */
       .chip.dir, .chip.world { max-width: 110px; }
       #model-picker { max-width: 140px; }
-      #telemetry-consent-card { bottom: 82px; }
+      #telemetry-consent-card { bottom: 54px; }
     }
   </style>
   <link rel="stylesheet" href="conversations/activity.css" />
 </head>
-<body data-mode="prep">
+<body data-mode="prep" class="home">
   <header class="chat-header">
     <button class="icon-btn" id="sessions-toggle" title="会话列表" data-i18n-title="header.sessions.title">☰</button>
     <span class="brand"><span class="logo"><img src="logo-mark.png" alt="" draggable="false"/></span><span class="wordmark">ArcaneDesk</span><button id="update-pill" class="update-pill" type="button" data-i18n-title="update.pill.title" data-i18n-dynamic hidden></button></span>
@@ -1675,13 +1819,6 @@
       <h1>ArcaneDesk</h1>
       <div class="ornament">✦</div>
       <p data-i18n-html="welcome.tagline">DM 的 AI 副驾驶。给我一个 Foundry 地址,我会自己打开面板、登录并读取世界;战斗中每步动作都有四态回执。<br/>也可以直接点顶栏的「面板」指示灯手动开关右侧主视觉。</p>
-      <div class="examples">
-        <button class="example-chip" data-chip-mode="prep" data-prompt="/skill:arcane-fvtt-setup 帮我安装 FVTT,我把安装包放在 " data-i18n="welcome.install.label" data-i18n-prompt="welcome.install.prompt">帮我安装 FVTT,我把安装包放在 …</button>
-        <button class="example-chip" data-chip-mode="prep" data-prompt="打开 http://127.0.0.1:30000 并读取世界信息" data-i18n="welcome.example1.label" data-i18n-prompt="welcome.example1.prompt">打开本地 Foundry 并读取世界信息</button>
-        <button class="example-chip" data-chip-mode="prep" data-prompt="打开我已部署好了的 FVTT，网址是 " data-i18n="welcome.remote.label" data-i18n-prompt="welcome.remote.prompt">打开我已部署好了的 FVTT，网址是 …</button>
-        <button class="example-chip" data-chip-mode="prep" data-prompt="/skill:arcane-module-reader 阅读并理解这个模组,帮我组织一个知识库,然后和我聊聊。模组 PDF 在 " data-i18n="welcome.example3.label" data-i18n-prompt="welcome.example3.prompt">阅读并理解这个模组,帮我组织一个知识库</button>
-        <button class="example-chip" data-chip-mode="combat" data-prompt="读取当前战斗的战场态势" data-i18n="welcome.example2.label" data-i18n-prompt="welcome.example2.prompt">读取当前战斗的战场态势</button>
-      </div>
     </div>
   </main>
   <button class="scroll-bottom" id="scroll-bottom" title="回到底部" data-i18n-title="scrollBottom.title">↓</button>
@@ -1689,28 +1826,35 @@
   <footer class="composer-wrap" id="composer-wrap">
     <div id="slash-popup"></div>
     <div id="queue-list" style="display:none"></div>
+    <!-- 工作区 chip 浮在卡片上方(kimi web 式):仅备团空会话可见;点击出最近文件夹下拉 -->
+    <div class="composer-context" id="composer-context" hidden>
+      <span class="chip dir" id="dir-chip" style="display:none" data-i18n-dynamic></span>
+      <div id="dir-popup" hidden></div>
+    </div>
     <div class="composer">
       <div id="attach-strip"></div>
       <textarea id="chat-input" rows="1" placeholder="和 Agent 对话…(可粘贴/拖入图片)" data-i18n-placeholder="composer.placeholder"></textarea>
       <input type="file" id="attach-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       <div class="composer-bar">
         <button id="plus" title="更多操作(添加图片…)" data-i18n-title="composer.more.title">+</button>
+        <span id="voice-status"></span>
+        <span id="search-usage" hidden></span>
+        <button id="model-picker" title="切换模型" data-i18n-title="modelPicker.title"><span id="model-picker-label">…</span><span class="caret" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
         <button id="mic" title="按住说话(或按住 F9)" data-i18n-title="composer.mic.title" data-i18n-dynamic>🎙</button>
         <button id="stop" title="中止当前任务" data-i18n-title="composer.stop.title">■</button>
         <button id="send" title="发送(Enter)" data-i18n-dynamic>↑</button>
       </div>
     </div>
     <div id="composer-stop-feedback" class="status-line" role="status" hidden></div>
+    <div class="home-chips" id="home-chips">
+      <button class="example-chip" data-chip-mode="prep" data-prompt="/skill:arcane-fvtt-setup 帮我安装 FVTT,我把安装包放在 " data-i18n="welcome.install.label" data-i18n-prompt="welcome.install.prompt" data-i18n-title="welcome.install.desc">安装 FVTT</button>
+      <button class="example-chip" data-chip-mode="prep" data-prompt="打开 http://127.0.0.1:30000 并读取世界信息" data-i18n="welcome.example1.label" data-i18n-prompt="welcome.example1.prompt" data-i18n-title="welcome.example1.desc">打开 FVTT</button>
+      <button class="example-chip" data-chip-mode="prep" data-prompt="/skill:arcane-module-reader 阅读并理解这个模组,帮我组织一个知识库,然后和我聊聊。模组 PDF 在 " data-i18n="welcome.example3.label" data-i18n-prompt="welcome.example3.prompt" data-i18n-title="welcome.example3.desc">阅读模组</button>
+      <button class="example-chip" data-chip-mode="prep" data-prompt="打开我已部署好了的 FVTT，网址是 " data-i18n="welcome.remote.label" data-i18n-prompt="welcome.remote.prompt" data-i18n-title="welcome.remote.desc">连接远程</button>
+      <button class="example-chip" data-chip-mode="combat" data-prompt="读取当前战斗的战场态势" data-i18n="welcome.example2.label" data-i18n-prompt="welcome.example2.prompt" data-i18n-title="welcome.example2.desc">战场态势</button>
+    </div>
     <div id="plus-menu" hidden>
       <button class="plus-item" id="attach" title="添加图片(也可直接粘贴 Ctrl+V 或拖入)" data-i18n-title="composer.attach.title"><span class="pi">📎</span><span data-i18n="composer.attach.label">添加图片</span></button>
-    </div>
-    <div class="composer-hint">
-      <span class="hint-left">
-        <span class="chip dir" id="dir-chip" style="display:none" data-i18n-dynamic></span>
-        <span id="voice-status"></span>
-        <span id="search-usage" hidden></span>
-      </span>
-      <button id="model-picker" title="切换模型" data-i18n-title="modelPicker.title"><span id="model-picker-label">…</span><span class="caret">▾</span></button>
     </div>
     <div id="model-popup" hidden>
       <input id="model-filter" placeholder="筛选模型…" data-i18n-placeholder="modelPicker.filterPlaceholder" autocomplete="off" spellcheck="false" />

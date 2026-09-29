@@ -150,6 +150,11 @@ const modeSegs = {
   combat: document.getElementById("mode-seg-combat"),
 };
 const dirChip = document.getElementById("dir-chip");
+const dirPopup = document.getElementById("dir-popup");
+const dirContext = document.getElementById("composer-context");
+// 线性图标(kimi web 式):描边取 currentColor,随 chip 常态/hover/虚线请柬态一起变色
+const DIR_ICON_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+const CHEVRON_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 const queueList = document.getElementById("queue-list");
 const scrollBottomBtn = document.getElementById("scroll-bottom");
 const togglePanelBtn = document.getElementById("toggle-panel");
@@ -483,7 +488,10 @@ function acceptModeSnapshot(payload) {
 let conversationEmpty = true;
 
 function syncDirChip() {
-  dirChip.style.display = currentMode === "prep" && conversationEmpty ? "" : "none";
+  const show = currentMode === "prep" && conversationEmpty;
+  dirChip.style.display = show ? "" : "none";
+  dirContext.hidden = !show;
+  if (!show) closeDirPopup();
 }
 
 // 备团队列列表(spec §3⑤):排队消息不进对话流,在 composer 上方成行(立即/编辑/删除)。
@@ -586,13 +594,26 @@ function applyModeUi(mode, cwd) {
   syncDirChip();
   syncQueueList();
   lastPrepCwd = cwd || null;
+  const dirIcon = document.createElement("span");
+  dirIcon.className = "dir-icon";
+  dirIcon.setAttribute("aria-hidden", "true");
+  dirIcon.innerHTML = DIR_ICON_SVG;
+  const dirLabel = document.createElement("span");
+  dirLabel.className = "dir-label";
+  const dirCaret = document.createElement("span");
+  dirCaret.className = "caret";
+  dirCaret.setAttribute("aria-hidden", "true");
+  dirCaret.innerHTML = CHEVRON_SVG;
   if (cwd) {
-    dirChip.textContent = `📁 ${cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd} ⌄`;
+    dirLabel.textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
     dirChip.title = t("header.dir.titleWith", { path: cwd });
   } else {
-    dirChip.textContent = `📁 ${t("header.dir.chooseLabel")} ⌄`;
+    dirLabel.textContent = t("header.dir.chooseLabel");
     dirChip.title = t("header.dir.chooseTitle");
   }
+  dirChip.replaceChildren(dirIcon, dirLabel, dirCaret);
+  // 未选目录 = 主页第一动作:虚线请柬样式(见 .chip.dir.empty)
+  dirChip.classList.toggle("empty", !cwd);
 }
 
 async function switchMode(next) {
@@ -634,9 +655,35 @@ async function switchMode(next) {
 modeSegs.prep.addEventListener("click", () => switchMode("prep"));
 modeSegs.combat.addEventListener("click", () => switchMode("combat"));
 
-dirChip.addEventListener("click", async () => {
-  const context = modeContext();
-  const result = await window.arcane.prepChooseDir(context);
+// 工作区下拉(kimi web 式):点 chip 列"最近的文件夹"(当前项 ✓),底部"选择文件夹…"走系统对话框。
+// 来源 = 当前目录 + 侧边栏导航里的备团项目(内部兜底工作区由 main 标 internal,跳过)。
+function recentPrepDirs() {
+  const seen = new Set();
+  const out = [];
+  const push = cwd => {
+    if (!cwd || typeof cwd !== "string") return;
+    const key = cwd.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(cwd);
+  };
+  push(lastPrepCwd);
+  if (navigationView?.rows) {
+    for (const row of navigationView.rows.values()) {
+      if (out.length >= 8) break;
+      if (row?.mode === "prep" && !row.internal) push(row.cwd);
+    }
+  }
+  return out;
+}
+
+function closeDirPopup() {
+  dirPopup.hidden = true;
+  dirChip.classList.remove("open");
+}
+
+// choose-dir(系统对话框)与下拉点选共用同一段收尾:换目录 = main 已起新空会话
+async function applyPrepDirResult(context, result) {
   if (!result?.ok) {
     if (!result?.canceled) {
       addStatus(t("chat.status.prepDirFailed", {
@@ -650,6 +697,74 @@ dirChip.addEventListener("click", async () => {
   invalidateSlashItems(); // cwd 变了,项目级 skills/模板可能不同
   // 换目录 = main 侧已开新 session,session_switched 事件会带历史来
   refreshSessions();
+}
+
+async function pickPrepDir(dirPath) {
+  closeDirPopup();
+  // 点当前已选目录 = 无事发生,不要为它重启会话
+  if (dirPath != null && lastPrepCwd && dirPath.toLowerCase() === lastPrepCwd.toLowerCase()) return;
+  const context = modeContext();
+  const result = dirPath == null
+    ? await window.arcane.prepChooseDir(context)
+    : await window.arcane.prepSetDir(context, dirPath);
+  await applyPrepDirResult(context, result);
+}
+
+function openDirPopup() {
+  const dirs = recentPrepDirs();
+  dirPopup.replaceChildren();
+  if (dirs.length) {
+    const head = document.createElement("div");
+    head.className = "dir-popup-head";
+    head.textContent = t("dirPopup.recent");
+    dirPopup.append(head);
+    for (const cwd of dirs) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "dir-item";
+      item.title = cwd;
+      const icon = document.createElement("span");
+      icon.className = "dir-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = DIR_ICON_SVG;
+      const text = document.createElement("span");
+      text.className = "dir-text";
+      const name = document.createElement("span");
+      name.className = "dir-name";
+      name.textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
+      const pathEl = document.createElement("span");
+      pathEl.className = "dir-path";
+      pathEl.textContent = cwd;
+      text.append(name, pathEl);
+      item.append(icon, text);
+      if (lastPrepCwd && cwd.toLowerCase() === lastPrepCwd.toLowerCase()) {
+        const check = document.createElement("span");
+        check.className = "dir-check";
+        check.textContent = "✓";
+        item.append(check);
+      }
+      item.addEventListener("click", () => { void pickPrepDir(cwd); });
+      dirPopup.append(item);
+    }
+  }
+  const choose = document.createElement("button");
+  choose.type = "button";
+  choose.className = "dir-item dir-choose";
+  choose.textContent = t("dirPopup.choose");
+  choose.addEventListener("click", () => { void pickPrepDir(null); });
+  dirPopup.append(choose);
+  dirPopup.hidden = false;
+  dirChip.classList.add("open");
+}
+
+dirChip.addEventListener("click", () => {
+  if (dirPopup.hidden) openDirPopup(); else closeDirPopup();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!dirPopup.hidden && e.target instanceof Node && !dirPopup.contains(e.target) && !dirChip.contains(e.target)) closeDirPopup();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !dirPopup.hidden) closeDirPopup();
 });
 
 // ---------- scrolling ----------
@@ -683,11 +798,19 @@ scrollBottomBtn.addEventListener("click", () => scrollToEnd(true));
 
 // ---------- helpers ----------
 
+// 空会话 = 主页布局:composer 浮到视觉中心(ZCode 式),建议 chips 横排在卡片下方;
+// 有消息后回落底部。纯 CSS(body.home)切换,composer 节点不挪窝——resetConversation
+// 的 innerHTML="" 会清空 messages,把 composer 挪进去会被连根销毁。
+function syncHomeLayout() {
+  document.body.classList.toggle("home", conversationEmpty);
+}
+
 // 欢迎页用显示/隐藏而不是移除:切换到空的全新会话时要能再展示回来。
 function dismissWelcome() {
   welcome.style.display = "none";
   conversationEmpty = false;
   syncDirChip();
+  syncHomeLayout();
 }
 
 function showWelcome() {
@@ -698,6 +821,7 @@ function showWelcome() {
   window.ArcaneI18n?.apply(welcome);
   conversationEmpty = true;
   syncDirChip();
+  syncHomeLayout();
 }
 
 // markdown 渲染管线(marked + KaTeX + hljs + mermaid)在 markdown.js。
@@ -2840,7 +2964,7 @@ function providerDisplayName(pid) {
   return providerNames[pid] ?? pid;
 }
 
-// 顶栏不再放模型 chip(与 composer 右下角的选择器重复),标签只更新 modelPicker;短标签 = 去掉 provider 前缀
+// 顶栏不再放模型 chip(与 composer 底行的选择器重复),标签只更新 modelPicker;短标签 = 去掉 provider 前缀
 function updateModelLabels(label) {
   if (!label) return;
   currentModelLabel = label;
@@ -3355,6 +3479,7 @@ window.ArcaneI18n.onLocaleChange(() => {
 
 // 首帧就用当前语言落一次模式徽章/目录 chip(applyI18n 对 dynamic 节点是跳过的)
 applyModeUi(currentMode, lastPrepCwd);
+syncHomeLayout();
 refreshTelemetryConsent();
 
 input.focus();
