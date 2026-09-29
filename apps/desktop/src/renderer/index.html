@@ -841,6 +841,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      position: relative; /* #model-popup 锚在卡片上(不随 home 态 wrap 拉高而浮起) */
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -1019,7 +1020,6 @@
     /* 浮层锚在 wrap 上:卡片收窄居中后,菜单/弹层改贴卡片边缘 */
     body.home #slash-popup { left: 0; right: 0; }
     body.home #plus-menu { left: 0; }
-    body.home #model-popup { right: 0; }
     /* 工作区 chip 浮在卡片上方(kimi web 式,仅备团空会话由 syncDirChip 放出);
        下拉从这里向下展开、盖住卡片上沿 */
     .composer-context:not([hidden]) {
@@ -1136,10 +1136,12 @@
     #model-picker:hover { background: var(--panel-2); border-color: var(--border); color: var(--text); filter: none; }
     #model-picker-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #model-picker .caret { display: inline-flex; flex: none; }
+    /* 弹层贴着选择器芯片向上弹出(kimi 式):底边 = 底行顶 + 6px(卡片下 padding 8 + 底行 32 + 6);
+       右缘对齐选择器右缘 = 卡片右 padding 8 + send 32 + 间距 8 + mic 32 + 间距 8 */
     #model-popup {
       position: absolute;
-      right: 12px;
-      bottom: calc(100% - 2px);
+      right: 88px;
+      bottom: 46px;
       width: 300px;
       max-height: 340px;
       display: flex;
@@ -1151,6 +1153,8 @@
       z-index: 36;
       overflow: hidden;
     }
+    /* busy 时 ■ 出现在 🎙 与 ↑ 之间,选择器被挤左 40px(32 + 间距 8) */
+    .composer-wrap.busy #model-popup { right: 128px; }
     #model-popup[hidden] { display: none; }
     #model-filter {
       margin: 8px 8px 6px;
@@ -1844,6 +1848,10 @@
         <button id="stop" title="中止当前任务" data-i18n-title="composer.stop.title">■</button>
         <button id="send" title="发送(Enter)" data-i18n-dynamic>↑</button>
       </div>
+      <div id="model-popup" hidden>
+        <input id="model-filter" placeholder="筛选模型…" data-i18n-placeholder="modelPicker.filterPlaceholder" autocomplete="off" spellcheck="false" />
+        <div id="model-list"></div>
+      </div>
     </div>
     <div id="composer-stop-feedback" class="status-line" role="status" hidden></div>
     <div class="home-chips" id="home-chips">
@@ -1855,10 +1863,6 @@
     </div>
     <div id="plus-menu" hidden>
       <button class="plus-item" id="attach" title="添加图片(也可直接粘贴 Ctrl+V 或拖入)" data-i18n-title="composer.attach.title"><span class="pi">📎</span><span data-i18n="composer.attach.label">添加图片</span></button>
-    </div>
-    <div id="model-popup" hidden>
-      <input id="model-filter" placeholder="筛选模型…" data-i18n-placeholder="modelPicker.filterPlaceholder" autocomplete="off" spellcheck="false" />
-      <div id="model-list"></div>
     </div>
   </footer>
   <div id="settings-backdrop">
