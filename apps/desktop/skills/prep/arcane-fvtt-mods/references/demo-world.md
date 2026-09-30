@@ -120,5 +120,7 @@ profile、world、解析到的精确包版本/哈希及实际安装版本。rece
 - receipt 中 `matchesResolvedVersion=false` 的保留本地新版是否符合用户预期。
 
 Demo 工件应携带自己的 module configuration，但新加入 profile 的 module 不一定已在既有 world 启用。若某项未启用，
-不直接改数据库或内部 settings；报告差异并让用户在 Manage Modules 中确认。最后列出 package/world 的安装或替换项、
+按 [install.md](install.md) 第 5 节的方式在 ready GM 会话合并写入 `moduleConfiguration` 并 reload 验收；够不到
+GM 会话时报告差异并让用户在 Manage Modules 中确认。仍然禁止直写数据库或 settings 文件。最后列出 package/world
+的安装或替换项、
 完整备份路径、world/profile/package SHA256、receipt 路径，以及 Demo 是否已成功启动。

@@ -25,7 +25,8 @@ mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <数据目
 - 索引给出的体积与 SHA256（没有则明确说“发布方哈希不可用”）；
 - 已有目录将先备份；
 - 正在运行的 Foundry 将在 staging 成功后停服，提交后恢复原世界；
-- 新安装仍需用户在世界里手动启用。
+- 新安装在重启后的 ready GM 世界里默认自动启用（含已解析的 required dependencies），
+  见第 5 节。
 
 计划是执行前告知，不等待批准：用户明确要求安装即授权。唯一要停下来取得确认的情况：主包或
 任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个不在 arcane mirror 选过的
@@ -84,6 +85,23 @@ staging 或 backup；先报告 helper 的准确错误。
 })()
 ```
 
-新安装的 mod 即使重启后已被 Foundry 发现，也不要调用内部 API 改启用配置；提醒用户打开世界的
-“管理模块 / Manage Modules”，启用目标与 required dependencies，然后刷新/重启世界。若用户
-完成后要求核对，再回读 `version` 与 `active`。
+新安装的 mod 重启后已被 Foundry 发现但尚未启用。在 ready GM 世界用 `browser_evaluate`
+合并写入启用配置——先读出现有 `moduleConfiguration`，并入目标 mod 与缺失的 required
+dependencies，不动已有条目：
+
+```js
+(async () => {
+  const current = game.settings.get("core", "moduleConfiguration");
+  await game.settings.set("core", "moduleConfiguration", {
+    ...current,
+    "<id>": true, // 及每个缺失的 required dependency
+  });
+  game.reload();
+})()
+```
+
+reload 后等世界重新 ready，再回读每个新启用 mod 的 `version` 与 `active`，全部
+`active === true` 才算完成。够不到 ready GM 会话（世界未运行、无 GM 权限、目标世界不明确）
+时不直写 world 数据库或 settings 文件；回退为提醒用户打开世界的“管理模块 /
+Manage Modules”，启用目标与 required dependencies，然后刷新/重启世界。若用户完成后要求
+核对，再回读 `version` 与 `active`。

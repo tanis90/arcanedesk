@@ -152,6 +152,19 @@
 - 逐次下载确认、无预声明哈希时再确认、单项超 250 MB 确认：全部取消，并入计划确认门。
 - 覆盖冲突：自动时间戳备份即授权，备份成功才继续，备份位置写进报告。
 
+### arcane-fvtt-mods 新装 mod 自动启用（2026-09-30）
+
+- 新装 mod 默认自动启用：用户让装 mod 即含“装完能用”的预期，装完让用户自己去
+  Manage Modules 勾选是纯打扰。该纪律自 6db6973 起存在但当时未留档，本次补记并修订。
+- 启用状态的实体是 world core setting `moduleConfiguration`（v13 存于 LevelDB，实证于
+  本机 arcane-demo world 的 `data/settings/`）。唯一安全的写路径是 ready GM 会话里
+  `game.settings.set`——与官方 Manage Modules UI 完全同源；直写数据库或 LevelDB
+  settings 文件的禁令原样保留。
+- 写入必须合并：先读现有配置，并入新 mod 与安装计划已解析的 required dependencies，不动
+  已有条目；`game.reload()` 后回读 `version`/`active` 验收。
+- 启用是写操作，并入安装计划的确认门一并告知，不做计划外静默副作用。够不到 ready GM
+  会话（世界未运行、无 GM 权限、目标世界不明确）时回退为提醒用户手动启用。
+
 ### arcane-module-to-fvtt / arcane-module-style-marking（2026-09-26）
 
 - 两个新 skill 收编自真实模组建设项目的 `.pi/skills/`。交互预算：module-to-fvtt 恒定 2 次

@@ -97,9 +97,14 @@ macOS Bash 调用形态：
   `<数据目录>/Data/systems`。
 - Foundry 正在运行时可以先完成临时 staging，但提交前要说明并按 `arcane-fvtt-ops` 精确停止
   监听端口的 Foundry PID；不要批量终止 Node。批量升级全部 staging 成功后只停服一次。
-- 不直接编辑 world 数据库、settings 存储或内部 module configuration 来强行启用新 mod。
-  新安装的 mod 在 Foundry 重启后提醒用户到世界的“管理模块 / Manage Modules”中启用并确认
-  依赖。已启用 mod 的升级可重启原世界，再回读版本与 active 状态。
+- 启用状态是世界的 core setting `moduleConfiguration`（v13 存于 LevelDB）。禁止直写 world
+  数据库或 settings 文件强行启用；唯一写路径是 ready GM 会话里用 `browser_evaluate` 调
+  `game.settings.set("core", "moduleConfiguration", ...)` 合并写入——先读现有配置，并入新 mod
+  与已解析依赖，不动已有条目——随后 `game.reload()` 并回读 `active` 验收，见
+  [references/install.md](references/install.md) 第 5 节。新安装的 mod 默认随安装计划告知后
+  自动启用；够不到 ready GM 会话（世界未运行、无 GM 权限、目标世界不明确）时回退为提醒用户
+  到世界的“管理模块 / Manage Modules”中启用并确认依赖。已启用 mod 的升级可重启原世界，再
+  回读版本与 active 状态。
 - 任一步失败都保持现有 module 可用，不盲目重试，不删除备份；只报告失败项、staging 路径
   和可恢复状态。
 - `world-stage` 的确认字段必须逐项取自本次 `world-inspect` 输出，尤其必须传
@@ -111,4 +116,5 @@ macOS Bash 调用形态：
   world 目录。
 
 最后报告 module/world id、旧/新版本、来源、SHA256、Data 目标绝对路径、备份路径、依赖状态，
-以及是否已在重启后的世界中验证。对于单独新装的 mod，明确写出“已安装但尚未在世界启用”。
+以及是否已在重启后的世界中验证。新装的 mod 报告启用结果；回退手动启用时明确写出
+“已安装但尚未在世界启用”。
