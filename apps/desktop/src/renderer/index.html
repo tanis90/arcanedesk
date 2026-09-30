@@ -1134,13 +1134,16 @@
     }
     /* 选择器已收进卡片(卡片底=panel),hover 用 panel-2 提亮;filter:none 盖掉 .composer button:hover 的 brightness,避免双重 hover */
     #model-picker:hover { background: var(--panel-2); border-color: var(--border); color: var(--text); filter: none; }
+    /* 弹层打开期间幽灵芯片保持显形(平时只有灰字),caret 翻转与目录 chip 的 open 态一致 */
+    .composer:has(#model-popup:not([hidden])) #model-picker { background: var(--panel-2); border-color: var(--border); color: var(--text); filter: none; }
+    .composer:has(#model-popup:not([hidden])) #model-picker .caret { transform: rotate(180deg); }
     #model-picker-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #model-picker .caret { display: inline-flex; flex: none; }
-    /* 弹层贴着选择器芯片向上弹出(kimi 式):底边 = 底行顶 + 6px(卡片下 padding 8 + 底行 32 + 6);
-       右缘对齐选择器右缘 = 卡片右 padding 8 + send 32 + 间距 8 + mic 32 + 间距 8 */
+    #model-picker .caret { display: inline-flex; flex: none; transition: transform 0.15s; }
+    /* 弹层从卡片右下角向上弹出:右缘贴卡片内容右缘(与 textarea、send 右缘同一条竖线),
+       不随 busy 态 ■ 出现而左右跳动;底边 = 底行顶 + 6px(卡片下 padding 8 + 底行 32 + 6) */
     #model-popup {
       position: absolute;
-      right: 88px;
+      right: 8px;
       bottom: 46px;
       width: 300px;
       max-height: 340px;
@@ -1149,12 +1152,11 @@
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 10px;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
       z-index: 36;
       overflow: hidden;
     }
-    /* busy 时 ■ 出现在 🎙 与 ↑ 之间,选择器被挤左 40px(32 + 间距 8) */
-    .composer-wrap.busy #model-popup { right: 128px; }
+    :root[data-theme="light"] #model-popup { box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.12); }
     #model-popup[hidden] { display: none; }
     #model-filter {
       margin: 8px 8px 6px;
