@@ -33,6 +33,7 @@ runtime/
 # Editor and OS state
 .idea/
 .vscode/
+.zcodeignore
 .DS_Store
 Thumbs.db
 *.swp
@@ -42,3 +43,4 @@ Thumbs.db
 tmp/
 temp/
 tmp-e2e/
+tmp-design/

@@ -56,7 +56,7 @@ selected by `publish-release.mjs --region intl` (default: the
 - Credentials: `CF_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
   (S3-compatible SigV4, region `auto`), scoped to this bucket with no Delete.
   A local copy of the current values lives at
-  `C:\Users\yangqi\.arcane-secrets\r2-intl.env` (outside every repository —
+  `%USERPROFILE%\.arcane-secrets\r2-intl.env` (outside every repository —
   never commit it). Backing token: R2 API token `arcane-demo-world-publish`
   (Object Read & Write, this bucket only), created 2026-09-22 for the
   `publish-intl-world.mjs` world uploads; CI keeps its own copy in the repo
