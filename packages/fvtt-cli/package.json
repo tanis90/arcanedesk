@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@arcanedesk/foundry-sdk": "0.1.0",
-    "commander": "14.0.2"
+    "commander": "15.0.0"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
