@@ -55,7 +55,7 @@
     }
     :root[data-theme="light"] {
       color-scheme: light;
-      /* 材质:羊皮纸 / 页面 / 墨水;accent = 铁胆墨水 */
+      /* 材质:羊皮纸 / 页面 / 墨水;accent = 墨(与营销主页 mode-toggle 同色) */
       --bg: #f0e9d6;
       --bg-soft: #eae2cc;
       --panel: #f7f2e3;
@@ -66,10 +66,10 @@
       --text-strong: #161107;
       --muted: #6f6450;
       --faint: #a09377;
-      --accent: #2e4170;
-      --accent-dim: #6b7ba3;
-      --accent-contrast: #f7f2e3;
-      --ring: rgba(46, 65, 112, 0.22);
+      --accent: #16130f;
+      --accent-dim: #57503f;
+      --accent-contrast: #f2ede1;
+      --ring: rgba(22, 19, 15, 0.20);
       --ok: #047857;
       --err: #c13b32;
       --warn: #b4690e;
@@ -283,11 +283,11 @@
       transition: transform 0.18s ease;
     }
     /* 浅色主题:与营销主页 mode-toggle 同款 —— 2px 墨线框 + 盖章硬投影,墨块滑块,纸色选中字 */
-    :root[data-theme="light"] .seg-switch { border: 2px solid #16130f; background: transparent; box-shadow: 3px 3px 0 #16130f24; }
-    :root[data-theme="light"] .seg-switch .seg-thumb { background: #16130f; }
-    :root[data-theme="light"] .seg-switch .seg { color: #57503f; }
-    :root[data-theme="light"] .seg-switch .seg:hover { color: #16130f; }
-    :root[data-theme="light"] .seg-switch .seg.active { color: #f2ede1; }
+    :root[data-theme="light"] .seg-switch { border: 2px solid var(--accent); background: transparent; box-shadow: 3px 3px 0 color-mix(in srgb, var(--accent) 14%, transparent); }
+    :root[data-theme="light"] .seg-switch .seg-thumb { background: var(--accent); }
+    :root[data-theme="light"] .seg-switch .seg { color: var(--accent-dim); }
+    :root[data-theme="light"] .seg-switch .seg:hover { color: var(--accent); }
+    :root[data-theme="light"] .seg-switch .seg.active { color: var(--accent-contrast); }
     body[data-mode="combat"] #mode-switch .seg-thumb { transform: translateX(100%); }
     /* 面板展开时 chat 侧被 margin-right 压窄(media query 只看整窗宽度,帮不上忙):
        main 把 chatWidth 告给 JS,窄于阈值就加 header-tight,收掉品牌文字和指示灯文案 */
