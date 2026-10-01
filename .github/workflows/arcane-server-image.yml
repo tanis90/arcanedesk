@@ -62,6 +62,11 @@ jobs:
       - name: Verify Desktop source
         run: npm run verify:source --workspace arcane-desktop
 
+      # desktop 测试直接 import 工作区包的 dist 产物；--workspace 直跑不会触发
+      # 根 pretest 的 build:sdk，必须显式构建（与根 package.json pretest 同一构建）。
+      - name: Build workspace SDK
+        run: npm run build:sdk
+
       - name: Run Desktop tests
         run: npm test --workspace arcane-desktop
 
