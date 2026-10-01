@@ -1,6 +1,6 @@
 ---
 name: arcane-fvtt-setup
-description: 在本机 Windows/macOS 或远程 Linux 服务器上安装、修复、升级、迁移 Foundry VTT 13，或部署、接管云服务器上的 FVTT。用户说"帮我装 Foundry/FVTT""从零部署""重装/升级""迁移到新机器"，或"我买了台服务器/阿里云/腾讯云 ECS，帮我把 Foundry 装上去""部署到服务器""连上我的服务器"，或提供 Foundry ZIP/EXE/DMG/timed URL 时使用。既有实例的日常启停、日志与端口排障改用 arcane-fvtt-ops（含远程模式）；模组管理归 arcane-fvtt-mods。
+description: 在本机 Windows/macOS 或远程 Linux 服务器上安装、修复、升级、迁移 Foundry VTT 13，或部署、接管云服务器上的 FVTT。用户说"帮我装 Foundry/FVTT""从零部署""重装/升级""迁移到新机器"，或"我买了台服务器/阿里云/腾讯云 ECS，帮我把 Foundry 装上去""部署到服务器""连上我的服务器"，或提供 Foundry ZIP/EXE/DMG/timed URL 时使用。本机既有实例的日常启停、日志与端口排障改用 arcane-fvtt-ops；服务器实例由本 skill 的 server 轨道接管运维；模组管理归 arcane-fvtt-mods。
 ---
 
 # Foundry VTT 安装与部署（本机 / 服务器）

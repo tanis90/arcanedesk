@@ -269,6 +269,10 @@
 - 轨道细节只进 references（硬规矩）：server 的 Docker/镜像通道/冲突处理/裸机纪律、
   local 的平台物料细节都不进 SKILL.md，防主干 token 膨胀；fvtt-skills 测试按
   SKILL.md 与 local-install.md 分层锁定。
+- 服务器接管运维归本 skill server 轨道：服务器在跑且基线一致时由 setup 直接接管
+  （沿用 server-ssh.md 的 SSH 通道与探测口径）；`arcane-fvtt-ops` 只管本机既有
+  实例，其"远程模式"仍是 server-deploy-plan 里未实现的规划，路由与文案不得再
+  引用它，待该规划真正实现时再改口。
 
 ### arcane-actor-update（2026-09-14）
 

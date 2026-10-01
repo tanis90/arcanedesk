@@ -15,17 +15,17 @@ const VENDOR_MAP = path.join(
   desktopRoot, "skills", "prep", "arcane-fvtt-setup", "references", "server-vendor-map.md",
 );
 
-test("vendor-map.md 的 cn/intl 通道根前缀与 region 默认值表逐字节一致", () => {
+test("server-vendor-map.md 的 cn/intl 通道根前缀与 region 默认值表逐字节一致", () => {
   const text = fs.readFileSync(VENDOR_MAP, "utf8");
   assert.equal(
     text.includes(`\`${regionDefaults("cn").serverDeployBaseUrl}\``),
     true,
-    "vendor-map.md must quote the cn serverDeployBaseUrl exactly as registered in region.mjs",
+    "server-vendor-map.md must quote the cn serverDeployBaseUrl exactly as registered in region.mjs",
   );
   assert.equal(
     text.includes(`\`${regionDefaults("intl").serverDeployBaseUrl}\``),
     true,
-    "vendor-map.md must quote the intl serverDeployBaseUrl exactly as registered in region.mjs",
+    "server-vendor-map.md must quote the intl serverDeployBaseUrl exactly as registered in region.mjs",
   );
 });
 

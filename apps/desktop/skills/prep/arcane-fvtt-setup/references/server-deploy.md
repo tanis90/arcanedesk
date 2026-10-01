@@ -2,8 +2,8 @@
 
 由 `../SKILL.md` 目标判定(target=server)路由进入;共享纪律(钉版基线、本体三要素、
 内容安装、验收口径)、交互预算轨道制(server 5 点)与安全底线在 `../SKILL.md`。
-首次接入先走 [server-ssh.md](server-ssh.md);服务器在跑且基线一致时零打扰直接接管
-运维(arcane-fvtt-ops 远程模式),不重新部署。云厂商速查在
+首次接入先走 [server-ssh.md](server-ssh.md);服务器在跑且基线一致时由本 skill 直接
+接管运维(沿用 server-ssh.md 的 SSH 通道与 §1 探测口径),不重新部署。云厂商速查在
 [server-vendor-map.md](server-vendor-map.md)。
 
 ## §1 探测序列(连入后,全部只读、零写入、秒级)

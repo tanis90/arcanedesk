@@ -48,7 +48,7 @@ const REGION = regionConfig();
 if (!String(process.env.ARCANE_MOD_INDEX_URL ?? "").trim()) {
   process.env.ARCANE_MOD_INDEX_URL = REGION.modIndexUrl;
 }
-// 服务器部署轨道（server-deploy-plan.md §5）：arcane-fvtt-server skill 经
+// 服务器部署轨道（server-deploy-plan.md §5）：arcane-fvtt-setup（server 轨道）经
 // ARCANE_SERVER_RELEASE_BASE 拿镜像通道根前缀（latest.json → <revision>/…）。
 // 与 modIndexUrl 同一接线模式；运维联调可显式覆盖。
 if (!String(process.env.ARCANE_SERVER_RELEASE_BASE ?? "").trim()) {
