@@ -12,7 +12,7 @@ import { regionDefaults } from "../src/main/region.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const VENDOR_MAP = path.join(
-  desktopRoot, "skills", "prep", "arcane-fvtt-server", "references", "vendor-map.md",
+  desktopRoot, "skills", "prep", "arcane-fvtt-setup", "references", "server-vendor-map.md",
 );
 
 test("vendor-map.md 的 cn/intl 通道根前缀与 region 默认值表逐字节一致", () => {

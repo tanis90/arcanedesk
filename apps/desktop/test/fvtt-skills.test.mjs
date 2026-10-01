@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const setupSkill = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-setup", "SKILL.md");
+const setupSkillLocal = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-setup", "references", "local-install.md");
 const setupSkillWindows = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-setup", "references", "windows-install.md");
 const setupSkillMacos = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-setup", "references", "macos-install.md");
 const opsSkill = path.join(desktopRoot, "skills", "prep", "arcane-fvtt-ops", "SKILL.md");
@@ -74,40 +75,68 @@ test("desktop packages generic skills but no demo world or environment profile a
   assert.equal(JSON.stringify(packageJson).includes("arcane-demo"), false);
 });
 
-test("setup skill routes local ZIP, EXE, and DMG through the bundled Node workflow", async () => {
+test("setup SKILL.md keeps the merged spine: target routing, track budgets, shared disciplines", async () => {
   const skill = await readFile(setupSkill, "utf8");
-  // 平台专属流程拆在 references/ 下:SKILL.md 留共享契约与路由,平台细节在各自文件里。
+  // 2026-10-01 起 arcane-fvtt-server 并入本 skill:SKILL.md 只留共享主干与轨道路由,
+  // 本机/服务器两轨道的执行细节分别在 local-install.md 与 server-*.md。
   assert.match(skill, /ARCANE_FVTT_NODE/);
   assert.match(skill, /ARCANE_FVTT_DISTRIBUTION_FILE/);
-  assert.match(skill, /FoundryVTT-<core\.foundry>/);
-  assert.match(skill, /本地 `\.zip`、`\.exe` 或 `\.dmg`/);
-  assert.match(skill, /Core 目录与\s*Data 目录必须分开/s);
-  assert.match(skill, /installDefaults\.systems\/modules\/worlds.*全部为空/s);
-  assert.match(skill, /逐字节核对\s*SHA256/s);
-  // 交互预算与计划确认门：4 个交互点，交付物料只授权读取与验证，确认门之后才有写入
-  assert.match(skill, /用户交互预算/);
-  assert.match(skill, /交互点最多 4 个/);
-  assert.match(skill, /交付物料只授权读取与验证/);
-  assert.match(skill, /安装计划与确认/);
-  assert.match(skill, /--allow-missing-data-dir/);
-  // Demo 环境默认安装，内容统一走 arcane mirror，禁止混链校验
-  assert.match(skill, /Demo 环境默认安装/);
-  assert.match(skill, /不在 arcane mirror 选过的 mod\s+之内/s);
-  assert.match(skill, /arcanedesk\.bitterbebop\.cn/);
-  assert.match(skill, /禁止混链校验/);
-  // 路径纪律：完整形态路径与装后回读
-  assert.match(skill, /<数据目录>\/Data\/systems\/dnd5e/);
-  assert.match(skill, /回读/);
-  assert.match(skill, /Node\.js distribution ZIP/);
+  // 目标判定与轨道路由:两条轨道的 reference 都必须被主干路由到
+  assert.match(skill, /目标判定/);
+  assert.match(skill, /references\/local-install\.md/);
   assert.match(skill, /references\/windows-install\.md/);
   assert.match(skill, /references\/macos-install\.md/);
-  assert.match(skill, /不使用\s*代理池或第三方镜像/s);
-  assert.match(skill, /Desktop 不打包 Demo world/);
+  assert.match(skill, /references\/server-ssh\.md/);
+  assert.match(skill, /references\/server-deploy\.md/);
+  assert.match(skill, /references\/server-vendor-map\.md/);
+  assert.match(skill, /target = \*\*local\*\*（默认）|默认 local/);
+  // 触发面同时覆盖本机安装与服务器部署
+  assert.match(skill, /帮我装 Foundry/);
+  assert.match(skill, /部署到服务器|帮我把 Foundry 装上去/);
+  // 交互预算轨道制:local 4 点 / server 5 点
+  assert.match(skill, /用户交互预算|交互预算（轨道制）/);
+  assert.match(skill, /local 4 点/);
+  assert.match(skill, /server 5 点/);
+  // 共享纪律:本体三要素、mirror、验收口径
+  assert.match(skill, /Purchased Licenses/);
+  assert.match(skill, /Older Stable/);
+  assert.match(skill, /Node\.JS/);
+  assert.match(skill, /禁止混链校验/);
   assert.match(skill, /arcane-fvtt-mods/);
-  assert.match(skill, /world-inspect/);
-  assert.match(skill, /references\/demo-world\.md/);
+  assert.match(skill, /references\/demo-world\.md|demo-world\.md/);
+  assert.match(skill, /\/api\/status/);
+  assert.match(skill, /systemVersion=5\.3\.3/);
+  // 安全底线并集:私钥纪律与零 docker pull 是 server 轨道并入的硬规则
+  assert.match(skill, /私钥材料永不进入对话/);
+  assert.match(skill, /docker pull/);
   assert.doesNotMatch(skill, /fvtt_setup/);
   assert.doesNotMatch(skill, /install-node|install-core|doctor/);
+});
+
+test("local-install.md keeps the local-track operational rules", async () => {
+  const local = await readFile(setupSkillLocal, "utf8");
+  assert.match(local, /FoundryVTT-<core\.foundry>/);
+  assert.match(local, /本地 `\.zip`、`\.exe` 或 `\.dmg`/);
+  assert.match(local, /Core 目录与\s*Data 目录必须分开/s);
+  assert.match(local, /installDefaults\.systems\/modules\/worlds.*全部为空/s);
+  assert.match(local, /逐字节核对\s*SHA256/s);
+  // 交互预算细则与计划确认门：4 个交互点，交付物料只授权读取与验证，确认门之后才有写入
+  assert.match(local, /交互点最多 4 个/);
+  assert.match(local, /交付物料只授权读取与验证/);
+  assert.match(local, /安装计划与确认/);
+  assert.match(local, /--allow-missing-data-dir/);
+  // Demo 环境默认安装，内容统一走 arcane mirror
+  assert.match(local, /Demo 环境默认安装/);
+  assert.match(local, /不在 arcane mirror 选过的 mod\s+之内/s);
+  assert.match(local, /arcanedesk\.bitterbebop\.cn/);
+  // 路径纪律：完整形态路径与装后回读
+  assert.match(local, /<数据目录>\/Data\/systems\/dnd5e/);
+  assert.match(local, /回读/);
+  assert.match(local, /Node\.js distribution ZIP/);
+  assert.match(local, /不使用\s*代理池或第三方镜像/s);
+  assert.match(local, /Desktop 不打包 Demo world/);
+  assert.match(local, /world-inspect/);
+  assert.match(local, /references\/demo-world\.md|demo-world\.md/);
 
   const windowsInstall = await readFile(setupSkillWindows, "utf8");
   assert.match(windowsInstall, /Windows EXE/);

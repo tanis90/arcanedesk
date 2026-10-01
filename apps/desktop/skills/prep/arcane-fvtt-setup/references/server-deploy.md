@@ -1,5 +1,11 @@
 # 部署执行手册(探测 / Docker / 镜像通道 / 验证 / 冲突 / 裸机)
 
+由 `../SKILL.md` 目标判定(target=server)路由进入;共享纪律(钉版基线、本体三要素、
+内容安装、验收口径)、交互预算轨道制(server 5 点)与安全底线在 `../SKILL.md`。
+首次接入先走 [server-ssh.md](server-ssh.md);服务器在跑且基线一致时零打扰直接接管
+运维(arcane-fvtt-ops 远程模式),不重新部署。云厂商速查在
+[server-vendor-map.md](server-vendor-map.md)。
+
 ## §1 探测序列(连入后,全部只读、零写入、秒级)
 
 能探测的绝不问用户。顺序固定,后一步在前一步结果上收敛。非 root 用户先
@@ -64,7 +70,7 @@ skill 预检:`unzip -p <zip> resources/app/package.json` 读版本比对(容器�
 ## §4 镜像通道与部署(默认轨道)
 
 端点:`ARCANE_SERVER_RELEASE_BASE`(App 注入)> region 默认(cn OSS / intl R2,
-见 vendor-map.md §下载源)。流程:
+见 server-vendor-map.md §下载源)。流程:
 
 1. `curl` `latest.json` → `<revision>/server-release.json` → 按 `uname -m` 选
    架构条目。
@@ -84,7 +90,7 @@ skill 预检:`unzip -p <zip> resources/app/package.json` 读版本比对(容器�
    - V1 容器 HEALTHCHECK(内置);
    - V2 宿主机 `curl 127.0.0.1:30000/api/status`(不是 exec 进容器)→ 端口映射;
    - V3 **用户本机** `curl http://<IP>:30000/api/status` → 完整公网路径。
-   V2 通而 V3 不通 ≈ 安全组(vendor-map.md 话术)。
+   V2 通而 V3 不通 ≈ 安全组(server-vendor-map.md 话术)。
 7. 收尾:`options.json` 的 `hostname` 写公网 IP(游戏内邀请链接才会指对);
    `foundry_open <服务器URL>` 打开面板;用户填 adminKey + license;skill 轮询
    `/api/status` 至 world 加载、`systemVersion=5.3.3`;之后做 world 用户与

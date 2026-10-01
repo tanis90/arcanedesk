@@ -239,6 +239,9 @@
 
 ### arcane-fvtt-server（2026-09-20）
 
+（2026-10-01 更新：本 skill 已并入 `arcane-fvtt-setup`，见下方合并记录；以下条目继续
+约束服务器轨道的行为，预算与话术原样有效。）
+
 - 交互预算 5 点：接入三事实问 / 用户终端跑公钥安装命令 / 冲突三选一 / "停着要不要启动" /
   激活面板用户自填 adminKey+license。安全组放行、下载源选择、发行版探测等全部是 skill
   侧探测或并行提示，不占交互点。
@@ -247,6 +250,25 @@
   （私钥永不进对话，会话会被持久化快照重放）。
 - 部署形态：镜像 tar.gz 走 arcane mirror（零 docker pull/registry）；公网开放 30000 是
   部署目的，安全边界是 FVTT 账号体系；CDP 调试端口绝不可公网暴露。
+
+### arcane-fvtt-setup 吸收 arcane-fvtt-server（2026-10-01）
+
+- 合并为单一安装 skill，保留 `arcane-fvtt-setup` 名字：触发面、system prompt 断言与
+  skill.loaded 遥测归因连续；`arcane-fvtt-server` 目录删除，其 references 以
+  `server-*` 前缀迁入 setup 的 references/。
+- 目标判定进 skill 内部：local | server 由用户语境判定（明说服务器/云/ECS/SSH →
+  server，其余默认 local），路由是 skill 内的判定不再是 skill 边界；确认门前两条
+  轨道全部只读，判定可无损切换。
+- 交互预算改轨道制：local 4 点 / server 5 点，分别沿用 2026-08-31 与 2026-09-20
+  记录，合并不新增、不合并交互点。
+- 共享主干只写一次：本体三要素话术（入口同为 Purchased Licenses → Older Stable
+  13.351，Operating System 下拉按轨道分叉）；钉版基线声明（本机以
+  community-distribution.json、服务器以 server-release.json 为准，发布管线保证一致）；
+  Demo 环境收口 arcane-fvtt-mods；验收统一 `/api/status` 口径；安全底线取两边并集
+  （并入 server 的"私钥永不进对话"与"零 docker pull"）。
+- 轨道细节只进 references（硬规矩）：server 的 Docker/镜像通道/冲突处理/裸机纪律、
+  local 的平台物料细节都不进 SKILL.md，防主干 token 膨胀；fvtt-skills 测试按
+  SKILL.md 与 local-install.md 分层锁定。
 
 ### arcane-actor-update（2026-09-14）
 

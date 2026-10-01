@@ -11,9 +11,32 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const REQUIRED_MARKERS = new Map([
   ["skills/prep/arcane-fvtt-setup/SKILL.md", [
     "ARCANE_FVTT_NODE",
-    "installDefaults.systems/modules/worlds",
+    "私钥材料永不进入对话",
+    "references/local-install.md",
+    "references/server-deploy.md",
     "references/windows-install.md",
     "references/macos-install.md",
+  ]],
+  ["skills/prep/arcane-fvtt-setup/references/local-install.md", [
+    "installDefaults.systems/modules/worlds",
+    "--allow-missing-data-dir",
+    "交付物料只授权读取与验证",
+  ]],
+  ["skills/prep/arcane-fvtt-setup/references/server-deploy.md", [
+    "ARCANE_SERVER_RELEASE_BASE",
+    "docker load",
+    "不要比较 imageId",
+    "hostname: arcane-fvtt",
+    "coreVersion ≤13.351",
+  ]],
+  ["skills/prep/arcane-fvtt-setup/references/server-ssh.md", [
+    "永不进入 agent 上下文",
+    "authorized_keys",
+    "arcane-server",
+  ]],
+  ["skills/prep/arcane-fvtt-setup/references/server-vendor-map.md", [
+    "30000/TCP",
+    "下载源",
   ]],
   ["skills/prep/arcane-fvtt-setup/references/macos-install.md", [
     "xattr -dr com.apple.quarantine",
