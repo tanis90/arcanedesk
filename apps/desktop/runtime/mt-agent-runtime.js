@@ -1,14 +1,15 @@
-// mt-agent-runtime v0.2.0
+// mt-agent-runtime v0.3.0
 (async (action, args, options) => {
     // 握手常量（内联，勿引用模块作用域；与文件头 RUNTIME 保持同步）
-    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.2.0", protocolVersion: 2 };
+    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.3.0", protocolVersion: 2 };
     const g = globalThis;
 
     if (typeof action !== "string" || !action) {
       throw new Error("INVALID_ACTION: action must be a non-empty string");
     }
     if (!["worldInfo", "doctor", "staticContext", "playContext", "battleContext", "turnContext",
-      "actorRead", "sceneRead", "contentSearch", "compendiumBrowse"].includes(action)) {
+      "actorRead", "sceneRead", "contentSearch", "compendiumBrowse",
+      "actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply"].includes(action)) {
       throw new Error("ACTION_UNKNOWN: " + action);
     }
     // 原版 requireReady 同序：game 在位 → game.ready → GM 门（只读集，门保持 M1 语义）
@@ -923,6 +924,809 @@
     }
 
     // =========================================================================
+    // M3 写集 A（J4–J7）+ 写安全脚手架（J8）。四态回执（az contracts.ts:629-632）：
+    //   rejected  {status, code, message}             —— 开写前守卫失败
+    //   completed {status, steps, verification, warnings}
+    //   partial / indeterminate {status, retry:false, steps, message}
+    // 写 ack = shim 的 doc.create/update/createEmbeddedDocuments 等 promise（hub.invoke
+    // 应答即服务端已收）；随后 az 同款读回复核：逐步比对实际值，落定才 completed。
+    // 各 action 自捕获异常转回执（az actorEditData/sceneApplyData 同款，不向宿主抛）。
+    // =========================================================================
+    function writeErrorMessage(error) {
+      return String(error?.message ?? error);
+    }
+    function writeReject(error) {
+      return { status: "rejected", code: writeErrorMessage(error).split(":")[0], message: writeErrorMessage(error) };
+    }
+    function writeInputGuard(input, action) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw new Error("INPUT_INVALID: " + action + " arguments required");
+      }
+    }
+    // az prepObject：写集入参字段白名单（未知字段拒绝）
+    function writePrepObject(value, keys) {
+      if (!value || typeof value !== "object" || Array.isArray(value)
+        || Object.keys(value).some((key) => !keys.includes(key))) {
+        throw new Error("INPUT_INVALID: unsupported fields");
+      }
+      return value;
+    }
+    const WRITE_ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+    function prepAbilityScores(value) {
+      const abilities = writePrepObject(value, WRITE_ABILITY_KEYS);
+      for (const score of Object.values(abilities)) {
+        if (!Number.isInteger(score) || score < 1 || score > 20) {
+          throw new Error("INPUT_INVALID: ability scores are integers 1..20");
+        }
+      }
+      return abilities;
+    }
+    // az prepDataImage + prepPrepareImage 的 dataPath-only 子集：真字节上传依赖
+    // FilePicker.upload（shim 桩无此面）——带 upload 即 CAPABILITY_UNAVAILABLE（M6 边界）
+    function prepDataImage(image) {
+      writePrepObject(image, ["dataPath", "syncPlacedTokens", "upload"]);
+      const dataPath = image.dataPath;
+      if (typeof dataPath !== "string" || !dataPath.trim() || dataPath.length > 512 || dataPath.includes("..")) {
+        throw new Error("INPUT_INVALID: image dataPath required");
+      }
+      return dataPath.trim();
+    }
+    async function prepPrepareImage(image) {
+      const dataPath = prepDataImage(image);
+      if (image.upload && typeof g.FilePicker?.upload !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: image upload requires FilePicker.upload (dataPath only in this shim)");
+      }
+      return { dataPath };
+    }
+    // az prepImagePatch：token 图像字段（ring 启用时同步 subject 贴图）
+    function prepImagePatch(token, img, prefix = "") {
+      return { [prefix + "texture.src"]: img,
+        ...(token?.ring?.enabled ? { [prefix + "ring.subject.texture"]: img } : {}) };
+    }
+    // az prepCheckRead：actorEdit/actorGrantItems 的 readState 守卫。身份缺失/不符 →
+    // READ_REF_INVALID（宿主 foundry-services.js:88 同码预检）；受影响字段漂移 →
+    // READ_REF_STALE。此处 throw，由各 action 统一转 rejected 回执。
+    function prepCheckRead(actor, state, keys) {
+      if (!state || state.actorUuid !== actor.uuid) throw new Error("READ_REF_INVALID: read this Actor first");
+      prepWorld(state.world);
+      const current = prepActorFields(actor, state.include);
+      for (const key of keys) {
+        if (!(key in state.fields) || JSON.stringify(state.fields[key]) !== JSON.stringify(current[key])) {
+          throw new Error("READ_REF_STALE: reread affected field " + key);
+        }
+      }
+    }
+    // az prepCheckSceneRead：sceneApply(update) 的场景字段 + token 成员/指纹守卫
+    function prepCheckSceneRead(scene, state, keys, layout) {
+      if (!state || state.sceneUuid !== scene.uuid) throw new Error("READ_REF_INVALID: read this Scene first");
+      prepWorld(state.world);
+      const fields = prepSceneFields(scene);
+      for (const key of keys) {
+        if (!(key in state.fields) || JSON.stringify(state.fields[key]) !== JSON.stringify(fields[key])) {
+          throw new Error("READ_REF_STALE: Scene field changed " + key);
+        }
+      }
+      if ((layout.update.length || layout.deleteIds.length) && !state.tokens) {
+        throw new Error("READ_REF_INVALID: read tokens before editing or deleting them");
+      }
+      for (const entry of layout.update) {
+        const before = state.tokens?.find((token) => token.id === entry.tokenId);
+        const token = scene.tokens?.get?.(entry.tokenId);
+        if (!before || !token) throw new Error("READ_REF_STALE: Token membership changed");
+        const now = prepPlacementFields(token);
+        for (const key of Object.keys(entry.changes)) {
+          if (JSON.stringify(before.fields[key]) !== JSON.stringify(now[key])) {
+            throw new Error("READ_REF_STALE: Token field changed " + key);
+          }
+        }
+      }
+      for (const id of layout.deleteIds) {
+        const before = state.tokens?.find((token) => token.id === id);
+        const token = scene.tokens?.get?.(id);
+        if (!before || !token || before.fingerprint !== prepSceneTokenState(token).fingerprint) {
+          throw new Error("READ_REF_STALE: Token to delete changed");
+        }
+      }
+    }
+    // az compendiumDocument 的 shim 适配：pack.getDocument 返回纯数据对象（无
+    // documentName 静态面）——文档类型以 pack 元数据 type 判定
+    async function compendiumWriteDocument(packId, entryId, documentName) {
+      const pack = game.packs?.get?.(cleanText(packId));
+      if (!pack) throw new Error("PACK_NOT_FOUND: compendium pack not found: " + packId);
+      const document = await pack.getDocument(cleanText(entryId));
+      if (!document) throw new Error("SOURCE_NOT_FOUND: compendium entry not found: " + packId + "/" + entryId);
+      if ((document.documentName ?? pack.metadata?.type ?? pack.documentName) !== documentName) {
+        throw new Error("SOURCE_MISMATCH: " + documentName + " source required");
+      }
+      return document;
+    }
+    function writePlainData(source) {
+      return typeof source?.toObject === "function" ? source.toObject() : JSON.parse(JSON.stringify(source));
+    }
+    // az prepPrepareGrants：CompendiumGrant[] → 待授予计划（期望名/型漂移守卫 + 批内去重）
+    async function prepPrepareGrants(entries) {
+      if (!Array.isArray(entries) || entries.length > 50) throw new Error("INPUT_INVALID: at most 50 grants");
+      const plans = [];
+      for (const entry of entries) {
+        writePrepObject(entry, ["uuid", "packId", "entryId", "expectedName", "expectedType", "quantity", "equipped"]);
+        if ((entry.uuid && (entry.packId || entry.entryId)) || (!entry.uuid && (!entry.packId || !entry.entryId))) {
+          throw new Error("INPUT_INVALID: supply uuid or packId+entryId");
+        }
+        let source, sourceUuid, sourceName = null, sourceType = null;
+        if (entry.uuid) {
+          source = await g.fromUuid(entry.uuid);
+          if (!source) throw new Error("SOURCE_NOT_FOUND: compendium Item not found: " + entry.uuid);
+          // shim fromUuid 对 Compendium 返回纯数据（无 documentName）——按 uuid 文档段判型
+          const isItem = source.documentName === "Item"
+            || (source.documentName == null && String(entry.uuid).split(".")[3] === "Item");
+          if (!isItem) throw new Error("SOURCE_MISMATCH: not an Item (" + entry.uuid + ")");
+          sourceUuid = entry.uuid;
+        } else {
+          source = await compendiumWriteDocument(entry.packId, entry.entryId, "Item");
+          sourceUuid = "Compendium." + cleanText(entry.packId) + ".Item." + cleanText(entry.entryId);
+        }
+        sourceName = source.name;
+        sourceType = source.type;
+        if (entry.expectedName && entry.expectedName !== source.name) {
+          throw new Error("SOURCE_MISMATCH: expectedName " + JSON.stringify(entry.expectedName)
+            + " but " + sourceUuid + " is " + JSON.stringify(source.name));
+        }
+        if (entry.expectedType && entry.expectedType !== source.type) {
+          throw new Error("SOURCE_MISMATCH: expectedType " + JSON.stringify(entry.expectedType)
+            + " but " + sourceUuid + " is " + JSON.stringify(source.type));
+        }
+        if (plans.some((plan) => plan.sourceUuid === sourceUuid)) continue;
+        const data = writePlainData(source);
+        delete data._id; delete data.folder;
+        if (entry.quantity !== undefined) {
+          if (!Number.isInteger(entry.quantity) || entry.quantity < 1 || entry.quantity > 999
+            || !data.system || !("quantity" in data.system)) throw new Error("INPUT_INVALID: unsupported quantity");
+          data.system.quantity = entry.quantity;
+        }
+        if (entry.equipped !== undefined) {
+          if (typeof entry.equipped !== "boolean" || !data.system || !("equipped" in data.system)) {
+            throw new Error("INPUT_INVALID: unsupported equipped state");
+          }
+          data.system.equipped = entry.equipped;
+        }
+        data.flags ??= {};
+        data.flags.arcanedesk = { ...data.flags.arcanedesk, sourceUuid };
+        data.flags.dnd5e = { ...data.flags.dnd5e, sourceId: sourceUuid };
+        plans.push({ sourceUuid, sourceName, sourceType, data });
+      }
+      return plans;
+    }
+    // 授予源身份匹配：sourceUuid 优先；item flags 在 shim 的 REST 信封序列化面
+    // （#persistEmbedded）与广播回声重建（rebuildEmbeddedCollection）中丢失时，退化为
+    // 名称+类型匹配（会话内去重口径；同名异源物品会被误判已授——见文件头降级声明，
+    // 信封携带 item flags 后恢复 az 精确语义）
+    function grantMatchesPlan(item, plan) {
+      return item.sourceUuid === plan.sourceUuid
+        || (item.sourceUuid == null && item.name === plan.sourceName && item.type === plan.sourceType);
+    }
+    // az prepApplyGrants：按源身份去重后创建嵌入 Item（requestId 幂等标记随授）
+    async function prepApplyGrants(actor, plans, requestId) {
+      const existing = collectionValues(actor.items).map(prepItemIdentity), skippedExisting = [], pending = [];
+      for (const plan of plans) {
+        const prior = existing.filter((item) => grantMatchesPlan(item, plan));
+        if (prior.length) skippedExisting.push(...prior);
+        else { plan.data.flags.arcanedesk.requestId = requestId; pending.push(plan); }
+      }
+      const created = pending.length ? await actor.createEmbeddedDocuments("Item", pending.map((plan) => plan.data)) : [];
+      return { created: collectionValues(created).map(prepItemIdentity), skippedExisting, expected: pending.length };
+    }
+    function prepImageTargets(actor, state) {
+      if (!state?.include?.includes("sceneTokens") || !Array.isArray(state.sceneTokens)) {
+        throw new Error("READ_REF_INVALID: read sceneTokens before synchronizing placed images");
+      }
+      const current = prepSceneTokens(actor);
+      const shape = (values) => values
+        .map((token) => ({ uuid: token.uuid, actorUuid: token.actorUuid, actorLink: token.actorLink, image: token.image }))
+        .sort((a, b) => a.uuid.localeCompare(b.uuid));
+      if (JSON.stringify(shape(current)) !== JSON.stringify(shape(state.sceneTokens))) {
+        throw new Error("READ_REF_STALE: placed Token image or membership changed");
+      }
+      return collectionValues(game.scenes).flatMap((scene) => collectionValues(scene.tokens))
+        .filter((token) => current.some((entry) => entry.uuid === token.uuid))
+        .map((token) => ({ token, before: prepTokenImageFields(token), actorId: token.actorId, actorLink: token.actorLink }));
+    }
+    // az prepSyncTokenImages 的 shim 适配：嵌入 token 的 update() 不落库——经父场景
+    // updateEmbeddedDocuments 持久化（REST 信封 + 广播）
+    async function prepSyncTokenImages(tokens, img, world, steps) {
+      for (const planned of tokens) {
+        const { token } = planned;
+        const step = { step: "token-image", targets: [token.uuid], state: "not-started" };
+        steps.push(step);
+        try {
+          prepWorld(world);
+          const present = collectionValues(game.scenes).some((scene) => collectionValues(scene.tokens).includes(token));
+          if (!present || token.actorId !== planned.actorId || token.actorLink !== planned.actorLink
+            || JSON.stringify(prepTokenImageFields(token)) !== JSON.stringify(planned.before)) {
+            throw new Error("READ_REF_STALE: Token changed before synchronization");
+          }
+          const patch = prepImagePatch(token, img);
+          step.state = "unknown";
+          const scene = token.parent ?? token.scene;
+          if (scene?.updateEmbeddedDocuments) await scene.updateEmbeddedDocuments("Token", [{ _id: token.id, ...patch }]);
+          else await token.update({ ...patch });
+          const actual = prepTokenImageFields(token);
+          if (Object.entries(patch).every(([key, value]) => actual[key] === value)) step.state = "completed";
+        } catch (error) { step.message = writeErrorMessage(error); break; }
+      }
+      const reported = new Set(steps.filter((step) => step.step === "token-image").flatMap((step) => step.targets));
+      for (const { token } of tokens) {
+        if (!reported.has(token.uuid)) steps.push({ step: "token-image", targets: [token.uuid], state: "not-started" });
+      }
+    }
+
+    // —— J4 actorCreate（az actorCreateData；blank | compendium 源 + abilities +
+    //    initialItems + dataPath 图像 + 幂等恢复 + 重名守卫）——
+    async function actorCreateData(input) {
+      let started = false, createdActor = null;
+      const steps = [], warnings = [];
+      try {
+        writeInputGuard(input, "actorCreate");
+        prepWorld(input.world);
+        if (!input.requestId || typeof input.name !== "string" || !input.name.trim() || input.name.length > 256) {
+          throw new Error("INPUT_INVALID: name and request identity required");
+        }
+        const prototypeName = input.prototypeToken === undefined ? undefined
+          : writePrepObject(input.prototypeToken, ["name"]).name;
+        if (input.prototypeToken !== undefined
+          && (typeof prototypeName !== "string" || !prototypeName.trim() || prototypeName.length > 256)) {
+          throw new Error("INPUT_INVALID: prototype Token name required");
+        }
+        // 降级：无 folder 语义——非空 folderId 记 warning 跳过（az prepFolder 校验后写入）
+        if (input.folderId != null) warnings.push("folders-absent:folderId-ignored");
+        let data, sourceUuid = null;
+        if (input.source?.kind === "blank" && ["character", "npc"].includes(input.source.actorType)) {
+          data = { type: input.source.actorType };
+        } else if (input.source?.kind === "compendium") {
+          const source = await compendiumWriteDocument(input.source.packId, input.source.entryId, "Actor");
+          data = writePlainData(source);
+          delete data._id; delete data.folder;
+          sourceUuid = "Compendium." + cleanText(input.source.packId) + ".Actor." + cleanText(input.source.entryId);
+        } else throw new Error("INPUT_INVALID: Actor source required");
+        // 基础能力随创建落位（az 注释：种族/ASI 增量叠加在基础值上）
+        const abilityScores = input.dnd5e === undefined ? null
+          : prepAbilityScores(writePrepObject(input.dnd5e, ["abilities"]).abilities ?? {});
+        if (abilityScores && Object.keys(abilityScores).length) {
+          data.system ??= {};
+          const abilities = data.system.abilities ?? {};
+          for (const [key, score] of Object.entries(abilityScores)) {
+            abilities[key] = { ...(abilities[key] ?? {}), value: score };
+          }
+          data.system.abilities = abilities;
+        }
+        const plans = await prepPrepareGrants(input.initialItems ?? []);
+        const preparedImage = input.image ? await prepPrepareImage(input.image) : null;
+        const imagePath = preparedImage?.dataPath ?? null;
+        prepWorld(input.world);
+        // 幂等恢复：同 requestId 的 Actor 已在世 → completed 引用返回（宿主 operationStore
+        // 重放回放原回执；无宿主的页内口径，见文件头偏差声明）
+        const recovered = collectionValues(game.actors)
+          .find((actor) => actor.flags?.arcanedesk?.requestId === input.requestId);
+        if (recovered) return {
+          status: "completed",
+          steps: [{ step: "create-actor", state: "completed", targets: [recovered.uuid], recovered: true }],
+          verification: [{ actorUuid: recovered.uuid, name: recovered.name, type: recovered.type, recovered: true }],
+          warnings: [...warnings, "requestId-replay:recovered-existing-actor"],
+        };
+        const collisions = collectionValues(game.actors).filter((actor) => actor.name === input.name);
+        if (collisions.length) return {
+          status: "rejected", code: "NAME_COLLISION", message: "Actor name already exists",
+          candidates: collisions.slice(0, 5).map((actor) => ({ uuid: actor.uuid, name: actor.name, type: actor.type })),
+        };
+        data.name = input.name;
+        if (prototypeName !== undefined) data.prototypeToken = { ...data.prototypeToken, name: prototypeName };
+        data.flags ??= {};
+        data.flags.arcanedesk = { ...data.flags.arcanedesk, requestId: input.requestId, ...(sourceUuid ? { sourceUuid } : {}) };
+        started = true;
+        createdActor = await (g.CONFIG?.Actor?.documentClass ?? g.Actor).create(data, { renderSheet: false });
+        if (!createdActor?.uuid) throw new Error("Actor creation was not confirmed");
+        steps.push({ step: "create-actor", state: "completed", targets: [createdActor.uuid], name: createdActor.name });
+        // shim 适配：create 载荷的 prototypeToken 被数据模型快照丢弃（活实例为合成
+        // getter）——经 update 点路径补写（REST 落库 + toObject 可见）；az 为一次性载荷
+        if (prototypeName !== undefined) {
+          await createdActor.update({ "prototypeToken.name": prototypeName });
+          const confirmed = createdActor.toObject?.().prototypeToken?.name === prototypeName;
+          steps.push({ step: "prototypeToken.name", targets: [createdActor.uuid], state: confirmed ? "completed" : "unknown" });
+          if (!confirmed) return { status: "partial", retry: false, steps, message: "Actor created; prototype Token name was not confirmed" };
+        }
+        if (imagePath) {
+          prepWorld(input.world);
+          const patch = { img: imagePath, ...prepImagePatch(createdActor.prototypeToken, imagePath, "prototypeToken.") };
+          await createdActor.update({ ...patch });
+          // 验证以持久化源为准（prototypeToken 活实例是合成 getter，见文件头降级）
+          const persistedToken = createdActor.toObject?.().prototypeToken ?? {};
+          const confirmed = createdActor.img === imagePath && (!("prototypeToken.texture.src" in patch) || persistedToken.texture?.src === imagePath);
+          steps.push({ step: "actor-image", targets: [createdActor.uuid], state: confirmed ? "completed" : "unknown", dataPath: imagePath });
+          if (!confirmed) return { status: "partial", retry: false, steps, message: "Actor created; image update was not confirmed" };
+        }
+        if (plans.length) {
+          const result = await prepApplyGrants(createdActor, plans, input.requestId);
+          steps.push({ step: "grant-items",
+            state: result.created.length === result.expected ? "completed" : "unknown",
+            targets: [createdActor.uuid], created: result.created, skippedExisting: result.skippedExisting });
+          if (result.created.length !== result.expected) {
+            return { status: "partial", retry: false, steps, message: "Actor created; some initial Items were not confirmed" };
+          }
+        }
+        return {
+          status: "completed", steps, warnings,
+          verification: [{
+            actorUuid: createdActor.uuid, name: createdActor.name, type: createdActor.type,
+            ...(prototypeName !== undefined
+              ? { prototypeToken: { name: createdActor.toObject?.().prototypeToken?.name ?? null } } : {}),
+            ...(abilityScores && Object.keys(abilityScores).length ? { abilities: abilityScores } : {}),
+          }],
+        };
+      } catch (error) {
+        return started
+          ? { status: createdActor || steps.some((step) => step.state === "completed") ? "partial" : "indeterminate",
+              retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // —— J5 actorEdit（az actorEditData；有界变更 + readState 守卫 + 读回复核）——
+    async function actorEditData(input) {
+      let started = false;
+      const steps = [], warnings = [];
+      try {
+        writeInputGuard(input, "actorEdit");
+        prepWorld(input.world);
+        const actor = await prepActor(input.actorUuid);
+        const changes = writePrepObject(input.changes, ["name", "folderId", "prototypeToken", "dnd5e", "image"]);
+        const patch = {};
+        let imageTargets = [], imagePath = null;
+        if (changes.image) {
+          const preparedImage = await prepPrepareImage(changes.image);
+          imagePath = preparedImage.dataPath;
+          Object.assign(patch, { img: imagePath }, prepImagePatch(actor.prototypeToken, imagePath, "prototypeToken."));
+          if (changes.image.syncPlacedTokens) imageTargets = prepImageTargets(actor, input.readState);
+        }
+        if ("name" in changes) {
+          if (typeof changes.name !== "string" || !changes.name.trim() || changes.name.length > 256) {
+            throw new Error("INPUT_INVALID: name required");
+          }
+          patch.name = changes.name;
+        }
+        // 降级：无 folder 语义——az 写 folder；此处记 warning 跳过（不当失败）
+        if ("folderId" in changes && changes.folderId != null) warnings.push("folders-absent:folderId-ignored");
+        if (changes.prototypeToken) {
+          for (const [key, value] of Object.entries(writePrepObject(changes.prototypeToken, ["name", "width", "height", "disposition"]))) {
+            if (key === "name" ? typeof value !== "string" || value.length > 256
+              : key === "disposition" ? ![-1, 0, 1].includes(value)
+              : !Number.isFinite(value) || value <= 0 || value > 100) {
+              throw new Error("INPUT_INVALID: invalid prototype Token field");
+            }
+            patch["prototypeToken." + key] = value;
+          }
+        }
+        if (changes.dnd5e) {
+          writePrepObject(changes.dnd5e, ["hp", "ac", "abilities"]);
+          if (changes.dnd5e.hp) {
+            const hp = writePrepObject(changes.dnd5e.hp, ["value", "max", "temp"]);
+            for (const [key, value] of Object.entries(hp)) {
+              if (!Number.isFinite(value) || value < 0) throw new Error("INPUT_INVALID: invalid HP");
+              patch["system.attributes.hp." + key] = value;
+            }
+            if ((hp.value ?? actor.system?.attributes?.hp?.value) > (hp.max ?? actor.system?.attributes?.hp?.max)) {
+              throw new Error("INPUT_INVALID: HP exceeds maximum");
+            }
+          }
+          if (changes.dnd5e.ac) {
+            const ac = writePrepObject(changes.dnd5e.ac, ["flat"]);
+            if (!Number.isFinite(ac.flat) || !["flat", "natural"].includes(actor.system?.attributes?.ac?.calc)) {
+              throw new Error("INPUT_INVALID: Actor does not use flat AC");
+            }
+            patch["system.attributes.ac.flat"] = ac.flat;
+          }
+          if (changes.dnd5e.abilities) {
+            for (const [key, score] of Object.entries(prepAbilityScores(changes.dnd5e.abilities))) {
+              patch["system.abilities." + key + ".value"] = score;
+            }
+          }
+        }
+        const keys = Object.keys(patch);
+        if (!keys.length) throw new Error("INPUT_INVALID: empty changes");
+        prepCheckRead(actor, input.readState, [...keys,
+          ...(changes.image ? ["prototypeToken.ring.enabled"] : []),
+          ...(changes.dnd5e?.ac ? ["system.attributes.ac.calc"] : [])]);
+        started = true;
+        await actor.update({ ...patch });
+        // 读回复核：prototypeToken.* 以持久化源为准（活实例是合成 getter，文件头降级）
+        const after = prepActorFields(actor, input.readState?.include ?? []);
+        const persistedToken = actor.toObject?.().prototypeToken ?? {};
+        const dotWalk = (node, path) => String(path).split(".")
+          .reduce((cursor, key) => (cursor == null ? undefined : cursor[key]), node);
+        for (const key of keys) {
+          if (key.startsWith("prototypeToken.")) {
+            after[key] = dotWalk(persistedToken, key.slice("prototypeToken.".length)) ?? null;
+          }
+        }
+        for (const key of keys) {
+          steps.push({ step: key, targets: [actor.uuid],
+            state: JSON.stringify(after[key]) === JSON.stringify(patch[key]) ? "completed" : "unknown",
+            before: input.readState?.fields?.[key], after: after[key] });
+        }
+        if (imagePath && imageTargets.length) await prepSyncTokenImages(imageTargets, imagePath, input.world, steps);
+        return steps.every((step) => step.state === "completed")
+          ? { status: "completed", steps, verification: steps, warnings }
+          : { status: "partial", retry: false, steps, message: "Actor update did not fully settle" };
+      } catch (error) {
+        return started
+          ? { status: steps.some((step) => step.state === "completed") ? "partial" : "indeterminate",
+              retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // —— J6 actorGrantItems（az actorGrantData；source 去重 + 期望漂移守卫）——
+    async function actorGrantData(input) {
+      let started = false;
+      const steps = [];
+      try {
+        writeInputGuard(input, "actorGrantItems");
+        prepWorld(input.world);
+        const actor = await prepActor(input.actorUuid);
+        if (!input.readState?.items || !input.items?.length || !input.requestId) {
+          throw new Error("READ_REF_INVALID: read items before granting");
+        }
+        prepCheckRead(actor, input.readState, []);
+        const plans = await prepPrepareGrants(input.items);
+        prepWorld(input.world);
+        // 只比对涉及的 source 身份（az：无关的 HP/其他物品可自由变化）
+        for (const plan of plans) {
+          const before = input.readState.items
+            .filter((item) => grantMatchesPlan(item, plan)).map((item) => item.id).sort();
+          const now = collectionValues(actor.items).map(prepItemIdentity)
+            .filter((item) => grantMatchesPlan(item, plan)).map((item) => item.id).sort();
+          if (JSON.stringify(before) !== JSON.stringify(now)) {
+            throw new Error("READ_REF_STALE: source Item membership changed");
+          }
+        }
+        started = true;
+        const result = await prepApplyGrants(actor, plans, input.requestId);
+        const actual = result.created
+          .filter((item) => (actor.items?.get?.(item.id) ?? null) !== null);
+        steps.push({ step: "grant-items", targets: [actor.uuid],
+          state: actual.length === result.expected ? "completed" : "unknown",
+          created: actual, skippedExisting: result.skippedExisting });
+        return actual.length === result.expected
+          ? { status: "completed", steps, verification: steps, warnings: [] }
+          : { status: "partial", retry: false, steps, message: "Some Items were not confirmed" };
+      } catch (error) {
+        return started
+          ? { status: "indeterminate", retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // —— J7 sceneApply（az sceneApplyData；create | update + token 增删改 + activate 收尾）——
+    function expandWritePatch(patch) {
+      const out = {};
+      for (const [key, value] of Object.entries(patch)) {
+        const parts = key.split(".");
+        let node = out;
+        for (let i = 0; i < parts.length - 1; i++) node = node[parts[i]] ??= {};
+        node[parts[parts.length - 1]] = value;
+      }
+      return out;
+    }
+    function prepPlacementPatch(changes, create = false) {
+      writePrepObject(changes, create
+        ? ["actorUuid", "x", "y", "name", "hidden", "disposition", "width", "height", "elevation", "actorLink"]
+        : ["x", "y", "name", "hidden", "disposition", "width", "height", "elevation"]);
+      const patch = {};
+      for (const [key, value] of Object.entries(changes)) {
+        if (key === "actorUuid") continue;
+        if (key === "name" ? typeof value !== "string" || !value.trim() || value.length > 256
+          : ["hidden", "actorLink"].includes(key) ? typeof value !== "boolean"
+          : key === "disposition" ? ![-1, 0, 1].includes(value)
+          : !Number.isFinite(value) || (["width", "height"].includes(key) && value <= 0)) {
+          throw new Error("INPUT_INVALID: invalid Token placement " + key);
+        }
+        patch[key] = value;
+      }
+      if (!Object.keys(patch).length || (create && (!Number.isFinite(changes.x) || !Number.isFinite(changes.y)))) {
+        throw new Error("INPUT_INVALID: Token position or changes required");
+      }
+      return patch;
+    }
+    function prototypeFingerprintOf(actor) {
+      const prototype = actor.prototypeToken ?? {};
+      return fnv1a64Hex(JSON.stringify(prototype.toObject ? prototype.toObject() : prototype));
+    }
+    async function sceneApplyData(input) {
+      let started = false, scene = null;
+      const steps = [];
+      try {
+        writeInputGuard(input, "sceneApply");
+        writePrepObject(input, ["operation", "sceneUuid", "readState", "scene", "tokens", "world", "requestId"]);
+        prepWorld(input.world);
+        if (!["create", "update"].includes(input.operation) || !input.requestId) {
+          throw new Error("INPUT_INVALID: Scene operation and request identity required");
+        }
+        const create = input.operation === "create";
+        const changes = writePrepObject(input.scene ?? {}, ["name", "active", "background", "width", "height", "grid"]);
+        const patch = {};
+        if (create && (input.sceneUuid || input.readState)) {
+          throw new Error("INPUT_INVALID: create does not accept existing Scene handles");
+        }
+        if (!create) scene = await prepScene(input.sceneUuid);
+        if (create || "name" in changes) {
+          if (typeof changes.name !== "string" || !changes.name.trim() || changes.name.length > 256) {
+            throw new Error("INPUT_INVALID: Scene name required");
+          }
+          patch.name = changes.name;
+        }
+        for (const key of ["width", "height"]) if (key in changes) {
+          if (!Number.isInteger(changes[key]) || changes[key] <= 0) {
+            throw new Error("INPUT_INVALID: Scene dimensions must be positive integers");
+          }
+          patch[key] = changes[key];
+        }
+        if ("active" in changes && typeof changes.active !== "boolean") throw new Error("INPUT_INVALID: active must be boolean");
+        if (changes.active === false) patch.active = false;
+        if (changes.grid) {
+          for (const [key, value] of Object.entries(writePrepObject(changes.grid, ["type", "size", "distance", "units"]))) {
+            if (key === "type" ? !Object.values(g.CONST?.GRID_TYPES ?? {}).includes(value)
+              : key === "units" ? typeof value !== "string" || value.length > 256
+              : !Number.isFinite(value) || value <= 0) {
+              throw new Error("INPUT_INVALID: unsupported grid " + key);
+            }
+            patch["grid." + key] = value;
+          }
+        }
+        if (changes.background) {
+          const prepared = await prepPrepareImage(changes.background);
+          patch["background.src"] = prepared.dataPath;
+        }
+        const raw = writePrepObject(input.tokens ?? {}, ["create", "update", "deleteIds"]);
+        const layout = { create: raw.create ?? [], update: raw.update ?? [], deleteIds: raw.deleteIds ?? [] };
+        if (Object.values(layout).some((value) => !Array.isArray(value))
+          || layout.create.length + layout.update.length + layout.deleteIds.length > 100) {
+          throw new Error("INPUT_INVALID: at most 100 Token operations");
+        }
+        if (create && (layout.update.length || layout.deleteIds.length)) {
+          throw new Error("INPUT_INVALID: new Scenes have no Tokens to update/delete");
+        }
+        const ids = [...layout.update.map((entry) => entry?.tokenId), ...layout.deleteIds];
+        if (ids.some((id) => typeof id !== "string" || !id || id.length > 256) || new Set(ids).size !== ids.length) {
+          throw new Error("INPUT_INVALID: duplicate or conflicting Token IDs");
+        }
+        if (!create && !Object.keys(patch).length && changes.active !== true && !ids.length && !layout.create.length) {
+          throw new Error("INPUT_INVALID: empty Scene changes");
+        }
+        const SceneClass = g.CONFIG?.Scene?.documentClass ?? g.Scene;
+        // （az 在此 prepValidateDocument：native strict 校验——shim 无 validate 面，
+        // 上方形状校验承担，见文件头降级声明）
+        const creations = [];
+        for (const entry of layout.create) {
+          const placement = prepPlacementPatch(entry, true);
+          const actor = await prepActor(entry.actorUuid);
+          // shim 适配：无 actor.getTokenDocument——放置字段 + 演员原型直构 token 数据
+          const prototype = actor.prototypeToken ?? {};
+          const prototypeName = typeof prototype.name === "string" && prototype.name.trim() ? prototype.name : actor.name;
+          creations.push({
+            actor,
+            prototypeFingerprint: prototypeFingerprintOf(actor),
+            data: {
+              name: placement.name ?? prototypeName,
+              x: placement.x, y: placement.y,
+              ...(placement.width !== undefined ? { width: placement.width } : {}),
+              ...(placement.height !== undefined ? { height: placement.height } : {}),
+              ...(placement.disposition !== undefined ? { disposition: placement.disposition } : {}),
+              ...(placement.elevation !== undefined ? { elevation: placement.elevation } : {}),
+              ...(placement.hidden !== undefined ? { hidden: placement.hidden } : {}),
+              actorId: actor.id,
+              actorLink: entry.actorLink === false ? false : true,
+              ...(actor.img ? { texture: { src: actor.img } } : {}),
+              flags: { arcanedesk: { requestId: input.requestId, sourceActorUuid: actor.uuid } },
+            },
+          });
+        }
+        const updates = [];
+        for (const entry of layout.update) {
+          writePrepObject(entry, ["tokenId", "changes"]);
+          const token = scene.tokens?.get?.(entry.tokenId);
+          if (!token) throw new Error("TOKEN_NOT_FOUND: Token not in requested Scene");
+          updates.push({ _id: entry.tokenId, ...prepPlacementPatch(entry.changes) });
+        }
+        for (const id of layout.deleteIds) {
+          if (!scene.tokens?.get?.(id)) throw new Error("TOKEN_NOT_FOUND: Token not in requested Scene");
+        }
+        const keys = [...Object.keys(patch), ...("active" in changes ? ["active"] : []),
+          ...(layout.create.length ? ["width", "height", "grid.type", "grid.size", "grid.distance", "grid.units"] : [])];
+        if (!create) prepCheckSceneRead(scene, input.readState, keys, layout);
+        if (create) {
+          // 幂等恢复（completed 引用返回，见文件头偏差声明）+ 重名守卫（az checkCreate）
+          const recovered = collectionValues(game.scenes)
+            .find((value) => value.flags?.arcanedesk?.requestId === input.requestId);
+          if (recovered) return {
+            status: "completed",
+            steps: [{ step: "create-scene", state: "completed", targets: [recovered.uuid], recovered: true }],
+            verification: [{ sceneUuid: recovered.uuid, ...prepSceneFields(recovered),
+              tokenCount: collectionValues(recovered.tokens).length, recovered: true }],
+            warnings: ["requestId-replay:recovered-existing-scene"],
+          };
+          if (collectionValues(game.scenes).some((value) => value.name === changes.name)) {
+            throw new Error("NAME_COLLISION: Scene name already exists");
+          }
+        }
+        prepWorld(input.world);
+        for (const { actor, prototypeFingerprint } of creations) {
+          const again = await prepActor(actor.uuid);
+          if (again !== actor || prototypeFingerprintOf(again) !== prototypeFingerprint) {
+            throw new Error("ACTOR_CHANGED: placement Actor or prototype changed");
+          }
+        }
+        if (create) {
+          started = true;
+          const step = { step: "create-scene", targets: [], state: "unknown" };
+          steps.push(step);
+          scene = await SceneClass.create({ ...expandWritePatch(patch), active: false,
+            flags: { arcanedesk: { requestId: input.requestId } } });
+          if (!scene?.uuid) throw new Error("Scene creation not confirmed");
+          step.targets = [scene.uuid];
+          const actual = prepSceneFields(scene);
+          if (!Object.entries(patch).every(([key, value]) => actual[key] === value)) {
+            throw new Error("Scene creation metadata did not settle");
+          }
+          step.state = "completed";
+        } else if (Object.keys(patch).length) {
+          started = true;
+          const step = { step: "update-scene", targets: [scene.uuid], state: "unknown" };
+          steps.push(step);
+          await scene.update({ ...patch });
+          const actual = prepSceneFields(scene);
+          const confirmed = Object.entries(patch).every(([key, value]) => actual[key] === value);
+          step.state = confirmed ? "completed" : "unknown";
+          if (!confirmed) throw new Error("Scene metadata did not settle");
+        }
+        if (creations.length) {
+          prepWorld(input.world); started = true;
+          const step = { step: "create-tokens", targets: [scene.uuid], state: "unknown", count: creations.length };
+          steps.push(step);
+          const documents = await scene.createEmbeddedDocuments("Token", creations.map((entry) => entry.data));
+          const created = collectionValues(documents);
+          const confirmed = created.length === creations.length
+            && new Set(created.map((token) => token.id)).size === created.length
+            && created.every((token) => token.flags?.arcanedesk?.requestId === input.requestId)
+            && creations.every((entry, index) => !!created[index] && Object.entries(entry.data)
+              .every(([key, value]) => key === "flags" || JSON.stringify(created[index][key] ?? null) === JSON.stringify(value ?? null)));
+          step.targets = created.map((token) => token.uuid);
+          step.state = confirmed ? "completed" : "unknown";
+          if (!confirmed) throw new Error("Token creation did not settle");
+        }
+        if (updates.length) {
+          prepWorld(input.world);
+          prepCheckSceneRead(scene, input.readState, [], { update: layout.update, deleteIds: [] });
+          started = true;
+          const step = { step: "update-tokens",
+            targets: updates.map((entry) => scene.uuid + ".Token." + entry._id), state: "unknown" };
+          steps.push(step);
+          await scene.updateEmbeddedDocuments("Token", updates.map((entry) => ({ ...entry })));
+          const confirmed = updates.every((entry) => {
+            const actual = prepPlacementFields(scene.tokens.get(entry._id) ?? {});
+            return Object.entries(entry).every(([key, value]) => key === "_id" || actual[key] === value);
+          });
+          step.state = confirmed ? "completed" : "unknown";
+          if (!confirmed) throw new Error("Token update did not settle");
+        }
+        if (layout.deleteIds.length) {
+          prepWorld(input.world);
+          prepCheckSceneRead(scene, input.readState, [], { update: [], deleteIds: layout.deleteIds });
+          started = true;
+          const step = { step: "delete-tokens",
+            targets: layout.deleteIds.map((id) => scene.uuid + ".Token." + id), state: "unknown" };
+          steps.push(step);
+          await scene.deleteEmbeddedDocuments("Token", layout.deleteIds);
+          const confirmed = layout.deleteIds.every((id) => !scene.tokens.has(id));
+          step.state = confirmed ? "completed" : "unknown";
+          if (!confirmed) throw new Error("Token deletion did not settle");
+        }
+        if (changes.active === true) {
+          prepWorld(input.world); started = true;
+          const step = { step: "activate-scene", targets: [scene.uuid], state: "unknown" };
+          steps.push(step);
+          // az scene.activate() 的 shim 适配：active 标志唯一化 + canvas 视图切换
+          for (const other of collectionValues(game.scenes)) {
+            if (other !== scene && other.active === true) await other.update({ active: false });
+          }
+          await scene.update({ active: true });
+          g.__MT_CANVAS_SEMANTICS__?.viewScene?.(scene);
+          step.state = scene.active === true && g.canvas?.scene?.id === scene.id ? "completed" : "unknown";
+          if (step.state !== "completed") throw new Error("Scene activation did not settle");
+        }
+        return { status: "completed", steps,
+          verification: [{ sceneUuid: scene.uuid, ...prepSceneFields(scene),
+            tokenCount: collectionValues(scene.tokens).length }],
+          warnings: [] };
+      } catch (error) {
+        return started
+          ? { status: steps.some((step) => step.state === "completed") ? "partial" : "indeterminate",
+              retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // —— imageApply（az imageApplyData；dataPath-only——Actor 走 actorEdit 全链（含
+    //    syncPlacedTokens），Item 直写 img；upload 一律 CAPABILITY_UNAVAILABLE）——
+    async function imageApplyData(input) {
+      let started = false, dataPath;
+      const steps = [];
+      try {
+        writeInputGuard(input, "imageApply");
+        writePrepObject(input, ["image", "targetUuid", "syncPlacedTokens", "world", "requestId"]);
+        prepWorld(input.world);
+        if (input.syncPlacedTokens !== undefined && typeof input.syncPlacedTokens !== "boolean") {
+          throw new Error("INPUT_INVALID: syncPlacedTokens must be boolean");
+        }
+        let doc = null, docName = null;
+        if (input.targetUuid !== undefined) {
+          if (typeof input.targetUuid !== "string" || !input.targetUuid || input.targetUuid.length > 256
+            || input.targetUuid.startsWith("Compendium.")) {
+            throw new Error("INPUT_INVALID: exact world document UUID required");
+          }
+          doc = await g.fromUuid(input.targetUuid);
+          // shim 适配：dnd5e 的 Item5e/MidiActor 实例不带 documentName 静态面——
+          // 世界集合成员身份 + uuid 链形状双重兜底判型（M2 prepActor 同款口径）
+          const targetParts = String(input.targetUuid).split(".");
+          const targetKind = targetParts[0] === "Actor" && targetParts.length === 2 ? "Actor"
+            : (targetParts[0] === "Item" && targetParts.length === 2)
+              || (targetParts.length === 4 && targetParts[2] === "Item") ? "Item" : null;
+          docName = typeof doc?.documentName === "string" ? doc.documentName
+            : doc && collectionValues(game.actors).includes(doc) ? "Actor"
+            : targetKind;
+          if (!doc || doc.uuid !== input.targetUuid || !["Actor", "Item"].includes(docName)) {
+            // 降级：JournalEntryPage 图页（az 支持）在 shim 无语义面——一并拒绝
+            throw new Error("IMAGE_TARGET_UNSUPPORTED: use a world Actor or Item; JournalEntryPage targets are unsupported in this shim");
+          }
+        }
+        if (input.syncPlacedTokens && docName !== "Actor") {
+          throw new Error("INPUT_INVALID: syncPlacedTokens requires an Actor target");
+        }
+        if (docName === "Actor") {
+          // az：Actor 目标复用 actorEdit 全链——页内先做一次新 actorRead 取 readState
+          const { readState } = await actorReadData({ actorUuid: doc.uuid,
+            include: ["prototypeToken", ...(input.syncPlacedTokens ? ["sceneTokens"] : [])] });
+          const image = { ...input.image, syncPlacedTokens: !!input.syncPlacedTokens };
+          const result = await actorEditData({ actorUuid: doc.uuid, readState, world: input.world,
+            requestId: input.requestId, changes: { image } });
+          return { ...result, ...(result.status !== "rejected" ? { dataPath: input.image.dataPath } : {}) };
+        }
+        const prepared = await prepPrepareImage(input.image);
+        dataPath = prepared.dataPath;
+        if (doc) {
+          const before = doc.img ?? null;
+          const step = { step: "document-image", targets: [doc.uuid], state: "unknown", before };
+          steps.push(step);
+          started = true;
+          // shim 适配：嵌入 Item 的 update() 不落库——经父文档 updateEmbeddedDocuments
+          if (doc.parent?.updateEmbeddedDocuments) {
+            await doc.parent.updateEmbeddedDocuments("Item", [{ _id: doc.id, img: dataPath }]);
+          } else {
+            await doc.update({ img: dataPath });
+          }
+          prepWorld(input.world);
+          step.after = doc.img ?? null;
+          if (step.after === dataPath) step.state = "completed";
+        }
+        return steps.every((step) => step.state === "completed")
+          ? { status: "completed", dataPath, steps, verification: [{ dataPath, targetUuid: doc?.uuid ?? null }], warnings: [] }
+          : { status: "partial", dataPath, retry: false, steps, message: "Image application did not fully settle" };
+      } catch (error) {
+        return started
+          ? { status: steps.some((step) => step.state === "completed") ? "partial" : "indeterminate",
+              ...(dataPath ? { dataPath } : {}), retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // =========================================================================
     // worldInfo / doctor（M2：modules 形状对齐 az——Record<string, boolean> + moduleVersions）
     // =========================================================================
     const world = { id: game.world?.id ?? null, title: game.world?.title ?? null };
@@ -1001,5 +1805,11 @@
     if (action === "actorRead") return await actorReadData(args);
     if (action === "sceneRead") return await sceneReadData(args);
     if (action === "contentSearch") return await contentSearchData(args);
-    return await compendiumBrowseData(args);
+    if (action === "compendiumBrowse") return await compendiumBrowseData(args);
+    // M3 写集 A：各 action 自捕获异常转四态回执（不向宿主抛；GM 门在入口统一把守）
+    if (action === "actorCreate") return await actorCreateData(args);
+    if (action === "actorEdit") return await actorEditData(args);
+    if (action === "actorGrantItems") return await actorGrantData(args);
+    if (action === "sceneApply") return await sceneApplyData(args);
+    return await imageApplyData(args);
   })
