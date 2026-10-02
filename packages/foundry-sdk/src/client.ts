@@ -88,8 +88,22 @@ export interface FoundryRuntimeClientOptions<Context> {
   allowedActions?: readonly DirectAction[];
   requireGM?: boolean;
   readyPollMs?: number;
+  /**
+   * Optional page-profile overrides for the preflight loop. The default
+   * (undefined) keeps the Foundry semantics built into this SDK: the page must
+   * sit on a /game path and be detected/ready with a GM (unless requireGM is
+   * false). Consumers hosting other Foundry-compatible pages pass their own
+   * path/readiness predicates here instead of forking the client.
+   */
+  pageProfile?: FoundryPageProfileOptions;
   log?: (level: "warn", message: string, details?: unknown) => void;
   onCallResult?: (record: FoundryRuntimeCallResultRecord) => void;
+}
+
+export interface FoundryPageProfileOptions {
+  id?: string;
+  isGamePath?: (state: FoundryPageState) => boolean;
+  isReady?: (state: FoundryPageState) => boolean;
 }
 
 interface DispatchMarker {
@@ -309,6 +323,7 @@ export class FoundryRuntimeClient<Context = unknown> {
   readonly #allowedActions: ReadonlySet<DirectAction>;
   readonly #requireGM: boolean;
   readonly #readyPollMs: number;
+  readonly #pageProfile: Readonly<FoundryPageProfileOptions> | null;
   readonly #log: (level: "warn", message: string, details?: unknown) => void;
   readonly #onCallResult: ((record: FoundryRuntimeCallResultRecord) => void) | null;
   #queue: Promise<unknown> = Promise.resolve();
@@ -336,12 +351,23 @@ export class FoundryRuntimeClient<Context = unknown> {
     if (!Number.isFinite(pollMs) || pollMs < 0) {
       throw new TypeError("readyPollMs must be a non-negative finite number");
     }
+    if (
+      options.pageProfile
+      && (typeof options.pageProfile !== "object"
+        || (options.pageProfile.isGamePath !== undefined
+          && typeof options.pageProfile.isGamePath !== "function")
+        || (options.pageProfile.isReady !== undefined
+          && typeof options.pageProfile.isReady !== "function"))
+    ) {
+      throw new TypeError("pageProfile.isGamePath and pageProfile.isReady must be functions");
+    }
 
     this.#transport = options.transport;
     this.#runtimeSource = source;
     this.#allowedActions = new Set(options.allowedActions ?? SAFE_DIRECT_ACTIONS);
     this.#requireGM = options.requireGM !== false;
     this.#readyPollMs = Math.floor(pollMs);
+    this.#pageProfile = options.pageProfile ?? null;
     this.#log = options.log ?? (() => undefined);
     this.#onCallResult = options.onCallResult ?? null;
   }
@@ -574,22 +600,35 @@ export class FoundryRuntimeClient<Context = unknown> {
         const state = inspected.state;
         lastState = state;
 
-        if (!isFoundryGamePath(state)) {
+        const isGamePath = this.#pageProfile?.isGamePath;
+        if (isGamePath ? !isGamePath(state) : !isFoundryGamePath(state)) {
           throw new FoundrySdkError(
             FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GAME,
-            "Foundry is not currently on a /game page",
-            { url: state.url ?? null, path: state.path ?? null },
+            isGamePath
+              ? `The page is not on the game path required by page profile "${this.#pageProfile?.id ?? "custom"}"`
+              : "Foundry is not currently on a /game page",
+            {
+              url: state.url ?? null,
+              path: state.path ?? null,
+              ...(this.#pageProfile?.id ? { profile: this.#pageProfile.id } : {}),
+            },
           );
         }
 
-        if (state.detected && state.ready && (state.gm || !this.#requireGM)) return context;
+        // A profile-provided readiness predicate replaces the default GM-aware
+        // check entirely (the profile owns its own auth/user semantics).
+        if (this.#pageProfile?.isReady) {
+          if (this.#pageProfile.isReady(state)) return context;
+        } else {
+          if (state.detected && state.ready && (state.gm || !this.#requireGM)) return context;
 
-        if (state.ready && !state.gm && this.#requireGM) {
-          throw new FoundrySdkError(
-            FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GM,
-            "The active Foundry user is not a GM",
-            { user: state.user ?? null, world: state.world ?? null },
-          );
+          if (state.ready && !state.gm && this.#requireGM) {
+            throw new FoundrySdkError(
+              FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GM,
+              "The active Foundry user is not a GM",
+              { user: state.user ?? null, world: state.world ?? null },
+            );
+          }
         }
       }
 
@@ -602,14 +641,14 @@ export class FoundryRuntimeClient<Context = unknown> {
       throw new FoundrySdkError(
         FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_DETECTED,
         "The /game page did not initialize as Foundry before the ready timeout",
-        { url: lastState.url ?? null },
+        { url: lastState.url ?? null, ...(this.#pageProfile?.id ? { profile: this.#pageProfile.id } : {}) },
       );
     }
     if (lastState) {
       throw new FoundrySdkError(
         FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_READY,
         "Foundry did not become ready before the ready timeout",
-        { world: lastState.world ?? null, readyTimeoutMs },
+        { world: lastState.world ?? null, readyTimeoutMs, ...(this.#pageProfile?.id ? { profile: this.#pageProfile.id } : {}) },
       );
     }
     throw new FoundrySdkError(

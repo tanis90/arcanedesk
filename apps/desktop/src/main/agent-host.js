@@ -1070,11 +1070,13 @@ export class AgentHost {
       label: "Open Foundry",
       description:
         "Open the Foundry panel in this window (chat stays as the left column, Foundry opens on the right). " +
+        "Also opens the ArcaneDesk mt-compat page (URL containing /user-files/compat/play.html) the same way; " +
+        "the response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
         "Idempotent: if the panel is already open on the same server the page is never re-navigated (a logged-in world session is protected). " +
         "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world).",
       parameters: Type.Object({
         url: Type.Optional(
-          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000. Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
+          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat page URL. Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
         ),
       }),
       execute: async (_toolCallId, params, signal) => {

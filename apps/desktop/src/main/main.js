@@ -3,9 +3,10 @@ import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, 
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectFoundryRuntime } from "./direct-foundry-runtime.js";
+import { DirectFoundryRuntime, PageProfileRoutedRuntime, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState } from "./foundry-web.js";
+import { PAGE_PROFILES, clientPageProfile, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
 import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
@@ -116,6 +117,15 @@ if (app.isPackaged || devUserDataOverride) {
 
 let mainWindow = null;
 let foundryTargetUrl = null;
+
+// 面板当前承载的页面档位(PAGE_PROFILES):随最近一次打开/加载的目标而定,
+// 是 runtime 路由(PageProfileRoutedRuntime)与会话语义(cookie 记忆/回填)的依据。
+// 不跟着页面当前 URL 抖 —— Keycloak 登录跳转期间 URL 离开 play.html,档位不变。
+let activeProfileId = /** @type {"foundry" | "mtcompat"} */ (PAGE_PROFILES.foundry.id);
+// mtcompat 的 PKCE/引导守卫:loadFoundryPage 导航成功后记录;120 秒内页面未 ready
+// 时,重复 foundry_open / F5 不再强制导航(否则授权码被丢掉、登录整轮重来)。
+const MT_COMPAT_LOGIN_WINDOW_MS = 120_000;
+let lastPanelNavigation = { at: 0, target: null, profileId: null };
 
 // 上次打开地址的持久化(启动时读,成功打开时写)。文件损坏按"没有记忆"处理,
 // 不抛错——首次打开的面板行为等价于全新安装。
@@ -591,6 +601,9 @@ async function showFoundryEmptyState() {
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
+ * mtcompat 档走同一状态机,但三点不同:目标 URL 原样加载(没有 /game 落点)、
+ * 不碰 Foundry session cookie(认证在 Keycloak + sessionStorage)、PKCE 登录/
+ * 世界引导未完成时重复 open 不强制导航,改报 login-in-progress。
  * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
@@ -609,8 +622,8 @@ async function openFoundryView(rawUrl) {
       error: err("err.panel.noTarget"),
       summary:
         "ERROR: no Foundry address to open yet — pass a url to foundry_open "
-        + "(e.g. http://localhost:30000 for the local server, or the deployed server URL); "
-        + "the panel has no implicit default",
+        + "(e.g. http://localhost:30000 for the local server, the deployed server URL, "
+        + "or the ArcaneDesk mt-compat page); the panel has no implicit default",
     };
   }
   let origin;
@@ -624,47 +637,131 @@ async function openFoundryView(rawUrl) {
     };
   }
 
+  const profile = resolvePageProfile(target) ?? PAGE_PROFILES.foundry;
+  activeProfileId = profile.id;
   foundryTargetUrl = target;
   rememberFoundryTarget(target);
 
   // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
-  // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
+  // panel_status / panel_layout 各发一次。下面只管页面档位专属的 cookie 与页面加载。
   const before = foundryView();
   panelSurfaces.showFoundry();
   const view = foundryView();
 
   if (before !== view) {
-    // 全新 view(首次打开或刚重建):有记住的登录态就先回填 cookie,直接进 /game,跳过 /join
-    const restored = await restoreSessionCookie(view, origin);
-    const initialUrl = restored ? new URL("/game", origin).href : target;
+    // 全新 view(首次打开或刚重建)。Foundry 档:有记住的登录态就先回填 cookie,
+    // 直接进 /game,跳过 /join;mtcompat 档:无 cookie 可管,目标 URL 原样加载。
+    let restored = false;
+    let initialUrl = target;
+    if (profile.sessionCookie) {
+      restored = await restoreSessionCookie(view, origin);
+      if (restored) initialUrl = new URL(profile.landingPath, origin).href;
+    }
     const loaded = await loadFoundryPage(initialUrl);
     if (!loaded.ok) return loaded;
-    dropIfSessionRejected(view, origin, restored);
-    void rememberSessionCookie(view, origin);
-    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+    if (profile.sessionCookie) {
+      dropIfSessionRejected(view, origin, restored);
+      void rememberSessionCookie(view, origin);
+    }
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
 
   const current = view.webContents.getURL();
-  if (sameOrigin(current, target)) {
+  // "已在目标页上"的判定按档位取:Foundry 同源即可;mtcompat 看 URL 是否匹配
+  // play.html 模式 —— Keycloak 挂在同一 origin 的 /auth 路径上,同源不构成证据。
+  const onTargetPage = profile.id === PAGE_PROFILES.mtcompat.id
+    ? matchPageProfile(current)?.id === profile.id
+    : sameOrigin(current, target);
+  if (onTargetPage) {
     // Same-origin idempotence only protects a real Foundry page. Chromium keeps
     // the failed URL after ERR_CONNECTION_RESET, so origin equality alone can
     // otherwise turn a blank/error page into a false-success tool result.
-    const inspected = await readFoundryPageState(view.webContents);
+    const inspected = await readFoundryPageState(view.webContents, { profileId: profile.id });
     if (inspected.ok && inspected.state?.detected) {
       trustFoundryPermissionOrigin(current);
-      return { ok: true, page: inspected.state, summary: await describePanel(current, inspected.state) };
+      return { ok: true, profile: profile.id, page: inspected.state, summary: await describePanel(current, inspected.state) };
     }
+    // 目标页在但未 detected:mtcompat 可能正停在登录/引导中,守卫窗口内不动它。
+    if (await authBounceInProgress(target)) return loginInProgressResult(target, inspected);
     const loaded = await loadFoundryPage(target);
     if (!loaded.ok) return loaded;
-    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
-  const restored = await restoreSessionCookie(view, origin);
-  const navUrl = restored ? new URL("/game", origin).href : target;
+  // 跨目标(跨源,或 mtcompat 离开了 play.html —— 例如停在 Keycloak 登录页):
+  // 先过 mtcompat 守卫,再按档位决定是否回填 cookie / 改写落点。
+  if (await authBounceInProgress(target)) return loginInProgressResult(target, null);
+  let navUrl = target;
+  if (profile.sessionCookie) {
+    const restored = await restoreSessionCookie(view, origin);
+    if (restored) navUrl = new URL(profile.landingPath, origin).href;
+    const loaded = await loadFoundryPage(navUrl);
+    if (!loaded.ok) return loaded;
+    dropIfSessionRejected(view, origin, restored);
+    void rememberSessionCookie(view, origin);
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
+  }
   const loaded = await loadFoundryPage(navUrl);
   if (!loaded.ok) return loaded;
-  dropIfSessionRejected(view, origin, restored);
-  void rememberSessionCookie(view, origin);
-  return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+  return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
+}
+
+/**
+ * URL → 面板档位,带 mtcompat 部署粘性:Keycloak 登录跳转期间页面 URL 会离开
+ * play.html(落到 /auth/... 或别的 host),仅按 URL 会掉回 Foundry 开放默认档。
+ * 与最近一次 mtcompat 导航同源的地址保持 mtcompat 档;打开流程的显式目标
+ * (openFoundryView)仍用 resolvePageProfile 判定,不受此影响。
+ */
+function resolvePanelProfile(url) {
+  const matched = matchPageProfile(url);
+  if (matched) return matched;
+  if (lastPanelNavigation.profileId === PAGE_PROFILES.mtcompat.id
+    && sameOrigin(lastPanelNavigation.target ?? "", url)) {
+    return PAGE_PROFILES.mtcompat;
+  }
+  return resolvePageProfile(url) ?? PAGE_PROFILES.foundry;
+}
+
+/**
+ * mtcompat 的 PKCE 登录/引导守卫:近期(MT_COMPAT_LOGIN_WINDOW_MS)确实由我们
+ * 导航到 mtcompat 目标、且页面尚未 ready 时,视为"登录/世界引导仍在进行"。
+ * 此时的强制导航(第二次 foundry_open、F5)会把页面从 Keycloak 授权流或
+ * play.html?code=... 的换码中途拉走,授权码作废、只能整轮重来。
+ * 不看调用方目标:当前页可能正停在 Keycloak 登录页,URL 已不匹配 play.html。
+ */
+async function mtCompatAuthBounceActive() {
+  if (lastPanelNavigation.profileId !== PAGE_PROFILES.mtcompat.id) return false;
+  if (Date.now() - lastPanelNavigation.at >= MT_COMPAT_LOGIN_WINDOW_MS) return false;
+  const contents = foundryView()?.webContents;
+  if (!contents || contents.isDestroyed()) return false;
+  const inspected = await readFoundryPageState(contents, { timeoutMs: 3_000, profileId: PAGE_PROFILES.mtcompat.id });
+  return !(inspected.ok && PAGE_PROFILES.mtcompat.isReady(inspected.state));
+}
+
+/**
+ * foundry_open 视角的守卫:在 mtCompatAuthBounceActive 之上还要求目标仍指向
+ * 同一个 mtcompat 部署(同源)。换服务器/换部署是显式意图,不拦。
+ */
+async function authBounceInProgress(target) {
+  if (resolvePageProfile(target)?.id !== PAGE_PROFILES.mtcompat.id) return false;
+  if (!sameOrigin(lastPanelNavigation.target ?? "", target)) return false;
+  return mtCompatAuthBounceActive();
+}
+
+/** 守卫生效时的 foundry_open/F5 结果:不动页面,把等待状态如实报给 agent/用户。 */
+function loginInProgressResult(target, inspected) {
+  const pageState = inspected?.ok ? JSON.stringify(inspected.state) : "(page state unavailable)";
+  return {
+    ok: true,
+    status: "login-in-progress",
+    profile: PAGE_PROFILES.mtcompat.id,
+    page: inspected?.ok ? inspected.state : null,
+    summary:
+      `panel is already waiting on ${target} (profile mtcompat) and the Keycloak login/world bootstrap has not finished; `
+      + `no navigation was forced. page=${pageState}. If a Keycloak login form is showing, ask the user to sign in `
+      + `directly in the panel (never handle credentials through model tools); afterwards the page exchanges the `
+      + `authorization code and bootstraps the world, which can take seconds. Poll with foundry_open or world_status; `
+      + `do not navigate away in the meantime.`,
+  };
 }
 
 async function loadFoundryPage(url) {
@@ -680,6 +777,8 @@ async function loadFoundryPage(url) {
     };
   }
   foundryTargetUrl = url;
+  const profile = resolvePanelProfile(url);
+  activeProfileId = profile.id;
   const failedPage = async () => {
     if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
     await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
@@ -696,7 +795,9 @@ async function loadFoundryPage(url) {
       summary: `ERROR: failed to load ${url}: ${error.message}`,
     };
   }
-  const inspected = await readFoundryPageState(contents);
+  // 导航成功才计入 mtcompat 守卫窗口:加载失败的目标不该被 login-in-progress 挡住重试。
+  lastPanelNavigation = { at: Date.now(), target: url, profileId: profile.id };
+  const inspected = await readFoundryPageState(contents, { profileId: profile.id });
   if (!inspected.ok) {
     await failedPage();
     return {
@@ -706,6 +807,12 @@ async function loadFoundryPage(url) {
     };
   }
   if (!inspected.state?.detected) {
+    if (!profile.sessionCookie) {
+      // mtcompat:未认证的访问会被 SPA 重定向到 Keycloak,登录页上没有 window.game,
+      // 但这不是"开错页面"—— 面板保持现状,把未就绪状态如实报回去,由
+      // authBounceInProgress 防止后续 open/F5 在登录中途强制导航。
+      return { ok: true, page: inspected.state };
+    }
     await failedPage();
     return {
       ok: false,
@@ -721,8 +828,11 @@ async function loadFoundryPage(url) {
 async function describePanel(url, knownState) {
   const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView()?.webContents);
   const pageState = inspected.ok ? JSON.stringify(inspected.state) : `(page not ready: ${inspected.error ?? inspected.status})`;
-  return `panel at ${url}; page=${pageState}. ` +
-    `runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.`;
+  const profileId = inspected.ok && inspected.state?.profile ? inspected.state.profile : activeProfileId;
+  const guidance = profileId === PAGE_PROFILES.mtcompat.id
+    ? "profile mtcompat authenticates through Keycloak inside the panel: while detected is false a login/redirection is still in progress — never submit or inspect credentials through model tools. After sign-in the page exchanges the authorization code and bootstraps the world (game.ready), which can take seconds; poll with foundry_open or world_status instead of re-navigating."
+    : "runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.";
+  return `panel at ${url}; page=${pageState}. ${guidance}`;
 }
 
 function readUiState() {
@@ -955,11 +1065,14 @@ app.whenReady().then(async () => {
       // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
       // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
       const view = panelSurfaces.ensureFoundryView();
-      const target = /^https?:/.test(view.webContents.getURL())
-        ? view.webContents.getURL()
-        : resolvedFoundryTarget();
+      const current = view.webContents.getURL();
+      const target = /^https?:/.test(current) ? current : resolvedFoundryTarget();
       // 空态页上的 F5:没有地址可刷,重落空态(顺带吃上最新主题/语言),不算错误。
       if (!target) return showFoundryEmptyState();
+      // mtcompat 登录/引导中:整页 reload 会丢掉 URL 上的授权码、把 PKCE 流拉回
+      // 起点;守卫窗口内 F5 改为如实报告,不动页面。当前页可能正停在 Keycloak
+      // 登录页(URL 已不匹配 play.html),所以用不看目标的 mtCompatAuthBounceActive。
+      if (await mtCompatAuthBounceActive()) return loginInProgressResult(resolvedFoundryTarget() ?? target, null);
       return loadFoundryPage(target);
     },
     // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
@@ -979,10 +1092,39 @@ app.whenReady().then(async () => {
     telemetry = null;
     console.log("[telemetry] initialization failed; continuing without telemetry:", error?.message ?? error);
   }
-  foundryRuntime = new DirectFoundryRuntime({
-    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
-    getWebContents: () => foundryView()?.webContents ?? null,
-    onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+  // 页面档位感知的 runtime:Foundry 档用 SDK 出厂 runtime 源与 preflight 语义
+  // (行为与单实例时代完全一致);mtcompat 档注入自定义 runtime 源与 profile 覆盖,
+  // 按最近打开目标的档位路由(activeProfileId)。
+  const mtRuntimeUserFile = configPath("mt-agent-runtime.js");
+  const mtRuntimeBundledFile = path.join(__dirname, "..", "..", "runtime", "mt-agent-runtime.js");
+  const mtRuntimeSource = resolveMtAgentRuntimeSource({
+    userFile: mtRuntimeUserFile,
+    bundledFile: mtRuntimeBundledFile,
+    log: message => console.log(message),
+  });
+  if (mtRuntimeSource) {
+    console.log(`[mt-runtime] using ${mtRuntimeSource.origin} runtime source: ${mtRuntimeSource.file}`);
+  }
+  foundryRuntime = new PageProfileRoutedRuntime({
+    foundry: new DirectFoundryRuntime({
+      allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+      getWebContents: () => foundryView()?.webContents ?? null,
+      onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+    }),
+    mtcompat: mtRuntimeSource ? new DirectFoundryRuntime({
+      allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+      runtimeSource: mtRuntimeSource.source,
+      pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+      // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
+      inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
+      getWebContents: () => foundryView()?.webContents ?? null,
+      onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+    }) : null,
+    getActiveProfileId: () => activeProfileId,
+    mtUnavailableMessage:
+      `The mt-compat page runtime is not installed: neither ${mtRuntimeUserFile} nor the bundled `
+      + `${mtRuntimeBundledFile} is present. Foundry pages keep working; mt-compat actions are unavailable until the runtime file is delivered.`,
+    log: message => console.log(message),
   });
 
   const secretStorage = new SecretStorage(safeStorage);

@@ -29,6 +29,10 @@ key
 *.pem
 .local-secrets/
 runtime/
+# apps/desktop/runtime/ 是随包分发的 mt-agent-runtime.js 源文件目录(非本地运行状态):
+# bundled 默认 runtime 要进 git,逐级解除上面的 runtime/ 忽略。
+!apps/desktop/runtime/
+!apps/desktop/runtime/**
 
 # Editor and OS state
 .idea/

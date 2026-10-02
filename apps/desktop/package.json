@@ -67,6 +67,7 @@
       "scripts/archive.mjs",
       "scripts/archive-zip.mjs",
       "distribution/community-distribution.json",
+      "runtime/**/*",
       "generated/desktop-release.json",
       "generated/region.json",
       "generated/renderer-assets/**/*",

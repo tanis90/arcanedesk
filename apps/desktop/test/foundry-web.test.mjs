@@ -66,10 +66,78 @@ test("Foundry page state reports direct runtime readiness without module state",
 
   assert.deepEqual(await readFoundryPageState(webContents), {
     ok: true,
-    state: { detected: true, path: "/game", ready: true, gm: true, runtimeReady: true },
+    state: { detected: true, path: "/game", ready: true, gm: true, runtimeReady: true, profile: "foundry" },
   });
   assert.match(expression, /runtimeReady/);
   assert.doesNotMatch(expression, /arcane-agent-bridge|moduleActive/);
+});
+
+test("foundry page state is decorated with the foundry profile and keeps in-page verdicts", async () => {
+  const webContents = new FakeWebContents(async () => ({
+    url: "http://localhost:30000/join",
+    path: "/join",
+    detected: true,
+    ready: false,
+    gm: false,
+    runtimeReady: false,
+    hasGame: true,
+  }));
+  const { ok, state } = await readFoundryPageState(webContents);
+  assert.equal(ok, true);
+  assert.equal(state.profile, "foundry");
+  assert.equal(state.detected, true); // Foundry 档:页面内结论原样保留
+  assert.equal(state.runtimeReady, false);
+});
+
+test("mtcompat page state resolves by URL and recomputes detection/readiness from raw signals", async () => {
+  const mtState = {
+    url: "https://49.7.212.177:30002/user-files/compat/play.html",
+    path: "/user-files/compat/play.html",
+    detected: false, // Foundry 公式(无 join/setup/标题)对 mtcompat 不适用
+    ready: false,
+    gm: false,
+    user: null,
+    world: null,
+    hasGame: true, // pre-bootstrap:window.game 已存在
+    runtimeReady: false,
+  };
+  const preBootstrap = new FakeWebContents(async () => ({ ...mtState }));
+  const pre = await readFoundryPageState(preBootstrap);
+  assert.equal(pre.ok, true);
+  assert.equal(pre.state.profile, "mtcompat");
+  assert.equal(pre.state.detected, true); // 按档位重算:有 window.game 即检测通过
+  assert.equal(pre.state.runtimeReady, false);
+
+  const bootstrapped = new FakeWebContents(async () => ({
+    ...mtState,
+    ready: true,
+    user: "gm",
+    world: "curse-of-strahd",
+  }));
+  const ready = await readFoundryPageState(bootstrapped);
+  assert.equal(ready.state.profile, "mtcompat");
+  assert.equal(ready.state.detected, true);
+  assert.equal(ready.state.runtimeReady, true);
+});
+
+test("a sticky profileId decorates pages whose URL left the profile path (Keycloak hop)", async () => {
+  const keycloak = new FakeWebContents(async () => ({
+    url: "https://49.7.212.177:30002/auth/realms/mt/protocol/openid-connect/auth",
+    path: "/auth/realms/mt/protocol/openid-connect/auth",
+    detected: false,
+    ready: false,
+    hasGame: false,
+    runtimeReady: false,
+  }));
+  // 不带 profileId:URL 不匹配任何模式 → Foundry 开放默认档,页面内结论保留。
+  const byUrl = await readFoundryPageState(keycloak);
+  assert.equal(byUrl.state.profile, "foundry");
+  assert.equal(byUrl.state.detected, false);
+  // 带 profileId(打开流程知道目标是什么档):登录跳转页归 mtcompat 档解释。
+  const sticky = await readFoundryPageState(keycloak, { profileId: "mtcompat" });
+  assert.equal(sticky.state.profile, "mtcompat");
+  assert.equal(sticky.state.detected, false);
+  assert.equal(sticky.state.runtimeReady, false);
 });
 
 test("page tools execute concurrently and use the current view", async () => {
