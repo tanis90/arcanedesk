@@ -1,7 +1,7 @@
-// mt-agent-runtime v0.4.0
+// mt-agent-runtime v0.5.0
 (async (action, args, options) => {
     // 握手常量（内联，勿引用模块作用域；与文件头 RUNTIME 保持同步）
-    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.4.0", protocolVersion: 2 };
+    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.5.0", protocolVersion: 2 };
     const g = globalThis;
 
     if (typeof action !== "string" || !action) {
@@ -9,7 +9,8 @@
     }
     if (!["worldInfo", "doctor", "staticContext", "playContext", "battleContext", "turnContext",
       "actorRead", "sceneRead", "contentSearch", "compendiumBrowse",
-      "actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply", "conditionsSet"].includes(action)) {
+      "actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply", "conditionsSet",
+      "executeTurn", "executeAction"].includes(action)) {
       throw new Error("ACTION_UNKNOWN: " + action);
     }
     // 原版 requireReady 同序：game 在位 → game.ready → GM 门（只读集，门保持 M1 语义）
@@ -134,13 +135,22 @@
         && activity?.midiProperties?.automationOnly !== true
         && activity?.isOverTimeFlag !== true;
     };
-    // availability 直报：az 的 isActionAvailableV2/actionBlockV2 全部依赖 arcane 模块
-    // availability flags / ActiveEffect 层——两者在 M2 边界外（无模块、effects 空），
-    // 语义退化为「无门槛 = 可用」，见文件头降级声明。
+    // availability/block 词汇：az isActionAvailableV2/actionBlockV2 移植（arcane flags 纯
+    // 数据面；本桌无作者 → 恒默认值，见文件头降级声明）
     const executableActionCandidatesV2 = function executableActionCandidatesV2(actor) {
       return collectActionCandidatesV2(actor).filter((candidate) =>
-        isAgentCallableActivityV2(candidate.activity));
+        isAgentCallableActionV2(candidate.item, candidate.activity)
+        && isActionAvailableV2(actor, candidate.activity)
+        && !actionBlockV2(actor, candidate.item, candidate.activity));
     };
+    function playActiveBuffRiderIds(actor) {
+      const moduleId = "arcane-dnd5e-2014-automation";
+      const activeArtifacts = new Set(collectionValues(actor?.effects).filter((effect) => effect?.disabled !== true)
+        .flatMap((effect) => collectionValues(effect.flags?.[moduleId]?.compilerArtifactIds)));
+      return [...new Set(collectionValues(actor?.items).filter((item) => item?.type === "spell")
+        .filter((item) => activeArtifacts.has(item.flags?.[moduleId]?.declaredActiveBuff?.requiredArtifactId))
+        .map((item) => cleanText(item.flags?.[moduleId]?.declaredActiveBuff?.identifier ?? item.system?.identifier)).filter(Boolean))];
+    }
     function concentrationNameV2(actor) {
       // M4 起读真 effects（statuses 派生集）；无专注效果时 null
       for (const effect of collectionValues(actor?.effects)) {
@@ -258,7 +268,10 @@
       if (damage.length) parts.push(damage.join(" + "));
       return parts.join("; ");
     }
-    function actionDefinitionV2(actor, entry) {
+    function actionDefinitionV2(actor, entry, includeInactiveBuffs = false) {
+      // az 第 3 参 includeInactiveBuffs：static 手册（heavy）传 true——把未激活的 buff 骑手
+      // 也列进 declaredRiders（带 requiresArtifactId 供 DM 预判）；执行路径不传（只认已激活）
+      const declaredRiders = declaredRiderOptionsV2(actor, entry, includeInactiveBuffs);
       return {
         id: actionIdV2(actor?.uuid, entry.itemId, entry.activityId),
         itemId: entry.itemId ?? null,
@@ -272,6 +285,7 @@
           range: entry.range?.value ?? null,
         },
         input: entry.inputContract ?? {},
+        ...(declaredRiders.length ? { declaredRiders } : {}),
       };
     }
     // 配置告警（az actionConfigProblemV2 的无模块子集：只查模板面，arcane interaction
@@ -290,7 +304,8 @@
       const timing = activity?.activation?.type ?? item?.system?.activation?.type;
       return !["reaction", "minute", "hour", "day", "round", "legendary", "mythic"].includes(timing);
     }
-    // 叙事法术槽位（az playNarrativeCost 的单职业直读版，见文件头降级声明）
+    // 叙事法术槽位（az playNarrativeCost：M5 起经 resolveNativeSpellSlotConsumption——
+    // CONFIG.DND5E.spellcasting 键位优先，缺席回退单职业直读，见文件头）
     function playNarrativeCost(item, activity, actor, spellLevel) {
       if (item?.type !== "spell") throw new Error("Narrative execution requires a spell");
       const activation = activity?.activation?.type ?? item.system?.activation?.type;
@@ -306,20 +321,21 @@
       }
       const level = Number(item.system?.level);
       if (!Number.isInteger(level) || level < 0 || level > 9) throw new Error("Unknown spell level");
-      const method = item.system?.method;
+      const method = spellMethodOf(item);
       if (!method || !["spell", "pact", "atwill"].includes(method)) throw new Error("Unknown spell resource method");
       const consumes = activity?.consumption?.spellSlot ?? (level > 0 && method !== "atwill");
       if (!consumes || level === 0) {
         if (spellLevel !== undefined) throw new Error("No spell slot to upcast");
         return null;
       }
-      const key = "spell" + level;
-      const pool = actor?.system?.spells?.[key];
-      if (!pool || !Number.isFinite(pool.value) || !Number.isFinite(pool.max)) throw new Error("Unknown spell slot pool");
-      return { key, value: pool.value, max: pool.max };
+      const slot = resolveNativeSpellSlotConsumption(item, { consumption: { spellSlot: true } }, actor,
+        g.CONFIG?.DND5E?.spellcasting, spellLevel);
+      if (!slot || !Number.isFinite(slot.value) || !Number.isFinite(slot.max)) throw new Error("Unknown spell slot pool");
+      return slot;
     }
-    // 动作手册：activity 目录 + 无 activity 法术的叙事条目（az playTokenActions 语义；
-    // declaredRider 词汇依赖 arcane 模块，恒省略）
+    // 动作手册：activity 目录 + 无 activity 法术的叙事条目（az playTokenActions 语义）。
+    // M5：activity 条目加 az 的 isAgentCallableActionV2 契约过滤（unsupported 契约不入册，
+    // 与 availableActionIds/executeTurn 寻址同一空间）；heavy 手册带未激活 buff 骑手词汇
     function playTokenActions(doc) {
       const actor = doc.actor;
       if (!actor) return [];
@@ -328,9 +344,10 @@
         if (!entry.activityId || entry.inputContract?.supported !== true) continue;
         const item = findItem(actor, entry.itemId);
         const activity = item ? findActivity(item, entry.activityId) : null;
+        if (!item || !activity || !isAgentCallableActionV2(item, activity)) continue;
         if (!playTimingSupported(item, activity)) continue;
-        const definition = actionDefinitionV2(actor, entry);
-        const problem = item && activity ? actionConfigProblemV2(item, activity) : null;
+        const definition = actionDefinitionV2(actor, entry, true);
+        const problem = actionConfigProblemV2(item, activity);
         definitions.push({ ...definition, activityId: entry.activityId,
           ...(problem ? { warnings: [problem] } : {}) });
       }
@@ -431,7 +448,7 @@
           concentration: actor ? concentrationNameV2(actor) : null, visible: !doc.hidden,
           defeated: !!collectionValues(focus.combat?.combatants).find((entry) => entry.tokenId === doc.id)?.defeated,
           availableActionIds: actor ? executableActionCandidatesV2(actor).map((candidate) => candidate.actionId) : [],
-          activeBuffRiderIds: [] };
+          activeBuffRiderIds: actor ? playActiveBuffRiderIds(actor) : [] };
       });
       // 指纹只哈希身份与能力结构，绝不哈希易变的 uses/slots/HP/conditions
       const structure = focus.tokens.map((doc) => [doc.id, doc.name, doc.disposition,
@@ -472,10 +489,11 @@
             const definition = actionDefinitionV2(actor, entry);
             const item = findItem(actor, entry.itemId);
             const entryActivity = item ? findActivity(item, entry.activityId) : null;
-            const configProblem = item && entryActivity ? actionConfigProblemV2(item, entryActivity) : null;
+            if (!item || !entryActivity || !isAgentCallableActionV2(item, entryActivity)) return null;
+            const configProblem = actionConfigProblemV2(item, entryActivity);
             if (configProblem) definition.warnings = [configProblem];
             return definition;
-          }),
+          }).filter(Boolean),
         });
       }
       return { schema: "arcane.turn.v2", battleId: combat.id, combatants,
@@ -1889,6 +1907,1563 @@
     }
 
     // =========================================================================
+    // M5 executeTurn / executeAction（az executeTurnV2Data / executeActionData 逐段移植；
+    // 语义规格 = az packages/foundry-sdk/test/execute-action.test.mjs，平价线
+    // tools/stage8-m5-parity.mjs）。相对 az 原版的 shim 适配/降级（逐条）：
+    //   - native summon 不移植（一期边界外，M6 候选；见文件头）——performUseAction 内 az
+    //     的 summon 终端 API/hooks/flight 控制整块不存在；summon 类 activity 在
+    //     executeAction 前置 CAPABILITY_UNAVAILABLE、在 executeTurn 不可寻址。
+    //   - usageConfig 不带 midiOptions.targetsToUse：我们捆绑的 midi 13.x
+    //     completeActivityUse 对 Set 调 .map（TypeError）——targetUuids 单路传入，midi
+    //     自行归一（az 双路语义等价）。
+    //   - performUseAction 的源 actor 取 placeable.actor ?? tokenDocument 面（shim 的
+    //     canvas placeable 不总带 actor 代理）。
+    //   - interaction/choiceDefault/nativeSummon marker/selectionConstraints 词汇不解析
+    //     （flags 在本桌无作者）——deriveActivityInputContract 取 az 的 dnd5e 原生推导
+    //     分支，allocation 输入恒拒（az 无 flags 时同码同文案）。
+    //   - az 的 thrown-attack 对话框抑制（suppressDefaultThrownAttackDialog）保留——
+    //     纯 dnd5e 数据面（properties "thr" + midiProperties.forceRollDialog）。
+    //   - executeAction 的焦点与 contextRef 同源（本 runtime 读面 M2 目标集口径）；
+    //     az 原版无战斗焦点=全场景 token（见文件头 playFocus 注释）。
+    //   - playTimingSupported 沿用 M2 口径（比 az 多拒 legendary/mythic——az 允许）。
+    // =========================================================================
+    function isAgentCallableActionV2(item, activity) {
+      return isAgentCallableActivityV2(activity)
+        && deriveActivityInputContract(item, activity).supported === true;
+    }
+    // az deriveActivityInputContract 的无 arcane-interaction 子集：模板/自身/选目标/不支持
+    // 四路 dnd5e 原生推导 + required/optional/target/template/range 全字段（M2 的
+    // deriveActivityInputContractLite 继续承担 staticContext/battleContext 输出面）
+    function deriveActivityInputContract(item, activity) {
+      const text = (value) => String(value ?? "").trim();
+      const itemTarget = item?.system?.target ?? {};
+      const activityTarget = activity?.target ?? {};
+      const rawActivityTarget = activity?._source?.target ?? activityTarget;
+      const activityOverridesTarget = activityTarget?.override === true || rawActivityTarget?.override === true;
+      const target = activityOverridesTarget ? activityTarget : itemTarget;
+      const rawTarget = activityOverridesTarget ? rawActivityTarget : (item?._source?.system?.target ?? itemTarget);
+      const itemRange = item?.system?.range ?? {};
+      const activityRange = activity?.range ?? {};
+      const range = activityRange?.override === true ? activityRange : itemRange;
+      const template = target?.template ?? {};
+      const affects = target?.affects ?? {};
+      const rawAffectsCount = rawTarget?.affects?.count;
+      const rawAffectsCountText = typeof rawAffectsCount === "string" ? rawAffectsCount.trim() : "";
+      const affectsCountFormula = rawAffectsCountText && !Number.isFinite(Number(rawAffectsCountText))
+        ? rawAffectsCountText : null;
+      const templateType = text(template?.type);
+      const affectsType = text(affects?.type);
+      const activityType = text(activity?.type);
+      const rangeUnits = text(range?.units);
+      let runtimeTargeting = "unsupported";
+      let source = "dnd5e-target";
+      if (templateType) runtimeTargeting = "template";
+      else if (affectsType === "self") runtimeTargeting = "self";
+      else if (["creature", "ally", "enemy", "token"].includes(affectsType)) runtimeTargeting = "tokens";
+      else if (["space", "object", "item", "none"].includes(affectsType)) {
+        // az：这些目标类型需要 token id 之外的输入面——协议未开放前保持不支持
+        runtimeTargeting = "unsupported";
+      } else if (rangeUnits === "self") {
+        runtimeTargeting = "self";
+        source = "dnd5e-range";
+      } else if (["attack", "save", "damage", "heal"].includes(activityType)) {
+        runtimeTargeting = "tokens";
+        source = "activity-type-fallback";
+      }
+      let origin = null;
+      let placement = null;
+      if (runtimeTargeting === "template") {
+        // az：midi 只自动放置 self 的半径/方半径延展；其余形状要人选方向/落点
+        if (rangeUnits === "self" && ["radius", "squareRadius"].includes(templateType)) {
+          origin = "self-centered";
+          placement = "self";
+        } else if (rangeUnits === "self") {
+          origin = "self-directional";
+          placement = "manual";
+        } else {
+          origin = "manual-point";
+          placement = "manual";
+        }
+      }
+      const mode = runtimeTargeting === "tokens" ? "selected-targets"
+        : runtimeTargeting === "template" ? (placement === "self" ? "self" : "placed-template")
+          : runtimeTargeting;
+      const supported = ["selected-targets", "placed-template", "self"].includes(mode);
+      return {
+        version: 2,
+        mode,
+        source,
+        supported,
+        execution: mode === "placed-template" ? "wait-for-human" : supported ? "immediate" : "not-implemented",
+        required: mode === "selected-targets" ? ["targetTokenIds"] : [],
+        optional: activityType === "attack" ? ["input.attackRollMode"] : [],
+        selections: [],
+        resolution: null,
+        selectionConstraints: [],
+        choiceDefault: null,
+        target: {
+          type: affectsType,
+          count: affects?.count ?? null,
+          countFormula: affectsCountFormula,
+          choice: affects?.choice ?? false,
+          special: affects?.special ?? "",
+        },
+        template: templateType
+          ? {
+            type: templateType,
+            count: template?.count ?? 1,
+            size: template?.size ?? null,
+            width: template?.width ?? null,
+            height: template?.height ?? null,
+            units: template?.units ?? rangeUnits ?? "",
+            contiguous: template?.contiguous ?? false,
+            origin,
+            placement,
+          }
+          : null,
+        range: {
+          value: range?.value ?? null,
+          long: range?.long ?? null,
+          units: rangeUnits,
+          special: range?.special ?? "",
+        },
+      };
+    }
+    function resolveRequiredSelectionsForContract(useArgs, inputContract) {
+      const definitions = Array.isArray(inputContract?.selections) ? inputContract.selections : [];
+      const provided = useArgs?.selections;
+      if (provided !== undefined && (!provided || typeof provided !== "object" || Array.isArray(provided))) {
+        throw new Error("selections must be an object");
+      }
+      const values = provided ?? {};
+      const known = new Set(definitions.map((definition) => String(definition?.id ?? "")));
+      const unknown = Object.keys(values).filter((key) => !known.has(key));
+      if (unknown.length > 0) throw new Error("Unknown selections: " + unknown.join(", "));
+      const resolved = {};
+      for (const definition of definitions) {
+        const id = String(definition?.id ?? "");
+        const value = values[id];
+        if (definition?.required === true && typeof value !== "string") {
+          throw new Error("Missing required selection input.selections." + id);
+        }
+        if (value === undefined) continue;
+        const allowed = Array.isArray(definition?.values) ? definition.values.map((entry) => String(entry?.value ?? "")) : [];
+        if (!allowed.includes(value)) throw new Error("Invalid selection input.selections." + id + ": " + String(value));
+        resolved[id] = value;
+      }
+      return resolved;
+    }
+    function resolveTargetSpecForContract(useArgs, inputContract) {
+      const values = (value) => {
+        if (value === undefined || value === null) return [];
+        return Array.isArray(value) ? value : [value];
+      };
+      const legacyTokenIds = values(useArgs?.targetTokenIds).map(String).filter(Boolean);
+      const provided = useArgs?.targetSpec;
+      if (provided !== undefined && (!provided || typeof provided !== "object" || Array.isArray(provided))) {
+        throw new Error("targetSpec must be an object");
+      }
+      const contractMode = String(inputContract?.mode ?? "unknown");
+      const hasSelfPlacedTemplate = !!inputContract?.template?.type && inputContract?.template?.placement === "self";
+      const runtimeMode = contractMode === "selected-targets" ? "tokens"
+        : contractMode === "placed-template" || (contractMode === "self" && hasSelfPlacedTemplate) ? "template"
+          : contractMode;
+      let targetSpec = provided ? { ...provided } : null;
+      if (!targetSpec && legacyTokenIds.length) {
+        if (contractMode !== "selected-targets") {
+          throw new Error("targetTokenIds are only accepted for selected-targets actions");
+        }
+        targetSpec = { mode: "tokens", tokenIds: legacyTokenIds, legacy: true };
+      }
+      if (!targetSpec && runtimeMode === "template") {
+        targetSpec = { mode: "template", placement: inputContract?.template?.placement ?? "manual" };
+      }
+      if (!targetSpec && runtimeMode === "self") targetSpec = { mode: "self" };
+      if (!targetSpec) throw new Error("targetTokenIds are required for selected-targets actions");
+      const requestedRawMode = String(targetSpec.mode ?? "").trim();
+      const requestedMode = requestedRawMode === "selected-targets" ? "tokens"
+        : requestedRawMode === "placed-template" ? "template" : requestedRawMode;
+      const gmDeclaredTemplateTargets = contractMode === "placed-template"
+        && requestedMode === "tokens" && targetSpec.geometry === "gm-declared";
+      if (requestedMode !== runtimeMode && !gmDeclaredTemplateTargets) {
+        throw new Error("targetSpec.mode " + requestedRawMode + " does not match action inputContract.mode " + contractMode);
+      }
+      if (requestedMode === "tokens") {
+        const tokenIds = values(targetSpec.tokenIds ?? legacyTokenIds).map(String).filter(Boolean);
+        const defaultPolicy = targetSpec.defaultPolicy;
+        if (!tokenIds.length && !defaultPolicy) {
+          throw new Error("targetSpec.tokenIds must contain at least one token id");
+        }
+        return {
+          mode: "tokens",
+          tokenIds,
+          geometry: targetSpec.geometry ?? (targetSpec.legacy ? "legacy-explicit" : "explicit"),
+          defaultPolicy: defaultPolicy ? { ...defaultPolicy } : null,
+          placement: null,
+          createMeasuredTemplate: false,
+          bypassedTemplateGeometry: gmDeclaredTemplateTargets,
+          inputMode: contractMode,
+        };
+      }
+      if (requestedMode === "template") {
+        if (legacyTokenIds.length) {
+          throw new Error("targetTokenIds are forbidden for template placement; use targetSpec.mode=template or an explicit geometry=gm-declared bypass");
+        }
+        const placement = String(targetSpec.placement ?? inputContract?.template?.placement ?? "manual");
+        if (!["manual", "self"].includes(placement)) throw new Error("targetSpec.placement must be manual or self");
+        return {
+          mode: "template",
+          tokenIds: [],
+          geometry: "measured-template",
+          placement,
+          createMeasuredTemplate: true,
+          bypassedTemplateGeometry: false,
+          inputMode: contractMode,
+        };
+      }
+      if (requestedMode === "self") {
+        if (legacyTokenIds.length) throw new Error("targetTokenIds are forbidden for self actions");
+        return {
+          mode: "self",
+          tokenIds: ["self"],
+          geometry: "self",
+          placement: null,
+          createMeasuredTemplate: false,
+          bypassedTemplateGeometry: false,
+          inputMode: contractMode,
+        };
+      }
+      throw new Error("CLI target mode " + requestedMode + " is not implemented; inspect inputContract before executing");
+    }
+    function resolveDefaultChosenTokens(sourceToken, inputContract) {
+      const policy = inputContract?.choiceDefault;
+      if (!policy || policy.cardinality !== "any") return [];
+      const sourceDoc = tokenDocument(sourceToken);
+      const sourceDisposition = Number(sourceDoc?.disposition ?? 0);
+      const rangeValue = Number(inputContract?.range?.value);
+      const rangeUnits = cleanText(inputContract?.range?.units);
+      const maxDistance = Number.isFinite(rangeValue) && rangeValue > 0
+        ? rangeUnits === "mi" ? rangeValue * 5280 : rangeValue : null;
+      const midi = g.MidiQOL;
+      const canSee = (from, to) => {
+        if (typeof midi?.canSee === "function") return midi.canSee(from, to) !== false;
+        return tokenDocument(to)?.hidden !== true;
+      };
+      return sceneTokens().filter((token) => {
+        const doc = tokenDocument(token);
+        if (!doc?.id || !token?.actor) return false;
+        const isSelf = doc.id === sourceDoc?.id;
+        if (isSelf && policy.includeSelf !== true) return false;
+        const disposition = Number(doc.disposition ?? 0);
+        if (sourceDisposition === 0 || disposition === 0) return false;
+        if (policy.targetPolicy === "same-disposition-all" && disposition !== sourceDisposition) return false;
+        if (policy.targetPolicy === "opposing-disposition-all" && Math.sign(disposition) === Math.sign(sourceDisposition)) return false;
+        if (!["same-disposition-all", "opposing-disposition-all"].includes(policy.targetPolicy)) return false;
+        if (maxDistance !== null && tokenWithinDistance(sourceToken, token, maxDistance) !== true) return false;
+        if (policy.requiresSourceCanSeeTarget === true && !canSee(sourceToken, token)) return false;
+        if (policy.requiresTargetCanSeeSource === true && !canSee(token, sourceToken)) return false;
+        return true;
+      });
+    }
+    function materializeDefaultTargetResolution(sourceToken, inputContract, targetResolution) {
+      if (targetResolution?.mode !== "tokens" || !targetResolution?.defaultPolicy) return targetResolution;
+      const tokens = resolveDefaultChosenTokens(sourceToken, inputContract);
+      if (!tokens.length) throw new Error("No eligible default targets");
+      return {
+        ...targetResolution,
+        tokenIds: tokens.map((token) => tokenDocument(token)?.id).filter(Boolean),
+        geometry: "default-choice",
+      };
+    }
+    function resolveActivityTargetCountLimit(item, inputContract, requestedSpellLevel) {
+      const positiveFinite = (value) => {
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? number : null;
+      };
+      const preparedCount = positiveFinite(inputContract?.target?.count);
+      const formula = String(inputContract?.target?.countFormula ?? "").trim();
+      if (!formula) return preparedCount;
+      const baseLevel = Number(item?.system?.level);
+      const explicitLevel = Number(requestedSpellLevel);
+      const itemLevel = requestedSpellLevel !== undefined && Number.isInteger(explicitLevel)
+        ? explicitLevel : baseLevel;
+      if (!Number.isInteger(itemLevel) || itemLevel < 0) return preparedCount;
+      const expression = formula.replace(/@item\.level\b/g, String(itemLevel)).replace(/\s+/g, "");
+      const tokens = expression.match(/\d+(?:\.\d+)?|[()+\-*/]/g) ?? [];
+      if (!expression || tokens.join("") !== expression) return preparedCount;
+      let position = 0;
+      function parsePrimary() {
+        const token = tokens[position];
+        if (token === "(") {
+          position += 1;
+          const value = parseExpression();
+          if (tokens[position] !== ")") return Number.NaN;
+          position += 1;
+          return value;
+        }
+        if (!token || !/^\d+(?:\.\d+)?$/.test(token)) return Number.NaN;
+        position += 1;
+        return Number(token);
+      }
+      function parseUnary() {
+        const token = tokens[position];
+        if (token === "+" || token === "-") {
+          position += 1;
+          const value = parseUnary();
+          return token === "-" ? -value : value;
+        }
+        return parsePrimary();
+      }
+      function parseProduct() {
+        let value = parseUnary();
+        while (tokens[position] === "*" || tokens[position] === "/") {
+          const operator = tokens[position];
+          position += 1;
+          const right = parseUnary();
+          value = operator === "*" ? value * right : value / right;
+        }
+        return value;
+      }
+      function parseExpression() {
+        let value = parseProduct();
+        while (tokens[position] === "+" || tokens[position] === "-") {
+          const operator = tokens[position];
+          position += 1;
+          const right = parseProduct();
+          value = operator === "+" ? value + right : value - right;
+        }
+        return value;
+      }
+      const resolved = parseExpression();
+      if (position !== tokens.length || !Number.isFinite(resolved) || resolved <= 0) return preparedCount;
+      return Math.floor(resolved);
+    }
+    function measureTokenDistanceWithFoundry(runtime, fromToken, toToken) {
+      if (!fromToken || !toToken) return null;
+      const midi = runtime?.MidiQOL;
+      if (typeof midi?.getDistance === "function") {
+        try {
+          const distance = Number(midi.getDistance(fromToken, toToken, { wallsBlock: false, includeCover: false }));
+          if (Number.isFinite(distance)) return distance >= 0 ? distance : null;
+        } catch { /* 落到网格测量 */ }
+      }
+      const canvas = runtime?.canvas;
+      const grid = canvas?.grid;
+      if (typeof grid?.measurePath !== "function") return null;
+      const centerOf = (tokenLike) => {
+        const document = tokenLike?.document ?? tokenLike;
+        const placeable = tokenLike?.center ? tokenLike
+          : document?.object?.center ? document.object
+            : canvas?.tokens?.get?.(document?.id) ?? null;
+        const centerX = Number(placeable?.center?.x);
+        const centerY = Number(placeable?.center?.y);
+        if (Number.isFinite(centerX) && Number.isFinite(centerY)) {
+          return { x: centerX, y: centerY, elevation: Number(document?.elevation ?? 0) };
+        }
+        const gridSize = Number(canvas?.dimensions?.size ?? canvas?.scene?.grid?.size);
+        const x = Number(document?.x);
+        const y = Number(document?.y);
+        if (!Number.isFinite(gridSize) || gridSize <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+        return {
+          x: x + (Number(document?.width ?? 1) * gridSize) / 2,
+          y: y + (Number(document?.height ?? 1) * gridSize) / 2,
+          elevation: Number(document?.elevation ?? 0),
+        };
+      };
+      const from = centerOf(fromToken);
+      const to = centerOf(toToken);
+      if (!from || !to) return null;
+      try {
+        const distance = Number(grid.measurePath([from, to], {})?.distance);
+        return Number.isFinite(distance) && distance >= 0 ? distance : null;
+      } catch { return null; }
+    }
+    function isTokenWithinDistanceWithFoundry(runtime, fromToken, toToken, maxDistance) {
+      if (!fromToken || !toToken || !Number.isFinite(maxDistance) || maxDistance < 0) return null;
+      const midi = runtime?.MidiQOL;
+      if (typeof midi?.checkDistance === "function") {
+        try {
+          const result = midi.checkDistance(fromToken, toToken, maxDistance, { wallsBlock: false, includeCover: false });
+          if (typeof result === "boolean") return result;
+        } catch { /* 落到共享距离适配器 */ }
+      }
+      const distance = measureTokenDistanceWithFoundry(runtime, fromToken, toToken);
+      return distance === null ? null : distance <= maxDistance;
+    }
+    function tokenWithinDistance(fromToken, toToken, maxDistance) {
+      return isTokenWithinDistanceWithFoundry(g, fromToken, toToken, maxDistance);
+    }
+    function checkActivityTargetRangeWithFoundry(runtime, activity, sourceToken, targetTokens) {
+      const checkActivityRange = runtime?.MidiQOL?.checkActivityRange;
+      if (typeof checkActivityRange !== "function") return "unavailable";
+      try {
+        const result = checkActivityRange(activity, sourceToken, new Set(targetTokens), false)?.result;
+        if (result === "fail") return "invalid";
+        if (result === "normal" || result === "dis") return "valid";
+      } catch { /* 调用方落到低层距离适配器 */ }
+      return "unavailable";
+    }
+    // az validateTargetResolutionForContract 的无 selectionConstraints 子集（词汇依赖
+    // arcane interaction flags，本桌无作者——az 无 flags 时同行为）：数量上限 + midi 射程
+    // 检查 + 合同射程回退（tokenWithinDistance）
+    function validateTargetResolutionForContract(sourceToken, item, activity, inputContract, targetResolution,
+      requestedSpellLevel, projectileResolution = null) {
+      if (targetResolution?.mode !== "tokens") return targetResolution;
+      const ids = collectionValues(targetResolution.tokenIds).map(String).filter(Boolean);
+      const count = resolveActivityTargetCountLimit(item, inputContract, requestedSpellLevel);
+      if (count !== null && ids.length > count && !projectileResolution) {
+        throw new Error("Selected target count exceeds action maximum of " + count);
+      }
+      const targetTokens = ids.map((id) => (id === "self" ? sourceToken : findToken(id))).filter(Boolean);
+      const activityRangeCheck = checkActivityTargetRangeWithFoundry(g, activity, sourceToken, targetTokens);
+      if (activityRangeCheck === "invalid") {
+        throw new Error("Target selection is outside the action's allowed range or line of effect");
+      }
+      const rangeValue = Number(inputContract?.range?.value);
+      const longRangeValue = Number(inputContract?.range?.long);
+      const rangeUnits = cleanText(inputContract?.range?.units);
+      const furthestRange = Math.max(
+        Number.isFinite(rangeValue) && rangeValue > 0 ? rangeValue : 0,
+        Number.isFinite(longRangeValue) && longRangeValue > 0 ? longRangeValue : 0,
+      );
+      const maxDistance = furthestRange > 0 ? (rangeUnits === "mi" ? furthestRange * 5280 : furthestRange) : null;
+      if (maxDistance !== null) {
+        for (const id of ids) {
+          const token = id === "self" ? sourceToken : findToken(id);
+          if (!token) continue;
+          const withinDistance = tokenWithinDistance(sourceToken, token, maxDistance);
+          if (withinDistance === false || (withinDistance === null && activityRangeCheck !== "valid")) {
+            throw new Error("Target token is outside action range: " + id);
+          }
+        }
+      }
+      return targetResolution;
+    }
+    // shim 适配：shim 不在构造期跑系统 _migrateData（会重写 legacy damage.parts 破坏
+    // CompatSheet 等旧消费面，browser-verify F4 实测）——旧版 preparation.mode →
+    // system.method 的归一在此读面兜底（az 真堆栈活模型已带 method；prepared/always→spell，
+    // 其余模式直取，与 dnd5e #migratePreparation 同口径）
+    function spellMethodOf(item) {
+      const method = String(item?.system?.method ?? "").trim();
+      if (method) return method;
+      const mode = String(item?.system?._source?.preparation?.mode
+        ?? item?._source?.system?.preparation?.mode ?? "").trim();
+      if (mode === "prepared" || mode === "always") return "spell";
+      return mode || null;
+    }
+    function resolveNativeSpellSlotConsumption(item, activity, actor, spellcastingConfig, requestedSpellLevel) {
+      const hasRequestedSpellLevel = requestedSpellLevel !== undefined;
+      if (item?.type !== "spell" || !activity?.consumption?.spellSlot) {
+        if (hasRequestedSpellLevel) throw new Error("spellLevel is only valid for spell-slot-consuming spell activities");
+        return null;
+      }
+      const method = spellMethodOf(item);
+      const baseLevel = Number(item?.system?.level ?? 0);
+      let level = baseLevel;
+      if (hasRequestedSpellLevel) {
+        if (typeof requestedSpellLevel !== "number" || !Number.isInteger(requestedSpellLevel)
+          || requestedSpellLevel < 1 || requestedSpellLevel > 9) {
+          throw new Error("spellLevel must be an integer from 1 to 9");
+        }
+        if (method !== "spell") throw new Error("spellLevel is only supported for ordinary spell slots");
+        if (!Number.isInteger(baseLevel) || baseLevel < 1 || requestedSpellLevel < baseLevel) {
+          throw new Error("spellLevel " + requestedSpellLevel + " cannot be lower than the spell's base level " + baseLevel);
+        }
+        level = requestedSpellLevel;
+      }
+      const spellcasting = spellcastingConfig?.[method];
+      const key = spellcasting?.getSpellSlotKey?.(level) ?? (method === "spell" ? `spell${level}` : method);
+      const slot = actor?.system?.spells?.[key];
+      if (!slot) {
+        if (hasRequestedSpellLevel) throw new Error("Spell slot " + key + " is not available on this actor");
+        return null;
+      }
+      return {
+        key,
+        value: Number(slot.value ?? 0),
+        max: Number(slot.max ?? 0),
+        level: Number(slot.level ?? level),
+      };
+    }
+    // 降级：independent-projectiles 词汇来自 arcane interaction flags（本桌无作者）——
+    // resolution 恒 null，allocation 输入一律拒绝（az 无 flags 时同码同文案）
+    function resolveIndependentProjectileAllocationV2(item, inputContract, targetTokenIds, allocation) {
+      if (inputContract?.resolution?.type !== "independent-projectiles") {
+        if (allocation !== undefined) throw new Error("input.allocation is only valid for independent-projectiles actions");
+        return null;
+      }
+      return null;
+    }
+    function featureDeclaredRiderOptionsV2(items) {
+      const moduleId = "arcane-dnd5e-2014-automation";
+      const values = Array.isArray(items) ? items : [];
+      return values.flatMap((item) => {
+        const declaration = item?.flags?.[moduleId]?.declaredRider;
+        if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) return [];
+        const id = String(declaration.id ?? declaration.identifier ?? item?.system?.identifier ?? "").trim();
+        if (!id) return [];
+        const declaredConsumes = String(declaration.consumes ?? "").trim();
+        const explicitConsumes = declaredConsumes === "none" ? "" : declaredConsumes;
+        const divineSmiteCompatibility = id === "divine-smite" && String(declaration.consumesOn ?? "").trim() === "hit";
+        const consumes = explicitConsumes || (divineSmiteCompatibility ? "spell-slot-on-hit" : "");
+        const rawMinimum = Number(declaration.minSpellLevel ?? 1);
+        const minSpellLevel = Number.isInteger(rawMinimum) && rawMinimum >= 1 ? rawMinimum : 1;
+        const name = String(item?.name ?? declaration.name ?? id).trim() || id;
+        const resource = String(declaration.resource ?? "").trim();
+        const attackType = String(declaration.attackType ?? "").trim();
+        return [{
+          id,
+          name,
+          ...(consumes ? { consumes } : {}),
+          ...(consumes === "spell-slot-on-hit" ? { minSpellLevel } : {}),
+          ...(resource ? { resource } : {}),
+          inputPath: "input.declaredRiders",
+          ...(attackType ? { attackType } : {}),
+        }];
+      });
+    }
+    function declaredRiderOptionsV2(actor, entry, includeInactiveBuffs = false) {
+      const actionItem = actor?.items?.get?.(entry.itemId)
+        ?? collectionValues(actor?.items).find((item) => item?.id === entry.itemId);
+      if (actionItem?.type !== "weapon" || entry.type !== "attack") return [];
+      const activity = activities(actionItem).find((candidate) => (candidate?.id ?? candidate?._id) === entry.activityId);
+      const attackText = [
+        activity?.attack?.type?.value,
+        activity?.attack?.type,
+        activity?.attack?.classification,
+        actionItem.system?.actionType,
+        actionItem.system?.type?.value,
+      ].filter(Boolean).join(" ").toLowerCase();
+      const melee = /melee|mwak|simplem|martialm/.test(attackText);
+      const ranged = /ranged|rwak|simpler|martialr/.test(attackText);
+      const attackTypeMatches = (declaration) => {
+        if (declaration?.attackType === "melee") return melee;
+        if (declaration?.attackType === "ranged") return ranged;
+        return true;
+      };
+      const featureRiders = featureDeclaredRiderOptionsV2(collectionValues(actor?.items))
+        .filter((option) => attackTypeMatches(option))
+        .map((option) => {
+          const result = { ...option };
+          delete result.attackType;
+          return result;
+        });
+      const spellSlotRiders = collectionValues(actor?.items)
+        .filter((item) => item?.type === "spell")
+        .map((item) => ({ item, declaration: item?.flags?.["arcane-dnd5e-2014-automation"]?.declaredWeaponSpellRider }))
+        .filter(({ declaration }) => declaration && typeof declaration === "object")
+        .filter(({ declaration }) => attackTypeMatches(declaration))
+        .map(({ item, declaration }) => ({
+          id: cleanText(declaration.identifier ?? item.system?.identifier),
+          name: item.name ?? declaration.identifier,
+          minSpellLevel: Number(declaration.minSpellLevel ?? item.system?.level ?? 1),
+          consumes: "spell-slot-on-hit",
+          inputPath: "input.declaredRiders",
+        }))
+        .filter((option) => option.id);
+      const activeBuffRiders = collectionValues(actor?.items)
+        .filter((item) => item?.type === "spell")
+        .map((item) => ({ item, declaration: item?.flags?.["arcane-dnd5e-2014-automation"]?.declaredActiveBuff }))
+        .filter(({ declaration }) => declaration && typeof declaration === "object")
+        .filter(({ declaration }) => attackTypeMatches(declaration))
+        .filter(({ declaration }) => includeInactiveBuffs
+          || collectionValues(actor?.effects).some((effect) => effect?.disabled !== true
+            && collectionValues(effect?.flags?.["arcane-dnd5e-2014-automation"]?.compilerArtifactIds)
+              .includes(declaration.requiredArtifactId)))
+        .map(({ item, declaration }) => ({
+          id: cleanText(declaration.identifier ?? item.system?.identifier),
+          name: item.name ?? declaration.identifier,
+          consumes: "active-buff-on-attack",
+          ...(includeInactiveBuffs ? { requiresArtifactId: declaration.requiredArtifactId } : {}),
+          resource: "none",
+          inputPath: "input.declaredRiders",
+        }))
+        .filter((option) => option.id);
+      const unique = [];
+      const seenIds = new Set();
+      for (const option of [...featureRiders, ...spellSlotRiders, ...activeBuffRiders]) {
+        if (seenIds.has(option.id)) continue;
+        seenIds.add(option.id);
+        unique.push(option);
+      }
+      return unique;
+    }
+    function resolveDeclaredRiderRequestsV2(requests, options, spellSlots) {
+      if (requests === undefined) return [];
+      if (!Array.isArray(requests)) throw new Error("input.declaredRiders must be an array");
+      const available = new Map((Array.isArray(options) ? options : [])
+        .filter((option) => option && String(option.id ?? "").trim())
+        .map((option) => [String(option.id).trim(), option]));
+      const seen = new Set();
+      const seenConsumptionKinds = new Set();
+      const reservedSlots = new Map();
+      return requests.map((request) => {
+        if (!request || typeof request !== "object" || Array.isArray(request)) {
+          throw new Error("Each input.declaredRiders entry must be an object");
+        }
+        const id = String(request.id ?? request.identifier ?? "").trim();
+        if (!id) throw new Error("Each declared rider requires id");
+        if (seen.has(id)) throw new Error("Duplicate declared rider " + id);
+        seen.add(id);
+        const option = available.get(id);
+        if (!option) throw new Error("Declared rider " + id + " is not available for this action");
+        const declaredConsumptionKind = String(option.consumes ?? "").trim();
+        const consumptionKind = declaredConsumptionKind === "none" ? "" : declaredConsumptionKind;
+        if (consumptionKind && seenConsumptionKinds.has(consumptionKind)) {
+          throw new Error("Only one declared rider consuming " + consumptionKind + " may be used with one attack");
+        }
+        if (consumptionKind) seenConsumptionKinds.add(consumptionKind);
+        if (consumptionKind !== "spell-slot-on-hit") {
+          if (request.spellLevel !== undefined || request.level !== undefined) {
+            throw new Error("Declared rider " + id + " does not accept spellLevel");
+          }
+          return { id };
+        }
+        const minimum = Number(option.minSpellLevel ?? 1);
+        const rawLevel = request.spellLevel ?? request.level ?? minimum;
+        if (typeof rawLevel !== "number" || !Number.isInteger(rawLevel) || rawLevel < 1 || rawLevel > 9) {
+          throw new Error("Declared rider " + id + " spellLevel must be an integer from 1 to 9");
+        }
+        if (rawLevel < minimum) {
+          throw new Error("Declared rider " + id + " spellLevel " + rawLevel + " cannot be lower than " + minimum);
+        }
+        const key = "spell" + rawLevel;
+        const slot = spellSlots?.[key];
+        const reserved = reservedSlots.get(key) ?? 0;
+        if (!slot || Number(slot.value ?? 0) <= reserved) {
+          throw new Error("No " + key + " spell slots remain for declared rider " + id);
+        }
+        reservedSlots.set(key, reserved + 1);
+        return { id, spellLevel: rawLevel };
+      });
+    }
+    function validateDeclaredRiderPlanV2(riderGroups) {
+      const spellSlotRiders = (Array.isArray(riderGroups) ? riderGroups : [])
+        .flatMap((group) => (Array.isArray(group) ? group : []))
+        .filter((rider) => rider?.spellLevel !== undefined);
+      if (spellSlotRiders.length > 1) {
+        throw new Error("Only one spell-slot-on-hit declared rider may be used in one execute-turn");
+      }
+    }
+    function isActionAvailableV2(actor, activity) {
+      const availability = activity?.flags?.["arcane-dnd5e-2014-automation"]?.availability ?? {};
+      const requiredIdentifier = String(availability.requiresEffectIdentifier ?? "").trim();
+      const requiredArtifactId = String(availability.requiresArtifactId ?? "").trim();
+      if (!requiredIdentifier && !requiredArtifactId) return true;
+      return collectionValues(actor?.effects).some((effect) => {
+        if (effect?.disabled === true || effect?.active === false || effect?.isSuppressed === true) return false;
+        const arcaneFlags = effect?.flags?.["arcane-dnd5e-2014-automation"] ?? {};
+        const identifier = String(arcaneFlags.identifier ?? arcaneFlags.effectIdentifier ?? "").trim();
+        const artifactIds = Array.isArray(arcaneFlags.compilerArtifactIds)
+          ? arcaneFlags.compilerArtifactIds.map((value) => String(value)) : [];
+        return (!requiredIdentifier || identifier === requiredIdentifier)
+          && (!requiredArtifactId || artifactIds.includes(requiredArtifactId));
+      });
+    }
+    function actionBlockV2(actor, item, activity) {
+      const activationType = effectiveActivityActivationTypeV2(item, activity);
+      const isSpell = item?.type === "spell";
+      const isAttack = activity?.type === "attack";
+      const isReaction = activationType === "reaction";
+      const isAction = activationType === "action";
+      if (!actor || (!isSpell && !isAttack && !isReaction && !isAction)) return null;
+      for (const effect of collectionValues(actor?.effects)) {
+        if (effect?.disabled === true || effect?.active === false || effect?.isSuppressed === true) continue;
+        const rawKinds = effect?.flags?.["arcane-dnd5e-2014-automation"]?.blockedActionKinds;
+        const kinds = rawKinds instanceof Set ? Array.from(rawKinds) : Array.isArray(rawKinds) ? rawKinds : [];
+        const kind = isSpell && kinds.includes("spell") ? "spell"
+          : isAttack && kinds.includes("attack") ? "attack"
+            : isReaction && kinds.includes("reaction") ? "reaction"
+              : isAction && kinds.includes("action") ? "action" : null;
+        if (kind) {
+          return {
+            kind,
+            effectId: effect?.id == null ? null : String(effect.id),
+            effectName: effect?.name == null ? (effect?.label == null ? null : String(effect.label)) : String(effect.name),
+          };
+        }
+      }
+      return null;
+    }
+    function stripHtml(html) {
+      if (!html) return "";
+      const div = document.createElement("div");
+      div.innerHTML = String(html);
+      return (div.textContent || div.innerText || "").replace(/\s+/g, " ").trim();
+    }
+    function findRecentItemCard({ since, sourceTokenId, itemId, itemName }) {
+      const messages = Array.from(game.messages ?? []).reverse();
+      return messages.find((message) => {
+        if ((message.timestamp ?? 0) < since) return false;
+        const speaker = message.speaker ?? {};
+        const flags = message.flags ?? {};
+        const midiItemId = flags["midi-qol"]?.itemId ?? flags["dnd5e"]?.item?.id;
+        const dndItemName = flags["dnd5e"]?.item?.name;
+        return (!sourceTokenId || speaker.token === sourceTokenId)
+          && (midiItemId === itemId || dndItemName === itemName || stripHtml(message.content).includes(itemName));
+      }) ?? null;
+    }
+    function activityMode(activity) {
+      const raw = activity?.flags?.["arcane-dnd5e-2014-automation"]?.mode;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+      const value = cleanText(raw.value ?? raw.id ?? raw.key ?? raw.damageType);
+      if (!value && raw.default !== true) return null;
+      return {
+        value: value || null,
+        ...(cleanText(raw.damageType) ? { damageType: cleanText(raw.damageType) } : {}),
+        default: raw.default === true,
+      };
+    }
+    function damageFormulaOf(part, fallbackTypes) {
+      const number = part?.number ?? null;
+      const denomination = part?.denomination ?? null;
+      const bonus = cleanText(part?.bonus ?? "");
+      let formula = "";
+      if (number && denomination) formula = number + "d" + denomination;
+      if (bonus) formula = formula ? formula + (bonus.startsWith("-") ? bonus : "+" + bonus) : bonus;
+      const types = setValues(part?.types);
+      return { formula, number, denomination, bonus, types: types.length ? types : fallbackTypes };
+    }
+    function serializeActivityUse(item, activity) {
+      const baseTypes = setValues(item?.system?.damage?.base?.types);
+      const parts = collectionValues(activity?.damage?.parts);
+      const inputContract = deriveActivityInputContract(item, activity);
+      return {
+        activityId: activity?.id ?? activity?._id ?? null,
+        activityName: activity?.name ?? null,
+        mode: activityMode(activity),
+        type: activity?.type ?? null,
+        activation: effectiveActivityActivationTypeV2(item, activity) || null,
+        range: {
+          value: activity?.range?.value ?? item?.system?.range?.value ?? null,
+          long: activity?.range?.long ?? item?.system?.range?.long ?? null,
+          units: activity?.range?.units ?? item?.system?.range?.units ?? null,
+          label: activity?.range?.labels?.range ?? null,
+        },
+        target: {
+          type: inputContract.target.type,
+          count: inputContract.target.count,
+          prompt: activity?.target?.prompt ?? null,
+          template: inputContract.template,
+        },
+        inputContract,
+        attack: activity?.attack
+          ? {
+            ability: activity.attack.ability ?? "",
+            type: activity.attack.type?.value ?? "",
+            classification: activity.attack.type?.classification ?? "",
+            bonus: activity.attack.bonus ?? "",
+          }
+          : null,
+        save: activity?.save
+          ? {
+            ability: setValues(activity.save.ability),
+            dc: activity.save.dc?.value ?? null,
+            formula: activity.save.dc?.formula ?? "",
+            calculation: activity.save.dc?.calculation ?? "",
+          }
+          : null,
+        damage: parts.map((part) => damageFormulaOf(part, part?.base ? baseTypes : [])),
+        consumption: {
+          spellSlot: activity?.consumption?.spellSlot ?? null,
+          targets: collectionValues(activity?.consumption?.targets).map((target) => ({
+            type: target?.type ?? "",
+            target: target?.target ?? "",
+            value: target?.value ?? "",
+          })),
+        },
+        warnings: activityWarnings(item, activity),
+      };
+    }
+    function activityWarnings(item, activity) {
+      const warnings = [];
+      const targets = collectionValues(activity?.consumption?.targets);
+      const hasEmptyItemUses = targets.some((target) => target?.type === "itemUses" && !cleanText(target?.target));
+      const maxUses = String(item?.system?.uses?.max ?? "");
+      if (hasEmptyItemUses && (maxUses === "0" || maxUses === "")) warnings.push("consumes-empty-itemUses-target");
+      if (activity?.target?.prompt === true) warnings.push("prompts-for-target");
+      if (activities(item).length > 1) warnings.push("multiple-activities");
+      return warnings;
+    }
+    function serializeTokenLite(tokenLike) {
+      const token = tokenObject(tokenLike);
+      const doc = tokenDocument(tokenLike);
+      const actor = token?.actor ?? doc?.actor ?? null;
+      const hp = actor?.system?.attributes?.hp ?? {};
+      const ac = actor?.system?.attributes?.ac ?? {};
+      const effects = collectionValues(actor?.effects).map((effect) => ({
+        id: effect.id ?? null,
+        name: effect.name ?? effect.label ?? null,
+        icon: effect.icon ?? null,
+        disabled: !!effect.disabled,
+        statuses: setValues(effect.statuses),
+        duration: effect.duration
+          ? {
+            type: effect.duration.type ?? null,
+            rounds: effect.duration.rounds ?? null,
+            turns: effect.duration.turns ?? null,
+            remaining: effect.duration.remaining ?? null,
+          }
+          : null,
+      }));
+      return {
+        id: doc?.id ?? token?.id ?? null,
+        uuid: doc?.uuid ?? null,
+        name: doc?.name ?? token?.name ?? null,
+        actorId: actor?.id ?? doc?.actorId ?? null,
+        actorName: actor?.name ?? null,
+        actorType: actor?.type ?? null,
+        x: doc?.x ?? token?.x ?? null,
+        y: doc?.y ?? token?.y ?? null,
+        width: doc?.width ?? null,
+        height: doc?.height ?? null,
+        hidden: !!doc?.hidden,
+        disposition: doc?.disposition ?? null,
+        elevation: doc?.elevation ?? null,
+        img: doc?.texture?.src ?? token?.texture?.src ?? null,
+        hp: { value: hp.value ?? null, max: hp.max ?? null, temp: hp.temp ?? 0, tempmax: hp.tempmax ?? 0 },
+        ac: { value: ac.value ?? null, calc: ac.calc ?? null, flat: ac.flat ?? null },
+        effects,
+        statuses: setValues(actor?.statuses),
+      };
+    }
+    function tokenState(tokenLike) {
+      const token = serializeTokenLite(tokenLike);
+      return {
+        tokenId: token.id,
+        name: token.name,
+        hp: token.hp,
+        effects: token.effects.map((effect) => effect.name).filter(Boolean),
+        statuses: token.statuses,
+      };
+    }
+    function diffTokenState(before, after) {
+      const beforeEffects = new Set(before.effects ?? []);
+      const afterEffects = new Set(after.effects ?? []);
+      const beforeStatuses = new Set(before.statuses ?? []);
+      const afterStatuses = new Set(after.statuses ?? []);
+      return {
+        tokenId: after.tokenId,
+        name: after.name,
+        hpBefore: before.hp?.value ?? null,
+        hpAfter: after.hp?.value ?? null,
+        tempHpBefore: before.hp?.temp ?? 0,
+        tempHpAfter: after.hp?.temp ?? 0,
+        hpDelta: (after.hp?.value ?? 0) - (before.hp?.value ?? 0),
+        tempHpDelta: (after.hp?.temp ?? 0) - (before.hp?.temp ?? 0),
+        effectsAdded: [...afterEffects].filter((name) => !beforeEffects.has(name)),
+        effectsRemoved: [...beforeEffects].filter((name) => !afterEffects.has(name)),
+        statusesAdded: [...afterStatuses].filter((name) => !beforeStatuses.has(name)),
+        statusesRemoved: [...beforeStatuses].filter((name) => !afterStatuses.has(name)),
+      };
+    }
+    function buildActivityUseCreateOptions(targetResolution) {
+      // 模板活动自带交互放置（activity.target.prompt）——同时强设 create.measuredTemplate
+      // 会启动第二次 use 工作流（双模板双消耗），az 注释同款
+      if (targetResolution?.mode === "template") return {};
+      return { create: { measuredTemplate: false } };
+    }
+    function suppressDefaultThrownAttackDialog(item, activity) {
+      const properties = item?.system?.properties;
+      const isThrownWeapon = properties?.has?.("thr") === true
+        || collectionValues(properties).some((property) => cleanText(property) === "thr");
+      const midiProperties = activity?.midiProperties;
+      if (activity?.type !== "attack" || !isThrownWeapon || !midiProperties || typeof midiProperties !== "object") {
+        return () => undefined;
+      }
+      const itemActivitySource = item?._source?.system?.activities?.[activity?.id];
+      const containers = [midiProperties, activity?._source?.midiProperties, itemActivitySource?.midiProperties]
+        .filter((entry, index, all) => entry && typeof entry === "object" && all.indexOf(entry) === index);
+      const explicit = containers.map((entry) => entry.forceRollDialog).find((value) => value && value !== "default");
+      if (explicit) return () => undefined;
+      const previous = containers.map((entry) => ({
+        entry,
+        hadValue: Object.prototype.hasOwnProperty.call(entry, "forceRollDialog"),
+        value: entry.forceRollDialog,
+      }));
+      const restore = () => {
+        for (const { entry, hadValue, value } of previous) {
+          if (hadValue) entry.forceRollDialog = value;
+          else delete entry.forceRollDialog;
+        }
+      };
+      try {
+        // midi 对每个可投掷武器强开配置对话框（即使 completeItemUse 显式非交互）——
+        // execute-turn 期间保持系统首选攻击模式，只压掉这个隐式对话框；本地模型覆写
+        // 绝不持久化，也不覆写显式契约（az 注释同款）
+        for (const { entry } of previous) entry.forceRollDialog = "never";
+      } catch (error) {
+        restore();
+        throw new Error("ACTION_MISCONFIGURED: Could not suppress the default thrown-weapon attack dialog: "
+          + cleanText(error?.message ?? error));
+      }
+      if (previous.some(({ entry }) => entry.forceRollDialog !== "never")) {
+        restore();
+        throw new Error("ACTION_MISCONFIGURED: Could not suppress the default thrown-weapon attack dialog");
+      }
+      return restore;
+    }
+    // —— performUseAction（az 同名函数移植，native summon 分支整体缺席，见段首注释；
+    //    签名固定 async function performUseAction(useArgs = {})——stage8-m5-parity 以
+    //    字符串替换注入测试桩）——
+    async function performUseAction(useArgs = {}) {
+      const totalStart = performance.now();
+      const timings = {};
+      let mark = totalStart;
+      function split(name) {
+        const now = performance.now();
+        timings[name] = Math.round((now - mark) * 10) / 10;
+        mark = now;
+      }
+      const sourceToken = findToken(useArgs?.sourceTokenId);
+      if (!sourceToken) throw new Error("Source token not found: " + useArgs?.sourceTokenId);
+      // shim 适配：placeable.actor 可缺席——文档面兜底（az 直读 sourceToken.actor）
+      const sourceActor = sourceToken.actor ?? tokenDocument(sourceToken)?.actor ?? null;
+      const item = sourceActor?.items?.get?.(useArgs?.itemId)
+        ?? findItem(sourceActor, useArgs?.itemId ?? useArgs?.itemIdentifier);
+      if (!item) throw new Error("Item not found: " + (useArgs?.itemId ?? useArgs?.itemIdentifier));
+      const activity = findActivity(item, useArgs?.activityId ?? useArgs?.activityIdentifier);
+      if (!isActionAvailableV2(sourceActor, activity)) throw new Error("Action is not currently available");
+      const actionBlock = actionBlockV2(sourceActor, item, activity);
+      if (actionBlock) {
+        throw new Error("ACTION_BLOCKED: " + (item.name ?? activity?.name ?? actionBlock.kind)
+          + " is blocked by " + (actionBlock.effectName ?? "an active effect"));
+      }
+      const inputContract = deriveActivityInputContract(item, activity);
+      const selections = resolveRequiredSelectionsForContract(useArgs, inputContract);
+      const hasRequestedSpellLevel = useArgs?.spellLevel !== undefined;
+      const unresolvedTargetResolution = materializeDefaultTargetResolution(
+        sourceToken,
+        inputContract,
+        resolveTargetSpecForContract(useArgs, inputContract),
+      );
+      const configProblem = actionConfigProblemV2(item, activity);
+      if (unresolvedTargetResolution?.bypassedTemplateGeometry !== true && configProblem) {
+        throw new Error("ACTION_MISCONFIGURED: " + configProblem);
+      }
+      const nativeSpellSlotBefore = resolveNativeSpellSlotConsumption(
+        item, activity, sourceActor, g.CONFIG?.DND5E?.spellcasting,
+        hasRequestedSpellLevel ? useArgs.spellLevel : undefined,
+      );
+      const effectiveSpellLevel = nativeSpellSlotBefore?.level ?? (hasRequestedSpellLevel ? useArgs.spellLevel : undefined);
+      if (nativeSpellSlotBefore && nativeSpellSlotBefore.value <= 0) {
+        throw new Error("No " + nativeSpellSlotBefore.key + " spell slots remain for " + item.name);
+      }
+      const projectileResolution = resolveIndependentProjectileAllocationV2(
+        item, inputContract, unresolvedTargetResolution?.tokenIds, useArgs?.allocation, effectiveSpellLevel,
+      );
+      const targetResolution = validateTargetResolutionForContract(
+        sourceToken, item, activity, inputContract, unresolvedTargetResolution, effectiveSpellLevel, projectileResolution,
+      );
+      split("resolveSourceItemActivityMs");
+      const targetTokens = collectionValues(targetResolution.tokenIds).map((id) => {
+        const token = cleanText(id) === "self" ? sourceToken : findToken(id);
+        if (!token) throw new Error("Target token not found: " + id);
+        return token;
+      });
+      const initialWorkflowTargetTokens = projectileResolution
+        ? targetTokens.filter((token) => tokenDocument(token)?.id === projectileResolution.primaryTargetId)
+        : targetTokens;
+      if (projectileResolution && initialWorkflowTargetTokens.length !== 1) {
+        throw new Error("Independent projectile primary target could not be resolved");
+      }
+      const beforeByTokenId = new Map(sceneTokens().map((token) => [tokenDocument(token)?.id, tokenState(token)]));
+      const templateIdsBefore = new Set(collectionValues(currentScene()?.templates)
+        .map((template) => template?.id).filter(Boolean));
+      const targetUuids = initialWorkflowTargetTokens.map((token) => tokenDocument(token)?.uuid).filter(Boolean);
+      const sourceTokenUuid = cleanText(tokenDocument(sourceToken)?.uuid);
+      const targetIds = initialWorkflowTargetTokens.map((token) => tokenDocument(token)?.id).filter(Boolean);
+      if (g.canvas?.tokens?.setTargets) g.canvas.tokens.setTargets(targetIds);
+      else if (game.user?.updateTokenTargets) game.user.updateTokenTargets(targetIds);
+      split("prepareTargetsAndBeforeStateMs");
+
+      const midi = g.MidiQOL;
+      if (!midi?.completeItemUse) throw new Error("MidiQOL.completeItemUse is not available");
+      const startedAt = Date.now();
+      const attackRollMode = useArgs?.attackRollMode ?? "normal";
+      const attackRollOptions = attackRollMode === "advantage" ? { advantage: true, disadvantage: false }
+        : attackRollMode === "disadvantage" ? { advantage: false, disadvantage: true } : {};
+      const declaredRiders = Array.isArray(useArgs?.declaredRiders)
+        ? useArgs.declaredRiders.map((rider) => ({ ...rider })) : [];
+      const fastForwardWorkflow = targetResolution.mode !== "template";
+      const usageConfig = {
+        chooseActivity: false,
+        configure: false,
+        createMessage: true,
+        arcaneDeclaredRiders: declaredRiders,
+        declaredRiders,
+        arcaneSelections: selections,
+        ...(hasRequestedSpellLevel && nativeSpellSlotBefore ? { spell: { slot: nativeSpellSlotBefore.key } } : {}),
+        ...buildActivityUseCreateOptions(targetResolution),
+        midiOptions: {
+          activityId: activity?.id,
+          arcaneDeclaredRiders: declaredRiders,
+          arcaneSelections: selections,
+          targetUuids,
+          // shim 适配：midi 13.x completeActivityUse 对 Set 调 .map——targetsToUse 不传
+          // （midi 由 targetUuids 自行归一），见段首注释
+          ignoreUserTargets: fastForwardWorkflow,
+          fastForward: fastForwardWorkflow,
+          ...(hasRequestedSpellLevel ? { spellLevel: Number(useArgs.spellLevel) } : {}),
+          ...attackRollOptions,
+          workflowOptions: {
+            arcaneDeclaredRiders: declaredRiders,
+            arcaneSelections: selections,
+            targetUuids,
+            sourceTokenUuid,
+            targetConfirmation: "none",
+            ...(fastForwardWorkflow
+              ? {
+                autoRollAttack: true,
+                autoRollDamage: "onHit",
+                fastForwardAttack: true,
+                fastForwardDamage: true,
+              }
+              : {}),
+            ...attackRollOptions,
+          },
+        },
+      };
+      const restoreThrownAttackDialog = suppressDefaultThrownAttackDialog(item, activity);
+      const completeItemUseStart = performance.now();
+      const requestedActionTimeoutMs = Number(useArgs?.actionTimeoutMs);
+      const actionTimeoutMs = Number.isFinite(requestedActionTimeoutMs) && requestedActionTimeoutMs > 0
+        ? Math.max(1000, requestedActionTimeoutMs) : 15000;
+      let workflowTimedOut = false;
+      let workflow = null;
+      let primaryTimeoutId = null;
+      try {
+        if (useArgs?.factSink) useArgs.factSink.started = true;
+        workflow = await Promise.race([
+          midi.completeItemUse(item, usageConfig, { configure: false }, {}),
+          new Promise((resolve) => {
+            primaryTimeoutId = setTimeout(() => {
+              workflowTimedOut = true;
+              resolve(null);
+            }, actionTimeoutMs);
+          }),
+        ]);
+      } finally {
+        if (primaryTimeoutId !== null) clearTimeout(primaryTimeoutId);
+        restoreThrownAttackDialog();
+      }
+      const workflowAborted = workflow?.aborted === true;
+      const workflowCompleted = !!workflow && !workflowTimedOut && !workflowAborted;
+      let nativeSpellSlotReconciled = false;
+      if (workflowCompleted && nativeSpellSlotBefore) {
+        const currentValue = Number(sourceActor?.system?.spells?.[nativeSpellSlotBefore.key]?.value ?? 0);
+        if (currentValue === nativeSpellSlotBefore.value) {
+          await sourceActor.update({
+            ["system.spells." + nativeSpellSlotBefore.key + ".value"]: Math.max(nativeSpellSlotBefore.value - 1, 0),
+          });
+          nativeSpellSlotReconciled = true;
+        }
+      }
+      timings.completeItemUseMs = Math.round((performance.now() - completeItemUseStart) * 10) / 10;
+      mark = performance.now();
+      const recentItemCard = workflow
+        ? null
+        : findRecentItemCard({
+          since: startedAt,
+          sourceTokenId: tokenDocument(sourceToken)?.id,
+          itemId: item.id,
+          itemName: item.name,
+        });
+      split("findRecentItemCardMs");
+      const requestedPostDelayMs = Number(useArgs?.postDelayMs ?? 0);
+      const postDelayStart = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, requestedPostDelayMs));
+      timings.postDelayMs = Math.round((performance.now() - postDelayStart) * 10) / 10;
+      mark = performance.now();
+      const workflowTargetTokens = collectionValues(workflow?.targets).map((target) => tokenObject(target)).filter(Boolean);
+      const newMeasuredTemplateDocuments = collectionValues(currentScene()?.templates)
+        .filter((template) => !templateIdsBefore.has(template?.id));
+      let templateTargetingWarning = null;
+      const computeTemplateTargets = (templates) => {
+        if (targetResolution.mode !== "template" || !templates.length) return [];
+        if (typeof midi?.computeTargetsFromTemplates !== "function") {
+          templateTargetingWarning = "midi-qol-template-target-computation-unavailable";
+          return [];
+        }
+        try {
+          return collectionValues(midi.computeTargetsFromTemplates(
+            templates, tokenDocument(sourceToken)?.uuid ?? "", false, "any", "always",
+          )).map((target) => tokenObject(target)).filter(Boolean);
+        } catch (error) {
+          templateTargetingWarning = "midi-qol-template-target-computation-failed:" + cleanText(error?.message ?? error);
+          return [];
+        }
+      };
+      const templateTargetTokens = computeTemplateTargets(newMeasuredTemplateDocuments);
+      const observedTargets = [];
+      const observedTargetIds = new Set();
+      for (const token of [...targetTokens, ...workflowTargetTokens, ...templateTargetTokens]) {
+        const tokenId = tokenDocument(token)?.id;
+        if (!tokenId || observedTargetIds.has(tokenId)) continue;
+        observedTargetIds.add(tokenId);
+        observedTargets.push(token);
+      }
+      const measuredTemplates = newMeasuredTemplateDocuments.map((template) => {
+        const memberTokens = computeTemplateTargets([template]);
+        return {
+          id: template?.id ?? null,
+          uuid: template?.uuid ?? null,
+          type: template?.t ?? template?.type ?? null,
+          x: template?.x ?? null,
+          y: template?.y ?? null,
+          distance: template?.distance ?? null,
+          width: template?.width ?? null,
+          direction: template?.direction ?? null,
+          angle: template?.angle ?? null,
+          targetTokenIds: memberTokens.map((token) => tokenDocument(token)?.id).filter(Boolean),
+          targets: memberTokens.map((token) => ({
+            tokenId: tokenDocument(token)?.id ?? null,
+            tokenName: token?.name ?? null,
+            actorId: token?.actor?.id ?? null,
+            actorName: token?.actor?.name ?? null,
+          })),
+        };
+      });
+      const resolvedTargetResolution = targetResolution.mode === "template"
+        ? {
+          ...targetResolution,
+          tokenIds: templateTargetTokens.map((token) => tokenDocument(token)?.id).filter(Boolean),
+          computedBy: "midi-qol-template-geometry",
+        }
+        : targetResolution;
+      split("afterStateAndDiffPrepMs");
+      const itemCardId = workflow?.itemCardId
+        ?? (typeof workflow?.id === "string" && workflow.id.startsWith("ChatMessage.")
+          ? workflow.id.slice("ChatMessage.".length)
+          : workflow?.id)
+        ?? recentItemCard?.id
+        ?? null;
+      return {
+        success: workflowCompleted || !!recentItemCard,
+        status: workflowAborted ? "aborted"
+          : workflowCompleted ? "completed"
+            : recentItemCard ? "submitted" : "no-workflow",
+        source: {
+          tokenId: tokenDocument(sourceToken)?.id,
+          tokenName: sourceToken.name,
+          actorId: sourceActor?.id ?? null,
+          actorName: sourceActor?.name ?? null,
+        },
+        item: { id: item.id, name: item.name, type: item.type },
+        activity: activity ? serializeActivityUse(item, activity) : null,
+        targetResolution: resolvedTargetResolution,
+        measuredTemplates,
+        itemCardId,
+        workflowId: workflow?.id ?? null,
+        attacks: collectionValues(workflow?.attacks).map((attack) => ({
+          total: attack?.total ?? null,
+          hit: attack?.hit ?? null,
+        })),
+        damageRolled: collectionValues(workflow?.damageRolls).map((roll) => ({
+          formula: roll?.formula ?? null,
+          total: roll?.total ?? null,
+        })),
+        resourceConsumption: nativeSpellSlotBefore
+          ? {
+            spellSlot: {
+              key: nativeSpellSlotBefore.key,
+              level: nativeSpellSlotBefore.level,
+              before: nativeSpellSlotBefore.value,
+              after: Number(sourceActor?.system?.spells?.[nativeSpellSlotBefore.key]?.value ?? 0),
+              reconciled: nativeSpellSlotReconciled,
+            },
+          }
+          : null,
+        tokenDiffs: observedTargets.map((token) => {
+          const tokenId = tokenDocument(token)?.id;
+          return diffTokenState(beforeByTokenId.get(tokenId), tokenState(token));
+        }),
+        warnings: [
+          ...activityWarnings(item, activity),
+          ...(templateTargetingWarning ? [templateTargetingWarning] : []),
+          ...(!workflow && !recentItemCard ? ["midi-qol-returned-no-workflow"] : []),
+          ...(workflowAborted ? ["midi-qol-workflow-aborted"] : []),
+          ...(workflowTimedOut ? ["complete-item-use-timeout"] : []),
+        ],
+        timings: {
+          ...timings,
+          requestedPostDelayMs,
+          totalMs: Math.round((performance.now() - totalStart) * 10) / 10,
+        },
+      };
+    }
+    function locateActionByIdV2(actor, actionId, mode) {
+      const wanted = String(actionId ?? "");
+      if (!wanted) return null;
+      for (const candidate of collectActionCandidatesV2(actor, mode)) {
+        if (candidate.actionId === wanted) return candidate;
+      }
+      return null;
+    }
+    function actionOwnerCombatantV2(combat, actionId) {
+      for (const combatant of collectionValues(combat?.combatants)) {
+        const token = findToken(combatant.tokenId) ?? tokenObject(combatant.token);
+        const actor = token?.actor ?? tokenDocument(token)?.actor ?? null;
+        if (!actor) continue;
+        const located = locateActionByIdV2(actor, actionId);
+        if (located && isAgentCallableActionV2(located.item, located.activity)) return combatant;
+      }
+      return null;
+    }
+    function serializeTurnResponseV2(facts) {
+      const actions = facts?.actions ?? [];
+      const requested = actions.length;
+      const completedCount = actions.filter((action) => action.completed).length;
+      const anyStarted = actions.some((action) => action.started);
+      const unstartedError = actions.find((action) => !action.started && !action.completed
+        && typeof action.error === "string" && action.error.trim() && action.error !== "not-attempted")?.error?.trim();
+      const advanceState = !facts?.advanceRequested ? "not-requested"
+        : facts?.advanceCompleted ? "completed" : "not-completed";
+      if (facts?.rejectedCode && !anyStarted && !facts?.advanceStarted) {
+        const rejectedMessage = facts.rejectedMessage?.trim();
+        return {
+          status: "rejected",
+          code: facts.rejectedCode,
+          ...(rejectedMessage ? { message: rejectedMessage } : {}),
+        };
+      }
+      const unconfirmedAction = actions.some((action) => action.started && !action.completed);
+      const unconfirmedAdvance = !!facts?.advanceRequested && !!facts?.advanceStarted && !facts?.advanceCompleted;
+      if (completedCount === requested && !unconfirmedAction) {
+        if (!facts?.advanceRequested || facts?.advanceCompleted) {
+          const receipt = requested === 1 ? actions[0]?.receipt : null;
+          return receipt ? { status: "completed", receipt } : { status: "completed" };
+        }
+        if (unconfirmedAdvance) return { status: "indeterminate", retry: false };
+        return {
+          status: "partial",
+          completed: completedCount,
+          requested,
+          advance: advanceState,
+          retry: false,
+        };
+      }
+      if (completedCount > 0) {
+        return {
+          status: "partial",
+          completed: completedCount,
+          requested,
+          advance: advanceState,
+          retry: false,
+          ...(unstartedError ? { message: unstartedError } : {}),
+        };
+      }
+      if (unconfirmedAction || unconfirmedAdvance) return { status: "indeterminate", retry: false };
+      // 无一开动且无 schema 拒绝记录：按拒绝输入处理（防御兜底；调用方应显式记 rejectedCode）
+      return {
+        status: "rejected",
+        code: facts?.rejectedCode ?? "INPUT_INVALID",
+        ...(unstartedError ? { message: unstartedError } : {}),
+      };
+    }
+    function rejectTurnV2(code, advanceRequested, message = null) {
+      return serializeTurnResponseV2({
+        rejectedCode: code,
+        rejectedMessage: cleanText(message),
+        actions: [],
+        advanceRequested: !!advanceRequested,
+        advanceStarted: false,
+        advanceCompleted: false,
+      });
+    }
+    function turnActionSpecsV2(executeArgs) {
+      if (executeArgs?.actions !== undefined) {
+        if (!Array.isArray(executeArgs.actions) || !executeArgs.actions.length) return null;
+        return executeArgs.actions;
+      }
+      if (executeArgs?.actionId !== undefined) {
+        return [{
+          actionId: executeArgs.actionId,
+          targetTokenIds: executeArgs.targetTokenIds,
+          input: executeArgs.input,
+        }];
+      }
+      return null;
+    }
+    function validTurnActionSpecV2(spec) {
+      if (!spec || typeof spec !== "object" || Array.isArray(spec)) return false;
+      if (!cleanText(spec.actionId)) return false;
+      if (spec.targetTokenIds !== undefined && !Array.isArray(spec.targetTokenIds)) return false;
+      if (spec.input !== undefined && (typeof spec.input !== "object" || spec.input === null || Array.isArray(spec.input))) return false;
+      if (spec.input?.attackRollMode !== undefined
+        && !["normal", "advantage", "disadvantage"].includes(spec.input.attackRollMode)) return false;
+      if (spec.input?.declaredRiders !== undefined) {
+        if (!Array.isArray(spec.input.declaredRiders)) return false;
+        if (spec.input.declaredRiders.some((rider) =>
+          !rider || typeof rider !== "object" || Array.isArray(rider) || !cleanText(rider.id ?? rider.identifier))) return false;
+      }
+      if (spec.input?.selections !== undefined
+        && (!spec.input.selections || typeof spec.input.selections !== "object" || Array.isArray(spec.input.selections))) {
+        return false;
+      }
+      if (spec.input?.allocation !== undefined && !Array.isArray(spec.input.allocation)) return false;
+      return true;
+    }
+    // —— executeTurn（az executeTurnV2Data 移植；playExecution 供 executeAction 的非战斗
+    //    路径内部分发——显式 sourceToken + combat，不查 game.combat）——
+    async function executeTurnData(executeArgs = {}, playExecution = null) {
+      const advanceRequested = executeArgs?.advance === true || executeArgs?.advance === "true";
+      const combat = playExecution ? playExecution.combat : game.combat ?? null;
+      if (!combat && !playExecution) return rejectTurnV2("BATTLE_NOT_ACTIVE", advanceRequested);
+      const specs = turnActionSpecsV2(executeArgs);
+      if (!specs) return rejectTurnV2("INPUT_INVALID", advanceRequested);
+      for (const spec of specs) {
+        if (!validTurnActionSpecV2(spec)) return rejectTurnV2("INPUT_INVALID", advanceRequested);
+      }
+      const activeCombatant = combat?.combatant ?? null;
+      const sourceToken = playExecution?.sourceToken
+        ?? (activeCombatant ? (findToken(activeCombatant.tokenId) ?? tokenObject(activeCombatant.token)) : null);
+      const actor = sourceToken?.actor ?? tokenDocument(sourceToken)?.actor ?? null;
+      if ((!activeCombatant && !playExecution) || !actor) return rejectTurnV2("BATTLE_NOT_ACTIVE", advanceRequested);
+      const plans = [];
+      for (const spec of specs) {
+        const located = locateActionByIdV2(actor, spec.actionId);
+        if (!located) {
+          const owner = combat ? actionOwnerCombatantV2(combat, spec.actionId) : null;
+          return rejectTurnV2(owner ? "ACTOR_NOT_ACTIVE" : "ACTION_NOT_FOUND", advanceRequested);
+        }
+        if (!isAgentCallableActionV2(located.item, located.activity)) {
+          return rejectTurnV2("ACTION_NOT_FOUND", advanceRequested);
+        }
+        const contract = deriveActivityInputContract(located.item, located.activity);
+        if (spec.input?.attackRollMode !== undefined && !contract.optional?.includes("input.attackRollMode")) {
+          return rejectTurnV2("INPUT_INVALID", advanceRequested, "input.attackRollMode is not supported by this action");
+        }
+        const specTargetSpec = spec.input?.targetSpec;
+        let targetResolution;
+        let declaredRiders;
+        try {
+          resolveRequiredSelectionsForContract({ selections: spec.input?.selections }, contract);
+          targetResolution = resolveTargetSpecForContract({ targetTokenIds: spec.targetTokenIds, targetSpec: specTargetSpec }, contract);
+          resolveNativeSpellSlotConsumption(
+            located.item, located.activity, actor, g.CONFIG?.DND5E?.spellcasting, spec.input?.spellLevel,
+          );
+          resolveIndependentProjectileAllocationV2(
+            located.item, contract, targetResolution?.tokenIds, spec.input?.allocation, spec.input?.spellLevel,
+          );
+          declaredRiders = resolveDeclaredRiderRequestsV2(
+            spec.input?.declaredRiders,
+            declaredRiderOptionsV2(actor, {
+              itemId: located.itemId,
+              activityId: located.activityId,
+              type: located.activity?.type,
+            }),
+            actor?.system?.spells ?? {},
+          );
+        } catch (error) {
+          return rejectTurnV2("INPUT_INVALID", advanceRequested, error?.message ?? error);
+        }
+        const isTokensOverride = targetResolution?.bypassedTemplateGeometry === true;
+        const targetSpec = specTargetSpec;
+        if (!isTokensOverride && actionConfigProblemV2(located.item, located.activity)) {
+          return rejectTurnV2("ACTION_MISCONFIGURED", advanceRequested);
+        }
+        plans.push({ spec, located, targetSpec, declaredRiders });
+      }
+      try {
+        validateDeclaredRiderPlanV2(plans.map((plan) => plan.declaredRiders));
+      } catch (error) {
+        return rejectTurnV2("INPUT_INVALID", advanceRequested, error?.message ?? error);
+      }
+      const facts = {
+        actions: [],
+        advanceRequested,
+        advanceStarted: false,
+        advanceCompleted: false,
+      };
+      let aborted = false;
+      for (const plan of plans) {
+        if (aborted) {
+          facts.actions.push({ actionId: plan.spec.actionId, started: false, completed: false, error: "not-attempted" });
+          continue;
+        }
+        const fact = { actionId: plan.spec.actionId, started: false, completed: false, error: null, receipt: null };
+        facts.actions.push(fact);
+        const sink = { started: false };
+        const actionBlock = actionBlockV2(actor, plan.located.item, plan.located.activity);
+        if (actionBlock) {
+          fact.error = "ACTION_BLOCKED";
+          if (!facts.actions.slice(0, -1).some((action) => action.started)) {
+            facts.rejectedCode = "ACTION_BLOCKED";
+          }
+          aborted = true;
+          continue;
+        }
+        try {
+          const result = await performUseAction({
+            sourceTokenId: tokenDocument(sourceToken)?.id,
+            itemId: plan.located.itemId,
+            activityId: plan.located.activityId,
+            targetTokenIds: plan.spec.targetTokenIds,
+            targetSpec: plan.targetSpec,
+            attackRollMode: plan.spec.input?.attackRollMode,
+            declaredRiders: plan.declaredRiders,
+            selections: plan.spec.input?.selections,
+            allocation: plan.spec.input?.allocation,
+            spellLevel: plan.spec.input?.spellLevel,
+            actionTimeoutMs: executeArgs?.actionTimeoutMs,
+            factSink: sink,
+          });
+          fact.started = sink.started;
+          fact.completed = result?.status === "completed";
+          if (!fact.completed) {
+            fact.error = result?.status ?? "unknown";
+            aborted = true;
+          }
+        } catch (error) {
+          fact.started = sink.started;
+          fact.error = cleanText(error?.message ?? error);
+          const rejectedCode = fact.error.startsWith("ACTION_BLOCKED:")
+            ? "ACTION_BLOCKED"
+            : fact.error.startsWith("ACTION_MISCONFIGURED:")
+              ? "ACTION_MISCONFIGURED"
+              : null;
+          if (!fact.started && !facts.actions.slice(0, -1).some((action) => action.started) && rejectedCode) {
+            facts.rejectedCode = rejectedCode;
+            facts.rejectedMessage = fact.error;
+          }
+          aborted = true;
+        }
+      }
+      const allCompleted = facts.actions.length === plans.length && facts.actions.every((action) => action.completed);
+      if (advanceRequested && allCompleted) {
+        const before = { round: combat.round, turn: combat.turn };
+        facts.advanceStarted = true;
+        try {
+          await combat.nextTurn();
+          facts.advanceCompleted = true;
+        } catch (error) {
+          const active = game.combat;
+          if (active && (active.round !== before.round || active.turn !== before.turn)) {
+            facts.advanceCompleted = true;
+          }
+        }
+      }
+      return serializeTurnResponseV2(facts);
+    }
+    // —— executeAction（az executeActionData 移植；PlayExecuteInput → narrative 扣资源或
+    //    分发 executeTurn native 路径；世界/contextRef/turn/焦点四重校验零写守卫）——
+    async function executeActionData(input) {
+      const reject = (code, message) => ({ status: "rejected", code, message });
+      let focus, live;
+      try { focus = playFocus(); live = playReadContext(false); }
+      catch (error) { return reject(String(error.message).split(":")[0], String(error.message)); }
+      if (!input.world
+        || (loopbackOrigin(input.world.origin) !== loopbackOrigin(focus.scope.world.origin)
+          || input.world.id !== focus.scope.world.id)) return reject("WORLD_CHANGED", "Bound world changed");
+      if (input.contextRef !== live.contextRef) return reject("STATIC_CONTEXT_STALE", "Refresh static context once");
+      const specs = input.resolvedActions;
+      if (!Array.isArray(specs) || !specs.length || specs.length > 20 || (!focus.combat && specs.length !== 1)) {
+        return reject("INPUT_INVALID", "Expected one noncombat action or a combat sequence");
+      }
+      if (input.advance && !focus.combat) return reject("INPUT_INVALID", "Cannot advance without an active combat");
+      if (focus.combat && JSON.stringify(input.turn) !== JSON.stringify(live.turn)) {
+        return reject("TURN_CHANGED", "Read the current turn before acting");
+      }
+      const plans = [];
+      for (const spec of specs) {
+        const doc = focus.tokens.find((token) => token.uuid === spec.sourceTokenUuid);
+        if (!doc?.actor || doc.actor.uuid !== spec.actorUuid) {
+          return reject("SOURCE_OUT_OF_FOCUS", "Exact source Token or Actor is no longer available");
+        }
+        if (focus.combat && focus.combat.combatant?.tokenId !== doc.id) {
+          return reject("ACTOR_NOT_ACTIVE", "Source is not the current combatant");
+        }
+        if (plans.length && plans[0].doc.id !== doc.id) {
+          return reject("INPUT_INVALID", "A sequence must use one source Token");
+        }
+        const item = doc.actor.items?.get?.(spec.itemId) ?? findItem(doc.actor, spec.itemId);
+        if (!item) return reject("ACTION_NOT_FOUND", "Item is no longer owned");
+        const activity = spec.activityId ? activities(item).find((value) => (value.id ?? value._id) === spec.activityId) : null;
+        if (spec.activityId && !activity) return reject("ACTION_NOT_FOUND", "Activity no longer exists");
+        if (!playTimingSupported(item, activity)) {
+          return reject("CASTING_TIMING_UNSUPPORTED", "Reactions and long casting times are not supported by Play execution; no resources consumed");
+        }
+        const definition = { id: spec.actionId, itemId: spec.itemId, activityId: spec.activityId };
+        if (playActionRef(focus.scope, doc, definition) !== spec.actionRef) {
+          return reject("ACTION_NOT_FOUND", "Invalid action reference");
+        }
+        if (activity?.type === "summon") {
+          return reject("CAPABILITY_UNAVAILABLE", "Summon placement awaits the auto pack protocol change (AUTO-001); no resources consumed");
+        }
+        const narrative = input.resolution === "narrative" || spec.actionId === "narrative:" + item.id
+          || (activity?.type === "utility" && !spec.targetTokenUuids?.length && !spec.input?.targetSpec
+            && deriveActivityInputContract(item, activity).mode === "selected-targets");
+        if (narrative && specs.length !== 1) return reject("INPUT_INVALID", "Narrative spells require a single action");
+        if (!narrative && (!activity || locateActionByIdV2(doc.actor, spec.actionId)?.activityId !== spec.activityId)) {
+          return reject("ACTION_NOT_FOUND", "Unsupported action identity");
+        }
+        if (spec.input && Object.keys(spec.input).some((key) =>
+          !["spellLevel", "attackRollMode", "selections", "allocation", "declaredRiders", "targetSpec"].includes(key))) {
+          return reject("INPUT_INVALID", "Unknown activity input");
+        }
+        const targetTokenIds = [];
+        for (const uuid of spec.targetTokenUuids ?? []) {
+          const target = collectionValues(currentScene()?.tokens).find((token) => token.uuid === uuid);
+          if (!target) return reject("TARGET_NOT_FOUND", "Target Token is no longer in the current Scene");
+          targetTokenIds.push(target.id);
+        }
+        let cost;
+        if (narrative) {
+          if (Object.keys(spec.input ?? {}).some((key) => key !== "spellLevel") || targetTokenIds.length) {
+            return reject("INPUT_INVALID", "Narrative records consumption only");
+          }
+          try { cost = playNarrativeCost(item, activity, doc.actor, spec.input?.spellLevel); }
+          catch (error) { return reject("CONSUMPTION_UNSUPPORTED", error.message); }
+          if (cost && cost.value < 1) return reject("RESOURCE_INSUFFICIENT", "No spell slots remain in the requested pool");
+        }
+        plans.push({ spec, doc, item, activity, narrative, cost, targetTokenIds });
+      }
+      const plan = plans[0];
+      if (plan.narrative) {
+        const steps = [];
+        try {
+          if (plan.cost) {
+            const key = "system.spells." + plan.cost.key + ".value";
+            await plan.doc.actor.update({ [key]: plan.cost.value - 1 });
+            const after = Number(plan.doc.actor.system.spells[plan.cost.key]?.value);
+            steps.push({ step: "spell-consumption", targets: [plan.doc.actor.uuid],
+              state: after === plan.cost.value - 1 ? "completed" : "unknown",
+              pool: plan.cost.key, before: plan.cost.value, after });
+            if (after !== plan.cost.value - 1) {
+              return { status: "indeterminate", retry: false, steps, message: "Consumption could not be confirmed; do not retry" };
+            }
+          }
+          if (input.advance) {
+            const before = { round: focus.combat.round, index: focus.combat.turn };
+            try {
+              await focus.combat.nextTurn();
+              steps.push({ step: "advance", targets: [focus.combat.id], state: "completed", before,
+                after: { round: focus.combat.round, index: focus.combat.turn } });
+            } catch {
+              return { status: "partial", retry: false, steps, message: "Spell recorded; turn advancement could not be confirmed. Do not repeat the spell." };
+            }
+          }
+          return { status: "completed", steps, verification: steps,
+            warnings: ["Narrative spell recorded; fictional outcome is decided by the DM. No independent animation adapter is available."] };
+        } catch (error) {
+          return { status: "indeterminate", retry: false, steps, message: "Consumption interrupted; do not retry" };
+        }
+      }
+      return executeTurnData(
+        {
+          actions: plans.map((plan) => ({
+            actionId: plan.spec.actionId,
+            targetTokenIds: plan.targetTokenIds,
+            input: plan.spec.input,
+          })),
+          advance: input.advance === true,
+        },
+        { sourceToken: tokenObject(plan.doc), combat: focus.combat },
+      );
+    }
+
+    // =========================================================================
     // worldInfo / doctor（M2：modules 形状对齐 az——Record<string, boolean> + moduleVersions）
     // =========================================================================
     const world = { id: game.world?.id ?? null, title: game.world?.title ?? null };
@@ -1974,5 +3549,9 @@
     if (action === "actorGrantItems") return await actorGrantData(args);
     if (action === "sceneApply") return await sceneApplyData(args);
     if (action === "imageApply") return await imageApplyData(args);
-    return await conditionsSetData(args);
+    if (action === "conditionsSet") return await conditionsSetData(args);
+    // M5 战斗集：executeTurn/executeAction 自包异常为回执（rejected/partial/indeterminate），
+    // 不向宿主抛；GM 门在入口统一把守
+    if (action === "executeTurn") return await executeTurnData(args);
+    return await executeActionData(args);
   })
