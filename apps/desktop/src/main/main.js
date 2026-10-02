@@ -29,7 +29,7 @@ import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
 import { DisplayMediaController, installDevicePermissionDenials } from "./permissions/display-media.js";
 import { err, errorToIpc } from "./i18n-error.mjs";
-import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
+import { bootstrapFvttOpsRuntime, bootstrapFvttOpsRuntimeOrEnvOverride } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { AppUpdater, buildFeedUrl, readReleaseChannel } from "./app-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
@@ -1205,17 +1205,23 @@ app.whenReady().then(async () => {
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");
-  const fvttOpsRuntimeReady = bootstrapFvttOpsRuntime({
+  const fvttOpsRuntimeReady = bootstrapFvttOpsRuntimeOrEnvOverride({
     runtimeRoot,
     distributionFile,
     bundledNodeRoot,
   }).then((runtime) => {
+    if (!runtime) {
+      console.error(`[fvtt-ops] packaged Node bootstrap unavailable; falling back to ARCANE_FVTT_NODE=${process.env.ARCANE_FVTT_NODE}`);
+      return null;
+    }
     console.log(`[fvtt-ops] Node ${runtime.version} ready at ${runtime.nodeBinary} (${runtime.reused ? "reused" : runtime.source})`);
     return runtime;
   });
   // Keep startup usable for settings/recovery, but retain the rejected promise
   // as the Agent gate. AgentHost awaits the same promise and therefore never
-  // falls back to a system Node when the packaged bootstrap failed.
+  // falls back to a system Node when the packaged bootstrap failed — unless the
+  // operator pinned ARCANE_FVTT_NODE, in which case the promise resolves null
+  // and AgentHost uses that binary (see bootstrapFvttOpsRuntimeOrEnvOverride).
   fvttOpsRuntimeReady.catch((error) => {
     console.error("[fvtt-ops] packaged Node bootstrap failed; Agent sessions are disabled", error);
   });

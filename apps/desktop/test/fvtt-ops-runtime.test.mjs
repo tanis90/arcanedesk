@@ -8,6 +8,7 @@ import test from "node:test";
 
 import {
   bootstrapFvttOpsRuntime,
+  bootstrapFvttOpsRuntimeOrEnvOverride,
   fvttNodePlatformKey,
 } from "../src/main/fvtt-ops-runtime.mjs";
 
@@ -145,4 +146,30 @@ test("bundled Foundry Node targets stay limited to packaged desktop platforms", 
   assert.equal(fvttNodePlatformKey("darwin", "arm64"), "darwin-arm64");
   assert.throws(() => fvttNodePlatformKey("linux", "x64"), /unsupported/);
   assert.throws(() => fvttNodePlatformKey("win32", "arm64"), /unsupported/);
+});
+
+test("ARCANE_FVTT_NODE override downgrades a failed bootstrap instead of disabling Agent sessions", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "arcane-fvtt-node-override-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const bundle = await prepareBundle(root);
+  const options = {
+    runtimeRoot: path.join(root, "runtime"),
+    bundledNodeRoot: bundle.bundledNodeRoot,
+    distributionFile: bundle.distributionFile,
+    // Unsupported desktop target makes the packaged bootstrap fail before any
+    // archive work, matching the Linux dev-host path.
+    platform: "linux",
+    arch: "x64",
+  };
+
+  const degraded = await bootstrapFvttOpsRuntimeOrEnvOverride({
+    ...options,
+    env: { ARCANE_FVTT_NODE: "/opt/dev-node/bin/node" },
+  });
+  assert.equal(degraded, null);
+
+  await assert.rejects(
+    bootstrapFvttOpsRuntimeOrEnvOverride({ ...options, env: {} }),
+    /unsupported bundled Foundry Node target/,
+  );
 });
