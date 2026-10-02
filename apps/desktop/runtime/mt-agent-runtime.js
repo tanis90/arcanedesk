@@ -1,7 +1,7 @@
-// mt-agent-runtime v0.3.0
+// mt-agent-runtime v0.4.0
 (async (action, args, options) => {
     // 握手常量（内联，勿引用模块作用域；与文件头 RUNTIME 保持同步）
-    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.3.0", protocolVersion: 2 };
+    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.4.0", protocolVersion: 2 };
     const g = globalThis;
 
     if (typeof action !== "string" || !action) {
@@ -9,7 +9,7 @@
     }
     if (!["worldInfo", "doctor", "staticContext", "playContext", "battleContext", "turnContext",
       "actorRead", "sceneRead", "contentSearch", "compendiumBrowse",
-      "actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply"].includes(action)) {
+      "actorCreate", "actorEdit", "actorGrantItems", "sceneApply", "imageApply", "conditionsSet"].includes(action)) {
       throw new Error("ACTION_UNKNOWN: " + action);
     }
     // 原版 requireReady 同序：game 在位 → game.ready → GM 门（只读集，门保持 M1 语义）
@@ -142,7 +142,7 @@
         isAgentCallableActivityV2(candidate.activity));
     };
     function concentrationNameV2(actor) {
-      // M4 前无 ActiveEffect 语义层，恒 null（degraded 直报，不伪造）
+      // M4 起读真 effects（statuses 派生集）；无专注效果时 null
       for (const effect of collectionValues(actor?.effects)) {
         const statuses = setValues(effect?.statuses);
         if (!statuses.includes("concentrating")) continue;
@@ -356,7 +356,10 @@
       ]));
     }
     // —— play 焦点（az playFocus；无战斗分支按 M2 指令改为 目标集+选中 placeables）——
-    function playFocus() {
+    // sceneWhenIdle：无战斗分支口径。读面（playContext/staticContext）保持 M2 目标集口径
+    // （空焦点合法）；写面（K5 conditionsSet）传 true——az 原版无战斗焦点=全场景 token，
+    // combat 模式的焦点守卫在无战斗时以场景为单位，否则空目标集会拒绝一切写入。
+    function playFocus(sceneWhenIdle = false) {
       const scene = currentScene();
       const sceneId = scene?.id ?? null;
       const combatSceneId = (combat) => combat?.scene?.id
@@ -379,8 +382,9 @@
           .map((entry) => (scene?.tokens?.get ? scene.tokens.get(entry.tokenId) : undefined) ?? entry.token)
           .filter(Boolean);
       } else {
-        const picked = [...setValues(game.user?.targets), ...collectionValues(g.canvas?.tokens?.controlled)];
-        tokens = picked.map(tokenDocument).filter(Boolean);
+        tokens = sceneWhenIdle ? collectionValues(scene?.tokens)
+          : [...setValues(game.user?.targets), ...collectionValues(g.canvas?.tokens?.controlled)]
+            .map(tokenDocument).filter(Boolean);
       }
       const unique = [...new Map(tokens.map((token) => {
         const doc = tokenDocument(token);
@@ -408,7 +412,7 @@
     function playReadContext(heavy) {
       const focus = playFocus();
       const degraded = heavy ? ["availability:arcane-flags-absent"]
-        : ["conditions:pre-M4", "concentration:pre-M4", "activeBuffRiderIds:pre-M4"];
+        : ["activeBuffRiderIds:pre-M4"];
       const combatants = focus.tokens.map((doc) => {
         const actor = doc.actor ?? null;
         const identity = {
@@ -521,15 +525,22 @@
           availableActionIds: executableActionCandidatesV2(activeActor).map((candidate) => candidate.actionId),
         } : null,
         combatants,
-        degraded: ["conditions:pre-M4", "concentration:pre-M4"],
       };
     }
 
     // =========================================================================
     // prep 投影（actorRead / sceneRead；readState 指纹是 M3 写守卫的输入）
     // =========================================================================
+    // az loopbackOrigin：loopback 等价拼写（localhost/127.0.0.1/[::1] 同协议同端口）归一为
+    // 127.0.0.1 再比较——形似主机名（localhost.evil.example）被 $ 锚拒绝（K5 移植，M3 全部
+    // 写 action 的世界守卫同步受益）
+    function loopbackOrigin(origin) {
+      if (typeof origin !== "string") return origin;
+      const match = origin.match(/^(https?:\/\/)(?:localhost|127[.]0[.]0[.]1|\[::1])(:[0-9]+)?$/i);
+      return match ? match[1] + "127.0.0.1" + (match[2] ?? "") : origin;
+    }
     function prepWorld(world) {
-      if (!world || world.origin !== (g.location?.origin ?? null) || world.id !== (game.world?.id ?? null)) {
+      if (!world || loopbackOrigin(world.origin) !== loopbackOrigin(g.location?.origin ?? null) || world.id !== (game.world?.id ?? null)) {
         throw new Error("WORLD_CHANGED: bound world mismatch");
       }
     }
@@ -1726,6 +1737,157 @@
       }
     }
 
+    // —— K5 conditionsSet（az conditionsSetData 逐段移植；M4b 写集收官）——
+    // shim 适配①：世界/嵌入文档实例不带 documentName 实例面（真 Foundry 有 getter，shim 只有
+    // 类静态）——documentNameOf 以实例面优先，世界集合成员身份 + uuid 链形状兜底（M2
+    // prepActor / imageApply 同款口径）。适配②：写路径的无战斗焦点取 az 语义（全场景 token，
+    // playFocus(true)），读面保留 M2 目标集口径。适配③：game.actors.get 经 worldFind 兜底。
+    function documentNameOf(doc) {
+      if (typeof doc?.documentName === "string") return doc.documentName;
+      if (collectionValues(game.actors).includes(doc)) return "Actor";
+      const parts = typeof doc?.uuid === "string" ? doc.uuid.split(".") : [];
+      if (parts[0] === "Scene" && parts.length === 2) return "Scene";
+      if (parts[0] === "Scene" && parts.length === 4 && parts[2] === "Token") return "Token";
+      if (parts[0] === "Actor" && parts.length === 2) return "Actor";
+      return null;
+    }
+    async function conditionsSetData(input) {
+      const reject = (code, message) => ({ status: "rejected", code, message });
+      const conditions = input?.conditions;
+      if (!Array.isArray(input?.targets) || !input.targets.length || input.targets.length > 20
+        || !Array.isArray(conditions) || !conditions.length || conditions.length > 8
+        || conditions.some((entry) => !entry || typeof entry.key !== "string" || typeof entry.active !== "boolean")
+        || new Set(conditions.map((entry) => entry.key)).size !== conditions.length) {
+        return reject("INPUT_INVALID", "Expected exact actors and distinct explicit condition states");
+      }
+      if (!["prep", "combat"].includes(input.mode)) return reject("INPUT_INVALID", "Missing mode policy");
+      const sceneFocus = input.mode === "combat" || input.targets.some((target) => target?.scope === "focus");
+      let focus;
+      try {
+        prepWorld(input.world);
+        focus = sceneFocus ? playFocus(true) : { tokens: [] };
+      } catch (error) { return reject(writeErrorMessage(error).split(":")[0], writeErrorMessage(error)); }
+      const supported = new Set(collectionValues(g.CONFIG?.statusEffects).map((effect) => effect.id));
+      if (conditions.some((entry) => !supported.has(entry.key))) return reject("CONDITION_UNSUPPORTED", "Unknown system condition");
+      const actors = [], bindings = [];
+      const selected = input.targets.filter((target) => target?.kind === "selected");
+      if (selected.length && input.targets.length !== 1) return reject("INPUT_INVALID", "selected must be the only selector");
+      const selectors = selected.length
+        ? (input.selectedTokenUuids ?? []).map((tokenUuid) => ({ kind: "token", tokenUuid })) : input.targets;
+      if (!selectors.length || selectors.length > 20) return reject("INPUT_INVALID", "Expected 1..20 targets in the submitted selection");
+      try { for (const target of selectors) {
+        let actor = null, document = null;
+        if (target?.kind === "actor" && input.mode === "prep" && typeof target.actorUuid === "string") {
+          document = await g.fromUuid(target.actorUuid);
+          if (documentNameOf(document) === "Actor" && document.uuid === target.actorUuid) actor = document;
+        } else if (target?.kind === "token" && typeof target.tokenUuid === "string") {
+          document = await g.fromUuid(target.tokenUuid);
+          if (documentNameOf(document) === "Token" && document.uuid === target.tokenUuid) {
+            if (input.mode === "combat" && !focus.tokens.some((token) => token.uuid === document.uuid)) {
+              return reject("SOURCE_OUT_OF_FOCUS", "Token is outside the current focus");
+            }
+            actor = document.actor;
+          }
+        } else if (target?.kind === "name" && typeof target.name === "string" && target.name.length <= 256) {
+          let candidates;
+          if (target.scope === "actors" && input.mode === "prep") {
+            candidates = collectionValues(game.actors).filter((value) => value.name === target.name);
+          } else if (target.scope === "focus") {
+            candidates = focus.tokens.filter((token) => token.name === target.name || token.actor?.name === target.name);
+          } else return reject("INPUT_INVALID", "Invalid name search scope");
+          if (candidates.length > 1) return { ...reject("TARGET_AMBIGUOUS", "More than one exact target name"),
+            candidates: candidates.slice(0, 5).map((value) => ({ uuid: value.uuid, name: value.name })) };
+          document = candidates[0];
+          actor = documentNameOf(document) === "Actor" ? document : document?.actor;
+        } else return reject("INPUT_INVALID", "Invalid target selector for this mode");
+        if (!actor || documentNameOf(actor) !== "Actor" || actor.pack) return reject("ACTOR_NOT_FOUND", "Target has no actual Actor");
+        bindings.push({ document, actor, focusBound: input.mode === "combat" || target.scope === "focus" });
+        if (!actors.some((value) => value.uuid === actor.uuid)) actors.push(actor);
+      }
+      } catch (error) { return reject("SOURCE_RESOLUTION_FAILED", writeErrorMessage(error)); }
+      const checkBindings = () => {
+        prepWorld(input.world);
+        if (!game.ready || !game.user?.isGM) throw new Error("WORLD_NOT_READY: ready GM context required");
+        const currentFocus = bindings.some((binding) => binding.focusBound) ? playFocus(true) : null;
+        for (const { document, actor, focusBound } of bindings) {
+          if (documentNameOf(document) === "Token") {
+            if (document.actor !== actor || (document.parent?.tokens && document.parent.tokens.get(document.id) !== document)) throw new Error("SOURCE_CHANGED: bound Token changed");
+            if (focusBound && !currentFocus.tokens.some((token) => token.uuid === document.uuid && token.actor === actor)) throw new Error("SOURCE_OUT_OF_FOCUS: bound Token left current focus");
+          } else if (actor.id && game.actors && !actor.isToken && worldFind(game.actors, actor.id) !== actor) throw new Error("SOURCE_CHANGED: bound Actor changed");
+        }
+      };
+      try { checkBindings(); } catch (error) { return reject(writeErrorMessage(error).split(":")[0], writeErrorMessage(error)); }
+      // az effectState 指纹 / manual 判定：手写状态标记 = 无 origin + 无 changes + 单状态 +
+      // flags 只含 core/arcanedesk（dae 仅空 specialDuration 元数据）
+      const effectState = (effect) => JSON.stringify([effect.uuid, effect.origin, effect.disabled, setValues(effect.statuses).sort(), effect.changes, effect.flags]);
+      const manual = (effect) => !effect.origin && collectionValues(effect.changes).length === 0
+        && setValues(effect.statuses).length === 1
+        && Object.entries(effect.flags ?? {}).every(([key, value]) => key === "core" || key === "arcanedesk"
+          || (key === "dae" && value && Object.keys(value).every((field) => field === "specialDuration")
+            && Array.isArray(value.specialDuration) && value.specialDuration.length === 0));
+      const steps = [];
+      const plans = [];
+      for (const actor of actors) for (const condition of conditions) {
+        const effects = collectionValues(actor.effects).filter((effect) => !effect.disabled && setValues(effect.statuses).includes(condition.key));
+        const before = setValues(actor.statuses).includes(condition.key) || effects.length > 0;
+        const plan = { actor, condition, before, effects, effectStates: effects.map(effectState), end: [] };
+        if (before && !condition.active) {
+          for (const effect of effects) {
+            if (manual(effect)) continue;
+            if (condition.key === "concentrating" && collectionValues(actor.concentration?.effects).includes(effect)
+              && typeof actor.endConcentration === "function") plan.end.push(effect);
+            else return reject("SOURCE_MANAGED", "Condition is provided by effect " + (effect.uuid ?? effect.name));
+          }
+          if (!effects.length) return reject("SOURCE_MANAGED", "Condition source is not an editable manual effect");
+        }
+        if (!before && condition.active && typeof actor.toggleStatusEffect !== "function") {
+          return reject("CAPABILITY_UNAVAILABLE", "Native status setting is unavailable");
+        }
+        plans.push(plan);
+      }
+      let started = false;
+      try {
+        for (const plan of plans) {
+          checkBindings();
+          const { actor, condition, effects, end } = plan;
+          const currentEffects = collectionValues(actor.effects).filter((effect) => !effect.disabled && setValues(effect.statuses).includes(condition.key));
+          const before = setValues(actor.statuses).includes(condition.key) || currentEffects.length > 0;
+          const needsWrite = before !== condition.active;
+          if (needsWrite && (before !== plan.before || JSON.stringify(currentEffects.map(effectState)) !== JSON.stringify(plan.effectStates))) throw new Error("CONDITION_CHANGED: condition sources changed before writing");
+          const step = { step: "condition", targets: [actor.uuid], state: needsWrite ? "unknown" : "completed",
+            key: condition.key, before, after: needsWrite ? null : before, noop: !needsWrite, summary: (actor.name ?? actor.uuid) + ": " + condition.key };
+          steps.push(step);
+          if (needsWrite) {
+            if (condition.active) { started = true; await actor.toggleStatusEffect(condition.key, { active: true }); }
+            else for (const [index, effect] of effects.entries()) {
+              checkBindings();
+              if (!collectionValues(actor.effects).includes(effect)) continue;
+              if (effectState(effect) !== plan.effectStates[index]) throw new Error("CONDITION_CHANGED: effect changed before removal");
+              if (end.includes(effect)) {
+                if (!collectionValues(actor.concentration?.effects).includes(effect)) throw new Error("SOURCE_MANAGED: concentration association changed");
+                started = true; await actor.endConcentration(effect);
+              } else {
+                if (!manual(effect)) throw new Error("SOURCE_MANAGED: effect is no longer a manual marker");
+                started = true; await effect.delete();
+              }
+            }
+          }
+          checkBindings();
+          const after = setValues(actor.statuses).includes(condition.key)
+            || collectionValues(actor.effects).some((effect) => !effect.disabled && setValues(effect.statuses).includes(condition.key));
+          step.after = after; step.state = after === condition.active ? "completed" : "unknown";
+          step.summary += "=" + after;
+          if (after !== condition.active) return { status: "partial", retry: false, steps,
+            message: "The native condition change did not settle. Do not retry automatically." };
+        }
+        return { status: "completed", steps, verification: steps.map(({ targets, key, before, after, noop }) => ({ targets, key, before, after, noop })), warnings: [] };
+      } catch (error) {
+        if (!started) return reject(writeErrorMessage(error).split(":")[0], writeErrorMessage(error));
+        return { status: steps.some((step) => step.state === "completed" && !step.noop) ? "partial" : "indeterminate",
+          retry: false, steps, message: writeErrorMessage(error) + ". Do not retry automatically." };
+      }
+    }
+
     // =========================================================================
     // worldInfo / doctor（M2：modules 形状对齐 az——Record<string, boolean> + moduleVersions）
     // =========================================================================
@@ -1806,10 +1968,11 @@
     if (action === "sceneRead") return await sceneReadData(args);
     if (action === "contentSearch") return await contentSearchData(args);
     if (action === "compendiumBrowse") return await compendiumBrowseData(args);
-    // M3 写集 A：各 action 自捕获异常转四态回执（不向宿主抛；GM 门在入口统一把守）
+    // M3/M4b 写集：各 action 自捕获异常转四态回执（az actorEditData/sceneApplyData/conditionsSetData 同款，不向宿主抛）；GM 门在入口统一把守
     if (action === "actorCreate") return await actorCreateData(args);
     if (action === "actorEdit") return await actorEditData(args);
     if (action === "actorGrantItems") return await actorGrantData(args);
     if (action === "sceneApply") return await sceneApplyData(args);
-    return await imageApplyData(args);
+    if (action === "imageApply") return await imageApplyData(args);
+    return await conditionsSetData(args);
   })
