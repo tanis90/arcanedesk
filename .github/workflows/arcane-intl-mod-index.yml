@@ -45,7 +45,7 @@ jobs:
         run: node apps/desktop/scripts/prepare-intl-index.mjs --output intl-index-out --publish
 
       - name: Upload publish plan for audit
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: intl-mod-index-publish-plan
           path: intl-index-out/publish-plan.json
