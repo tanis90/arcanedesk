@@ -134,7 +134,7 @@ jobs:
             --out-fragment "fragment-${{ matrix.region }}.json"
 
       - name: Upload fragment artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: release-fragment-${{ matrix.region }}-${{ env.RELEASE_ID }}
           path: fragment-${{ matrix.region }}.json

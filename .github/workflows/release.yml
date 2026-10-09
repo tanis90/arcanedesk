@@ -25,7 +25,7 @@ jobs:
       artifact-metadata: write
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 24
         uses: actions/setup-node@v7
@@ -66,7 +66,7 @@ jobs:
           sbom-path: artifacts/sbom.cdx.json
 
       - name: Upload SDK, CLI, checksums, and SBOM
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: npm-package-candidates
           path: artifacts
@@ -95,7 +95,7 @@ jobs:
       artifact-metadata: write
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 24
         uses: actions/setup-node@v7
@@ -128,7 +128,7 @@ jobs:
           subject-checksums: apps/desktop/dist/SHA256SUMS
 
       - name: Upload Desktop candidate
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.target }}-candidate
           path: |
