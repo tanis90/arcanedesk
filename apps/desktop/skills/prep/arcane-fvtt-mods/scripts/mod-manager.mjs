@@ -32,6 +32,21 @@ export function resolveIndexUrl(flagValue, env = process.env) {
   return httpsUrl(value, "mirror index URL");
 }
 
+// 世界展示索引地址（站点展示元数据，world-catalog 专用）：--worlds-index-url 参数 >
+// ARCANE_WORLDS_INDEX_URL 环境变量 > 从根索引 URL 的 origin 派生 /worlds/index.json。
+// 派生地址只保证 cn 构建存在（intl 根索引派生出的地址目前 404），派生失败由
+// world-catalog 的展示降级路径吸收，不是错误；显式传参/环境变量非法时按配置错误硬报错。
+export function deriveWorldsIndexUrl(indexUrl) {
+  const source = httpsUrl(indexUrl, "mirror index URL");
+  return httpsUrl(`${new URL(source).origin}/worlds/index.json`, "worlds display index URL");
+}
+
+export function resolveWorldsIndexUrl(flagValue, indexUrl, env = process.env) {
+  const flag = typeof flagValue === "string" && flagValue.trim() ? flagValue.trim() : null;
+  const fromEnv = String(env.ARCANE_WORLDS_INDEX_URL ?? "").trim() || null;
+  return httpsUrl(flag ?? fromEnv ?? deriveWorldsIndexUrl(indexUrl), "worlds display index URL");
+}
+
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 8 * 1024 * 1024 * 1024;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -816,13 +831,109 @@ function worldResolutionSha256({ generated, profile, world, system, modules }) {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL) {
+// 展示索引是站点侧的纯展示元数据（不可信网络输入，字段"只增不改"）：world-catalog 的
+// 工件事实（version/bytes/sha256/URL）永远只来自根索引；展示字段只允许平铺白名单，
+// web 视觉素材（previewBase/cover/maps/characters）与未知字段一律不进输出。
+const WORLD_DISPLAY_FIELDS = ["tagline", "description", "compat", "players", "duration", "stats", "tags", "credits", "moduleLinks"];
+
+function validateWorldDisplayCreditsEntry(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const entry = { author: requireString(value.author, `${label} author`, 256), role: requireString(value.role, `${label} role`, 256) };
+  if (value.name !== undefined) {
+    if (typeof value.name !== "string") throw new Error(`${label} name must be a string`);
+    entry.name = value.name;
+  }
+  if (value.items !== undefined) {
+    if (!Array.isArray(value.items) || value.items.some((item) => typeof item !== "string")) {
+      throw new Error(`${label} items must be an array of strings`);
+    }
+    entry.items = [...value.items];
+  }
+  return entry;
+}
+
+function validateWorldDisplayIndexEntry(value, index) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`worlds display index entry ${index} must be an object`);
+  }
+  const id = requireString(value.id, `worlds display index entry ${index} id`, 128);
+  if (!ID_PATTERN.test(id)) throw new Error(`worlds display index entry ${index} has an unsafe id: ${id}`);
+  const label = `worlds display index entry ${id}`;
+  const entry = { id };
+  if (value.version !== undefined) entry.version = requireString(value.version, `${label} version`, 128);
+  for (const field of ["tagline", "description", "compat", "players", "duration"]) {
+    if (value[field] !== undefined) {
+      if (typeof value[field] !== "string") throw new Error(`${label} ${field} must be a string`);
+      entry[field] = value[field];
+    }
+  }
+  if (value.stats !== undefined) {
+    const stats = value.stats;
+    if (!stats || typeof stats !== "object" || Array.isArray(stats)) throw new Error(`${label} stats must be an object`);
+    for (const field of ["scenes", "actors", "journals"]) {
+      if (typeof stats[field] !== "number") throw new Error(`${label} stats.${field} must be a number`);
+    }
+    entry.stats = { scenes: stats.scenes, actors: stats.actors, journals: stats.journals };
+  }
+  if (value.tags !== undefined) {
+    if (!Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== "string")) {
+      throw new Error(`${label} tags must be an array of strings`);
+    }
+    entry.tags = [...value.tags];
+  }
+  if (value.credits !== undefined) {
+    if (!Array.isArray(value.credits)) throw new Error(`${label} credits must be an array`);
+    entry.credits = value.credits.map((item, itemIndex) => validateWorldDisplayCreditsEntry(item, `${label} credits ${itemIndex}`));
+  }
+  if (value.moduleLinks !== undefined) {
+    if (!Array.isArray(value.moduleLinks)) throw new Error(`${label} moduleLinks must be an array`);
+    entry.moduleLinks = value.moduleLinks.map((item, itemIndex) => {
+      const linkLabel = `${label} moduleLinks ${itemIndex}`;
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error(`${linkLabel} must be an object`);
+      return {
+        label: requireString(item.label, `${linkLabel} label`, 256),
+        url: httpsUrl(item.url, `${linkLabel} URL`),
+      };
+    });
+  }
+  return entry;
+}
+
+function validateWorldDisplayIndex(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(value.worlds)) {
+    throw new Error("worlds display index must be an object with a worlds array");
+  }
+  return value.worlds.map(validateWorldDisplayIndexEntry);
+}
+
+// 展示索引任何获取/解析/校验失败都整体降级（不部分应用），world-catalog 照常输出工件对账。
+async function loadWorldDisplayIndex(fetchImpl, worldsIndexUrl) {
+  try {
+    const value = await fetchJson(fetchImpl, worldsIndexUrl, "worlds display index");
+    const byId = new Map();
+    for (const entry of validateWorldDisplayIndex(value)) {
+      if (!byId.has(entry.id)) byId.set(entry.id, entry);
+    }
+    return {
+      status: "ok",
+      generated: typeof value.generated === "string" ? value.generated : null,
+      byId,
+    };
+  } catch {
+    return { status: "unavailable", generated: null, byId: new Map() };
+  }
+}
+
+export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_INDEX_URL, display = null) {
   const index = validateMirrorIndex(indexValue);
   const installed = Array.isArray(installedValue?.worlds) ? installedValue.worlds : [];
+  const displayById = display?.status === "ok" ? display.byId : new Map();
   const rows = index.worlds.map((entry) => {
     const matches = installed.filter((local) => local.id === entry.id);
     const local = matches.length === 1 ? matches[0] : null;
-    return {
+    const row = {
       id: entry.id,
       title: entry.title,
       localVersion: local?.version ?? null,
@@ -838,6 +949,16 @@ export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_
         ? matches.map((match) => ({ version: match.version, directory: match.directory }))
         : null,
     };
+    const displayEntry = displayById.get(entry.id) ?? null;
+    if (displayEntry) {
+      for (const field of WORLD_DISPLAY_FIELDS) {
+        if (displayEntry[field] !== undefined) row[field] = displayEntry[field];
+      }
+      if (displayEntry.version !== undefined && displayEntry.version !== entry.version) {
+        row.displayVersion = displayEntry.version;
+      }
+    }
+    return row;
   }).sort((a, b) => a.id.localeCompare(b.id));
   const publishedIds = new Set(index.worlds.map((entry) => entry.id));
   const notInMirror = installed
@@ -846,6 +967,9 @@ export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_
     .sort((a, b) => a.id.localeCompare(b.id));
   return {
     indexUrl,
+    displayIndexUrl: display?.url ?? deriveWorldsIndexUrl(indexUrl),
+    displayIndexStatus: display?.status ?? "unavailable",
+    displayIndexGenerated: display?.status === "ok" ? display.generated : null,
     generated: index.generated,
     dataDirExists: installedValue?.dataDirExists ?? null,
     rows,
@@ -855,12 +979,20 @@ export function buildWorldCatalog(indexValue, installedValue, indexUrl = MIRROR_
   };
 }
 
-export async function catalogWorlds({ dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
-  const [index, installed] = await Promise.all([
+export async function catalogWorlds({
+  dataDir,
+  fetchImpl = fetch,
+  indexUrl = MIRROR_INDEX_URL,
+  worldsIndexUrl = null,
+  allowMissingDataDir = false,
+}) {
+  const resolvedWorldsIndexUrl = resolveWorldsIndexUrl(worldsIndexUrl, indexUrl);
+  const [index, installed, display] = await Promise.all([
     loadIndex(fetchImpl, indexUrl),
     listInstalledWorlds(dataDir, { allowMissingDataDir }),
+    loadWorldDisplayIndex(fetchImpl, resolvedWorldsIndexUrl),
   ]);
-  return buildWorldCatalog(index, installed, indexUrl);
+  return buildWorldCatalog(index, installed, indexUrl, { ...display, url: resolvedWorldsIndexUrl });
 }
 
 // 镜像全量清单：从索引侧枚举（与 catalog 的"只对本机已装对账"互补），并标注默认集。
@@ -2170,7 +2302,7 @@ function usage() {
     "",
     "本机对账与检查（只读）：",
     "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 只对本机【已安装】mod 与镜像做版本对账；不含未安装的镜像 mod（全量清单用 mirror-catalog）",
-    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 镜像可下载世界全量 + 本机安装状态",
+    "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>] [--worlds-index-url <url>]   # 镜像可下载世界全量 + 本机安装状态（含站点展示元数据：简介/人数/时长/兼容性等）",
     "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 解析某世界的环境依赖计划",
     "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 检查单个 manifest 与本机状态",
     "  mod-manager local-inspect --archive <zip> --data-dir <dir>   # 检查本地 zip 物料",
@@ -2185,6 +2317,7 @@ function usage() {
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
     "",
     "镜像索引地址：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量（桌面端按构建 region 注入）；两者都缺失时报错。",
+    "世界展示索引地址（world-catalog）：--worlds-index-url 参数 > ARCANE_WORLDS_INDEX_URL 环境变量 > 从根索引 URL 的 origin 派生 /worlds/index.json；展示索引获取或校验失败时命令照常成功，输出 displayIndexStatus: \"unavailable\" 且行内只有工件字段。",
   ].join("\n");
 }
 
@@ -2246,6 +2379,7 @@ export async function runCli(argv = process.argv.slice(2)) {
       return catalogWorlds({
         dataDir: options["data-dir"],
         indexUrl: resolveIndexUrl(options["index-url"]),
+        worldsIndexUrl: options["worlds-index-url"] ?? null,
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
       });
     case "world-stage":

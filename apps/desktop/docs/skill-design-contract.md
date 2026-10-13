@@ -58,6 +58,17 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### arcane-fvtt-mods 世界展示索引与纯发现放宽（2026-10-13）
+
+- `world-catalog` 合并站点世界展示索引（tagline/description/compat/players/duration/stats/tags/
+  credits/moduleLinks，字段只增不改）：rows 的工件事实（version/bytes/sha256/URL）永远只取根
+  索引，展示数据获取/解析/校验失败整体降级为 `displayIndexStatus: "unavailable"`，不部分应用、
+  不阻塞对账；web 视觉素材（previewBase/cover/maps/characters）不进 CLI 输出，看图引导去官网
+  世界页。
+- `--allow-missing-data-dir` 放宽到纯发现：只读 `world-catalog` 在用户尚未安装 FVTT、Data 目录
+  可能不存在时也可传该旗标（先看有什么世界再决定装不装）；修订 2026-08-31 记录中"仅 setup
+  全新安装流程使用"的范围限定，stage/commit 永远严格不变，写路径的硬报错警报器保留。
+
 ### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
 
 - G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
