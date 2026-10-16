@@ -24,7 +24,8 @@ import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
 import { createFoundryTools } from "./foundry-tools.js";
-import { activeToolNamesForPool, verifyActiveTools } from "./foundry-tool-policy.js";
+import { activeToolNamesForPoolInProfile, verifyActiveTools } from "./foundry-tool-policy.js";
+import { mtcompatSurfaceSegment, withMtcompatSurfaceSegment } from "./mtcompat-surface.mjs";
 import { PendingInputs } from "./tasks/pending-inputs.js";
 import { replaceFile } from "./atomic-file.js";
 import { regionConfig } from "./region.mjs";
@@ -232,13 +233,15 @@ export class AgentHost {
    *   log?: (...data: any[]) => void,
    *   profile?: Record<string, any>,
    *   getLocale?: () => string,
+   *   getPanelProfileId?: () => string | null,
+   *   mtcompatSurfaceFile?: string,
    *   taskStorageDir?: string,
    *   operationStorageDir?: string,
    *   scheduler?: any,
    *   search?: { store: import("./search/store.js").SearchStore, spark: () => any, fetchImpl?: any } | null,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler, search } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, getPanelProfileId, mtcompatSurfaceFile, taskStorageDir, operationStorageDir, scheduler, search } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
@@ -256,6 +259,11 @@ export class AgentHost {
     this.telemetry = telemetry ?? null;
     this.runtimeReady = runtimeReady ?? Promise.resolve(null);
     this.getLocale = getLocale ?? null;
+    // 面板当前档位（main.js 的 activeProfileId）：mtcompat 档才挂支持面蒸馏段，
+    // 缺席（测试/无面板）按 foundry 开放默认档处理，工具与 prompt 逐字节不变。
+    this.getPanelProfileId = getPanelProfileId ?? null;
+    // 蒸馏产物路径注入点（测试/联调指到 fixture）；缺省走 generated/ 的构建产物。
+    this.mtcompatSurfaceFile = mtcompatSurfaceFile ?? null;
     this.fvttOpsNode = null;
     this.modelRuntime = null;
     // 用户当前选择的模型。缺 key 时它可以先于 AgentSession.model 生效，
@@ -293,6 +301,29 @@ export class AgentHost {
   /** Pi 原生模式存储目录；不依赖 cwd 编码，也不需要外部 path -> mode 索引。 */
   sessionDir() {
     return sessionDirForMode(getAgentDir(), this.profile.mode);
+  }
+
+  /**
+   * 面板当前档位 id（main.js 注入的 getter，值即 activeProfileId）。无注入（测试/无面板）
+   * 返回 null——策略层与蒸馏段一律按 foundry 开放默认档处理。
+   */
+  panelProfileId() {
+    return this.getPanelProfileId?.() ?? null;
+  }
+
+  /**
+   * mtcompat 档的支持面蒸馏段（A2，Tier 0 背诵级）：面板当前档位决定，foundry 档/无产物
+   * 返回 null。段落挂在模式 prompt 与 eval 工具描述上，两处共用同一份文本。
+   * 产物损坏只记日志并降级为"无段落"——包内数据把会话建不起来，代价与收益不成比例；
+   * 构建期由 prepare 链保证 schema，损坏会被日志直接指出。
+   */
+  surfaceSegment() {
+    try {
+      return mtcompatSurfaceSegment(this.panelProfileId(), this.mtcompatSurfaceFile ?? undefined);
+    } catch (error) {
+      this.log(`[agent:${this.profile.mode}] mtcompat surface segment unavailable: ${error.message}`);
+      return null;
+    }
   }
 
   createSessionManager() {
@@ -420,7 +451,8 @@ export class AgentHost {
       agentDir: getAgentDir(),
     };
     // web_search 只在工具池里存在(已配置搜索)时才激活;allowlist 静态包含它。
-    options.tools = activeToolNamesForPool(this.profile.mode, customTools);
+    // 激活名单按「面板档位 × 模式」取(A2):mtcompat 档的策略面独立成表。
+    options.tools = activeToolNamesForPoolInProfile(this.profile.mode, customTools, this.panelProfileId());
     // 模型按会话生效:已有会话恢复自己的模型,新会话才吃全局默认(见
     // initialModelRefForAttach)。传 model 对象是为了绕过 pi settings.json
     // 的默认,而不是覆盖会话选择。
@@ -433,7 +465,8 @@ export class AgentHost {
       // 战斗纪律系统提示:全量替换 SDK 默认的 coding-agent prompt
       // (默认 prompt 讲文件/代码工具,对无 shell 的战斗 agent 是误导)。
       // appendSystemPromptOverride 必须显式置空,挡掉 ~/.pi 的 APPEND_SYSTEM.md。
-      const systemPrompt = loadCombatSystemPrompt(this.log);
+      // mtcompat 档另挂支持面蒸馏段(A2;foundry 档 base 原样返回)。
+      const systemPrompt = withMtcompatSurfaceSegment(loadCombatSystemPrompt(this.log), this.surfaceSegment());
       if (systemPrompt) {
         const languageDirective = languageDirectiveForLocale(this.getLocale?.());
         const loader = new DefaultResourceLoader({
@@ -448,8 +481,8 @@ export class AgentHost {
     } else {
       // 备团:保留 pi 默认 coding prompt(它准确描述了内置工具),追加模式序言;
       // skills 走原生渐进披露(<available_skills> 清单,read 按需加载);
-      // fence 挂 cwd 围栏 extension。
-      const prepPreamble = loadPrepPreamble(this.log);
+      // fence 挂 cwd 围栏 extension。mtcompat 档在序言后另挂支持面蒸馏段(A2)。
+      const prepPreamble = withMtcompatSurfaceSegment(loadPrepPreamble(this.log), this.surfaceSegment());
       const languageDirective = languageDirectiveForLocale(this.getLocale?.());
       const loader = new DefaultResourceLoader({
         cwd,
@@ -1161,21 +1194,25 @@ export class AgentHost {
       },
     });
 
+    // mtcompat 档:蒸馏段挂在 eval 工具描述尾部(A2,Tier 0/1/2 三层纪律的入口文本);
+    // foundry 档段为 null,描述逐字节不变。
+    const browserEvaluateDescription = prepWorldEdit
+      ? "Run JavaScript inside the controlled Foundry page and return the JSON-serialized result. " +
+        "In prep mode this tool MAY read or change the current world when the DM explicitly asks for content synchronization. " +
+        "Use public Foundry Document APIs (for example Actor.create/document.update/createEmbeddedDocuments), await writes, and return a compact verification value. " +
+        "Call foundry_open first; require a ready GM /game page. Never submit /join or handle credentials. " +
+        "Do not perform live combat actions. Provide ONE expression or an async IIFE that returns a value."
+      : "Run JavaScript inside the Foundry page and return the JSON-serialized result. " +
+        "Use it only for bounded diagnostics of page/game initialization. " +
+        "Do not use it to submit the /join form or handle credentials; the user logs in directly in the Foundry panel. " +
+        "Do not use it to bypass world_status or the structured combat tools for reads or writes. " +
+        "Provide ONE expression or an async IIFE that returns a value. " +
+        "For structured combat data always use world_status/combat_*.";
+
     const browserEvaluate = defineTool({
       name: "browser_evaluate",
       label: "Browser Evaluate",
-      description: prepWorldEdit
-        ? "Run JavaScript inside the controlled Foundry page and return the JSON-serialized result. " +
-          "In prep mode this tool MAY read or change the current world when the DM explicitly asks for content synchronization. " +
-          "Use public Foundry Document APIs (for example Actor.create/document.update/createEmbeddedDocuments), await writes, and return a compact verification value. " +
-          "Call foundry_open first; require a ready GM /game page. Never submit /join or handle credentials. " +
-          "Do not perform live combat actions. Provide ONE expression or an async IIFE that returns a value."
-        : "Run JavaScript inside the Foundry page and return the JSON-serialized result. " +
-          "Use it only for bounded diagnostics of page/game initialization. " +
-          "Do not use it to submit the /join form or handle credentials; the user logs in directly in the Foundry panel. " +
-          "Do not use it to bypass world_status or the structured combat tools for reads or writes. " +
-          "Provide ONE expression or an async IIFE that returns a value. " +
-          "For structured combat data always use world_status/combat_*.",
+      description: withMtcompatSurfaceSegment(browserEvaluateDescription, this.surfaceSegment()),
       parameters: Type.Object({
         code: Type.String({ description: "JS expression or async IIFE returning a value" }),
       }),

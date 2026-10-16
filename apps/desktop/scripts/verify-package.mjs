@@ -56,6 +56,7 @@ export const requiredFiles = [
   "distribution/community-distribution.json",
   "generated/desktop-release.json",
   "generated/region.json",
+  "generated/mtcompat-surface.json",
   "generated/renderer-assets/marked/lib/marked.umd.js",
   "generated/renderer-assets/highlightjs/cdn-assets/highlight.min.js",
   "generated/renderer-assets/highlightjs/cdn-assets/styles/nord.min.css",
@@ -93,7 +94,7 @@ export const exactDirectories = new Map([
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
-  ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
+  ["generated", ["desktop-release.json", "mtcompat-surface.json", "region.json", "renderer-assets"]],
 ]);
 
 // generated/ 的精确清单随 region flavor 变化：intl 包必须携带英文 system prompts

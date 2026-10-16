@@ -6,7 +6,8 @@ import path from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager,
   createReadTool, createWriteTool, createEditTool, createBashTool, createPowerShellTool } from "@earendil-works/pi-coding-agent";
 import { AgentHost } from "../src/main/agent-host.js";
-import { activeToolNames, activeToolNamesForPool, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { TOOL_NAMES_BY_PROFILE, activeToolNames, activeToolNamesForPool, activeToolNamesForPoolInProfile, activeToolNamesForProfile, normalizePolicyProfile, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { PAGE_PROFILES } from "../src/main/page-profiles.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 import { SAFE_DIRECT_ACTIONS } from "@arcanedesk/foundry-sdk/contracts";
@@ -93,4 +94,37 @@ test("real Pi prep session activates web_search when search is configured", asyn
   t.after(() => session.dispose());
   verifyActiveTools(session, expected);
   assert.equal(session.getActiveToolNames().includes("web_search"), true);
+});
+
+// ---- A2：写策略的档位维度（mtcompat 档策略面独立，A3 在其上放 pageEval 写策略）----
+
+test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不变", () => {
+  // 档位词汇表与页面档位同一份事实源：两边键集必须一致（新增档位不许漏配策略表）。
+  assert.deepEqual(Object.keys(TOOL_NAMES_BY_PROFILE).sort(), Object.keys(PAGE_PROFILES).sort());
+  for (const mode of ["combat", "prep"]) {
+    assert.deepEqual(activeToolNamesForProfile(mode, "mtcompat"), activeToolNamesForProfile(mode, "foundry"),
+      `${mode}: A2 起 mtcompat 面与 foundry 面内容同集（A3 起分叉）`);
+    assert.deepEqual(activeToolNamesForProfile(mode, "mtcompat"), activeToolNames(mode));
+  }
+  // 旧调用方语义：无档位 = 开放默认档；模式校验照旧。
+  assert.equal(activeToolNames("combat").length, 6);
+  assert.equal(activeToolNames("prep").length, 27, "静态 allowlist 27 = 26 有效 + web_search 静态成员");
+  assert.throws(() => activeToolNamesForProfile("unknown-mode", "mtcompat"), /Unknown tool mode/);
+});
+
+test("档位归一：词汇表外的 id（含笔误/undefined/null）一律落开放默认档", () => {
+  assert.equal(normalizePolicyProfile("mtcompat"), "mtcompat");
+  assert.equal(normalizePolicyProfile("foundry"), "foundry");
+  assert.equal(normalizePolicyProfile("mtcompat-dev"), "foundry");
+  assert.equal(normalizePolicyProfile(undefined), "foundry");
+  assert.equal(normalizePolicyProfile(null), "foundry");
+  assert.equal(normalizePolicyProfile(42), "foundry");
+});
+
+test("档位维度的池感知激活：web_search 仍只在池里真的构造出它时才激活", () => {
+  const pool = [{ name: "foundry_open" }, { name: "web_search" }];
+  assert.deepEqual(activeToolNamesForPoolInProfile("prep", pool, "mtcompat"), activeToolNamesForProfile("prep", "mtcompat"));
+  assert.equal(activeToolNamesForPoolInProfile("prep", [], "mtcompat").includes("web_search"), false);
+  assert.equal(activeToolNamesForPoolInProfile("prep", [], "foundry").includes("web_search"), false);
+  assert.equal(activeToolNamesForPool("prep", pool).includes("web_search"), true);
 });

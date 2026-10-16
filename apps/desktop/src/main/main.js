@@ -1353,6 +1353,8 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
+      // 面板当前档位(A2):mtcompat 档才挂支持面蒸馏段/走 mtcompat 策略面。
+      getPanelProfileId: () => activeProfileId,
       profile: {
         getCwd: () => directory ?? combatWorkspace,
       },
@@ -1371,6 +1373,8 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
+      // 面板当前档位(A2):mtcompat 档才挂支持面蒸馏段/走 mtcompat 策略面。
+      getPanelProfileId: () => activeProfileId,
       profile: {
         mode: "prep",
         getCwd: () => cwd,
