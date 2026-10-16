@@ -14,7 +14,7 @@
 | GCP | 购买时自设 | .pem 或密码 |
 | 不认识的小服务商 | root → ubuntu → admin 逐个试 | 密码 |
 
-厂商同时决定安全组引导话术与控制台兜底路径(见 vendor-map.md)。
+厂商同时决定安全组引导话术与控制台兜底路径(见 server-vendor-map.md)。
 
 ## ① 开场(问且只问三个事实)
 
@@ -63,7 +63,7 @@ macOS 变体:`cat ~/.ssh/id_ed25519.pub | ssh root@47.98.x.x "…"`。
    ```
 3. `ssh arcane-server 'echo ok'` 验证;`Permission denied` → 换下一候选用户名,
    回到③换一条命令;22 端口超时 → 提示"去云厂商控制台把安全组的 22 端口放行"
-   (vendor-map.md 有各家路径)。
+   (server-vendor-map.md 有各家路径)。
 4. 汇报:
 
 > ✅ 连上了。以后你对我说"服务器"就是它(arcane-server),你的密码和私钥我从头到尾没碰过。现在开始检查服务器环境(系统、Docker、30000 端口)……
@@ -78,7 +78,7 @@ macOS 变体:`cat ~/.ssh/id_ed25519.pub | ssh root@47.98.x.x "…"`。
 
 适用:所有候选用户名都 Permission denied(密码登录被禁/密码丢失),或用户主动
 要求在控制台操作。此时导入的是**我们生成的公钥**(skill 展示 .pub 内容),用户
-不需要下载任何 .pem。各家控制台的密钥对规则与坑见 vendor-map.md;以阿里云为例:
+不需要下载任何 .pem。各家控制台的密钥对规则与坑见 server-vendor-map.md;以阿里云为例:
 
 > 打开阿里云控制台 → 云服务器 ECS → 左侧"密钥对"——**先看左上角地域是不是你
 > 实例所在的那个**,不对先切。点"导入密钥对",把我给你的这串公钥粘进去;然后

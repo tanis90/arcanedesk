@@ -4,6 +4,10 @@
 - 日期：2026-09-18
 - 分支：`docs/server-deploy-plan`（自 main 切出）
 - 前置阅读：`apps/desktop/distribution/oss-release-contract.md`、`apps/desktop/docs/i18n-plan.md`（region 体系）
+- **2026-10-01 更新**：本文所述 `arcane-fvtt-server` skill 已并入 `arcane-fvtt-setup`
+  （见 `skill-design-contract.md` §6 合并记录）；其 references 现为
+  `arcane-fvtt-setup/references/server-{ssh,deploy,vendor-map}.md`，行为原样。本文其余
+  内容保留为设计记录，skill 名以合并后为准。
 
 ## 0. TL;DR
 

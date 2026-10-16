@@ -11,6 +11,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | --- | --- | --- |
 | `@earendil-works/pi-coding-agent` | MIT | <https://github.com/earendil-works/pi> |
 | `@highlightjs/cdn-assets` | BSD-3-Clause | <https://highlightjs.org/> |
+| `brace-expansion` | MIT | <https://github.com/isaacs/brace-expansion> |
 | `commander` | MIT | <https://github.com/tj/commander.js> |
 | `katex` | MIT | <https://katex.org/> |
 | `marked` | MIT | <https://marked.js.org/> |

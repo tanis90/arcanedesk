@@ -39,7 +39,17 @@ skill 不做任何云厂商集成:不调 OpenAPI、不存云凭证、不按厂�
 跟 app 的 region flavor 走,不跟服务器物理位置:cn 一律 OSS 北京(阿里云 ECS
 同区域时自动切内网 endpoint `arcane-package.oss-cn-beijing-internal.aliyuncs.com`,
 经元数据服务 `100.100.100.200` 探测 region),intl 一律 R2
-(`dl.arcanedesk.app`)。服务器侧统一 curl 模板:
+(`dl.arcanedesk.app`)。
+
+镜像通道根前缀(region 默认值,与 App 注入的 `ARCANE_SERVER_RELEASE_BASE`
+同源;env 缺失时按 flavor 取下表字面量):
+
+- cn: `https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/server`
+- intl: `https://dl.arcanedesk.app/desktop/arcane-desk-intl/server`
+
+入口固定为 `<根前缀>/latest.json` → `<revision>/server-release.json` → 按
+`uname -m` 选架构 tar.gz;同 revision 目录内还有 docker-compose.yml 与 README。
+服务器侧统一 curl 模板:
 
 ```
 curl -fL --retry 5 --retry-delay 2 -C - --connect-timeout 10 -o <file> <url>

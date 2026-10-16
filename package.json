@@ -30,5 +30,8 @@
   "devDependencies": {
     "classic-level": "3.0.0",
     "fflate": "0.8.3"
+  },
+  "overrides": {
+    "katex": "^0.18.4"
   }
 }

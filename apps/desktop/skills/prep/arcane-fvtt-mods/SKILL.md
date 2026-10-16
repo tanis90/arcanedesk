@@ -1,6 +1,6 @@
 ---
 name: arcane-fvtt-mods
-description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或 Arcane Demo world 时使用。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
+description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或镜像发布的世界（含 Arcane Demo 与奥法世界授权世界包），或询问有哪些可下载的世界、某世界的简介/时长/人数/兼容性时使用。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
 ---
 
 # Foundry VTT 模组管理
@@ -48,16 +48,21 @@ macOS Bash 调用形态：
   [references/install.md](references/install.md)。
 - 用户问 Arcane 包、国内镜像或本机 mod 有什么更新：读取
   [references/updates.md](references/updates.md)。
-- 用户要求安装、检查、更新或重置 Arcane Demo world，安装 FVTT 后继续 Demo 环境，或点名
-  安装 dnd5e 等 system：读取 [references/demo-world.md](references/demo-world.md)。
+- 用户问有什么世界可下载、某个世界的简介/时长/人数/兼容性：用只读的 `world-catalog`
+  （输出含 tagline/description/players/duration/compat/stats/tags/credits 与
+  `displayIndexStatus`；展示索引不可用时只有工件字段）。想看地图预览、预设角色或完整介绍时
+  引导用户访问官网 `https://arcanedesk.bitterbebop.cn/worlds/<世界 id>/`。
+- 用户要求安装、检查、更新或重置 Arcane Demo world 或其他镜像发布的世界（含奥法世界授权
+  世界包），安装 FVTT 后继续 Demo 环境，或点名安装 dnd5e 等 system：读取
+  [references/demo-world.md](references/demo-world.md)。
 
 只读的 `bundle-inspect` 可检查构建输入，无需 Foundry 目录；其他只读的
 `local-inspect` / `inspect` / `catalog` / `mirror-catalog` / `world-inspect` / `world-catalog` 可以直接执行。
 回答"镜像里有哪些可下载内容（含未安装的）"一律用 `mirror-catalog`（枚举 index 全量，无需 Data 目录）；
 `catalog` 只对本机【已安装】mod 与镜像对账，枚举不出未安装的镜像 mod。`catalog` / `inspect` / `world-*`
-等默认要求 Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。唯一例外是
-`arcane-fvtt-setup` 全新安装流程在计划确认前传 `--allow-missing-data-dir`，输出带 `dataDirExists`
-标记；stage/commit 不接受该旗标，永远严格。下载前说明来源、
+等默认要求 Data 目录已存在；目录不存在时的硬报错是防错误路径的刻意设计，先核对路径，不要绕过。例外只有两类只读场景可以传
+`--allow-missing-data-dir`（输出带 `dataDirExists` 标记）：`arcane-fvtt-setup` 全新安装流程在计划确认前的检查，以及纯发现场景——
+用户尚未安装 FVTT、Data 目录可能还不存在，只想先看看有什么可下载（如先跑一次 `world-catalog`）。stage/commit 不接受该旗标，永远严格。下载前说明来源、
 目标与已知体积；写入 `<数据目录>/Data/modules`、`<数据目录>/Data/systems` 或
 `<数据目录>/Data/worlds`、停服或重启前展示计划。计划是告知，不是反复追问：用户明确要求
 安装/升级，或在更新表后说“升级”、“全部升级”或点名选择的包，即视为对表中准确版本、体积、

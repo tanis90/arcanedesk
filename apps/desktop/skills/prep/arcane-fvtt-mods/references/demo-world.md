@@ -1,6 +1,7 @@
-# Arcane Demo world 与环境 Profile
+# 镜像发布的 world 与环境 Profile
 
-`arcane-demo` 不随 Desktop 打包。world、环境 profile 和 package 是三条独立发布线：
+本参考覆盖任意镜像发布的 world：`arcane-demo`（官方 Demo）与奥法世界授权世界包，行文以
+`arcane-demo` 为示例。镜像 world 不随 Desktop 打包。world、环境 profile 和 package 是三条独立发布线：
 
 - `worlds` 条目只描述不可变的 world manifest/ZIP，并用 `defaultProfile` 选择环境；world 内容变化时才发新 world 版本。
 - `profiles` 条目指向不可变的 `foundry-environment-profile`；profile 只列 system/module id，不列版本。system/module ID 集合或 profile 语义元数据变化时才加 revision。
@@ -11,7 +12,36 @@ skill 不固定 world 版本、Core 版本、profile revision、system/module id
 `relationships.requires` 递归解析到该快照中的精确 stable 包。这里的 stable 是 Arcane OSS 已验收版本，
 不是上游最新版本。
 
-## 1. 只读检查
+## 1. 世界发现与只读检查
+
+### 世界发现（world-catalog）
+
+用户问“有什么世界可下载”、某个世界的简介/时长/人数/兼容性，或想知道已发布 world 有哪些更新时，
+用只读的 `world-catalog` 回答；用户尚未安装 FVTT、Data 目录还不存在的纯发现场景可追加
+`--allow-missing-data-dir`：
+
+```text
+mod-manager world-catalog --data-dir <数据目录>
+```
+
+镜像侧世界清单在 `rows` 数组：每行含工件字段 `id`、`title`、`localVersion`、`mirrorVersion`、
+`status`、`downloadUrl`、`bytes`、`sha256`、`defaultProfile`；镜像无已发布 world 时 `rows` 为 `[]`。
+辅助列表 `updates`（可升级的行）、`notInMirror`（本机已装但镜像未发布）、`invalidLocal`
+（本机安装损坏）在为空时照常出现。命中站点展示索引（`displayIndexStatus: "ok"`）时行内还平铺
+展示字段，呈现话术：
+
+- `tagline` 一句话简介、`description` 详细介绍：用自己的话转述，不整段照抄；
+- `stats.scenes` / `stats.actors` / `stats.journals`：场景/角色/日志数量，说明世界规模；
+- `players`、`duration`：建议人数与预计时长；`compat`：兼容性一行（Foundry 与 system 版本）；
+- `tags`：题材标签；`credits`：作者与分工；`moduleLinks`：相关 mod 链接；
+- 体积与本机安装状态始终以工件字段为准（`bytes`、`localVersion`/`mirrorVersion`/`status`）。
+
+`displayIndexStatus: "unavailable"` 时行内只有工件字段：照常呈现版本/体积/安装状态，说明简介
+暂不可用，不要编造展示内容。展示字段不包含地图预览、预设角色卡与完整图文介绍；用户想看这些时
+引导访问官网 `https://arcanedesk.bitterbebop.cn/worlds/<世界 id>/`。用户点名要装某个世界后，
+走下文既有的 inspect → stage → commit → 验收流程，`--world-id` 换成该世界 id。
+
+### 安装计划（world-inspect）
 
 确认 Foundry Data 目录后执行：
 
@@ -19,24 +49,15 @@ skill 不固定 world 版本、Core 版本、profile revision、system/module id
 mod-manager world-inspect --world-id arcane-demo --data-dir <数据目录>
 ```
 
+（`--world-id arcane-demo` 是示例；装其他镜像发布的世界时换成对应 id。）
+
 由 `arcane-fvtt-setup` 全新安装流程进入、Data 目录尚不存在时，只读命令追加
 `--allow-missing-data-dir`；输出 `dataDirExists: false` 表示全新安装，计划中把该目录标为
 「将新建」。不要为跑只读检查提前创建目录——目录结构在计划确认后的写入阶段才创建。
 
-若用户问所有已发布 world 的更新，可先执行：
-
-```text
-mod-manager world-catalog --data-dir <数据目录>
-```
-
-输出的镜像侧世界清单在 `rows` 数组：每行含 `id`、`title`、`localVersion`、`mirrorVersion`、
-`status`、`downloadUrl`、`bytes`、`sha256`、`defaultProfile`；镜像无已发布 world 时 `rows` 为 `[]`。
-辅助列表 `updates`（可升级的行）、`notInMirror`（本机已装但镜像未发布）、`invalidLocal`
-（本机安装损坏）在为空时照常出现。
-
 `index.json` 没有目标 world/profile/package 时只说明发布数据不完整；不要回退到 Desktop 内置清单，
 也不要猜 OSS 路径。检查本机 Core 是否符合 world manifest 的兼容性与 `coreVersion` 要求；不符合时先路由到
-`arcane-fvtt-setup` 安装或切换 Core，不能让 Foundry 用错配 Core 自动迁移 Demo。
+`arcane-fvtt-setup` 安装或切换 Core，不能让 Foundry 用错配 Core 自动迁移目标 world。
 
 展示以下变更表；依赖很多时可把完全相同的 module 折叠为数量汇总：
 
@@ -61,9 +82,9 @@ profile id/revision/SHA256、索引 `generated` 及完整解析集合 `resolutio
 措辞约定：
 
 - 只有 package missing/upgrade：说明将备份并替换这些全局 `<数据目录>/Data/systems` /
-  `<数据目录>/Data/modules`，可能影响其他 world；不要声称 Demo world 会被重置。
-- world missing：称为“安装 Arcane Demo”。
-- world upgrade：称为“备份并重置 Arcane Demo 到 <version>”，并明确 Actor、Item、Journal、Scene、聊天和数据库
+  `<数据目录>/Data/modules`，可能影响其他 world；不要声称 world 本体会被重置。
+- world missing：称为“安装 <world 标题>”（示例：“安装 Arcane Demo”）。
+- world upgrade：称为“备份并重置 <world 标题> 到 <version>”，并明确 Actor、Item、Journal、Scene、聊天和数据库
   不会自动合并。
 - world 或 package 为 `local-newer`：默认不降级；用户必须另行明确要求特定旧版本，而当前 profile 流程不提供该降级。
 
@@ -112,15 +133,16 @@ profile、world、解析到的精确包版本/哈希及实际安装版本。rece
 
 ## 5. 启动与验收
 
-使用 world 要求的 Core 与同一数据目录启动，安装/重置 world 时追加 `--world=arcane-demo`。等待 ready GM 页面后只读回验：
+使用 world 要求的 Core 与同一数据目录启动，安装/重置 world 时追加 `--world=<世界 id>`
+（示例：`--world=arcane-demo`）。等待 ready GM 页面后只读回验：
 
 - `game.world.id`、`game.world.version` 与 `game.version`；
 - `game.system.id` 和当前安装版本；
 - 本次解析到的 module 的版本与 `active`；
 - receipt 中 `matchesResolvedVersion=false` 的保留本地新版是否符合用户预期。
 
-Demo 工件应携带自己的 module configuration，但新加入 profile 的 module 不一定已在既有 world 启用。若某项未启用，
+world 工件应携带自己的 module configuration，但新加入 profile 的 module 不一定已在既有 world 启用。若某项未启用，
 按 [install.md](install.md) 第 5 节的方式在 ready GM 会话合并写入 `moduleConfiguration` 并 reload 验收；够不到
 GM 会话时报告差异并让用户在 Manage Modules 中确认。仍然禁止直写数据库或 settings 文件。最后列出 package/world
 的安装或替换项、
-完整备份路径、world/profile/package SHA256、receipt 路径，以及 Demo 是否已成功启动。
+完整备份路径、world/profile/package SHA256、receipt 路径，以及 world 是否已成功启动。
