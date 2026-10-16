@@ -5,6 +5,7 @@ import {
   MT_COMPAT_PATH_SUFFIX,
   PAGE_PROFILES,
   clientPageProfile,
+  createPanelProfileState,
   matchPageProfile,
   resolvePageProfile,
 } from "../src/main/page-profiles.js";
@@ -117,4 +118,85 @@ test("clientPageProfile leaves foundry undefined and adapts other profiles for t
     true,
   );
   assert.equal(override.isReady({ hasGame: true, ready: true, world: "w", user: "gm", path: "/auth" }), false);
+});
+
+
+test("panel profile state seeds the null profile until the panel first opens", () => {
+  const state = createPanelProfileState();
+  assert.deepEqual(state.current(), {
+    type: "panel_profile",
+    profileId: null,
+    url: null,
+    displayName: null,
+  });
+  // null 档上的重复 set 依然去重。
+  assert.equal(state.set(null, null), null);
+});
+
+test("panel profile state emits on change and dedupes unchanged values", () => {
+  const state = createPanelProfileState();
+  const first = state.set("foundry", "http://localhost:30000");
+  assert.deepEqual(first, {
+    type: "panel_profile",
+    profileId: "foundry",
+    url: "http://localhost:30000",
+    displayName: "Foundry VTT",
+  });
+  // 同值重复:set 返回 null(不重复推送),current 仍报当前档。
+  assert.equal(state.set("foundry", "http://localhost:30000"), null);
+  assert.deepEqual(state.current(), first);
+  // 同档内 URL 变化(url 是 payload 的一部分)也要发 —— reload/二次导航路径。
+  assert.deepEqual(state.set("foundry", "http://localhost:30000/game"), {
+    type: "panel_profile",
+    profileId: "foundry",
+    url: "http://localhost:30000/game",
+    displayName: "Foundry VTT",
+  });
+});
+
+test("panel profile state maps displayName from PAGE_PROFILES", () => {
+  const state = createPanelProfileState();
+  assert.deepEqual(state.set("mtcompat", MT_URL), {
+    type: "panel_profile",
+    profileId: "mtcompat",
+    url: MT_URL,
+    displayName: "MT Compat",
+  });
+  // 切档(profileId 变、url 也变了)同样产出新 payload。
+  assert.deepEqual(state.set("foundry", "http://localhost:30000"), {
+    type: "panel_profile",
+    profileId: "foundry",
+    url: "http://localhost:30000",
+    displayName: "Foundry VTT",
+  });
+});
+
+test("panel profile state clears to the null profile when the panel closes", () => {
+  const state = createPanelProfileState();
+  state.set("mtcompat", MT_URL);
+  // null 档强制 url/displayName 为 null,即使调用方带了 url。
+  assert.deepEqual(state.set(null, MT_URL), {
+    type: "panel_profile",
+    profileId: null,
+    url: null,
+    displayName: null,
+  });
+  assert.equal(state.set(null, null), null);
+  assert.deepEqual(state.current(), {
+    type: "panel_profile",
+    profileId: null,
+    url: null,
+    displayName: null,
+  });
+});
+
+test("panel profile state treats unknown profile ids as the null profile", () => {
+  const state = createPanelProfileState();
+  state.set("foundry", "http://localhost:30000");
+  assert.deepEqual(state.set("stealth-profile", "http://localhost:30000"), {
+    type: "panel_profile",
+    profileId: null,
+    url: null,
+    displayName: null,
+  });
 });

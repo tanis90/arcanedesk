@@ -14,6 +14,8 @@ interface ArcaneBridge {
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel(): Promise<any>;
   closePanel(): Promise<any>;
+  /** 档位指示器启动种子:当前面板档位 { type, profileId, url, displayName };后续变化经 onEvent 的 panel_profile 推送。 */
+  panelProfile(): Promise<any>;
   /** F5: reload the current right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel(): Promise<any>;
   /** Switch the right pane between the existing Foundry page and the open note. */

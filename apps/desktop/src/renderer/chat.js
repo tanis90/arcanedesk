@@ -144,7 +144,7 @@ const send = document.getElementById("send");
 const stop = document.getElementById("stop");
 const composerWrap = document.getElementById("composer-wrap");
 const panelDot = document.getElementById("panel-dot");
-const worldChip = document.getElementById("world-chip");
+const profileChip = document.getElementById("profile-chip");
 const modeSegs = {
   prep: document.getElementById("mode-seg-prep"),
   combat: document.getElementById("mode-seg-combat"),
@@ -170,6 +170,8 @@ const streamBubbles = new Map(); // message key -> bubble element
 const thinkBlocks = new Map(); // message key -> { block, label, body, startAt }
 let busy = false;
 let panelOpen = false;
+// 右屏已识别档位:{ id: "foundry" | "mtcompat", name: 产品名 } | null(无面板 = 隐藏 chip)
+let panelProfile = null;
 let modelSetupCard = null;
 const permissionRequests = new Map();
 const permissionQueue = [];
@@ -1481,6 +1483,22 @@ function setBusy(next) {
 
 // ---------- events ----------
 
+function applyPanelProfile(profile) {
+  panelProfile = profile?.profileId && profile?.displayName
+    ? { id: profile.profileId, name: profile.displayName }
+    : null;
+  renderProfileChip();
+}
+
+function renderProfileChip() {
+  const name = panelProfile?.name ?? "";
+  profileChip.textContent = name;
+  profileChip.title = name ? t("header.profile.title", { name }) : "";
+  profileChip.style.display = name ? "" : "none";
+  profileChip.classList.toggle("foundry", panelProfile?.id === "foundry");
+  profileChip.classList.toggle("mtcompat", panelProfile?.id === "mtcompat");
+}
+
 function onEvent(event) {
   // 双模式:带 mode 标签的事件只渲染活动模式;无标签的 panel 等全局事件放行
   if (event.mode && event.mode !== currentMode) return;
@@ -1567,6 +1585,9 @@ function onEvent(event) {
       if (typeof event.gutter === "number") panelLayout.gutter = event.gutter;
       applyPanelLayout();
       break;
+    case "panel_profile":
+      applyPanelProfile(event);
+      break;
     case "fullscreen":
       // 真全屏(F11):main 告知状态,CSS 收起标题栏带、分隔条上沿回窗口顶
       document.body.classList.toggle("is-fullscreen", Boolean(event.on));
@@ -1575,15 +1596,6 @@ function onEvent(event) {
       updateModelLabels(event.label ?? "default");
       if (typeof event.supportsImages === "boolean") modelSupportsImages = event.supportsImages;
       break;
-    case "world_info": {
-      const title = event.data?.world?.title ?? event.data?.world?.id;
-      if (title) {
-        worldChip.textContent = title;
-        worldChip.title = `world: ${event.data?.world?.id ?? title}`;
-        worldChip.style.display = "";
-      }
-      break;
-    }
     case "permission_request":
       receivePermissionRequest(event);
       break;
@@ -2352,8 +2364,6 @@ async function pullCurrentSession() {
     const payload = await window.arcane.currentSession();
     if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
     if (payload.mode) requestedMode = payload.mode;
-    const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
-    if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
     await installSnapshot(payload, "latest", captured);
   });
 }
@@ -3469,6 +3479,7 @@ window.ArcaneI18n.onLocaleChange(() => {
   applyModeUi(currentMode, lastPrepCwd);
   reflectThemeGlyph();
   if (currentModelLabel) updateModelLabels(currentModelLabel);
+  renderProfileChip();
   window.__arcaneRefreshVoice?.();
   renderPermissionRequest();
   renderSearchUi(); // 探知珠状态行是动态文案,跟着新语言重渲染
@@ -3484,6 +3495,8 @@ refreshTelemetryConsent();
 
 input.focus();
 window.arcane.onEvent(receiveEvent);
+// 档位启动种子:preload 未暴露 panelProfile 时静默跳过,首个 panel_profile 事件到达后照常覆盖
+if (typeof window.arcane.panelProfile === "function") window.arcane.panelProfile().then(applyPanelProfile, () => {});
 input.addEventListener("input", () => { draftRevision++; workspaceReady.add(selectedSessionId); saveWorkspace(); });
 window.addEventListener("pagehide", saveWorkspace);
 window.addEventListener("focus", () => { void resyncSelected(); });

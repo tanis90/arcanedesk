@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { DirectFoundryRuntime, PageProfileRoutedRuntime, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState } from "./foundry-web.js";
-import { PAGE_PROFILES, clientPageProfile, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
+import { PAGE_PROFILES, clientPageProfile, createPanelProfileState, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
 import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
@@ -122,6 +122,10 @@ let foundryTargetUrl = null;
 // 是 runtime 路由(PageProfileRoutedRuntime)与会话语义(cookie 记忆/回填)的依据。
 // 不跟着页面当前 URL 抖 —— Keycloak 登录跳转期间 URL 离开 play.html,档位不变。
 let activeProfileId = /** @type {"foundry" | "mtcompat"} */ (PAGE_PROFILES.foundry.id);
+// 渲染层档位指示器的状态源:随打开/导航/关闭更新并去重,经事件总线推
+// panel_profile;初始为 null 档(面板尚未打开),不取上面 activeProfileId
+// 的 foundry 路由默认值。
+const panelProfileState = createPanelProfileState();
 // mtcompat 的 PKCE/引导守卫:loadFoundryPage 导航成功后记录;120 秒内页面未 ready
 // 时,重复 foundry_open / F5 不再强制导航(否则授权码被丢掉、登录整轮重来)。
 const MT_COMPAT_LOGIN_WINDOW_MS = 120_000;
@@ -214,6 +218,12 @@ function sendToRenderer(event) {
   }
   if (event.type === "activity_update") desktopNotifications?.reconcile(event.summary.sessionId);
   if (event.type === "activity_removed") desktopNotifications?.reconcile(event.sessionId);
+}
+
+/** 档位变化经事件总线推给渲染层;状态器去重,值未变(返回 null)时不发。 */
+function pushPanelProfile(profileId, url) {
+  const payload = panelProfileState.set(profileId, url);
+  if (payload) sendToRenderer(payload);
 }
 
 function isTrustedChatIpc(event) {
@@ -639,6 +649,7 @@ async function openFoundryView(rawUrl) {
 
   const profile = resolvePageProfile(target) ?? PAGE_PROFILES.foundry;
   activeProfileId = profile.id;
+  pushPanelProfile(profile.id, target);
   foundryTargetUrl = target;
   rememberFoundryTarget(target);
 
@@ -779,6 +790,7 @@ async function loadFoundryPage(url) {
   foundryTargetUrl = url;
   const profile = resolvePanelProfile(url);
   activeProfileId = profile.id;
+  pushPanelProfile(profile.id, url);
   const failedPage = async () => {
     if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
     await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
@@ -2103,7 +2115,13 @@ app.whenReady().then(async () => {
   // 它同时管 foundry 与 reader 两个 surface,重开时按 lastContent 恢复关闭前的内容(§3.4 CLOSED 行)。
   const panelOperations = {
     open: () => panelSurfaces.openPanel(),
-    close: () => panelSurfaces.closePanel(),
+    // 关闭后档位归零:右屏不再承载任何 VTT 页面(控制器只管 view 生命周期,
+    // 档位推送留在 main.js,状态器对重复 close 天然去重)。
+    close: () => {
+      const result = panelSurfaces.closePanel();
+      pushPanelProfile(null, null);
+      return result;
+    },
     // F5 改为 surface 感知(spec §4.3):foundry → 等导航与巡检完成再报;reader → 重读当前文件。
     // 于是 READER_C 下的 F5 不再静默哑掉(design-rules R5)。
     reload: () => panelSurfaces.reloadSurface(),
@@ -2115,6 +2133,12 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
+  // 档位指示器的启动种子:panel_profile 事件只推变化,晚加载/重载的
+  // 渲染层从这里拉当前档;返回与事件同形的对象。
+  ipcMain.handle("panel:get-profile", event => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    return panelProfileState.current();
+  });
   // 顶栏 FVTT/文档切换:只切已存在的内容。foundry 从未打开时返回 empty(提示在切换丸上
   // 闪烁);reader 从未打开时不再报空,控制器直接切去阅读器的空态兜底页。
   ipcMain.handle("panel:switch", (event, target) => {

@@ -294,10 +294,13 @@
     body.header-tight .chat-header { gap: 6px; padding: 0 10px; }
     body.header-tight .brand .wordmark { display: none; }
     body.header-tight .indicator .ind-label { display: none; }
-    body.header-tight .chip.dir, body.header-tight .chip.world { max-width: 110px; }
+    body.header-tight .chip.dir, body.header-tight .chip.profile { max-width: 110px; }
     .chip.dir { font-family: var(--mono); font-size: var(--fs-micro); max-width: 200px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
     .chip.dir:hover { border-color: var(--accent-dim); color: var(--text); }
-    .chip.world { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    /* 已识别档位徽章:两档只靠边框/文字色相区分,一眼可辨但安静 */
+    .chip.profile { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    .chip.profile.foundry { border-color: var(--warn); color: var(--warn); }
+    .chip.profile.mtcompat { border-color: var(--info); color: var(--info); }
     .status-group { display: flex; gap: 10px; font-size: var(--fs-meta); color: var(--muted); align-items: center; flex: none; }
     .indicator { display: inline-flex; align-items: center; gap: 5px; cursor: default; white-space: nowrap; }
     .ind {
@@ -1753,7 +1756,7 @@
     @media (max-width: 560px) {
       .chat-header { gap: 6px; padding: 0 10px; }
       .indicator .ind-label { display: none; }   /* 只留状态点,含义看 tooltip */
-      .chip.dir, .chip.world { max-width: 110px; }
+      .chip.dir, .chip.profile { max-width: 110px; }
       #model-picker { max-width: 140px; }
       #telemetry-consent-card { bottom: 54px; }
     }
@@ -1770,7 +1773,7 @@
       <button class="seg" id="mode-seg-combat" type="button" title="战斗:接管 Foundry 战斗" data-i18n="header.mode.combatShort" data-i18n-title="header.mode.combatTitle">战斗</button>
     </div>
     <span class="header-spacer"></span>
-    <span class="chip world" id="world-chip" style="display:none"></span>
+    <span class="chip profile" id="profile-chip" style="display:none"></span>
     <button class="icon-btn" id="theme-toggle" title="切换月之暗面 / 月之亮面" data-i18n-title="header.theme.title" data-i18n-dynamic>☾</button>
     <button class="icon-btn" id="settings-toggle" title="设置(模型与 provider)" data-i18n-title="header.settings.title">⚙</button>
     <span class="status-group">

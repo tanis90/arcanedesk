@@ -100,6 +100,7 @@ globalThis.ARCANE_MESSAGES = {
     "header.surface.switchTitle": "切换右侧面板:FVTT / 文档",
     "header.surface.fvtt": "FVTT",
     "header.surface.doc": "文档",
+    "header.profile.title": "已识别面板：{name}",
 
     // ---------- 欢迎页 ----------
     "welcome.logoAlt": "ArcaneDesk 法杖星芒 logo",
@@ -632,6 +633,7 @@ globalThis.ARCANE_MESSAGES = {
     "header.surface.switchTitle": "Switch the right panel: FVTT / Document",
     "header.surface.fvtt": "FVTT",
     "header.surface.doc": "Docs",
+    "header.profile.title": "Detected panel: {name}",
 
     // ---------- welcome ----------
     "welcome.logoAlt": "ArcaneDesk wand-spark logo",

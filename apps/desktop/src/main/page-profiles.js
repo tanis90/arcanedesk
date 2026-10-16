@@ -113,3 +113,42 @@ export function clientPageProfile(profile) {
     isReady: state => Boolean(profile.isReady(state)),
   };
 }
+
+/**
+ * 面板档位推送的状态器(main.js 持有唯一实例):跟踪"面板当前档位 + URL",
+ * 是 panel_profile 事件(arcane:event 总线)与 panel:get-profile 启动种子的
+ * 共同数据源,两者同形:{ type, profileId, url, displayName }。
+ * displayName 取自 PAGE_PROFILES;profileId 为 null(面板关闭/尚未打开)时
+ * url/displayName 同为 null。初始即 null 档 —— activeProfileId 的 foundry
+ * 默认值是 runtime 路由兜底,不代表面板已开。
+ */
+export function createPanelProfileState() {
+  let current = null; // { profileId, url } | null(无面板)
+
+  const payload = () => Object.freeze({
+    type: "panel_profile",
+    profileId: current?.profileId ?? null,
+    url: current?.url ?? null,
+    displayName: current === null ? null : PAGE_PROFILES[current.profileId].displayName,
+  });
+
+  return Object.freeze({
+    /**
+     * 记录面板当前档位与 URL。值变化(profileId 或 url 任一)返回本次应推送的
+     * payload;未变返回 null(去重在这层完成,调用方见 null 即不发)。
+     * 只认 PAGE_PROFILES 里的档;null 与未知 id 一律归一为"无面板",
+     * 此时 url 强制为 null —— 宁可不报,不虚报档位。
+     */
+    set(profileId, url) {
+      const nextId = typeof profileId === "string" && Object.hasOwn(PAGE_PROFILES, profileId) ? profileId : null;
+      const nextUrl = nextId !== null && typeof url === "string" && url !== "" ? url : null;
+      if ((current?.profileId ?? null) === nextId && (current?.url ?? null) === nextUrl) return null;
+      current = nextId === null ? null : Object.freeze({ profileId: nextId, url: nextUrl });
+      return payload();
+    },
+    /** 当前档位 payload(渲染层启动种子);无任何记录时返回 null 档。 */
+    current() {
+      return payload();
+    },
+  });
+}
