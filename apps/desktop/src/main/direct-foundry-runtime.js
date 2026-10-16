@@ -120,6 +120,8 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
  * - 开头的 `export default ` 前缀可留可不留(留着时文件是合法 ES module,会被剥掉);
  * - 空文件 / 语法不成立(无法作为函数表达式解析)的文件按"缺失"处理并记日志;
  * - 优先级:userData/config/mt-agent-runtime.js(开发/热修) > 包内 runtime/mt-agent-runtime.js。
+ *   这份打包拷贝只是离线兜底 —— 面板就绪后页面自持的 __MT_AGENT_RUNTIME_SOURCE__
+ *   是真源,由 adoptMtcompatRuntimeFromPage 采用并换入路由(A1 PRD)。
  * @typedef {{ source: string, origin: "user" | "bundled", file: string }} RuntimeSourceFile
  */
 
@@ -134,6 +136,21 @@ function isFunctionExpression(source) {
   } catch {
     return false;
   }
+}
+
+/**
+ * runtime 源串体检(打包拷贝文件与页面真源 __MT_AGENT_RUNTIME_SOURCE__ 同构,共用这套规则):
+ * 剥 `export default` 前缀、剪掉尾部的 `;`/空白(它们会破坏 `(source)(...)` 的包裹求值),
+ * 再按函数表达式解析验证。失败给原因码 —— 两处调用侧的日志文案各不相同。
+ * @param {unknown} raw
+ * @returns {{ source: string | null, error: "empty" | "invalid" | null }}
+ */
+function analyzeMtRuntimeSource(raw) {
+  if (typeof raw !== "string") return { source: null, error: "empty" };
+  const source = stripExportDefault(raw).replace(/[\s;]+$/, "");
+  if (!source.trim()) return { source: null, error: "empty" };
+  if (!isFunctionExpression(source)) return { source: null, error: "invalid" };
+  return { source, error: null };
 }
 
 /**
@@ -168,19 +185,89 @@ export function resolveMtAgentRuntimeSource({
       }
       continue;
     }
-    // 尾部的 `;`/空白会破坏 `(source)(...)` 的包裹求值,一并剪掉。
-    const source = stripExportDefault(raw).replace(/[\s;]+$/, "");
-    if (!source.trim()) {
-      log(`[mt-runtime] ${origin} runtime at ${file} is empty; ignoring`);
+    // 尾部的 `;`/空白会破坏 `(source)(...)` 的包裹求值,analyze 一并剪掉。
+    const analyzed = analyzeMtRuntimeSource(raw);
+    if (!analyzed.source) {
+      const detail = analyzed.error === "invalid" ? "is not a usable function expression" : "is empty";
+      log(`[mt-runtime] ${origin} runtime at ${file} ${detail}; ignoring`);
       continue;
     }
-    if (!isFunctionExpression(source)) {
-      log(`[mt-runtime] ${origin} runtime at ${file} is not a usable function expression; ignoring`);
-      continue;
-    }
-    return { source, origin, file };
+    return { source: analyzed.source, origin, file };
   }
   return null;
+}
+
+/**
+ * A1 runtime 源页面优先:面板就绪后页面里自持的 __MT_AGENT_RUNTIME_SOURCE__ 是真源,
+ * 打包拷贝(包内/用户目录 mt-agent-runtime.js)只是离线兜底。SDK 在构造期钉死
+ * runtimeSource(client.ts 的 #runtimeSource),所以采用页面源只能整实例重建后换入。
+ *
+ * 失败路径一律保持现状、只落日志:源缺席 / 页面读取失败 / 源不是可用函数表达式 /
+ * 重建抛错 / 与当前源相同 —— 既有 mtcompat client(或"未安装"的报错态)继续服务,
+ * 绝不因采用失败拆掉既有连接。源缺席是正常路径(Foundry 档页面、旧版页面)不落日志。
+ * @param {{
+ *   routed: PageProfileRoutedRuntime,
+ *   currentSource?: string | null,
+ *   readPageSource: () => Promise<{ ok: boolean, source?: string, reason?: string, error?: string }>,
+ *   createRuntime: (source: string) => DirectFoundryRuntime | null,
+ *   log?: (level: "info" | "warn", message: string) => void,
+ * }} options
+ * @returns {Promise<{ adopted: boolean, reason: "adopted" | "absent" | "read-failed" | "invalid" | "unchanged" | "rebuild-failed", source?: string }>}
+ */
+export async function adoptMtcompatRuntimeFromPage({
+  routed,
+  currentSource = null,
+  readPageSource,
+  createRuntime,
+  log = () => {},
+}) {
+  if (!routed || typeof routed.setMtcompatRuntime !== "function") {
+    throw new TypeError("a PageProfileRoutedRuntime is required");
+  }
+  if (typeof readPageSource !== "function") throw new TypeError("readPageSource must be a function");
+  if (typeof createRuntime !== "function") throw new TypeError("createRuntime must be a function");
+
+  let read;
+  try {
+    read = await readPageSource();
+  } catch (error) {
+    log("warn", `[mt-runtime] cannot read the page runtime source: ${error?.message ?? error}; keeping the installed runtime`);
+    return { adopted: false, reason: "read-failed" };
+  }
+  if (!read?.ok) {
+    const reason = read?.reason ?? "read-failed";
+    if (reason === "absent") return { adopted: false, reason: "absent" };
+    log(
+      "warn",
+      `[mt-runtime] the page runtime source could not be read (${read?.error ?? reason}); keeping the installed runtime`,
+    );
+    return { adopted: false, reason: "read-failed" };
+  }
+
+  const analyzed = analyzeMtRuntimeSource(read.source);
+  if (!analyzed.source) {
+    log("warn", `[mt-runtime] the page runtime source is ${analyzed.error ?? "unusable"}; keeping the installed runtime`);
+    return { adopted: false, reason: "invalid" };
+  }
+  const source = analyzed.source;
+  if (source === currentSource) return { adopted: false, reason: "unchanged" };
+
+  let runtime;
+  try {
+    runtime = createRuntime(source);
+  } catch (error) {
+    log("warn", `[mt-runtime] rebuilding the mtcompat runtime from the page source failed: ${error?.message ?? error}; keeping the installed runtime`);
+    return { adopted: false, reason: "rebuild-failed" };
+  }
+  if (!runtime) {
+    log("warn", "[mt-runtime] rebuilding the mtcompat runtime from the page source returned nothing; keeping the installed runtime");
+    return { adopted: false, reason: "rebuild-failed" };
+  }
+
+  routed.setMtcompatRuntime(runtime);
+  const header = String(source).split("\n", 1)[0].trim().slice(0, 80);
+  log("info", `[mt-runtime] adopted the page runtime source (${source.length} bytes; ${header})`);
+  return { adopted: true, reason: "adopted", source };
 }
 
 /**
@@ -213,6 +300,16 @@ export class PageProfileRoutedRuntime {
   #mtUnavailableMessage;
   #log;
   #lastHandshake = null;
+
+  /**
+   * runtime 源页面优先的换入点(A1):SDK 构造期钉死 runtimeSource,采用页面真源
+   * 只能整实例重建 —— 重建成功后才调这里换入;失败/缺席一律不调,既有连接原样保留。
+   * 传 null 可退回"未安装"报错态(目前只有测试用得上)。
+   * 换入即生效:后续 call/callForSession 走新实例;已在旧实例队列里的调用留在旧实例跑完。
+   */
+  setMtcompatRuntime(runtime = null) {
+    this.#mtcompat = runtime;
+  }
 
   /** 活动档位的 runtime;mtcompat 源未安装时抛稳定编码错误(调用侧以工具错误呈现)。 */
   #activeRuntime() {

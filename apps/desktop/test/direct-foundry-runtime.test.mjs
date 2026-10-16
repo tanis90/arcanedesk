@@ -9,6 +9,7 @@ import {
 import {
   DirectFoundryRuntime,
   PageProfileRoutedRuntime,
+  adoptMtcompatRuntimeFromPage,
   resolveMtAgentRuntimeSource,
 } from "../src/main/direct-foundry-runtime.js";
 import { PAGE_PROFILES, clientPageProfile } from "../src/main/page-profiles.js";
@@ -612,4 +613,133 @@ test("mtcompat preflight rejects off-path pages before evaluation", async () => 
     return true;
   });
   assert.equal(evaluations, 0);
+});
+
+// ---------- A1:runtime 源页面优先(页面真源采用) ----------
+
+const PAGE_RUNTIME_FUNCTION = `// mt-agent-runtime v9.9.9
+(async function (action, args, options) {
+  return { action, args, options, runtime: { name: "mt-agent-runtime", protocolVersion: 9 } };
+})`;
+
+function createMtcompatRuntime({ runtimeSource = MT_RUNTIME_FUNCTION } = {}) {
+  return new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    getWebContents: () => fakeWebContents(),
+    inspectPage: async () => ({
+      ok: true,
+      state: {
+        url: "https://mt.example.test/user-files/compat/play.html",
+        path: "/user-files/compat/play.html",
+        profile: "mtcompat",
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
+      },
+    }),
+    evaluate: async (_webContents, expression) => ({
+      status: "completed",
+      value: await Function(`"use strict"; return (${expression});`)(),
+    }),
+  });
+}
+
+test("adoptMtcompatRuntimeFromPage rebuilds the mtcompat client from the page source", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: createMtcompatRuntime(),
+    getActiveProfileId: () => "mtcompat",
+  });
+  // 采用前:走打包拷贝的源(v2 桩)。
+  assert.equal((await routed.call("worldInfo", {})).runtime.protocolVersion, 2);
+
+  const logs = [];
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed,
+    currentSource: MT_RUNTIME_FUNCTION,
+    readPageSource: async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }),
+    createRuntime: source => createMtcompatRuntime({ runtimeSource: source }),
+    log: (level, message) => logs.push(`${level}: ${message}`),
+  });
+  assert.equal(outcome.adopted, true);
+  assert.equal(outcome.reason, "adopted");
+  // 页面源原样归一:首行协议注释保留(函数表达式体检通过),尾部无分号。
+  assert.equal(outcome.source, PAGE_RUNTIME_FUNCTION);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /^info: .*adopted the page runtime source/);
+
+  // 换入后 typed 调用走页面真源(v2 桩不再应答)。
+  const value = await routed.call("battleContext", {});
+  assert.equal(value.runtime.protocolVersion, 9);
+  assert.equal(value.action, "battleContext");
+});
+
+test("adoptMtcompatRuntimeFromPage can install the runtime when no file source was delivered", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: null,
+    getActiveProfileId: () => "mtcompat",
+    mtUnavailableMessage: "not installed",
+  });
+  await assert.rejects(routed.call("worldInfo", {}), error => error.code === "FOUNDRY_SDK_TRANSPORT_UNAVAILABLE");
+
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed,
+    readPageSource: async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }),
+    createRuntime: source => createMtcompatRuntime({ runtimeSource: source }),
+    log: () => {},
+  });
+  assert.equal(outcome.adopted, true);
+  assert.equal((await routed.call("battleContext", {})).runtime.protocolVersion, 9);
+});
+
+test("page runtime adoption keeps the installed runtime on every failure path", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: createMtcompatRuntime(),
+    getActiveProfileId: () => "mtcompat",
+  });
+  const logs = [];
+  const adopt = (readPageSource, createRuntime = source => createMtcompatRuntime({ runtimeSource: source })) =>
+    adoptMtcompatRuntimeFromPage({
+      routed,
+      currentSource: MT_RUNTIME_FUNCTION,
+      readPageSource,
+      createRuntime,
+      log: (level, message) => logs.push(`${level}: ${message}`),
+    });
+
+  // 源缺席:正常路径,静默保持现状(不落日志、不重建)。
+  assert.deepEqual(await adopt(async () => ({ ok: false, reason: "absent" })), { adopted: false, reason: "absent" });
+  assert.deepEqual(logs, []);
+  // 页面不可读(navigated/timeout/读取抛错):警告 + 保持现状。
+  assert.deepEqual(await adopt(async () => ({ ok: false, reason: "timeout" })), { adopted: false, reason: "read-failed" });
+  assert.deepEqual(await adopt(async () => { throw new Error("panel is gone"); }), { adopted: false, reason: "read-failed" });
+  // 源不是可用函数表达式(垃圾串/空白):警告 + 保持现状。
+  assert.deepEqual(await adopt(async () => ({ ok: true, source: "not a function expression" })), { adopted: false, reason: "invalid" });
+  assert.deepEqual(await adopt(async () => ({ ok: true, source: "   " })), { adopted: false, reason: "invalid" });
+  // 与当前源相同:不重建也不落日志(F5 重复巡检的常态)。
+  const logsBeforeUnchanged = logs.length;
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: MT_RUNTIME_FUNCTION })),
+    { adopted: false, reason: "unchanged" },
+  );
+  assert.equal(logs.length, logsBeforeUnchanged);
+  // 重建抛错 / 工厂返回空:警告 + 保持现状。
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }), () => { throw new Error("constructor exploded"); }),
+    { adopted: false, reason: "rebuild-failed" },
+  );
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }), () => null),
+    { adopted: false, reason: "rebuild-failed" },
+  );
+  assert.ok(logs.some(message => /^warn: .*could not be read|^warn: .*cannot read/.test(message)));
+  assert.ok(logs.some(message => /^warn: .*is invalid;/.test(message)));
+  assert.ok(logs.some(message => /is empty; keeping the installed runtime/.test(message)));
+  assert.ok(logs.some(message => /rebuilding the mtcompat runtime from the page source failed/.test(message)));
+  assert.ok(logs.some(message => /returned nothing; keeping the installed runtime/.test(message)));
+
+  // 全程既有 client 未动:调用照常走打包拷贝的源(v2)。
+  assert.equal((await routed.call("worldInfo", {})).runtime.protocolVersion, 2);
 });

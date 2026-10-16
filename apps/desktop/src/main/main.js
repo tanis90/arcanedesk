@@ -3,10 +3,10 @@ import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, 
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectFoundryRuntime, PageProfileRoutedRuntime, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
+import { DirectFoundryRuntime, PageProfileRoutedRuntime, adoptMtcompatRuntimeFromPage, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
-import { readFoundryPageState } from "./foundry-web.js";
-import { PAGE_PROFILES, clientPageProfile, createPanelProfileState, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
+import { readFoundryPageState, readPageAgentRuntimeSource } from "./foundry-web.js";
+import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
 import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
@@ -131,6 +131,25 @@ const panelProfileState = createPanelProfileState();
 const MT_COMPAT_LOGIN_WINDOW_MS = 120_000;
 let lastPanelNavigation = { at: 0, target: null, profileId: null };
 
+// 隐藏 per-URL 档位覆盖(PRD A1 运维逃生舱,不做 UI):环境变量 JSON
+// { "<URL 或前缀>": "<profileId>" }。配错不影响打开流程(静态忽略 + 警告日志);
+// 命中先于 URL 契约判定 —— 页面 URL 契约失灵时的最后手段。
+const panelProfileOverrides = createPanelProfileOverrides(
+  process.env[PANEL_PROFILE_OVERRIDE_ENV],
+  message => console.warn(message),
+);
+if (panelProfileOverrides.entries.length > 0) {
+  console.log(
+    `[panel-profile] ${panelProfileOverrides.entries.length} URL override(s) from ${PANEL_PROFILE_OVERRIDE_ENV}: `
+    + panelProfileOverrides.entries.map(entry => `${entry.prefix} -> ${entry.profileId}`).join(", "),
+  );
+}
+
+/** 显式目标的档位:env 覆盖优先(逃生舱),再按 URL 契约判定;不含面板同源粘性(见 resolvePanelProfile)。 */
+function resolveExplicitProfile(url) {
+  return panelProfileOverrides.resolve(url) ?? resolvePageProfile(url) ?? PAGE_PROFILES.foundry;
+}
+
 // 上次打开地址的持久化(启动时读,成功打开时写)。文件损坏按"没有记忆"处理,
 // 不抛错——首次打开的面板行为等价于全新安装。
 function panelTargetFile() {
@@ -164,6 +183,9 @@ let panelSwitchView = null;
 let panelSwitchStatus = { open: false, surface: null }; // 最近一次 panel_status 的快照
 const PANEL_SWITCH_SIZE = { width: 156, height: 30 };
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
+// 当前 mtcompat client 的 runtime 源(normalize 后):启动时是打包拷贝的源,面板就绪后
+// 若采用页面真源则替换。用于"源未变就不重建"的去重(A1)。
+let mtcompatRuntimeSourceText = null;
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
 let chatWidthPx = null; // 用户可拖;null = 按比例初始化
 let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设为 exact origin
@@ -608,6 +630,44 @@ async function showFoundryEmptyState() {
 }
 
 /**
+ * mtcompat client 的完整构造参数:除 runtimeSource 外整份固定。A1 采用页面真源
+ * (__MT_AGENT_RUNTIME_SOURCE__)时按新源重建实例,动作白名单/preflight 覆盖/巡检/
+ * 遥测逐字不变。
+ */
+function createMtcompatRuntime(runtimeSource) {
+  return new DirectFoundryRuntime({
+    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+    runtimeSource,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
+    inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
+    getWebContents: () => foundryView()?.webContents ?? null,
+    onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+  });
+}
+
+/**
+ * A1 runtime 源页面优先:面板巡检通过后,mtcompat 页面自持的
+ * __MT_AGENT_RUNTIME_SOURCE__ 是真源,打包拷贝只是离线兜底。指纹在位才多读一次页面
+ * (源串只在这里跨 IPC,约几百 KB);采用成功即换入新 client —— typed 工具与后续
+ * eval 走页面真源,不再等应用更新同步拷贝。源缺席/读取失败/重建失败都保持既有
+ * client,失败详情由 adoptMtcompatRuntimeFromPage 落日志,这里绝不拆既有连接。
+ */
+async function maybeAdoptPageMtRuntimeSource(profile, state) {
+  if (profile.id !== PAGE_PROFILES.mtcompat.id) return;
+  if (!state?.hasMtAgentRuntime) return;
+  if (!foundryRuntime) return; // 启动竞态兜底:runtime 尚未装配时保持现状。
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed: foundryRuntime,
+    currentSource: mtcompatRuntimeSourceText,
+    readPageSource: () => readPageAgentRuntimeSource(foundryView()?.webContents, { timeoutMs: 3_000 }),
+    createRuntime: createMtcompatRuntime,
+    log: (level, message) => (level === "warn" ? console.warn(message) : console.log(message)),
+  });
+  if (outcome.adopted) mtcompatRuntimeSourceText = outcome.source;
+}
+
+/**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
@@ -647,7 +707,8 @@ async function openFoundryView(rawUrl) {
     };
   }
 
-  const profile = resolvePageProfile(target) ?? PAGE_PROFILES.foundry;
+  // 显式目标过 env 覆盖(逃生舱)再按 URL 契约判定;面板粘性只作用于 resolvePanelProfile。
+  const profile = resolveExplicitProfile(target);
   activeProfileId = profile.id;
   pushPanelProfile(profile.id, target);
   foundryTargetUrl = target;
@@ -690,6 +751,9 @@ async function openFoundryView(rawUrl) {
     const inspected = await readFoundryPageState(view.webContents, { profileId: profile.id });
     if (inspected.ok && inspected.state?.detected) {
       trustFoundryPermissionOrigin(current);
+      // 面板已在目标页且就绪。登录完成后 SPA 自己跳回 play.html,这一步不经过 load
+      // 流程 —— A1 的页面真源采用点在这里补一次(指纹在位且源未变时不做重建)。
+      await maybeAdoptPageMtRuntimeSource(profile, inspected.state);
       return { ok: true, profile: profile.id, page: inspected.state, summary: await describePanel(current, inspected.state) };
     }
     // 目标页在但未 detected:mtcompat 可能正停在登录/引导中,守卫窗口内不动它。
@@ -719,10 +783,12 @@ async function openFoundryView(rawUrl) {
 /**
  * URL → 面板档位,带 mtcompat 部署粘性:Keycloak 登录跳转期间页面 URL 会离开
  * play.html(落到 /auth/... 或别的 host),仅按 URL 会掉回 Foundry 开放默认档。
- * 与最近一次 mtcompat 导航同源的地址保持 mtcompat 档;打开流程的显式目标
- * (openFoundryView)仍用 resolvePageProfile 判定,不受此影响。
+ * 判定序:env 隐藏覆盖(逃生舱)> URL 契约 > 同源 mtcompat 粘性 > 开放默认档。
+ * 打开流程的显式目标(openFoundryView)走 resolveExplicitProfile(覆盖 + URL),不沾粘性。
  */
 function resolvePanelProfile(url) {
+  const override = panelProfileOverrides.resolve(url);
+  if (override) return override;
   const matched = matchPageProfile(url);
   if (matched) return matched;
   if (lastPanelNavigation.profileId === PAGE_PROFILES.mtcompat.id
@@ -753,7 +819,7 @@ async function mtCompatAuthBounceActive() {
  * 同一个 mtcompat 部署(同源)。换服务器/换部署是显式意图,不拦。
  */
 async function authBounceInProgress(target) {
-  if (resolvePageProfile(target)?.id !== PAGE_PROFILES.mtcompat.id) return false;
+  if (resolveExplicitProfile(target).id !== PAGE_PROFILES.mtcompat.id) return false;
   if (!sameOrigin(lastPanelNavigation.target ?? "", target)) return false;
   return mtCompatAuthBounceActive();
 }
@@ -818,6 +884,9 @@ async function loadFoundryPage(url) {
       summary: `ERROR: ${url} loaded but the page could not be inspected (${inspected.error ?? inspected.status})`,
     };
   }
+  // A1 页面真源优先:巡检通过后采用页面自持的 runtime 源(指纹缺席/读取失败/重建
+  // 失败都保持现状,不阻塞下面的加载结论)。
+  await maybeAdoptPageMtRuntimeSource(profile, inspected.state);
   if (!inspected.state?.detected) {
     if (!profile.sessionCookie) {
       // mtcompat:未认证的访问会被 SPA 重定向到 Keycloak,登录页上没有 window.game,
@@ -1106,7 +1175,8 @@ app.whenReady().then(async () => {
   }
   // 页面档位感知的 runtime:Foundry 档用 SDK 出厂 runtime 源与 preflight 语义
   // (行为与单实例时代完全一致);mtcompat 档注入自定义 runtime 源与 profile 覆盖,
-  // 按最近打开目标的档位路由(activeProfileId)。
+  // 按最近打开目标的档位路由(activeProfileId)。这里的打包拷贝只是离线兜底 ——
+  // 面板就绪后页面自持的 __MT_AGENT_RUNTIME_SOURCE__ 优先(maybeAdoptPageMtRuntimeSource)。
   const mtRuntimeUserFile = configPath("mt-agent-runtime.js");
   const mtRuntimeBundledFile = path.join(__dirname, "..", "..", "runtime", "mt-agent-runtime.js");
   const mtRuntimeSource = resolveMtAgentRuntimeSource({
@@ -1123,21 +1193,15 @@ app.whenReady().then(async () => {
       getWebContents: () => foundryView()?.webContents ?? null,
       onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
     }),
-    mtcompat: mtRuntimeSource ? new DirectFoundryRuntime({
-      allowedActions: DESKTOP_FOUNDRY_ACTIONS,
-      runtimeSource: mtRuntimeSource.source,
-      pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
-      // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
-      inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
-      getWebContents: () => foundryView()?.webContents ?? null,
-      onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
-    }) : null,
+    mtcompat: mtRuntimeSource ? createMtcompatRuntime(mtRuntimeSource.source) : null,
     getActiveProfileId: () => activeProfileId,
     mtUnavailableMessage:
       `The mt-compat page runtime is not installed: neither ${mtRuntimeUserFile} nor the bundled `
       + `${mtRuntimeBundledFile} is present. Foundry pages keep working; mt-compat actions are unavailable until the runtime file is delivered.`,
     log: message => console.log(message),
   });
+  // "源未变不重建"的基准:启动时是打包拷贝的源,面板就绪后可能换成页面真源。
+  mtcompatRuntimeSourceText = mtRuntimeSource?.source ?? null;
 
   const secretStorage = new SecretStorage(safeStorage);
   const providerStore = new ProviderStore(configPath("providers.json"), console.log, process.env, secretStorage);
