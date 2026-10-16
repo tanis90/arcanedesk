@@ -2,11 +2,19 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 
-import { evaluateNavigationSafe, readFoundryPageState } from "../src/main/foundry-web.js";
+import { evaluateNavigationSafe, readFoundryPageState, readPageAgentRuntimeSource } from "../src/main/foundry-web.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+
+/** 真跑 PAGE_STATE_EXPRESSION:注入假 window/document/location,断言页面信号的形状。 */
+function runPageExpression(expression, page) {
+  return Function(
+    "window", "document", "location",
+    `"use strict"; return (${expression});`,
+  )(page.window, page.document, page.location);
+}
 
 class FakeWebContents extends EventEmitter {
   constructor(evaluate) {
@@ -99,6 +107,7 @@ test("mtcompat page state resolves by URL and recomputes detection/readiness fro
     user: null,
     world: null,
     hasGame: true, // pre-bootstrap:window.game 已存在
+    hasMtAgentRuntime: true, // 页面自证 runtime 指纹(PRD A1)
     runtimeReady: false,
   };
   const preBootstrap = new FakeWebContents(async () => ({ ...mtState }));
@@ -118,6 +127,20 @@ test("mtcompat page state resolves by URL and recomputes detection/readiness fro
   assert.equal(ready.state.profile, "mtcompat");
   assert.equal(ready.state.detected, true);
   assert.equal(ready.state.runtimeReady, true);
+
+  // 指纹缺席(未佐证态):URL 命中 + hasGame 在位 → 识别照旧,但 runtimeReady 不成立。
+  const unattested = new FakeWebContents(async () => ({
+    ...mtState,
+    ready: true,
+    user: "gm",
+    world: "curse-of-strahd",
+    hasMtAgentRuntime: false,
+  }));
+  const degraded = await readFoundryPageState(unattested);
+  assert.equal(degraded.state.profile, "mtcompat");
+  assert.equal(degraded.state.detected, true);
+  assert.equal(degraded.state.hasMtAgentRuntime, false);
+  assert.equal(degraded.state.runtimeReady, false);
 });
 
 test("a sticky profileId decorates pages whose URL left the profile path (Keycloak hop)", async () => {
@@ -138,6 +161,62 @@ test("a sticky profileId decorates pages whose URL left the profile path (Keyclo
   assert.equal(sticky.state.profile, "mtcompat");
   assert.equal(sticky.state.detected, false);
   assert.equal(sticky.state.runtimeReady, false);
+});
+
+test("the page state expression reports the mtcompat runtime fingerprint from a live-like page", async () => {
+  const page = {
+    window: {
+      game: { ready: true, user: { isGM: true, name: "gm" }, world: { id: "cos", title: "CoS" } },
+      __MT_READY__: true,
+      __MT_AGENT_RUNTIME_SOURCE__: "// mt-agent-runtime v0.6.0\n(async function (action) { return action; })",
+    },
+    document: { title: "MT Compat", querySelector: () => null },
+    location: { href: "https://mt.test/user-files/compat/play.html", pathname: "/user-files/compat/play.html" },
+  };
+  const webContents = new FakeWebContents(async code => runPageExpression(code, page));
+
+  const attested = (await readFoundryPageState(webContents)).state;
+  assert.equal(attested.hasMtAgentRuntime, true);
+  assert.equal(attested.profile, "mtcompat");
+  assert.equal(attested.detected, true);
+  assert.equal(attested.runtimeReady, true);
+
+  // 只留页内直调桩(无宿主源串)也算自证;两者都没有就是未佐证。
+  delete page.window.__MT_AGENT_RUNTIME_SOURCE__;
+  page.window.__MT_AGENT_RUNTIME__ = async () => ({});
+  const pageOnly = (await readFoundryPageState(webContents)).state;
+  assert.equal(pageOnly.hasMtAgentRuntime, true);
+  assert.equal(pageOnly.runtimeReady, true);
+
+  delete page.window.__MT_AGENT_RUNTIME__;
+  const bare = (await readFoundryPageState(webContents)).state;
+  assert.equal(bare.hasMtAgentRuntime, false);
+  assert.equal(bare.profile, "mtcompat"); // URL 是识别主证据:没有被指纹否决
+  assert.equal(bare.detected, true);
+  assert.equal(bare.runtimeReady, false); // 但未佐证 → 不就绪
+});
+
+test("the page runtime source reads the page string and reports absent/terminal outcomes", async () => {
+  const present = new FakeWebContents(async code => {
+    assert.match(code, /__MT_AGENT_RUNTIME_SOURCE__/);
+    return "// mt-agent-runtime v0.6.0\n(async function (action) { return action; })";
+  });
+  const read = await readPageAgentRuntimeSource(present);
+  assert.equal(read.ok, true);
+  assert.match(read.source, /mt-agent-runtime v0\.6\.0/);
+
+  const absent = new FakeWebContents(async () => null);
+  assert.deepEqual(await readPageAgentRuntimeSource(absent), { ok: false, reason: "absent" });
+  const blank = new FakeWebContents(async () => "   ");
+  assert.deepEqual(await readPageAgentRuntimeSource(blank), { ok: false, reason: "absent" });
+
+  // 页面不可读:导航/超时都按失败收口,调用方据此保持现状(不重建、不悬挂)。
+  const navigating = new FakeWebContents(() => new Promise(() => {}));
+  const pending = readPageAgentRuntimeSource(navigating, { timeoutMs: 1_000 });
+  queueMicrotask(() => navigating.emit("did-start-navigation", {}, "https://mt.test/auth", false, true));
+  assert.deepEqual(await pending, { ok: false, reason: "navigated" });
+  const slow = new FakeWebContents(() => new Promise(() => {}));
+  assert.deepEqual(await readPageAgentRuntimeSource(slow, { timeoutMs: 10 }), { ok: false, reason: "timeout" });
 });
 
 test("page tools execute concurrently and use the current view", async () => {

@@ -1,19 +1,27 @@
 // Page profiles — 右屏面板可以承载不止一种"VTT 页面"。Foundry 是开放默认档
 // (任意 http(s) 源都可能是 Foundry 服务器);mtcompat 是我们自有的 VTT SPA
-// (/user-files/compat/play.html),页面侧模拟 Foundry API(window.game 等)。
+// (/user-files/compat[...]/play.html),页面侧模拟 Foundry API(window.game 等)。
 // 每档 profile 描述:URL 识别、游戏路径判定、检测/就绪语义、会话 cookie 是否持久化、
 // 登录落点。main.js 的打开流程、foundry-web.js 的页面巡检与 foundry-sdk 的
 // preflight 判定全部以这里为唯一事实源;foundry 档的语义与引入 profile 之前逐字节等价。
 
-/** mtcompat SPA 的页面路径(API 兼容层部署在 /user-files/compat/play.html)。 */
+/** mtcompat SPA 的规范页面路径(API 兼容层的生产部署形态)。 */
 export const MT_COMPAT_PATH_SUFFIX = "/user-files/compat/play.html";
+
+/**
+ * mtcompat 页面路径契约(PRD A1):所有形态的 play.html URL 恒为
+ * `/user-files/compat[...]/play.html` —— 生产是 compat,分支部署是 compat-<slug>
+ * (如 compat-qa、compat-feat-agent-api)。路径是稳定锚点,host 不设防;
+ * 对 pathname 匹配(查询串/哈希不参与),一次放宽后不再随部署形态漂移。
+ */
+export const MT_COMPAT_PATH_PATTERN = /\/user-files\/compat(?:-[\w-]+)?\/play\.html$/;
 
 function foundryIsGamePath(pathname) {
   return String(pathname ?? "").replace(/\/+$/, "") === "/game";
 }
 
 function mtCompatIsGamePath(pathname) {
-  return String(pathname ?? "").endsWith(MT_COMPAT_PATH_SUFFIX);
+  return MT_COMPAT_PATH_PATTERN.test(String(pathname ?? ""));
 }
 
 /** Foundry 检测沿用页面内巡检的结论(window.game / join 表单 / setup / 标题)。 */
@@ -32,12 +40,18 @@ function mtCompatDetect(state) {
 }
 
 /**
- * mtcompat 就绪 = SPA 引导完成(game.ready)且 world/user 已就位。不强制 isGM:
- * 自有部署的当前用户即 DM,Keycloak 登录完成后 user 才存在。
+ * mtcompat 就绪 = SPA 引导完成(game.ready)且 world/user 已就位,且页面自证 runtime
+ * 指纹(window.__MT_AGENT_RUNTIME_SOURCE__ / __MT_AGENT_RUNTIME__,见 foundry-web.js 的
+ * hasMtAgentRuntime)。不强制 isGM:自有部署的当前用户即 DM,Keycloak 登录完成后 user 才存在。
+ *
+ * 指纹只是 isReady 的佐证,不做第二检测机制:识别(detect)始终以 URL/hasGame 为主,
+ * URL 命中但指纹缺席的页面仍被识别为 mtcompat(detect 照常,状态里 hasMtAgentRuntime=false),
+ * 只是不就绪(unattested 态)——runtime 没装上的页面 typed 调用本来也走不通。
  */
 function mtCompatIsReady(state) {
   return Boolean(
-    mtCompatDetect(state) && state.ready && state.world && state.user && mtCompatIsGamePath(state.path)
+    mtCompatDetect(state) && state.ready && state.world && state.user
+      && mtCompatIsGamePath(state.path) && state.hasMtAgentRuntime
   );
 }
 
@@ -57,8 +71,9 @@ export const PAGE_PROFILES = Object.freeze({
   mtcompat: Object.freeze({
     id: "mtcompat",
     displayName: "MT Compat",
-    // 同时覆盖 IP 直连与域名形态(路径是稳定锚点,host 不设防)。
-    urlPatterns: Object.freeze([/\/user-files\/compat\/play\.html/]),
+    // 同时覆盖 IP 直连、域名与 compat-<slug> 分支部署形态;路径契约是唯一锚点,
+    // 模式对 URL 的 pathname 匹配(matchPageProfile),查询串/哈希不影响命中。
+    urlPatterns: Object.freeze([MT_COMPAT_PATH_PATTERN]),
     // 认证在 Keycloak cookie + SPA sessionStorage:没有任何 cookie 需要我们持久化,
     // 打开流程跳过 remember/restore/dropIf;重启后的首次打开是一次静默 SSO 弹跳。
     sessionCookie: null,
@@ -70,7 +85,10 @@ export const PAGE_PROFILES = Object.freeze({
   }),
 });
 
-/** 仅按 URL 模式匹配(mtcompat)。Foundry 无模式,永不因此命中。 */
+/**
+ * 仅按 URL 模式匹配(mtcompat)。模式对 pathname 匹配 —— 拿 href 匹配时查询串会让
+ * `$` 锚定失效(mtcompat 的 Keycloak 换码 URL 带 ?code=...);Foundry 无模式,永不因此命中。
+ */
 export function matchPageProfile(url) {
   let parsed;
   try {
@@ -79,7 +97,7 @@ export function matchPageProfile(url) {
     return null;
   }
   for (const profile of Object.values(PAGE_PROFILES)) {
-    if (profile.urlPatterns.some(pattern => pattern.test(parsed.href))) return profile;
+    if (profile.urlPatterns.some(pattern => pattern.test(parsed.pathname))) return profile;
   }
   return null;
 }
@@ -112,6 +130,76 @@ export function clientPageProfile(profile) {
     isGamePath: state => profile.isGamePath(String(state?.path ?? "")),
     isReady: state => Boolean(profile.isReady(state)),
   };
+}
+
+/** 隐藏 per-URL 档位覆盖的环境变量名(运维逃生舱,见 createPanelProfileOverrides)。 */
+export const PANEL_PROFILE_OVERRIDE_ENV = "ARCANEDESK_PANEL_PROFILE_OVERRIDES";
+
+const EMPTY_PROFILE_OVERRIDES = Object.freeze({
+  entries: Object.freeze([]),
+  resolve: () => null,
+});
+
+/**
+ * 隐藏 per-URL 档位覆盖(PRD A1 的运维逃生舱,不做 UI):读环境变量
+ * ARCANEDESK_PANEL_PROFILE_OVERRIDES,JSON 对象形如
+ * `{"https://host:port/user-files/compat-dev": "mtcompat"}`。
+ *
+ * 键是 URL 或其前缀(尾部斜杠归一掉);命中要求 URL 在前缀处结束,或余部以
+ * `/`、`?`、`#` 开头 —— 避免 `/compat` 误吃 `/compatfoo`。值必须是 PAGE_PROFILES
+ * 里的 profileId(foundry 也可,用来把被模式误判的地址拉回开放默认档)。
+ * 最长键优先(更具体的 URL 覆盖更宽的 origin)。
+ *
+ * 配错不挡路:空值/非法 JSON/非对象/坏条目一律忽略,坏配置记一条警告日志。
+ * @param {string | undefined} raw 环境变量原文(缺省读 process.env)
+ * @param {(message: string) => void} [log] 警告落点
+ * @returns {{ entries: readonly { prefix: string, profileId: string }[], resolve: (url: any) => any }}
+ */
+export function createPanelProfileOverrides(raw = process.env[PANEL_PROFILE_OVERRIDE_ENV], log = () => {}) {
+  const text = typeof raw === "string" ? raw.trim() : "";
+  if (!text) return EMPTY_PROFILE_OVERRIDES;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    log(`[panel-profile] ignoring ${PANEL_PROFILE_OVERRIDE_ENV}: invalid JSON (${error?.message ?? error})`);
+    return EMPTY_PROFILE_OVERRIDES;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    log(`[panel-profile] ignoring ${PANEL_PROFILE_OVERRIDE_ENV}: expected a JSON object of { "<url prefix>": "<profileId>" }`);
+    return EMPTY_PROFILE_OVERRIDES;
+  }
+
+  const entries = [];
+  for (const [key, value] of Object.entries(parsed)) {
+    const prefix = String(key).replace(/\/+$/, "");
+    if (!prefix) {
+      log(`[panel-profile] ignoring empty URL prefix in ${PANEL_PROFILE_OVERRIDE_ENV}`);
+      continue;
+    }
+    if (typeof value !== "string" || !Object.hasOwn(PAGE_PROFILES, value)) {
+      log(`[panel-profile] ignoring ${PANEL_PROFILE_OVERRIDE_ENV} entry ${key}: unknown profile ${JSON.stringify(value)}`);
+      continue;
+    }
+    entries.push(Object.freeze({ prefix, profileId: value }));
+  }
+  entries.sort((a, b) => b.prefix.length - a.prefix.length);
+
+  return Object.freeze({
+    entries: Object.freeze(entries),
+    resolve(url) {
+      const target = String(url ?? "");
+      for (const { prefix, profileId } of entries) {
+        if (!target.startsWith(prefix)) continue;
+        const rest = target.slice(prefix.length);
+        if (rest === "" || rest.startsWith("/") || rest.startsWith("?") || rest.startsWith("#")) {
+          return PAGE_PROFILES[profileId];
+        }
+      }
+      return null;
+    },
+  });
 }
 
 /**

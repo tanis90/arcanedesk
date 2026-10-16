@@ -477,7 +477,7 @@ test("PageProfileRoutedRuntime routes by the active page profile and keeps telem
         url: "https://mt.example.test/user-files/compat/play.html",
         path: "/user-files/compat/play.html",
         profile: "mtcompat",
-        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true,
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
       },
     }),
     evaluate: async () => ({
@@ -550,7 +550,7 @@ test("PageProfileRoutedRuntime logs the worldInfo runtime handshake once per sig
     getWebContents: () => fakeWebContents(),
     inspectPage: async () => ({
       ok: true,
-      state: { path: "/user-files/compat/play.html", profile: "mtcompat", detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true },
+      state: { path: "/user-files/compat/play.html", profile: "mtcompat", detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true },
     }),
     evaluate: async () => ({
       status: "completed",
@@ -578,7 +578,7 @@ test("mtcompat preflight accepts a bootstrapped play.html without the GM flag", 
         url: "https://mt.example.test/user-files/compat/play.html",
         path: "/user-files/compat/play.html",
         profile: "mtcompat",
-        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true,
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
       },
     }),
     evaluate: async (_webContents, expression) => ({

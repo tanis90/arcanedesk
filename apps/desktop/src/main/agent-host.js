@@ -1070,7 +1070,8 @@ export class AgentHost {
       label: "Open Foundry",
       description:
         "Open the Foundry panel in this window (chat stays as the left column, Foundry opens on the right). " +
-        "Also opens the ArcaneDesk mt-compat page (URL containing /user-files/compat/play.html) the same way; " +
+        "Also opens the ArcaneDesk mt-compat page (any URL whose path is /user-files/compat[...]/play.html: " +
+        "the deployed compat directory or a compat-<slug> branch deploy) the same way; " +
         "the response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
         "Idempotent: if the panel is already open on the same server the page is never re-navigated (a logged-in world session is protected). " +
         "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world).",
