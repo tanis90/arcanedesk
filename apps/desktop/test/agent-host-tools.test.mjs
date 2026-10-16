@@ -442,6 +442,106 @@ test("structured tools fail closed when the page runtime is unavailable", async 
   await assert.rejects(tools.get("foundry_play_context").execute("turn", {}), /Foundry runtime unavailable/);
 });
 
+// ---- A3：foundry_page_eval（mtcompat 档的兜底 eval，touched/missing 当场返回）----
+
+function pageEvalHarness({ receipt, failure } = {}) {
+  const calls = [];
+  const { host, tools } = buildHarness({ call: async (action, args, options) => {
+    calls.push({ action, args, options });
+    if (failure) throw failure;
+    return receipt;
+  } });
+  host.maybeRequestApproval = async () => true;
+  return { host, tools, calls, tool: tools.get("foundry_page_eval") };
+}
+
+test("A3 注册与 schema：foundry_page_eval 在池里，参数 {code, requestId?}", () => {
+  const { tool } = pageEvalHarness({ receipt: { status: "completed", touched: [], missing: [] } });
+  assert.ok(tool, "工具池含 foundry_page_eval");
+  assert.equal(tool.parameters.type, "object");
+  assert.deepEqual(Object.keys(tool.parameters.properties).sort(), ["code", "requestId"]);
+  assert.deepEqual(tool.parameters.required, ["code"]);
+});
+
+test("A3 审批拦截：与 browser_evaluate 同级，拒绝后绝不派发页面", async () => {
+  const { host, tool, calls } = pageEvalHarness({ receipt: { status: "completed", value: 1, touched: [], missing: [] } });
+  const approvals = [];
+  host.maybeRequestApproval = async (payload) => { approvals.push(payload); return false; };
+  const result = await tool.execute("eval-1", { code: "return game.user.isGM;" });
+  assert.equal(approvals.length, 1);
+  assert.equal(approvals[0].tool, "foundry_page_eval");
+  assert.equal(approvals[0].summary, "return game.user.isGM;");
+  assert.match(result.content[0].text, /DM declined this code; do not retry it\./);
+  assert.deepEqual(calls, []);
+});
+
+test("A3 结果呈现：completed 空增量只回 value；带注记附尾（- path [status] note / - feature ×count）", async () => {
+  const empty = pageEvalHarness({ receipt: { status: "completed", value: { hp: 7 }, touched: [], missing: [] } });
+  const plain = await empty.tool.execute("eval-1", { code: "return { hp: 7 };" });
+  assert.equal(plain.content[0].text, JSON.stringify({ hp: 7 }, null, 2));
+  assert.doesNotMatch(plain.content[0].text, /touched\/missing/);
+  assert.equal(empty.calls[0].action, "pageEval");
+  assert.equal(empty.calls[0].args.code, "return { hp: 7 };");
+  assert.equal("requestId" in empty.calls[0].args, false);
+  assert.equal(empty.calls[0].options.executionTimeoutMs, 60_000);
+  assert.deepEqual(empty.calls[0].options.signal, undefined);
+
+  const annotated = pageEvalHarness({ receipt: { status: "completed", value: { ok: true },
+    touched: [{ path: "canvas.pan", status: "stub-noop", note: "视角固定无平移概念" }],
+    missing: [{ feature: "MidiQOL.completeItemUse", count: 2 }] } });
+  const text = (await annotated.tool.execute("eval-2", { code: "return { ok: true };", requestId: "req-1" })).content[0].text;
+  assert.match(text, /^\{\n  "ok": true\n\}/);
+  assert.match(text, /touched\/missing（必须读；报了踩桩就按 note 绕开重写）:/);
+  assert.match(text, /- canvas\.pan \[stub-noop\] 视角固定无平移概念/);
+  assert.match(text, /- MidiQOL\.completeItemUse ×2/);
+  assert.equal(annotated.calls[0].args.requestId, "req-1");
+  assert.equal(annotated.calls[0].args.code, "return { ok: true };");
+});
+
+test("A3 结果呈现：rejected 的 code+message 显眼，注记同样附尾；无返回值不伪造正文", async () => {
+  const rejected = pageEvalHarness({ receipt: { status: "rejected", code: "CAPABILITY_UNAVAILABLE", message: "api surface registry not installed",
+    touched: [{ path: "TextEditor.enrichHTML", status: "stub-fixed", note: "透传不富化" }], missing: [] } });
+  const result = await rejected.tool.execute("eval-1", { code: "return __MT_AGENT_RUNTIME__('apiSurface', {});" });
+  assert.match(result.content[0].text, /^REJECTED \[CAPABILITY_UNAVAILABLE\]: api surface registry not installed/);
+  assert.match(result.content[0].text, /- TextEditor\.enrichHTML \[stub-fixed\] 透传不富化/);
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "rejected");
+
+  const empty = pageEvalHarness({ receipt: { status: "completed", touched: [], missing: [] } });
+  assert.equal((await empty.tool.execute("eval-2", { code: "return undefined;" })).content[0].text,
+    "completed (the code returned no value)");
+});
+
+test("A3 旧源降级：ACTION_UNKNOWN 照实呈现并指路，不抛不重试", async () => {
+  const failure = Object.assign(new Error("Foundry runtime read failed: ACTION_UNKNOWN: pageEval"),
+    { code: "FOUNDRY_SDK_EVALUATION_FAILED" });
+  const { tool } = pageEvalHarness({ failure });
+  const result = await tool.execute("eval-1", { code: "return 1;" });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /ACTION_UNKNOWN/);
+  assert.match(result.content[0].text, /pageEval unavailable/);
+  assert.match(result.content[0].text, /v0\.5\.0/);
+  assert.match(result.content[0].text, /Do not retry this call as-is\./);
+  assert.equal(result.details.error, "FOUNDRY_SDK_EVALUATION_FAILED");
+});
+
+test("A3 描述：三规则调用形态在位（typed 优先 / apiSurface 直调形态 / 注记必读）", () => {
+  const { tool } = pageEvalHarness({ receipt: { status: "completed", touched: [], missing: [] } });
+  assert.match(tool.description, /prefer typed actions, eval is the fallback/);
+  assert.match(tool.description, /__MT_AGENT_RUNTIME__\("apiSurface", \{prefix:"<domain>"\}\)/);
+  assert.match(tool.description, /always read the `touched`\/`missing` annotations/);
+  assert.match(tool.description, /rewrite the call per the note instead of retrying/);
+  assert.match(tool.promptGuidelines.join("\n"), /__MT_AGENT_RUNTIME__\("apiSurface", \{prefix:"<domain>"\}\)/);
+});
+
+test("A3 无面板兜底：runtime 缺席时失败文本仍可读，不抛", async () => {
+  const { host, tool } = pageEvalHarness({ receipt: { status: "completed", touched: [], missing: [] } });
+  host.foundryRuntime = null;
+  const result = await tool.execute("eval-1", { code: "return 1;" });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /runtime is unavailable/);
+});
+
 test("prep preamble forces reading the matching skill before install actions", () => {
   const preamble = readFileSync(
     new URL("../system-prompts/prep.md", import.meta.url),

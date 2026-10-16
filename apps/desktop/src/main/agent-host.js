@@ -3,6 +3,7 @@
 //   界面层:foundry_open;browser_evaluate 仅备团
 //   运维视觉层:foundry_screenshot(仅备团/运维模式,返回当前 Foundry viewport)
 //   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
+//   兜底 eval:foundry_page_eval(A3,仅 mtcompat 档备团;pageEval 回执带 touched/missing 注记)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
@@ -198,6 +199,57 @@ function safeJson(value) {
   } catch {
     return String(value);
   }
+}
+
+// ---- A3：pageEval 结果呈现（PRD §2.5 规则 3 的落点）----
+// touched/missing 是页面在「你踩了桩」的当场告知，模型必须一眼看到：注记恒附在正文
+// 尾部（空增量不附），紧凑成 `- path [status] note` / `- feature ×count` 两行形状。
+
+/** pageEval 回执的注记行；空增量返回空数组（调用侧据此不附尾）。 */
+function pageEvalAnnotationLines(receipt) {
+  const lines = [];
+  for (const item of Array.isArray(receipt?.touched) ? receipt.touched : []) {
+    const note = typeof item?.note === "string" && item.note ? ` ${item.note}` : "";
+    lines.push(`- ${item?.path ?? "?"} [${item?.status ?? "?"}]${note}`);
+  }
+  for (const item of Array.isArray(receipt?.missing) ? receipt.missing : []) {
+    lines.push(`- ${item?.feature ?? "?"} ×${item?.count ?? "?"}`);
+  }
+  return lines;
+}
+
+/** 注记尾巴（含抬头一行）；空增量返回空串。 */
+function pageEvalAnnotationBlock(receipt) {
+  const lines = pageEvalAnnotationLines(receipt);
+  if (lines.length === 0) return "";
+  return `\n\ntouched/missing（必须读；报了踩桩就按 note 绕开重写）:\n${lines.join("\n")}`;
+}
+
+/** pageEval 四态回执 → 模型可读文本（completed / rejected 自捕获；其余形状照实回显）。 */
+function pageEvalResultText(receipt) {
+  if (receipt?.status === "completed") {
+    const body = receipt.value === undefined ? "completed (the code returned no value)" : safeJson(receipt.value);
+    return `${body}${pageEvalAnnotationBlock(receipt)}`;
+  }
+  if (receipt?.status === "rejected") {
+    const code = typeof receipt.code === "string" && receipt.code ? receipt.code : "REJECTED";
+    const message = typeof receipt.message === "string" && receipt.message ? receipt.message : "pageEval was rejected";
+    return `REJECTED [${code}]: ${message}${pageEvalAnnotationBlock(receipt)}`;
+  }
+  return `pageEval returned an unrecognized receipt; raw value:\n${safeJson(receipt)}`;
+}
+
+/**
+ * pageEval 未拿到回执（SDK 层抛错）→ 照实呈现。旧 runtime 源（打包兜底 v0.5.0）
+ * 没有这个 action，页面自答 ACTION_UNKNOWN——这不是调用方代码错，工具层明确降级指路。
+ */
+function pageEvalFailureText(error) {
+  const message = String(error?.message ?? error);
+  const label = error?.code ? `${error.code}: ${message}` : message;
+  if (/ACTION_UNKNOWN/.test(message)) {
+    return `pageEval unavailable — ${label}. The page runtime does not implement the pageEval action: this mt-compat page runs an older runtime source (the bundled fallback copy is v0.5.0). Use typed actions for this page, or have the current compat build deployed — the page's own __MT_AGENT_RUNTIME_SOURCE__ is adopted automatically once it carries pageEval. Do not retry this call as-is.`;
+  }
+  return `pageEval failed without a receipt — ${label}. The code did not complete; if it may have started a write, verify page state before retrying.`;
 }
 
 function extractText(message) {
@@ -1266,6 +1318,56 @@ export class AgentHost {
         : host.foundryRuntime.call(action, args, options);
     };
 
+    // A3：mtcompat 档的 pageEval 工具（PRD §2.5 三层消费的 Tier 1/2 入口）。只进
+    // mtcompat 备团策略表（foundry-tool-policy.js 的 MTCOMPAT_TOOL_NAMES_BY_MODE），
+    // foundry 档不注册、不激活。审批与 browser_evaluate 同级——任意代码执行，不降档；
+    // 通道与 typed action 同链（mtcompat client 的 pageEval，GM 门沿用宿主 requireGM）。
+    const foundryPageEval = defineTool({
+      name: "foundry_page_eval",
+      label: "Page Eval (mt-compat)",
+      description: withMtcompatSurfaceSegment(
+        "Run JavaScript in the controlled mt-compat page as an async function body (top-level await works) and return its JSON value. " +
+          "This is the mt-compat profile's one annotated eval fallback: unlike browser_evaluate its receipt also carries " +
+          "`touched` (stubs/missing surfaces this call stepped on, each with the workaround in its note) and `missing` (engine error features). " +
+          "Profile rules: (1) prefer typed actions, eval is the fallback; " +
+          "(2) before an eval touches an unfamiliar domain, read the declaration first — call `__MT_AGENT_RUNTIME__(\"apiSurface\", {prefix:\"<domain>\"})` " +
+          "inside this tool's code (returns {revision, defaultPolicy, entries[]}; a face the manifest never mentions is treated as absent); " +
+          "(3) always read the `touched`/`missing` annotations in the result — when they report a stub you stepped on, rewrite the call per the note instead of retrying. " +
+          "On the mt-compat page prefer this tool over browser_evaluate: only this receipt carries the annotations. " +
+          "Await every write: this receipt only covers what settled before it returned. " +
+          "Requires a ready GM page (call foundry_open first); never submit /join or handle credentials; keep the code bounded and disclose what it changed.",
+        this.surfaceSegment()
+      ),
+      parameters: Type.Object({
+        code: Type.String({ description: "Non-empty JS function body; top-level await works. Return the value to inspect." }),
+        requestId: Type.Optional(Type.String({ description: "Optional id echoed by the receipt; pageEval has no dedupe/replay semantics." })),
+      }),
+      executionMode: "sequential",
+      promptGuidelines: [
+        "Prefer typed actions; use pageEval only for surfaces no typed action covers.",
+        "Query the declaration before touching an unfamiliar domain: __MT_AGENT_RUNTIME__(\"apiSurface\", {prefix:\"<domain>\"}).",
+        "Read the touched/missing annotations in every receipt; a reported stub means rewrite per its note.",
+      ],
+      execute: async (_toolCallId, params, signal) => {
+        const approved = await host.maybeRequestApproval({
+          tool: "foundry_page_eval",
+          summary: params.code?.slice(0, 200),
+          args: params,
+        });
+        if (!approved) return textResult("DM declined this code; do not retry it.");
+        let receipt;
+        try {
+          receipt = await runtimeCall("pageEval", {
+            code: params.code,
+            ...(params.requestId ? { requestId: params.requestId } : {}),
+          }, { signal, executionTimeoutMs: 60_000 });
+        } catch (error) {
+          return { ...textResult(pageEvalFailureText(error), { error: error?.code ?? "PAGE_EVAL_FAILED" }), isError: true };
+        }
+        return textResult(pageEvalResultText(receipt), receipt);
+      },
+    });
+
     const worldStatus = defineTool({
       name: "world_status",
       label: "World Status",
@@ -1327,7 +1429,7 @@ export class AgentHost {
     }) : null;
 
     // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
-    return [foundryOpen, foundryScreenshot, browserEvaluate, worldStatus, ...createFoundryTools(host), requestUserInput, openDocument,
+    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), requestUserInput, openDocument,
       ...(webSearch ? [webSearch] : [])];
   }
 }

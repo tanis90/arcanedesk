@@ -53,6 +53,14 @@ export class WebContentsFoundryTransport {
 }
 
 /**
+ * mtcompat 档 client 的扩展 action（A3）：pageEval 是 arcaneVTT 侧 runtime 的兜底 eval
+ * action，不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里——只有 mtcompat client 的白
+ * 名单带它，foundry 档 client 逐字不变。SDK 客户端对 action 只做字符串白名单检查
+ * （Set.has），并入后即走既有队列/序列化/preflight/中断语义。
+ * @typedef {"pageEval"} MtcompatRuntimeAction
+ */
+
+/**
  * Product-facing name retained for AgentHost. All protocol, preflight,
  * serialization, queueing, timeout, and indeterminate-write behavior lives in
  * @arcanedesk/foundry-sdk; Desktop supplies only the WebContents transport.
@@ -62,7 +70,7 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
    * @param {{
    *   getWebContents?: () => any,
    *   runtimeSource?: string,
-   *   allowedActions?: readonly import("@arcanedesk/foundry-sdk/contracts").DirectAction[],
+   *   allowedActions?: readonly (import("@arcanedesk/foundry-sdk/contracts").DirectAction | MtcompatRuntimeAction)[],
    *   evaluate?: (webContents: any, expression: string, options: { timeoutMs: number, signal?: AbortSignal }) => Promise<any>,
    *   inspectPage?: (webContents: any, options: { timeoutMs: number, signal?: AbortSignal }) => Promise<any>,
    *   readyPollMs?: number,
@@ -91,7 +99,8 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
     const callContext = new AsyncLocalStorage();
     super({
       transport,
-      ...(allowedActions ? { allowedActions } : {}),
+      // 扩展 action 的类型层过桥：SDK 只要满白名单集，契约类型不收录 mtcompat 扩展名。
+      ...(allowedActions ? { allowedActions: /** @type {readonly import("@arcanedesk/foundry-sdk/contracts").DirectAction[]} */ (allowedActions) } : {}),
       ...(runtimeSource !== undefined ? { runtimeSource } : {}),
       ...(readyPollMs !== undefined ? { readyPollMs } : {}),
       ...(pageProfile ? { pageProfile } : {}),

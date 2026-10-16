@@ -1074,7 +1074,8 @@ function summarizeArgs(toolName, args) {
     switch (toolName) {
       case "foundry_open":
         return args.url ?? t("chat.card.defaultUrl");
-      case "browser_evaluate": {
+      case "browser_evaluate":
+      case "foundry_page_eval": {
         const first = String(args.code ?? "").split("\n")[0].trim();
         return first.length > 90 ? first.slice(0, 90) + "…" : first;
       }

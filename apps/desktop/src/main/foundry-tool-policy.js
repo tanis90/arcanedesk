@@ -3,7 +3,8 @@
 // 档位维度（A2 起）：档案词汇与页面档位同一份事实源（page-profiles.js 的
 // PAGE_PROFILES），机制语义是「页面档位决定策略面」——foundry 档（开放默认档）
 // 行为必须与引入档位维度之前逐字节一致；mtcompat 档的策略面独立成表，A3 在其上
-// 放 pageEval 与写策略。归一规则：词汇表外的 id（含 undefined/null）落开放默认档。
+// 放 pageEval（foundry_page_eval，只进 mtcompat 备团档）。归一规则：词汇表外的 id
+// （含 undefined/null）落开放默认档。
 import { PAGE_PROFILES } from "./page-profiles.js";
 
 /** foundry 档（开放默认档）工具面。改这张表前先想清楚 mtcompat 档要不要跟。 */
@@ -18,13 +19,15 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）——A3 的 pageEval 只进这张表，
- * foundry 档不受影响。A2 起点与 foundry 面同集：档位分叉目前只落在蒸馏段挂载与
- * 策略表归属上。
+ * foundry 档不受影响。A3 起与 foundry 面的唯一分叉是备团的 foundry_page_eval：
+ * 备团是「typed action 铺不满、eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持
+ * 纯 typed 面（与 foundry 档战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径
+ * 不可控，需要兜底时先出战斗再补）。
  */
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
   combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
     "foundry_execute_action", "foundry_conditions_set"]),
-  prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "world_status",
+  prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
     "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "request_user_input", "open_document",
     "web_search"]),
@@ -54,6 +57,14 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
   "actorRead", "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance",
   "sceneRead", "sceneApply", "imageApply",
 ]);
+
+/**
+ * mtcompat 档 client 的 runtime 动作白名单（A3）：foundry 面 + pageEval。
+ * pageEval 是 arcaneVTT 侧 runtime 的兜底 eval action（PRD §3.1），不在 SDK 的 foundry
+ * 契约（ALL_DIRECT_ACTIONS）里——只随 mtcompat client 装配，foundry 档 client 的白名单
+ * 与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK 既有路径。
+ */
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "pageEval"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio

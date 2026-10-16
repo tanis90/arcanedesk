@@ -84,6 +84,15 @@ test("挂载点：mtcompat 档 eval 工具描述带蒸馏段，foundry 档逐字
   assert.ok(description.includes("Scene#activate"), "坑位行随段落进描述");
 });
 
+test("挂载点（A3）：foundry_page_eval 的描述在 mtcompat 档同样带蒸馏段，foundry 档无段", (t) => {
+  const file = temporaryArtifact(t, ARTIFACT);
+  const pageEval = (host) => host.buildTools().find((tool) => tool.name === "foundry_page_eval");
+  const foundryDescription = pageEval(prepHost({ getPanelProfileId: () => "foundry", mtcompatSurfaceFile: file })).description;
+  assert.equal(foundryDescription.includes("离线蒸馏"), false);
+  const mtcompatDescription = pageEval(prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file })).description;
+  assert.equal(mtcompatDescription, `${foundryDescription}\n\n${SEGMENT}`, "蒸馏段追加在新 eval 工具描述尾部");
+});
+
 test("挂载点：产物缺席/损坏时挂载降级为无段落，不影响工具构造与会话", (t) => {
   const logs = [];
   const absent = prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: path.join(os.tmpdir(), "arcane-no-surface.json"), log: (message) => logs.push(message) });

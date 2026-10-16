@@ -1,4 +1,4 @@
-import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
+import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -632,11 +632,11 @@ async function showFoundryEmptyState() {
 /**
  * mtcompat client 的完整构造参数:除 runtimeSource 外整份固定。A1 采用页面真源
  * (__MT_AGENT_RUNTIME_SOURCE__)时按新源重建实例,动作白名单/preflight 覆盖/巡检/
- * 遥测逐字不变。
+ * 遥测逐字不变。动作白名单是 mtcompat 档专用表(A3):foundry 面 + pageEval 扩展名。
  */
 function createMtcompatRuntime(runtimeSource) {
   return new DirectFoundryRuntime({
-    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
     runtimeSource,
     pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
     // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
