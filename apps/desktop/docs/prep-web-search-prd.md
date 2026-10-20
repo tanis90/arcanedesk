@@ -13,10 +13,15 @@
 - 开源发行版默认不产生 Arcane 运营费用：新用户默认 Arcane Spark 模式——未登录 Spark
   时只有在自己配了 DeepSeek key 的情况下才会外发；两者都没有时不注册工具、零请求零费用。
 - "模型决定何时搜索"与"由哪个服务执行搜索"分离；不静默跟随当前模型换用付费上游。
-- 搜索与网页读取是两个工具；本期只做搜索，`web_fetch` 留到 P2。
+- 搜索与网页读取是两个工具，职责分离：`web_search` 只返回标题/链接/摘要，`web_fetch`
+  才抓取单页正文；模型先用搜索定位、摘要不足时才抓取。
 
 M2 补充（2026-10-20）：用户已经为自己的聊天模型配了 **DeepSeek key** 时，搜索自动复用
 那把 key 直连 DeepSeek 官方 tools API，扣用户自己的账单，无需在「联网搜索」页再配置一次。
+
+M8 补充（2026-10-20）：新增 `web_fetch` 工具，沿用与 `web_search` **完全相同**的接入
+优先级——用户自己的 DeepSeek key 优先直连 `api.deepseek.com/v1/tools/fetch`，否则 CN
+Spark 模式走 relay `/v1/fetch`，其余情况工具不进池。结果上限 64KB（与搜索的 16KB 分离）。
 
 ## 2. 总体方案
 
@@ -52,9 +57,10 @@ content,publish_date}`），使 Spark adapter 与 z-ai BYOK adapter 共享同一
 | 5 | 「本轮已用 N 次搜索」状态行（无独立剩余额度展示） | 聊天 UI | P1 |
 | 6 | Spark 服务端 `/v1/search`：计量、熔断、z-ai 主 + DeepSeek 备 | 服务端 | P1 |
 | 7 | Kimi / OpenAI key 复用（检测 + 一键确认启用） | 设置页 | P2 |
-| 8 | `web_fetch`（SSRF/大小/重定向防护） | 工具 | P2 |
+| 8 | `web_fetch`：抓取单页正文（http(s) only、64KB 上限） | 工具 | M8 |
 | 9 | i18n：双语文案、结构化错误、区域化默认端点 | 全局 | P1 |
 | 10 | 用户自带 DeepSeek 聊天 key 自动接管搜索（无需二次配置） | 搜索 | M2 |
+| 11 | `web_fetch` 工具 + prep prompt 用法约束 | 工具 | M8 |
 
 ## 4. 工具契约
 
@@ -204,6 +210,45 @@ Content-Type: application/json
   `publishedAt`←`date|publish_date`，`source`←`media|source|authority`。
 - 无 `request_id`，`meta.requestId` 恒为 `null`；`normalize.js` 的 1000 字符 / 16KB 截断照旧。
 
+### 6.2 `web_fetch` 工具契约（M8）
+
+```json
+{ "name": "web_fetch", "arguments": { "url": "https://foundryvtt.com/releases/" } }
+```
+
+返回：
+
+```json
+{
+  "title": "…", "url": "https://…", "content": "…markdown…",
+  "meta": { "backend": "deepseek", "requestId": "…", "truncated": false }
+}
+```
+
+**URL 校验（桌面端与 relay 同一套语法规则）**：`url` 必填字符串、去空白后非空、
+≤ 8192 字符、scheme 只能是 `http`/`https`、必须有 host、不得含 `user:pass@`。桌面端自己
+先拦 `file:` / `data:` / `javascript:` / 自定义 app scheme——这类本地 scheme 永远不该出现在
+网络工具参数里。**不做**私网 IP / localhost / 端口 / 重定向链校验：抓取发生在 DeepSeek 侧，
+客户端与 relay 都不解析域名、不建连目标站（同 relay 的设计结论）。
+
+**结果上限 64KB（Q7）**：与搜索的 16KB 分离。抓取是单篇正文、用途是精读，预算应更大；
+但仍必须有上限——超限按 UTF-8 字节截正文（不切碎多字节字符）并置 `meta.truncated=true`，
+`title`/`url` 永不截断。
+
+**两条上游**（优先级与 `web_search` 完全一致）：
+
+| 条件 | 端点 | 凭据 |
+| --- | --- | --- |
+| spark 模式 + 用户自己的 DeepSeek key | `POST https://api.deepseek.com/v1/tools/fetch`，体 `{"url"}` | 用户自己的 key |
+| spark 模式 + 仅 Spark key（CN） | `POST {sparkBase}/v1/fetch`，体 `{"url"}` | Spark key（relay 计量） |
+| `off` / 无凭据 | 工具不进池 | — |
+
+**错误面**：`400 bad_request`（我方漏校验）、`404 fetch_unavailable`（页面不存在/无法提取，
+**含 relay 尚未部署时的 404**）、`413 page_too_large`、`422 fetch_blocked`（站点禁止抓取）、
+`429/503 + Retry-After`（relay 刻意避开 429，桌面端映射为 `rateLimited` 而非"额度耗尽"）、
+`504 upstream_timeout`。全部映射到 `err.fetch.*`，并给模型一段可执行指引（换来源/改用摘要/
+不要连续重试同一 URL）。
+
 ## 7. Spark 服务端 `/v1/search`
 
 ```http
@@ -292,29 +337,36 @@ Content-Type: application/json
 3. Spark `/v1/search` 上线（z-ai 主 + 熔断 + 遥测）。
 4. i18n 随功能同批交付：`ss.*` 双语文案、结构化错误、智谱区域默认端点进 intl overlay。
 
-**P2（key 复用与网页读取）**
+**M8（网页正文读取，已完成）**
+1. `web_fetch` 工具：http(s) only、64KB 上限、DeepSeek 直连 / CN relay 两条上游。
+
+**P2（key 复用）**
 1. Kimi / OpenAI 检测 + 一键确认启用（条款确认后）。
 2. DeepSeek 上游转正或淘汰（依据 P0/P1 质量 A/B 数据）。
-3. `web_fetch`（SSRF/大小/重定向防护）。
 
 ## 11. 验收标准
 
-1. 全新安装、未配置搜索：设置 tab 引导清晰，备团/combat 会话均无 `web_search` 工具，无任何
-   搜索网络请求。
+1. 全新安装、未配置搜索：设置 tab 引导清晰，备团/combat 会话均无 `web_search` / `web_fetch`
+   工具，无任何搜索或抓取网络请求。
 2. 防护与计量：同一 query 重复调用命中缓存且不重复计费；同轮内不出现任何客户端次数上限
    或预算提示，用量行如实显示本轮已执行次数；服务端返回 429（服务端熔断）时 UI 显示对应
    文案与设置入口；Spark 搜索用量并入统一计量，无独立剩余额度展示。
 3. BYOK 模式：key 以掩码显示、重启后保持；换 endpoint 需重新确认；renderer 侧代码路径
    无法取得明文 key。
 4. 引用：含搜索结果的回答中每条引用可点击跳转原始 URL；会话恢复后引用仍有效。
-5. 持久化：单条 toolResult ≤ 16 KB；JSONL 恢复会话不丢失结果列表。
+5. 持久化：单条搜索 toolResult ≤ 16 KB、单条抓取 toolResult ≤ 64 KB；JSONL 恢复会话不丢失
+   结果列表与正文。
 6. 启用无弹窗：模式卡选卡即保存即生效；探知珠状态行如实呈现接收方与计费；未登录
    Spark（或 BYOK 未存 key）时工具不注册、零网络请求。
 6b. DeepSeek 自动接入：模型页已配 DeepSeek key 时，spark 模式下 `web_search` 直接调
    `api.deepseek.com/v1/tools/search` 且只带用户自己的 key（不经过 Spark 中转）；未配时
    回落 Spark relay；`off`/`byok`/`custom` 不受影响；探知珠显示「计入你的 DeepSeek 账单」；
    会话中保存/删除该 key，下一次搜索即改变走向（无需重开会话）。
-7. i18n：新增文案 zh-CN / en-US 齐全（`ss.*`）；en-US 下设置行、模式卡、工具卡片完整显示
+6c. `web_fetch`：与 `web_search` 同一条凭据优先级（DeepSeek key 优先，否则 CN relay）；
+   只接受 http(s) 绝对 URL，`file:`/`data:`/`javascript:` 在发请求前即拒绝；relay 未部署
+   时 404 显示可恢复指引而不是错误崩溃；正文超 64KB 时截断并标 `truncated`；combat 模式
+   不提供该工具。
+7. i18n：新增文案 zh-CN / en-US 齐全（`ss.*`、`err.fetch.*`）；en-US 下设置行、模式卡、工具卡片完整显示
    不截断不溢出；主进程搜索错误经 `fmtIpc` 本地化，UI 不出现上游原始报错；`publishedAt`
    与费用币种按 locale/后端呈现；国内/国际发行包的智谱默认端点随区域 overlay 生效。
 
@@ -326,5 +378,7 @@ Content-Type: application/json
 - 不因「当前选中哪个聊天模型」而更换搜索上游。唯一的自动联动是按**端点 origin** 复用
   用户自己已经配置的 DeepSeek key（同一把 key、同一个接收方、同一份账单）；其余上游仍需
   用户在「联网搜索」页显式选择。`off` 模式优先级最高，自动接入不会把搜索重新打开。
-- combat 模式不提供 `web_search`。
+- combat 模式不提供 `web_search` / `web_fetch`。
+- 不做完整网页抓取工程（JS 渲染、反爬绕过、多页爬取、站内镜像）；`web_fetch` 只读取
+  上游已提取的单页正文。
 - 不在本期做搜索结果的历史聚合/研究工作台。

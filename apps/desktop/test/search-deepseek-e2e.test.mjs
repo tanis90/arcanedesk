@@ -10,7 +10,7 @@ import { after } from "node:test";
 import test from "node:test";
 
 import { AgentHost } from "../src/main/agent-host.js";
-import { SearchStore } from "../src/main/search/store.js";
+import { DEEPSEEK_SEARCH_HOST, SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
 // providers.js 在模块加载时按 regionConfig() 固化 Spark 默认 baseUrl，
@@ -126,4 +126,60 @@ test("without a DeepSeek key the same rig falls back to the Spark relay", async 
 test("neither key: web_search is not registered and nothing is sent", () => {
   const { tool } = buildRig();
   assert.equal(tool, undefined);
+});
+
+const FETCH_BODY = JSON.stringify({
+  title: "Foundry VTT v13 migration",
+  content: "# Migration\n\nMove your world to v13.",
+});
+
+test("web_fetch rides the same DeepSeek key and endpoint family end to end", async () => {
+  const dir = mkdtempSync(path.join(scratch, "fetch-rig-"));
+  const secretStorage = testSecretStorage();
+  const providerStore = new ProviderStore(
+    path.join(dir, "providers.json"), () => {}, { ARCANE_SPARK_ENABLED: "0" }, secretStorage,
+  );
+  providerStore.upsertProvider({
+    id: "deepseek",
+    name: "DeepSeek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-fetch-e2e",
+    models: [{ id: "deepseek-flash" }],
+  });
+  const searchStore = new SearchStore(path.join(dir, "search.json"), () => {}, secretStorage);
+  searchStore.update({ mode: "spark" }, null);
+
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return new Response(FETCH_BODY, { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  const host = new AgentHost({
+    foundryRuntime: { call: async () => ({}) },
+    operationStorageDir: mkdtempSync(path.join(dir, "session-")),
+    getFoundryView: () => null,
+    openFoundry: async () => ({ ok: true, summary: "open" }),
+    sendToRenderer: () => {},
+    log: () => {},
+    profile: { mode: "prep", getCwd: () => dir },
+    search: {
+      store: searchStore,
+      spark: () => null,
+      ownChatKeys: () => ({ deepseek: providerStore.credentialForHost(DEEPSEEK_SEARCH_HOST) }),
+      fetchImpl: impl,
+    },
+  });
+  host.describeCurrent = () => ({ id: "session-fetch-e2e" });
+
+  const tool = host.buildTools().find((candidate) => candidate.name === "web_fetch");
+  assert.ok(tool, "web_fetch must be available with only a DeepSeek key");
+  const result = await tool.execute("f1", { url: "https://foundryvtt.com/releases/v13" }, undefined);
+  assert.equal(result.isError, undefined);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.deepseek.com/v1/tools/fetch");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer sk-deepseek-fetch-e2e");
+  const parsed = JSON.parse(result.content[0].text);
+  assert.equal(parsed.meta.backend, "deepseek");
+  assert.match(parsed.content, /Migration/);
 });

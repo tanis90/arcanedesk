@@ -67,7 +67,7 @@ test("activation check rejects extra/missing names; Desktop explicitly opts in w
   assert.equal(sideEffectClass("foundry_execute_action"), "world_write");
 });
 
-test("real Pi prep session activates web_search when search is configured", async t => {
+test("real Pi prep session activates web_search and web_fetch when search is configured", async t => {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "arcane-tool-policy-search-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const settingsManager = SettingsManager.inMemory();
@@ -83,14 +83,16 @@ test("real Pi prep session activates web_search when search is configured", asyn
     search: { store: searchStore, spark: () => ({ apiKey: "sk-spark", baseUrl: "https://llm.example/v1" }) } });
   const customTools = host.buildTools();
   assert.equal(customTools.some((tool) => tool?.name === "web_search"), true);
+  assert.equal(customTools.some((tool) => tool?.name === "web_fetch"), true);
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPool("prep", customTools);
-  assert.equal(expected.length, 27); // 26 基线 + web_search
+  assert.equal(expected.length, 28); // 26 基线 + web_search + web_fetch
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
     customTools, tools: expected });
   t.after(() => session.dispose());
   verifyActiveTools(session, expected);
   assert.equal(session.getActiveToolNames().includes("web_search"), true);
+  assert.equal(session.getActiveToolNames().includes("web_fetch"), true);
 });

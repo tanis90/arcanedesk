@@ -31,16 +31,44 @@ export function getString(value) {
 }
 
 /** 带搜索错误码的 Error（coerceSearchError 按 .code 收拢为 SearchError）。 */
-export function codedError(code, message) {
-  return Object.assign(new Error(message), { code });
+export function codedError(code, message, meta = {}) {
+  return Object.assign(new Error(message), { code }, meta);
+}
+
+/**
+ * HTTP 状态 → 错误码；未提供 mapHttpError 时的默认表（搜索语义）。
+ * 传输错误统一在这里收拢，避免每个 adapter 重复。
+ */
+function defaultHttpErrorCode(status) {
+  return status === 401 || status === 403
+    ? "authFailed"
+    : status === 429 || status === 402
+      ? "quotaExceeded"
+      : "backendUnavailable";
+}
+
+/** Retry-After 只认整数秒；解析不出返回 null。 */
+export function readRetryAfter(headers) {
+  const raw = headers?.get?.("retry-after");
+  if (raw == null) return null;
+  const seconds = Number(String(raw).trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
 }
 
 /**
  * fetch + 统一错误映射。timeoutMs 通过 AbortSignal.timeout 与调用方 signal 合流；
  * 超时判 timeout、调用方取消判 cancelled、网络错误判 backendUnavailable。
+ * mapHttpError({status, retryAfter}) 可覆盖非 2xx 的错误码（fetch 用更细的表）。
  */
-export async function fetchJson(url, init, { signal = null, fetchImpl = fetch, backend, log = null }) {
-  const timeoutSignal = AbortSignal.timeout(15_000);
+export async function fetchJson(url, init, {
+  signal = null,
+  fetchImpl = fetch,
+  backend,
+  log = null,
+  timeoutMs = 15_000,
+  mapHttpError = null,
+}) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const merged = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   let response;
   try {
@@ -53,14 +81,14 @@ export async function fetchJson(url, init, { signal = null, fetchImpl = fetch, b
   }
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
+    const retryAfter = readRetryAfter(response.headers);
     log?.(`[search:${backend}] http ${response.status}`);
+    const code = (mapHttpError ? mapHttpError({ status: response.status, retryAfter, body: detail }) : null)
+      ?? defaultHttpErrorCode(response.status);
     throw codedError(
-      response.status === 401 || response.status === 403
-        ? "authFailed"
-        : response.status === 429 || response.status === 402
-          ? "quotaExceeded"
-          : "backendUnavailable",
+      code,
       `http ${response.status}: ${detail.slice(0, 200)}`,
+      retryAfter != null ? { retryAfter } : {},
     );
   }
   try {

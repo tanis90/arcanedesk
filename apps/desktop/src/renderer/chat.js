@@ -1090,6 +1090,10 @@ function summarizeArgs(toolName, args) {
         const q = String(args.query ?? "").trim();
         return q.length > 80 ? `“${q.slice(0, 80)}…”` : `“${q}”`;
       }
+      case "web_fetch": {
+        const url = String(args.url ?? "").trim();
+        return url.length > 100 ? `${url.slice(0, 100)}…` : url;
+      }
       default:
         return "";
     }
@@ -1225,6 +1229,21 @@ function finishToolCard(toolCallId, toolName, event) {
         body.appendChild(el("div", "ss-results-note", `${parsed.meta.backend} · ${note}`));
       }
       body.appendChild(list);
+    } catch {
+      body.appendChild(el("pre", null, shorten(text)));
+    }
+  } else if (toolName === "web_fetch" && !event.isError) {
+    // 抓取结果：标题链接 + 正文（卡片本身默认收起，避免 64KB 正文撑爆时间线）。
+    try {
+      const parsed = JSON.parse(text);
+      const head = el("div", "ss-results");
+      const link = el("a", "ss-result", parsed.title || parsed.url);
+      link.href = parsed.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      head.appendChild(link);
+      const note = [parsed.meta?.backend, parsed.meta?.truncated ? "· truncated" : null].filter(Boolean).join(" ");
+      if (note) body.appendChild(el("div", "ss-results-note", note));
+      body.appendChild(head);
+      body.appendChild(el("pre", null, shorten(parsed.content ?? "")));
     } catch {
       body.appendChild(el("pre", null, shorten(text)));
     }

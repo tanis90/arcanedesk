@@ -6,6 +6,7 @@ import { after } from "node:test";
 import test from "node:test";
 
 import { AgentHost } from "../src/main/agent-host.js";
+import { activeToolNamesForPool } from "../src/main/foundry-tool-policy.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
@@ -202,4 +203,130 @@ test("off mode keeps the tool out of the pool even with a DeepSeek key", () => {
     ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user" } }),
   });
   assert.equal(host.buildTools().some((t) => t.name === "web_search"), false);
+});
+
+const FETCH_OK_BODY = JSON.stringify({
+  title: "dnd5e 5.3.4",
+  content: "# Release notes\n\n- fixed A",
+});
+
+function stubFetchRaw(cases) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url: String(url), init });
+    const match = cases.shift();
+    if (!match) throw new Error("unexpected fetch call");
+    return new Response(match.body ?? "", {
+      status: match.status ?? 200,
+      headers: { "Content-Type": "application/json", ...(match.headers ?? {}) },
+    });
+  };
+  return { impl, calls };
+}
+
+test("web_fetch joins the pool alongside web_search and reads a page", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetchRaw([{ body: FETCH_OK_BODY }]);
+  const { host } = buildHost({
+    store,
+    fetchImpl: impl,
+    spark: false,
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user" } }),
+  });
+
+  const tools = host.buildTools();
+  assert.equal(tools.some((t) => t.name === "web_search"), true);
+  const fetchTool = tools.find((t) => t.name === "web_fetch");
+  assert.ok(fetchTool, "web_fetch should be registered with a DeepSeek key");
+
+  const result = await fetchTool.execute("f1", { url: "https://foundryvtt.com/releases/5.3.4" }, undefined);
+  assert.equal(result.isError, undefined);
+  assert.equal(calls[0].url, "https://api.deepseek.com/v1/tools/fetch");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer sk-deepseek-user");
+  const parsed = JSON.parse(result.content[0].text);
+  assert.equal(parsed.title, "dnd5e 5.3.4");
+  assert.match(parsed.content, /Release notes/);
+  assert.equal(result.details.title, "dnd5e 5.3.4");
+});
+
+test("web_fetch is absent when search credentials are not configured", () => {
+  const store = makeStore({ mode: "spark" });
+  const { host } = buildHost({ store, spark: false, ownChatKeys: () => ({ deepseek: null }) });
+  const tools = host.buildTools();
+  assert.equal(tools.some((t) => t.name === "web_search"), false);
+  assert.equal(tools.some((t) => t.name === "web_fetch"), false);
+});
+
+test("web_fetch is prep-only, never in the combat pool", () => {
+  const store = makeStore({ mode: "spark" });
+  const { host } = buildHost({
+    store,
+    profileMode: "combat",
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user" } }),
+  });
+  const tools = host.buildTools();
+  // buildTools 是两种模式的并集,per-mode 激活由 activeToolNamesForPool 决定。
+  assert.equal(tools.some((t) => t.name === "web_fetch"), true);
+  assert.equal(activeToolNamesForPool("combat", tools).includes("web_fetch"), false);
+  assert.equal(activeToolNamesForPool("prep", tools).includes("web_fetch"), true);
+});
+
+test("web_fetch returns a recoverable isError result with model guidance", async () => {
+  const store = makeStore({ mode: "spark" });
+  // relay 未部署：404 非 JSON 体。
+  const { impl } = stubFetchRaw([{ status: 404, body: "Not Found" }]);
+  const { host, events } = buildHost({ store, fetchImpl: impl });
+
+  const tool = host.buildTools().find((t) => t.name === "web_fetch");
+  const result = await tool.execute("f1", { url: "https://example.com/a" }, undefined);
+  assert.equal(result.isError, true);
+  assert.equal(result.details.error, "fetchUnavailable");
+  assert.match(result.content[0].text, /Could not retrieve readable content/);
+  const emitted = events.find((event) => event.type === "search_error");
+  assert.equal(emitted.data.code, "fetchUnavailable");
+});
+
+test("web_fetch rejects local schemes before any network call", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetchRaw([]);
+  const { host } = buildHost({ store, fetchImpl: impl });
+
+  const tool = host.buildTools().find((t) => t.name === "web_fetch");
+  const result = await tool.execute("f1", { url: "file:///C:/Windows/win.ini" }, undefined);
+  assert.equal(result.isError, true);
+  assert.equal(result.details.error, "badRequest");
+  assert.match(result.content[0].text, /Invalid URL/);
+  assert.equal(calls.length, 0);
+});
+
+test("web_fetch rate limiting tells the model to back off", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl } = stubFetchRaw([{
+    status: 503,
+    headers: { "Retry-After": "5" },
+    body: JSON.stringify({ error: { code: "upstream_rate_limited" } }),
+  }]);
+  const { host } = buildHost({ store, fetchImpl: impl });
+
+  const tool = host.buildTools().find((t) => t.name === "web_fetch");
+  const result = await tool.execute("f1", { url: "https://example.com/a" }, undefined);
+  assert.equal(result.isError, true);
+  assert.equal(result.details.error, "rateLimited");
+  assert.match(result.content[0].text, /rate-limited/);
+  assert.match(result.content[0].text, /5s/);
+});
+
+test("web_fetch stays out of the pool for search-only BYOK backends", () => {
+  // zai/brave 只有搜索能力：注册 web_fetch 只会得到一个永远 notConfigured 的工具。
+  for (const [backend, key] of [["zai", "zai-key-1234"], ["brave", "brave-key-777"]]) {
+    const store = makeStore({ mode: "byok", byokBackend: backend, apiKey: key });
+    const { host } = buildHost({ store, spark: false });
+    const tools = host.buildTools();
+    assert.equal(tools.some((t) => t.name === "web_search"), true, `${backend} keeps search`);
+    assert.equal(tools.some((t) => t.name === "web_fetch"), false, `${backend} must not register fetch`);
+  }
+  // deepseek BYOK 两者都有。
+  const deepseek = makeStore({ mode: "byok", byokBackend: "deepseek", apiKey: "deepseek-key-1234" });
+  const tools = buildHost({ store: deepseek, spark: false }).host.buildTools();
+  assert.equal(tools.some((t) => t.name === "web_fetch"), true);
 });
