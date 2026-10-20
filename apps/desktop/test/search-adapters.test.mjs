@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { executeSearch } from "../src/main/search/index.js";
 import { SearchError } from "../src/main/search/errors.js";
-import { SearchBudget } from "../src/main/search/budget.js";
+import { SearchRunCache } from "../src/main/search/cache.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
@@ -44,12 +44,12 @@ test("zai adapter speaks the zhipu web_search wire format", async () => {
   }]);
   const store = makeStore({ mode: "byok", byokBackend: "zai", apiKey: "zai-key" });
 
-  const budget = new SearchBudget();
-  budget.reset("run");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
   const { payload, usage } = await executeSearch(
     { query: "foundry v13 dnd5e", count: 5, freshness: "month" },
-    { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
   );
   assert.equal(usage.backend, "zai");
   assert.equal(usage.cached, false);
@@ -78,12 +78,12 @@ test("spark adapter posts the arcane /v1/search contract", async () => {
   }]);
   const store = makeStore({ mode: "spark" });
 
-  const budget = new SearchBudget();
-  budget.reset("run");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
   const { payload } = await executeSearch(
     { query: "模组 兼容性", count: 5, freshness: "month", domains: ["foundryvtt.com"] },
-    { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
   );
   assert.equal(fetch.calls[0].url, "https://llm.example/v1/search");
   const request = JSON.parse(fetch.calls[0].init.body);
@@ -102,12 +102,12 @@ test("brave adapter maps web.results and warns on domains", async () => {
   }]);
   const store = makeStore({ mode: "byok", byokBackend: "brave", apiKey: "brave-key" });
 
-  const budget = new SearchBudget();
-  budget.reset("run");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
   const { payload } = await executeSearch(
     { query: "brave query", domains: ["example.com"] },
-    { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
   );
   const url = new URL(fetch.calls[0].url);
   assert.equal(url.hostname, "api.search.brave.com");
@@ -123,41 +123,35 @@ test("dedupe cache short-circuits identical queries in the same run", async () =
   ]);
   const store = makeStore({ mode: "spark" });
 
-  const budget = new SearchBudget();
-  budget.reset("run");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
-  const first = await executeSearch({ query: "same  QUERY" }, { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
-  const second = await executeSearch({ query: "same query" }, { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
+  const first = await executeSearch({ query: "same  QUERY" }, { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
+  const second = await executeSearch({ query: "same query" }, { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
   assert.equal(second.usage.cached, true);
   assert.equal(second.payload, first.payload);
   assert.equal(fetch.calls.length, 1); // 只发了一次
-  assert.equal(budget.used("run"), 1);
+  assert.equal(cache.used("run"), 1);
 });
 
-test("hard cap produces budgetExhausted; first search goes out without any confirmation", async () => {
-  const fetch = stubFetch([
-    { body: JSON.stringify({ search_results: [{ title: "T", url: "https://x.example/1", content: "C" }] }) },
-  ]);
+test("no client-side cap: many distinct queries all go out", async () => {
+  const fetch = stubFetch(Array.from({ length: 12 }, () => ({
+    body: JSON.stringify({ search_results: [{ title: "T", url: "https://x.example/1", content: "C" }] }),
+  })));
   const store = makeStore({ mode: "spark" });
 
-  const budget = new SearchBudget({ hard: 1 });
-  budget.reset("run");
-  budget.record("run", "previous", "p");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
-  await assert.rejects(
-    executeSearch({ query: "next query" }, { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} }),
-    (error) => error instanceof SearchError && error.code === "budgetExhausted",
-  );
-
-  // 无 consent 闸:配置完成即首次外发。
-  const freshBudget = new SearchBudget();
-  freshBudget.reset("run");
-  const { usage } = await executeSearch({ query: "first query" }, { store, spark: SPARK, budget: freshBudget, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
-  assert.equal(usage.cached, false);
-  assert.equal(fetch.calls.length, 1);
+  for (let i = 0; i < 12; i += 1) {
+    const { usage } = await executeSearch({ query: `query ${i}` }, { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} });
+    assert.equal(usage.used, i + 1);
+  }
+  assert.equal(fetch.calls.length, 12);
+  assert.equal(cache.used("run"), 12);
 });
 
-test("upstream 429/401 map to quota/auth errors; empty results consume budget", async () => {
+test("upstream 429/401 map to quota/auth errors; empty results are not cached", async () => {
   const fetch = stubFetch([
     { status: 429, body: JSON.stringify({ error: { code: "quota_exceeded" } }) },
     { status: 401, body: JSON.stringify({ error: { code: "unauthorized" } }) },
@@ -165,24 +159,23 @@ test("upstream 429/401 map to quota/auth errors; empty results consume budget", 
   ]);
   const store = makeStore({ mode: "spark" });
 
-
-  const quota = await executeSearch({ query: "quota query" }, { store, spark: SPARK, budget: new SearchBudget(), runKey: "r", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
+  const quota = await executeSearch({ query: "quota query" }, { store, spark: SPARK, cache: new SearchRunCache(), runKey: "r", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
   assert.ok(quota instanceof SearchError && quota.code === "quotaExceeded");
   assert.equal(quota.toIpc().key, "err.search.quotaExceeded");
 
-  const auth = await executeSearch({ query: "auth query" }, { store, spark: SPARK, budget: new SearchBudget(), runKey: "r", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
+  const auth = await executeSearch({ query: "auth query" }, { store, spark: SPARK, cache: new SearchRunCache(), runKey: "r", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
   assert.ok(auth instanceof SearchError && auth.code === "authFailed");
 
-  const budget = new SearchBudget();
-  budget.reset("run");
-  const empty = await executeSearch({ query: "empty query" }, { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
+  const cache = new SearchRunCache();
+  cache.reset("run");
+  const empty = await executeSearch({ query: "empty query" }, { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} }).catch((e) => e);
   assert.ok(empty instanceof SearchError && empty.code === "empty");
-  assert.equal(budget.used("run"), 1); // 空结果消耗预算但不进缓存
-  assert.equal(budget.lookup("run", "empty query"), null);
+  assert.equal(cache.used("run"), 0); // 空结果不计数也不进缓存
+  assert.equal(cache.lookup("run", "empty query"), null);
 });
 
-test("payload respects the 8KB cap by dropping trailing results", async () => {
-  const big = "x".repeat(400); // snippet 500 截断后仍 400 字符
+test("payload keeps 5 long snippets under the 16KB cap", async () => {
+  const big = "x".repeat(2000); // 截断到 1000 字符后 5 条仍在 16KB 内
   const rows = Array.from({ length: 30 }, (_, i) => ({
     title: `T${i}`,
     url: `https://x.example/${i}`,
@@ -191,16 +184,41 @@ test("payload respects the 8KB cap by dropping trailing results", async () => {
   const fetch = stubFetch([{ body: JSON.stringify({ search_results: rows }) }]);
   const store = makeStore({ mode: "spark" });
 
-  const budget = new SearchBudget();
-  budget.reset("run");
+  const cache = new SearchRunCache();
+  cache.reset("run");
 
   const { payload } = await executeSearch(
     { query: "big query", count: 5 },
-    { store, spark: SPARK, budget, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
   );
-  assert.ok(Buffer.byteLength(payload, "utf8") <= 8 * 1024);
+  assert.ok(Buffer.byteLength(payload, "utf8") <= 16 * 1024);
   const parsed = JSON.parse(payload);
-  assert.equal(parsed.results.length, 5); // count=5 本来就压住了
-  // 再用 5 条 900 字符 snippet 验证截断链路：500 截断生效
-  assert.ok(parsed.results[0].snippet.length <= 500);
+  assert.equal(parsed.results.length, 5); // 16KB 容得下 5 条长 snippet，不丢尾
+  assert.equal(parsed.meta.truncated, false);
+  assert.equal(parsed.results[0].snippet.length, 1000); // snippet 截断到 1000
+});
+
+test("payload over 16KB drops trailing results and marks meta.truncated", async () => {
+  const big = "y".repeat(2000);
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    title: `T${i}`,
+    url: `https://x.example/${i}`,
+    content: big,
+  }));
+  const fetch = stubFetch([{ body: JSON.stringify({ search_results: rows }) }]);
+  const store = makeStore({ mode: "spark" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+
+  const { payload } = await executeSearch(
+    { query: "huge query", count: 20 },
+    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+  assert.ok(Buffer.byteLength(payload, "utf8") <= 16 * 1024);
+  const parsed = JSON.parse(payload);
+  assert.equal(parsed.meta.truncated, true);
+  assert.ok(parsed.results.length > 0 && parsed.results.length < 20);
+  assert.equal(parsed.results[0].title, "T0"); // 从尾部丢，头部保留
+  assert.equal(parsed.results[0].snippet.length, 1000);
 });

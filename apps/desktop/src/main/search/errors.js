@@ -11,7 +11,6 @@ const IPC_KEYS = {
   backendUnavailable: "err.search.backendUnavailable",
   timeout: "err.search.timeout",
   cancelled: "err.search.cancelled",
-  budgetExhausted: "err.search.budgetExhausted",
   empty: "err.search.empty",
   notConfigured: "err.search.notConfigured",
   badRequest: "err.search.badRequest",

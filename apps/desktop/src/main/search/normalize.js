@@ -1,9 +1,9 @@
 // search/normalize.js — 统一结果形状与截断（PRD §4）。
 // 上游字段在这里收敛为 {title,url,snippet,publishedAt,source}；
-// snippet 500 字符、整个 toolResult payload 8KB 上限（会话 JSONL 持久化成本）。
+// snippet 1000 字符、整个 toolResult payload 16KB 上限（会话 JSONL 持久化成本）。
 
-export const MAX_SNIPPET_CHARS = 500;
-export const MAX_PAYLOAD_BYTES = 8 * 1024;
+export const MAX_SNIPPET_CHARS = 1000;
+export const MAX_PAYLOAD_BYTES = 16 * 1024;
 
 /** 单条结果清洗；title+url 缺失即丢弃该条。 */
 export function toUnifiedResult(raw) {
@@ -26,7 +26,7 @@ export function truncateSnippet(text) {
 }
 
 /**
- * 组装 toolResult payload（JSON 字符串）。超 8KB 时逐条从尾部丢结果并打
+ * 组装 toolResult payload（JSON 字符串）。超 16KB 时逐条从尾部丢结果并打
  * meta.truncated=true，保证 payload 恒在上限内。
  */
 export function toToolPayload(results, meta = {}) {

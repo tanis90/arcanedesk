@@ -17,7 +17,7 @@
                │                                 │     │ execute                              │
                │                                 │     ▼                                     │
                │                                 │ search/ 模块                               │
-               │                                 │   budget.js（去重缓存+软提示+硬上限）       │
+               │                                 │   cache.js（run 级去重缓存 + 用量计数）     │
                │                                 │   store.js（SearchStore，safeStorage）     │
                │                                 │   adapters/{spark,zai,brave,custom}.js    │
                │                                 └──────┬──────────────────────────────────┘
@@ -36,7 +36,7 @@
 src/main/search/
   index.js        # 装配 defineTool("web_search")，导出 createWebSearchTool(host, deps)
   store.js        # SearchStore：配置 + 凭据持久化（照抄 VoiceStore 模式）
-  budget.js       # run 级计数器 + 归一化 query 去重缓存 + 软提示/硬上限
+  cache.js        # run 级去重缓存 + 用量计数（无次数上限）
   errors.js       # SearchError(code, upstream?) → I18nError("err.search.*") 映射
   capabilities.js # 各后端能力声明（freshness/domains 支持度 → meta.warnings）
   adapters/
@@ -75,18 +75,16 @@ src/main/search/
 "换后端/换 endpoint"靠既有的 credential-target 绑定与 KEY_REENTRY_REQUIRED 约束，
 不再叠加确认弹窗。
 
-### 2.2 budget.js（run 级防护）
+### 2.2 cache.js（run 级去重缓存）
 
-- 窗口 = 同一条用户消息引发的整条 agent 链。计数器挂在 AgentHost 实例上
-  （`Map<runKey, {count, seen: Map<normQuery, resultRef>}>`）；runKey 以用户输入事件为界
+- 窗口 = 同一条用户消息引发的整条 agent 链。缓存与计数挂在 AgentHost 实例上
+  （`Map<runKey, {count, cache: Map<normQuery, toolPayload>}>`）；runKey 以用户输入事件为界
   重置——agent-host 已把 session 事件投影到 renderer，实现时从同一事件流取用户输入事件名
   （pi 0.84.3，见 §13 开放问题）。会话关闭即丢弃。
-- 归一化：`query.trim().replace(/\s+/g, " ")` + ASCII lower。命中 `seen` 直接返回缓存
-  结果（`meta.cached: true`），不计次、不发包。
-- 软阈值 5：第 6 次起在 toolResult 尾部追加提示段（模型可读）。
-- 硬上限 10：返回 `err.search.budgetExhausted`（isError，附已执行次数），提示模型基于
-  已有结果作答。Spark 模式同规则；按次计量的 unit 由服务端另行核算，desktop 不做计费判断。
-- 常量集中在文件头（`SOFT_LIMIT = 5` / `HARD_LIMIT = 10`），单测直接引用。
+- 归一化：`query.trim().replace(/\s+/g, " ")` + ASCII lower。命中 `cache` 直接返回缓存的
+  toolPayload（usage `cached: true`），不计次、不发包。
+- 无任何客户端次数上限：`count` 只用于 `search_usage` 事件给 UI 用量行做透明展示；
+  按次计量的 unit 由服务端另行核算，desktop 不做计费判断，也不拦截调用。
 
 ### 2.3 工具装配（`index.js` + agent-host.js 集成）
 
@@ -99,7 +97,7 @@ const webSearch = defineTool({
   description: "Search the web for prep research…",   // 英文，给模型读，不进 UI 字典
   parameters: Type.Object({
     query: Type.String({ minLength: 2 }),
-    count: Type.Optional(Type.Integer({ minimum: 1, maximum: 5 })),
+    count: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
     freshness: Type.Optional(Type.String()),           // "day"|"week"|"month"|"year"
     domains: Type.Optional(Type.Array(Type.String())),
   }),
@@ -112,9 +110,9 @@ const webSearch = defineTool({
   （`agent-host.js:1272`）。主进程构造 prep host 时把 `"web_search"` 加入
   `main.js:771` 的 prep allowlist 数组；combat profile 不加即天然不注册。未配置
   （`store.usable() === false`）时即使 allowlist 包含也不注册——构建工具列表时查一次。
-- execute 流程：参数清洗 → budget 检查（去重/计数）→ 取凭据 →
+- execute 流程：参数清洗 → 去重缓存（命中直接复用）→ 取凭据 →
   adapter 调用（`AbortSignal.timeout(15s)` + 透传 `signal` 支持取消）→ normalize →
-  截断（snippet 500 字符 / toolResult 8KB）→ 组装统一结构 → `host.emit({ type:
+  截断（snippet 1000 字符 / toolResult 16KB）→ 组装统一结构 → `host.emit({ type:
   "search_usage", used, backend, runKey })` → `textResult(json)`。
 - 事件通道复用现有 `sendToRenderer`（自动带 mode/sessionId，`agent-host.js:335`），
   renderer 据此渲染用量行；不新开 IPC 通道。
@@ -225,11 +223,11 @@ quota_exceeded(429), timeout, cancelled, empty}`，上抛为 `I18nError("err.sea
 ```text
 model tool_call(query)
   → pi session → web_search.execute(params, signal)
-    → budget: 归一化 key 命中缓存? ──是──► 返回缓存 toolResult (meta.cached)
-    → budget: count++, ≥6 附加提示 / >10 返回 err.search.budgetExhausted
+    → cache: 归一化 key 命中缓存? ──是──► 返回缓存 toolResult (usage.cached)
+    → cache: 未命中则发包, count++ (仅用于用量展示, 无上限)
     → store.credentialForUse(spark) → {apiKey, baseUrl, adapter}
     → adapter.search(...)  fetch + AbortSignal.timeout(15s) + signal
-    → normalize → 截断(500/8KB) → capabilities.warnings
+    → normalize → 截断(1000 字符/16KB) → capabilities.warnings
     → host.emit(search_usage) → renderer 用量行
   ← toolResult {results[], meta{backend, requestId, truncated, warnings, cached}}
 ```
@@ -238,18 +236,18 @@ model tool_call(query)
 
 - **adapter 单测**：fixture 用真实响应样本（移植时连同 pi-websearch 的测试样本一起搬），
   覆盖 zai/brave/spark/custom 的字段映射、空结果、429/503/超时/取消、headers 断言。
-- **budget 单测**：去重命中不计次、软提示从第 6 次出现、第 11 次硬断、run 重置、
+- **cache 单测**：去重命中不计次、计数无上限增长、run 重置隔离、
   并发调用下计数原子性（Promise.all 场景）。
 - **store 单测**：掩码复用、KEY_REENTRY_REQUIRED、换 backend 弃 key、新用户默认 spark
   （无凭据零请求）、schema v2 不再持久化 consent、safeStorage 不可用降级（照 voice-store 现有测试）。
 - **集成**（mock fetch + 假 AgentHost）：prep allowlist 注册/未注册两态、事件到 renderer
-  的 payload 形状、8KB 截断后 JSONL 可恢复。
+  的 payload 形状、16KB 截断后 JSONL 可恢复。
 - **手工验收**：对齐 PRD §11 七条。
 
 ## 11. 里程碑任务分解
 
 **P0（POC，不发布）**
-1. `search/{index,store,budget,errors,adapters/zai,adapters/brave}.js` + 单测（mock 起步）；
+1. `search/{index,store,cache,errors,adapters/zai,adapters/brave}.js` + 单测（mock 起步）；
 2. prep allowlist 临时加 `web_search`，跑真实 query 评测脚本（50–100 条，两网络环境）。
 
 **P1（首发）**
@@ -265,7 +263,7 @@ model tool_call(query)
 
 ## 12. 风险与开放问题
 
-- **Pi 用户输入事件名**：budget 的 run 重置钩子依赖 pi 0.84.3 session 事件流中的用户
+- **Pi 用户输入事件名**：cache 的 run 重置钩子依赖 pi 0.84.3 session 事件流中的用户
   输入事件，实现前先确认事件类型（若无干净钩子，fallback：以每次 assistant 回合开始
   为界近似，并在单测里固化该语义）。
 - Brave 结果落盘条款未决前，brave adapter 的 snippet 持久化长度先取更保守的 200 字符。
@@ -277,12 +275,13 @@ model tool_call(query)
 
 | 里程碑 | 提交 | 内容 |
 | --- | --- | --- |
-| M1 | `de595f5` | search 模块（store/budget/errors/adapters/normalize）+ 21 单测 |
+| M1 | `de595f5` | search 模块（store/cache/errors/adapters/normalize）+ 21 单测 |
 | M2 | `7c1a8bc` | AgentHost 工具装配、prep allowlist（池感知激活）、search_usage/error 事件、region 注入 |
 | M3 | ops `226fe72` + 桌面 `87c19c3` | arcane-spark-edge `POST /v1/search`（z-ai 上游、双闸门计量、deductSearch）；桌面 zai adapter 对齐 bigmodel 文档 |
 | M4 | `f6bac45` | 设置页 tab、consent 弹窗、工具卡片、用量 chip、ss.*/err.search.* 双语 |
 | M5 | 本次 | prep system prompt 增量；Spark 链路本地 e2e（真 HTTP + 真 fetch，fixture 与 worker 输出逐字段一致）；全套 650/650 |
 | M6 | 本次 | 拆除 consent 流程（execute 闸、IPC、弹窗、事件、schema v2）；新用户默认 spark；设置页重设计为「探知珠状态行 + 模式卡选卡即保存」 |
+| M7 | 2026-10-20 | 移除客户端成本限制：删除次数上限与软提示；count 上限 5→20；snippet 500→1000 字符；payload 8KB→16KB；`budget.js`→`cache.js`（`SearchRunCache`） |
 
 测试基线：desktop `npm test` 650/650、`tsc --noEmit` 干净；ops `services/arcane-spark-edge` `node --test test/*.test.mjs` 25/25。
 
@@ -299,7 +298,7 @@ model tool_call(query)
 
 ### 手工验收（对齐 PRD §11）
 
-- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费/第 6 次软提示/第 11 次硬断、429/402 文案 key、8KB 截断、默认 spark 无凭据零外发（M6 测试）、双语占位符一致、en-US 布局待人工过一遍。
+- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费且无客户端次数上限、429/402 文案 key、16KB 截断、默认 spark 无凭据零外发（M6 测试）、双语占位符一致、en-US 布局待人工过一遍。
 - 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、设置页探知珠视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
 
 ### 实测已知怪癖（2026-09-18 真实流量）

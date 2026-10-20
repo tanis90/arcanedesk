@@ -6,7 +6,6 @@ import { after } from "node:test";
 import test from "node:test";
 
 import { AgentHost } from "../src/main/agent-host.js";
-import { SearchBudget } from "../src/main/search/budget.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
@@ -90,25 +89,25 @@ test("web_search execute returns structured payload and emits search_usage", asy
   assert.equal(usage.data.sessionId, "session-1");
 });
 
-test("first search succeeds without confirmation; hard cap and run reset behave", async () => {
+test("agent_start resets the cache so the same query goes out again", async () => {
   const store = makeStore({ mode: "spark" });
   const { impl, calls } = stubFetch(OK_BODY);
   const { host } = buildHost({ store, fetchImpl: impl });
-  host.searchBudget = new SearchBudget({ soft: 5, hard: 1 }); // 注入小上限
 
   const tool = host.buildTools().find((t) => t.name === "web_search");
-  // 无首次确认闸:配置完成即外发。
-  const first = await tool.execute("c1", { query: "first query" }, undefined);
+  // 无首次确认闸：配置完成即外发。
+  const first = await tool.execute("c1", { query: "same query" }, undefined);
   assert.equal(first.isError, undefined);
   assert.equal(calls.length, 1);
 
-  // 第二条触发硬上限。
-  const second = await tool.execute("c2", { query: "second query" }, undefined);
-  assert.equal(second.isError, true);
-  assert.match(second.content[0].text, /budget for this turn is exhausted/);
+  // 同 run 同 query：缓存短路，不再发包。
+  const second = await tool.execute("c2", { query: "same query" }, undefined);
+  assert.equal(second.isError, undefined);
+  assert.equal(calls.length, 1);
 
-  // agent_start 语义:新一轮 run 预算重置。
+  // agent_start 语义：新一轮 run 缓存清空，同 query 重新发包。
   host.resetSearchRun();
-  const third = await tool.execute("c3", { query: "third query" }, undefined);
+  const third = await tool.execute("c3", { query: "same query" }, undefined);
   assert.equal(third.isError, undefined);
+  assert.equal(calls.length, 2);
 });
