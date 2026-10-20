@@ -478,3 +478,61 @@ test("migrates a pre-v3 protected key into a target-bound encrypted payload", ()
     target: "origin:https://provider.example",
   });
 });
+
+test("credentialForHost finds a provider by endpoint host, regardless of path", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "deepseek",
+    name: "DeepSeek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [{ id: "deepseek-flash" }],
+  });
+
+  const cred = store.credentialForHost("api.deepseek.com");
+  assert.deepEqual(cred, {
+    apiKey: "sk-deepseek-user",
+    baseUrl: "https://api.deepseek.com/v1",
+    providerId: "deepseek",
+  });
+  // 大小写与协议不敏感；未知 host 返回 null（绝不回落到别的 provider）。
+  assert.equal(store.credentialForHost("API.DEEPSEEK.COM")?.apiKey, "sk-deepseek-user");
+  assert.equal(store.credentialForHost("api.bigmodel.cn"), null);
+  assert.equal(store.credentialForHost(""), null);
+});
+
+test("credentialForHost refuses providers whose credential target was tampered with", () => {
+  const { file } = tempConfig();
+  const storage = testSecretStorage();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [],
+  });
+  const persisted = JSON.parse(readFileSync(file, "utf8"));
+  persisted.providers[0].baseUrl = "https://attacker.example/v1";
+  writeFileSync(file, JSON.stringify(persisted));
+
+  const reloaded = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  // key 的 credential target 仍绑在 deepseek origin：被改过的公开配置拿不到 key。
+  assert.equal(reloaded.credentialForHost("api.deepseek.com"), null);
+  assert.equal(reloaded.credentialForHost("attacker.example"), null);
+});
+
+test("credentialForHost skips providers without a usable key", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "",
+    models: [],
+  });
+  assert.equal(store.credentialForHost("api.deepseek.com"), null);
+});

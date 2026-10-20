@@ -222,3 +222,152 @@ test("payload over 16KB drops trailing results and marks meta.truncated", async 
   assert.equal(parsed.results[0].title, "T0"); // 从尾部丢，头部保留
   assert.equal(parsed.results[0].snippet.length, 1000);
 });
+
+const DEEPSEEK_KEY = { deepseek: { apiKey: "sk-deepseek-user", baseUrl: "https://api.deepseek.com/v1" } };
+
+test("deepseek adapter speaks the official /v1/tools/search contract", async () => {
+  const fetch = stubFetch([{
+    body: JSON.stringify({
+      results: [
+        {
+          title: "dnd5e 5.3.4 release notes",
+          url: "https://foundryvtt.com/release",
+          snippet: "Release notes for dnd5e 5.3.4.",
+          summary: "A long summary that should not win over snippet.",
+          date: "2026-08-30",
+          rerank_score: 0.93,
+          authority: "official",
+        },
+        { title: "no url entry", snippet: "dropped" }, // 缺 url 丢弃
+      ],
+    }),
+  }]);
+  const store = makeStore({ mode: "spark" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+
+  const { payload, usage } = await executeSearch(
+    { query: "dnd5e 5.3.4 更新说明", count: 5 },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+
+  // 端点与鉴权:用户自己的 key 直接发给 api.deepseek.com,不经过 Spark 中转。
+  assert.equal(fetch.calls.length, 1);
+  assert.equal(fetch.calls[0].url, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(fetch.calls[0].init.headers.Authorization, "Bearer sk-deepseek-user");
+  const request = JSON.parse(fetch.calls[0].init.body);
+  assert.equal(request.query, "dnd5e 5.3.4 更新说明");
+  assert.equal(request.count, 5);
+
+  assert.equal(usage.backend, "deepseek");
+  const parsed = JSON.parse(payload);
+  assert.equal(parsed.results.length, 1);
+  assert.equal(parsed.results[0].url, "https://foundryvtt.com/release");
+  assert.equal(parsed.results[0].snippet, "Release notes for dnd5e 5.3.4."); // snippet 优先于 summary
+  assert.equal(parsed.results[0].publishedAt, "2026-08-30");
+  assert.equal(parsed.results[0].source, "official");
+  assert.equal(parsed.meta.backend, "deepseek");
+  assert.equal(parsed.meta.requestId, null); // 契约无 request_id
+});
+
+test("deepseek adapter falls back to summary and clamps query to 128 chars", async () => {
+  const fetch = stubFetch([{
+    body: JSON.stringify({
+      results: [{ title: "T", url: "https://x.example/1", summary: "S".repeat(700), date: "2026-09-01" }],
+    }),
+  }]);
+  const store = makeStore({ mode: "spark" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+
+  const { payload } = await executeSearch(
+    { query: "关".repeat(300), count: 3 },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+  const request = JSON.parse(fetch.calls[0].init.body);
+  assert.equal([...request.query].length, 128); // 上游硬上限
+  assert.equal(request.count, 3);
+  const parsed = JSON.parse(payload);
+  assert.equal(parsed.results[0].snippet.length, 700); // summary 兜底,截断交给 normalize(1000)
+  assert.equal(parsed.results[0].source, "deepseek"); // 无 authority 时用 backend 名
+});
+
+test("deepseek adapter folds domains into the query and warns nothing away", async () => {
+  const fetch = stubFetch([{
+    body: JSON.stringify({ results: [{ title: "T", url: "https://foundryvtt.com/1", snippet: "S" }] }),
+  }]);
+  const store = makeStore({ mode: "spark" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+
+  const { payload } = await executeSearch(
+    { query: "v13 migration", domains: ["foundryvtt.com"], freshness: "month" },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+  const request = JSON.parse(fetch.calls[0].init.body);
+  assert.equal(request.query, "v13 migration site:foundryvtt.com");
+  assert.equal("freshness" in request, false); // 契约不支持该参数
+  const parsed = JSON.parse(payload);
+  assert.equal(parsed.meta.warnings.length, 1); // freshness 不支持要显式告警
+  assert.match(parsed.meta.warnings[0], /freshness/);
+});
+
+test("deepseek upstream errors map onto the shared error surface", async () => {
+  const fetch = stubFetch([
+    { status: 401, body: JSON.stringify({ error: { message: "invalid key" } }) },
+    { status: 429, body: JSON.stringify({ error: { message: "rate limited" } }) },
+  ]);
+  const store = makeStore({ mode: "spark" });
+
+  const auth = await executeSearch(
+    { query: "auth query" },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache: new SearchRunCache(), runKey: "r", fetchImpl: fetch.impl, log: () => {} },
+  ).catch((error) => error);
+  assert.ok(auth instanceof SearchError && auth.code === "authFailed");
+  assert.equal(auth.toIpc().key, "err.search.authFailed");
+
+  const quota = await executeSearch(
+    { query: "quota query" },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache: new SearchRunCache(), runKey: "r", fetchImpl: fetch.impl, log: () => {} },
+  ).catch((error) => error);
+  assert.ok(quota instanceof SearchError && quota.code === "quotaExceeded");
+});
+
+test("deepseek key only takes over in spark mode; explicit modes keep their own backend", async () => {
+  // 显式 byok(zai)时用户的 DeepSeek 聊天 key 不得抢走请求。
+  const fetch = stubFetch([{
+    body: JSON.stringify({ search_result: [{ title: "T", link: "https://x.example/1", content: "C" }] }),
+  }]);
+  const store = makeStore({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-1234" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+  const { usage } = await executeSearch(
+    { query: "explicit byok" },
+    { store, spark: SPARK, ownChatKeys: DEEPSEEK_KEY, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+  assert.equal(usage.backend, "zai");
+  assert.match(fetch.calls[0].url, /bigmodel\.cn/);
+  const request = JSON.parse(fetch.calls[0].init.body);
+  assert.equal(request.search_query, "explicit byok");
+});
+
+test("without a deepseek key, spark mode keeps the existing relay path", async () => {
+  const fetch = stubFetch([{
+    body: JSON.stringify({ search_results: [{ title: "T", url: "https://x.example/1", content: "C" }], requestId: "req-1" }),
+  }]);
+  const store = makeStore({ mode: "spark" });
+
+  const cache = new SearchRunCache();
+  cache.reset("run");
+  const { usage } = await executeSearch(
+    { query: "relay query" },
+    { store, spark: SPARK, ownChatKeys: { deepseek: null }, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+  );
+  assert.equal(usage.backend, "spark");
+  assert.equal(fetch.calls[0].url, "https://llm.example/v1/search");
+  assert.equal(fetch.calls[0].init.headers.Authorization, "Bearer sk-spark-9999");
+});

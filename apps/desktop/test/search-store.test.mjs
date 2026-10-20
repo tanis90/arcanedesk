@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -120,4 +120,128 @@ test("protected key persists across reload; corrupted file falls back to the spa
   const reloaded = new SearchStore(file, () => {}, testSecretStorage());
   assert.equal(reloaded.usable(null), true);
   assert.equal(reloaded.data.apiKey, "zai-key-1234");
+});
+
+test("endpoint resolution is table-driven: every backend keeps its own origin", () => {
+  const { store } = tempStore();
+  const cases = [
+    { backend: "zai", origin: "https://open.bigmodel.cn", path: "/api/paas/v4/web_search" },
+    { backend: "brave", origin: "https://api.search.brave.com", path: "/res/v1/web/search" },
+    { backend: "deepseek", origin: "https://api.deepseek.com", path: "/v1/tools/search" },
+  ];
+  for (const { backend, origin, path } of cases) {
+    store.update({ mode: "byok", byokBackend: backend, apiKey: `${backend}-key-1234` }, SPARK);
+    const cred = store.credentialForUse(null);
+    assert.equal(cred.adapterId, backend, `${backend} adapter`);
+    const url = new URL(cred.baseUrl);
+    assert.equal(url.origin, origin, `${backend} must not be sent to another vendor`);
+    assert.equal(url.pathname, path);
+    // 凭据按 origin 绑定：同一 backend 保存后 key 可复用。
+    assert.equal(cred.apiKey, `${backend}-key-1234`);
+  }
+});
+
+test("an unknown byok backend resolves to no endpoint, never to zhipu", () => {
+  const { store } = tempStore();
+  store.update({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-1234" }, SPARK);
+  // 绕过 update()/load() 的枚举校验，直接模拟表里没有的 backend：
+  // 解析必须返回空端点，绝不能把 key 发到智谱。
+  store.data.byokBackend = "unknown-vendor";
+  const cred = store.credentialForUse(null);
+  assert.equal(cred.adapterId, null);
+  assert.equal(cred.apiKey, "");
+  assert.equal(cred.baseUrl, "");
+});
+
+test("a persisted unknown backend is coerced back to a registered one on load", () => {
+  const dir = mkdtempSync(join(tmpdir(), "arcane-search-test-"));
+  const file = join(dir, "search.json");
+  const raw = new SearchStore(file, () => {}, testSecretStorage());
+  raw.update({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-1234" }, SPARK);
+  const persisted = JSON.parse(readFileSync(file, "utf8"));
+  persisted.byokBackend = "unknown-vendor";
+  writeFileSync(file, JSON.stringify(persisted));
+
+  const store = new SearchStore(file, () => {}, testSecretStorage());
+  assert.equal(store.data.byokBackend, "zai");
+  assert.equal(store.credentialForUse(null).baseUrl, "https://open.bigmodel.cn/api/paas/v4/web_search");
+});
+
+test("spark mode prefers the user's own DeepSeek chat key over the relay", () => {
+  const { store } = tempStore();
+  store.update({ mode: "spark" }, SPARK);
+  const deepseek = { deepseek: { apiKey: "sk-deepseek-chat", baseUrl: "https://api.deepseek.com/v1" } };
+
+  const cred = store.credentialForUse(SPARK, deepseek);
+  assert.equal(cred.adapterId, "deepseek");
+  assert.equal(cred.apiKey, "sk-deepseek-chat");
+  assert.equal(cred.baseUrl, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(cred.keySource, "deepseek-chat");
+
+  const pub = store.toPublic(SPARK, deepseek);
+  assert.equal(pub.hasKey, true);
+  assert.equal(pub.keySource, "deepseek-chat");
+  assert.equal(pub.deepseekHasKey, true);
+  assert.equal(pub.effectiveBackend, "deepseek");
+  assert.equal(pub.apiKey, "••••chat");
+});
+
+test("spark mode falls back to the relay when no DeepSeek key is configured", () => {
+  const { store } = tempStore();
+  store.update({ mode: "spark" }, SPARK);
+  const cred = store.credentialForUse(SPARK, { deepseek: null });
+  assert.equal(cred.adapterId, "spark");
+  assert.equal(cred.apiKey, "sk-spark-9999");
+  assert.equal(cred.keySource, "arcane-spark");
+  // 只有 DeepSeek key、没有 Spark 也能用（优先级 1 独立成立）。
+  const noSpark = store.credentialForUse(null, { deepseek: { apiKey: "sk-deepseek-chat" } });
+  assert.equal(noSpark.adapterId, "deepseek");
+  assert.equal(store.usable(null, { deepseek: { apiKey: "sk-deepseek-chat" } }), true);
+});
+
+test("explicit off/byok/custom modes ignore the DeepSeek chat key", () => {
+  const deepseek = { deepseek: { apiKey: "sk-deepseek-chat" } };
+  const { store } = tempStore();
+
+  store.update({ mode: "off" }, SPARK);
+  assert.equal(store.usable(SPARK, deepseek), false);
+  assert.equal(store.credentialForUse(SPARK, deepseek).adapterId, null);
+
+  store.update({ mode: "byok", byokBackend: "brave", apiKey: "brave-key-777" }, SPARK);
+  const byok = store.credentialForUse(SPARK, deepseek);
+  assert.equal(byok.adapterId, "brave");
+  assert.equal(byok.apiKey, "brave-key-777");
+
+  store.update({ mode: "custom", customBaseUrl: "https://search.example.com/v1", apiKey: "custom-key-42" }, SPARK);
+  const custom = store.credentialForUse(SPARK, deepseek);
+  assert.equal(custom.adapterId, "custom");
+  assert.equal(custom.apiKey, "custom-key-42");
+});
+
+test("explicit deepseek BYOK binds to the deepseek origin and persists its own key", () => {
+  const { store } = tempStore();
+  const result = store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "sk-deepseek-search" }, null);
+  assert.equal(result.ok, true);
+  assert.equal(store.data.credentialTarget, "origin:https://api.deepseek.com");
+  const cred = store.credentialForUse(null);
+  assert.equal(cred.adapterId, "deepseek");
+  assert.equal(cred.baseUrl, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(cred.keySource, "search");
+  // 显式 BYOK 下即使模型页也有 DeepSeek key，也用搜索页自己的那把。
+  const withChatKey = store.credentialForUse(null, { deepseek: { apiKey: "sk-deepseek-chat" } });
+  assert.equal(withChatKey.apiKey, "sk-deepseek-search");
+});
+
+test("defaults injection covers every backend endpoint (region overlay / staging)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "arcane-search-test-"));
+  const store = new SearchStore(join(dir, "search.json"), () => {}, testSecretStorage(), {
+    zaiBaseUrl: "https://staging.example/zai",
+    zaiSearchEngine: "search-staging",
+    deepseekBaseUrl: "https://staging.example/v1/tools/search",
+  });
+  store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "deepseek-key-1234" }, null);
+  assert.equal(store.credentialForUse(null).baseUrl, "https://staging.example/v1/tools/search");
+  store.update({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-1234" }, null);
+  assert.equal(store.credentialForUse(null).baseUrl, "https://staging.example/zai");
+  assert.equal(store.credentialForUse(null).searchEngine, "search-staging");
 });

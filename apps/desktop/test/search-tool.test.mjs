@@ -30,7 +30,7 @@ const OK_BODY = JSON.stringify({
   requestId: "req-1",
 });
 
-function buildHost({ store, fetchImpl, profileMode = "prep" } = {}) {
+function buildHost({ store, fetchImpl, profileMode = "prep", ownChatKeys = null, spark = true } = {}) {
   const events = [];
   const host = new AgentHost({
     foundryRuntime: { call: async () => ({}) },
@@ -43,7 +43,8 @@ function buildHost({ store, fetchImpl, profileMode = "prep" } = {}) {
     ...(store ? {
       search: {
         store,
-        spark: () => SPARK,
+        spark: () => (spark ? SPARK : null),
+        ...(ownChatKeys ? { ownChatKeys: () => ownChatKeys() } : {}),
         ...(fetchImpl ? { fetchImpl } : {}),
       },
     } : {}),
@@ -110,4 +111,95 @@ test("agent_start resets the cache so the same query goes out again", async () =
   const third = await tool.execute("c3", { query: "same query" }, undefined);
   assert.equal(third.isError, undefined);
   assert.equal(calls.length, 2);
+});
+
+const DEEPSEEK_BODY = JSON.stringify({
+  results: [
+    { title: "dnd5e 5.3.4", url: "https://foundryvtt.com/a", snippet: "notes", date: "2026-08-30", authority: "official" },
+  ],
+});
+
+test("a user's own DeepSeek key brings web_search online without Spark", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetch(DEEPSEEK_BODY);
+  const { host, events } = buildHost({
+    store,
+    fetchImpl: impl,
+    spark: false,
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user", baseUrl: "https://api.deepseek.com/v1" } }),
+  });
+
+  const tool = host.buildTools().find((t) => t.name === "web_search");
+  assert.ok(tool, "web_search should join the pool when only a DeepSeek key exists");
+  const result = await tool.execute("c1", { query: "dnd5e 5.3.4" }, undefined);
+
+  assert.equal(result.isError, undefined);
+  assert.equal(calls[0].url, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer sk-deepseek-user");
+  const parsed = JSON.parse(result.content[0].text);
+  assert.equal(parsed.meta.backend, "deepseek");
+  const usage = events.find((event) => event.type === "search_usage");
+  assert.equal(usage.data.backend, "deepseek");
+});
+
+test("saving a DeepSeek key mid-session takes effect on the next execute", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetch(DEEPSEEK_BODY);
+  let deepseek = null;
+  const { host } = buildHost({ store, fetchImpl: impl, spark: false, ownChatKeys: () => ({ deepseek }) });
+
+  // 构建工具池时还没有任何凭据:工具不注册。
+  assert.equal(host.buildTools().some((t) => t.name === "web_search"), false);
+
+  // 会话进行中用户在模型页保存了 DeepSeek key:工具池不重建，
+  // 但 next 会话/下一次 attach 会重新走 buildTools()，并拿到新凭据。
+  deepseek = { apiKey: "sk-deepseek-user", baseUrl: "https://api.deepseek.com/v1" };
+  const tools = host.buildTools();
+  const tool = tools.find((t) => t.name === "web_search");
+  assert.ok(tool);
+
+  // 执行时再改 key（不重建工具池）：下一次 execute 直接用新 key，无需重开会话。
+  const first = await tool.execute("c1", { query: "first" }, undefined);
+  assert.equal(first.isError, undefined);
+  assert.equal(calls.length, 1);
+
+  deepseek = { apiKey: "sk-deepseek-rotated", baseUrl: "https://api.deepseek.com/v1" };
+  const second = await tool.execute("c2", { query: "second" }, undefined);
+  assert.equal(second.isError, undefined);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].init.headers.Authorization, "Bearer sk-deepseek-rotated");
+});
+
+test("spark stays the fallback when the DeepSeek key is removed mid-session", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetch(OK_BODY);
+  let deepseek = { apiKey: "sk-deepseek-user" };
+  const { host } = buildHost({ store, fetchImpl: impl, ownChatKeys: () => ({ deepseek }) });
+
+  const tool = host.buildTools().find((t) => t.name === "web_search");
+  await tool.execute("c1", { query: "first" }, undefined);
+  assert.equal(calls[0].url, "https://api.deepseek.com/v1/tools/search");
+
+  // 删除 DeepSeek provider 后回到既有 Spark relay 路径。
+  deepseek = null;
+  const second = await tool.execute("c2", { query: "second" }, undefined);
+  assert.equal(second.isError, undefined);
+  assert.equal(calls[1].url, "https://llm.example/v1/search");
+  assert.equal(calls[1].init.headers.Authorization, "Bearer sk-spark-9999");
+});
+
+test("spark mode without spark and without deepseek keeps web_search out of the pool", () => {
+  const store = makeStore({ mode: "spark" });
+  const { host } = buildHost({ store, spark: false, ownChatKeys: () => ({ deepseek: null }) });
+  assert.equal(host.buildTools().some((t) => t.name === "web_search"), false);
+});
+
+test("off mode keeps the tool out of the pool even with a DeepSeek key", () => {
+  const store = makeStore({ mode: "off" });
+  const { host } = buildHost({
+    store,
+    spark: false,
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user" } }),
+  });
+  assert.equal(host.buildTools().some((t) => t.name === "web_search"), false);
 });

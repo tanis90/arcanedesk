@@ -233,7 +233,7 @@ export class AgentHost {
    *   taskStorageDir?: string,
    *   operationStorageDir?: string,
    *   scheduler?: any,
-   *   search?: { store: import("./search/store.js").SearchStore, spark: () => any, fetchImpl?: any } | null,
+   *   search?: { store: import("./search/store.js").SearchStore, spark: () => any, ownChatKeys?: () => any, fetchImpl?: any } | null,
    * }} [deps]
    */
   constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler, search } = {}) {
@@ -1247,8 +1247,23 @@ export class AgentHost {
 
     // 联网搜索:仅 prep 激活(foundry-tool-policy),未配置/缺凭据时 execute
     // 返回可恢复的结构化指引(isError),不 throw 打断 agent。
-    const sparkForSearch = host.searchDeps?.spark ? host.searchDeps.spark() : null;
-    const webSearch = host.searchDeps && host.searchDeps.store.usable(sparkForSearch) ? defineTool({
+    // 工具池在 attach() 时构建;凭据(Spark / 用户自己的 DeepSeek key)在每次
+    // execute 时重新解析——会话进行中保存 key 无需重开会话,session 级生效。
+    const searchCredential = () => {
+      const deps = host.searchDeps;
+      if (!deps) return { spark: null, ownChatKeys: null };
+      return {
+        spark: deps.spark ? deps.spark() : null,
+        ownChatKeys: deps.ownChatKeys ? deps.ownChatKeys() : null,
+      };
+    };
+    const searchUsable = () => {
+      const deps = host.searchDeps;
+      if (!deps) return false;
+      const { spark, ownChatKeys } = searchCredential();
+      return deps.store.usable(spark, ownChatKeys);
+    };
+    const webSearch = searchUsable() ? defineTool({
       name: "web_search",
       label: "Web Search",
       description:
@@ -1264,10 +1279,12 @@ export class AgentHost {
       executionMode: "sequential",
       execute: async (_toolCallId, params, signal) => {
         const runKey = `run-${host._searchRun}`;
+        const { spark, ownChatKeys } = searchCredential();
         try {
           const { payload, usage } = await executeSearch(params, {
             store: host.searchDeps.store,
-            spark: host.searchDeps.spark ? host.searchDeps.spark() : null,
+            spark,
+            ownChatKeys,
             cache: host.searchCache,
             runKey,
             signal,

@@ -10,19 +10,45 @@ import { validateProviderBaseUrl } from "../provider-endpoint.js";
 import { createUnavailableSecretStorage } from "../secret-storage.js";
 
 export const MODES = new Set(["off", "spark", "byok", "custom"]);
-export const BYOK_BACKENDS = new Set(["zai", "brave"]);
 
 export const DEFAULT_ZAI_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/web_search";
 export const DEFAULT_ZAI_SEARCH_ENGINE = "search_pro";
 export const DEFAULT_BRAVE_BASE_URL = "https://api.search.brave.com/res/v1/web/search";
+/**
+ * DeepSeek 聊天 key 按 origin 绑定；tools/search 与 chat 同源，同一把 key
+ * 既是模型凭据也是搜索凭据。自动接入时用 ProviderStore.credentialForHost()
+ * 按这个 host 查。
+ */
+export const DEEPSEEK_SEARCH_HOST = "api.deepseek.com";
+export const DEFAULT_DEEPSEEK_BASE_URL = `https://${DEEPSEEK_SEARCH_HOST}/v1/tools/search`;
+
+/**
+ * backend → 端点/引擎登记表（唯一事实来源）。每个 backend 必须显式登记，
+ * 未登记的键解析为 null——绝不能回落到别的后端，否则一把 key 会被发到
+ * 它没被授权接收的端点（历史上 brave 之外的未知值都落到智谱端点）。
+ */
+const BYOK_ENDPOINTS = Object.freeze({
+  zai: Object.freeze({ baseUrlKey: "zaiBaseUrl", searchEngineKey: "zaiSearchEngine" }),
+  brave: Object.freeze({ baseUrlKey: "braveBaseUrl" }),
+  deepseek: Object.freeze({ baseUrlKey: "deepseekBaseUrl" }),
+});
+
+export const BYOK_BACKENDS = new Set(Object.keys(BYOK_ENDPOINTS));
+
+/** 目标 backend → 实际会请求的端点；未登记返回 null。 */
+function byokEndpoint(backend, defaults) {
+  const entry = Object.hasOwn(BYOK_ENDPOINTS, backend) ? BYOK_ENDPOINTS[backend] : null;
+  if (!entry) return null;
+  const baseUrl = defaults[entry.baseUrlKey] ?? "";
+  const searchEngine = entry.searchEngineKey ? defaults[entry.searchEngineKey] ?? "" : "";
+  return { baseUrl, ...(searchEngine ? { searchEngine } : {}) };
+}
 
 /** 目标 backend → 实际会请求的端点。 */
 function effectiveBaseUrl(data, defaults) {
   if (data.mode === "spark") return ""; // 运行时取 Spark provider 的 baseUrl
   if (data.mode === "custom") return data.customBaseUrl;
-  if (data.mode === "byok") {
-    return data.byokBackend === "brave" ? defaults.braveBaseUrl : defaults.zaiBaseUrl;
-  }
+  if (data.mode === "byok") return byokEndpoint(data.byokBackend, defaults)?.baseUrl ?? "";
   return "";
 }
 
@@ -40,7 +66,7 @@ export class SearchStore {
    * @param {string} filePath userData/config/search.json
    * @param {Function} log
    * @param {import("../secret-storage.js").SecretStorage} secretStorage SecretStorage 实例（测试注入桩）
-   * @param {{ zaiBaseUrl?: string, zaiSearchEngine?: string }} defaults 区域 overlay 注入点（国内 bigmodel+search_pro / 国际 z.ai+search-prime）
+   * @param {{ zaiBaseUrl?: string, zaiSearchEngine?: string, deepseekBaseUrl?: string }} defaults 区域 overlay 注入点（国内 bigmodel+search_pro / 国际 z.ai+search-prime）
    */
   constructor(filePath, log = console.log, secretStorage = createUnavailableSecretStorage(), defaults = {}) {
     this.filePath = filePath;
@@ -50,6 +76,7 @@ export class SearchStore {
       zaiBaseUrl: defaults.zaiBaseUrl ?? DEFAULT_ZAI_BASE_URL,
       zaiSearchEngine: defaults.zaiSearchEngine ?? DEFAULT_ZAI_SEARCH_ENGINE,
       braveBaseUrl: DEFAULT_BRAVE_BASE_URL,
+      deepseekBaseUrl: defaults.deepseekBaseUrl ?? DEFAULT_DEEPSEEK_BASE_URL,
     };
     this.data = this.load();
   }
@@ -100,17 +127,19 @@ export class SearchStore {
   }
 
   /** 掩码视图（renderer 唯一可见形态）。 */
-  toPublic(spark = null) {
-    const resolved = this.credentialForUse(spark);
-    const followsSpark = this.data.mode === "spark" && !this.data.apiKey;
+  toPublic(spark = null, ownChatKeys = null) {
+    const resolved = this.credentialForUse(spark, ownChatKeys);
     return {
       mode: this.data.mode,
       byokBackend: this.data.byokBackend,
       customBaseUrl: this.data.customBaseUrl,
       apiKey: resolved.apiKey ? `••••${resolved.apiKey.slice(-4)}` : "",
       hasKey: Boolean(resolved.apiKey),
-      keySource: followsSpark && resolved.apiKey ? "arcane-spark" : "search",
+      keySource: resolved.keySource ?? "search",
       sparkHasKey: Boolean(spark?.apiKey),
+      // DeepSeek 聊天 key 与 tools/search 同 origin，自动复用；仅 spark 模式生效。
+      deepseekHasKey: Boolean(ownChatKeys?.deepseek?.apiKey),
+      effectiveBackend: resolved.adapterId ?? null,
       defaults: { zaiBaseUrl: this.defaults.zaiBaseUrl, zaiSearchEngine: this.defaults.zaiSearchEngine },
     };
   }
@@ -160,26 +189,47 @@ export class SearchStore {
   }
 
   /** 是否可以向 agent 注册 web_search（mode≠off 且凭据齐备）。 */
-  usable(spark = null) {
+  usable(spark = null, ownChatKeys = null) {
     if (this.data.mode === "off") return false;
-    return Boolean(this.credentialForUse(spark).apiKey);
+    return Boolean(this.credentialForUse(spark, ownChatKeys).apiKey);
   }
 
-  /** 运行时凭据与 adapter 选择；spark 模式跟随 Spark provider。 */
-  credentialForUse(spark = null) {
+  /**
+   * 运行时凭据与 adapter 选择（接入优先级见 PRD §5.2）：
+   * 1. spark 模式（产品默认）且用户已有自己的 DeepSeek 聊天 key → deepseek 直连，
+   *    扣用户自己的 key（两者同 origin，天然共享凭据）；
+   * 2. 否则 spark 模式跟随 Spark provider（CN 区 relay 路径，行为不变）；
+   * 3. off/byok/custom 是用户的显式选择，不参与自动接管。
+   */
+  credentialForUse(spark = null, ownChatKeys = null) {
     if (this.data.mode === "spark") {
+      const deepseek = ownChatKeys?.deepseek;
+      if (deepseek?.apiKey) {
+        return {
+          adapterId: "deepseek",
+          apiKey: String(deepseek.apiKey),
+          baseUrl: this.defaults.deepseekBaseUrl,
+          keySource: "deepseek-chat",
+        };
+      }
       const base = spark?.baseUrl ? String(spark.baseUrl).replace(/\/+$/, "") : "";
-      return { adapterId: "spark", apiKey: spark?.apiKey ? String(spark.apiKey) : "", baseUrl: base };
+      return {
+        adapterId: "spark",
+        apiKey: spark?.apiKey ? String(spark.apiKey) : "",
+        baseUrl: base,
+        keySource: "arcane-spark",
+      };
     }
     if (this.data.mode === "byok") {
-      const backend = this.data.byokBackend;
-      const base = backend === "brave" ? this.defaults.braveBaseUrl : this.defaults.zaiBaseUrl;
-      const target = consentTargetForBaseUrl(base);
+      const endpoint = byokEndpoint(this.data.byokBackend, this.defaults);
+      if (!endpoint) return { adapterId: null, apiKey: "", baseUrl: "", keySource: null };
+      const target = consentTargetForBaseUrl(endpoint.baseUrl);
       return {
-        adapterId: backend,
+        adapterId: this.data.byokBackend,
         apiKey: this.data.apiKey && this.data.credentialTarget === target ? this.data.apiKey : "",
-        baseUrl: base,
-        ...(backend === "zai" ? { searchEngine: this.defaults.zaiSearchEngine } : {}),
+        baseUrl: endpoint.baseUrl,
+        ...(endpoint.searchEngine ? { searchEngine: endpoint.searchEngine } : {}),
+        keySource: "search",
       };
     }
     if (this.data.mode === "custom") {
@@ -188,8 +238,9 @@ export class SearchStore {
         adapterId: "custom",
         apiKey: this.data.apiKey && this.data.credentialTarget === target ? this.data.apiKey : "",
         baseUrl: this.data.customBaseUrl,
+        keySource: "search",
       };
     }
-    return { adapterId: null, apiKey: "", baseUrl: "" };
+    return { adapterId: null, apiKey: "", baseUrl: "", keySource: null };
   }
 }

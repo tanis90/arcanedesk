@@ -345,6 +345,33 @@ export class ProviderStore {
     return { apiKey: provider.apiKey, baseUrl: endpoint.baseUrl };
   }
 
+  /**
+   * 按端点 host 取凭据：给「用户已有某家聊天 key，工具顺带复用」这类场景用
+   * （如 DeepSeek 聊天 key 与 tools/search 同 origin）。
+   *
+   * 只匹配 host、不匹配路径；仍要求 provider 自身的 credential target 校验通过，
+   * 因此被篡改的 baseUrl 不会漏出 key。找不到返回 null——调用方绝不能回落到
+   * 另一个 provider 的 key。
+   */
+  credentialForHost(host) {
+    const wanted = String(host ?? "").trim().toLowerCase();
+    if (!wanted) return null;
+    for (const provider of this.data.providers) {
+      if (!usableCredential(provider)) continue;
+      const endpoint = providerCredentialTarget(provider);
+      if (!endpoint.ok || !endpoint.origin) continue;
+      let hostname;
+      try {
+        hostname = new URL(endpoint.origin).hostname.toLowerCase();
+      } catch {
+        continue;
+      }
+      if (hostname !== wanted) continue;
+      return { apiKey: provider.apiKey, baseUrl: endpoint.baseUrl, providerId: provider.id };
+    }
+    return null;
+  }
+
   /** Return a validated public endpoint without exposing or requiring its credential. */
   baseUrlForProvider(id) {
     const provider = this.data.providers.find((candidate) => candidate.id === id);

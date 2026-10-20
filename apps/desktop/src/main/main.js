@@ -22,7 +22,7 @@ import { StartupReconciler } from "./conversations/startup-reconciler.js";
 import "../shared/i18n/messages.js";
 import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
-import { SearchStore } from "./search/store.js";
+import { DEEPSEEK_SEARCH_HOST, SearchStore } from "./search/store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
@@ -1162,10 +1162,14 @@ app.whenReady().then(async () => {
         fence: true,
         streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },
-      // web_search 仅 prep 注入;spark 凭据运行时取 arcane-spark provider。
+      // web_search 仅 prep 注入;凭据每次 execute 时重取——spark 走内置 provider,
+      // ownChatKeys 让「用户自己的 DeepSeek 聊天 key」自动接管搜索(同 origin)。
       search: {
         store: searchStore,
         spark: () => providerStore.credentialForProvider("arcane-spark"),
+        ownChatKeys: () => ({
+          deepseek: providerStore.credentialForHost(DEEPSEEK_SEARCH_HOST),
+        }),
       },
     }); } }),
   };
@@ -1702,9 +1706,13 @@ app.whenReady().then(async () => {
   // ---- 联网搜索(PRD prep-web-search):配置保存;无 consent 流程——启用即知情 ----
   // spark 模式与语音同源:复用内置 arcane-spark provider 的凭据。
   const arcaneSparkForSearch = () => providerStore.credentialForProvider("arcane-spark");
+  // 用户自己的 DeepSeek 聊天 key(模型页配置):与 tools/search 同 origin,自动复用。
+  const ownChatKeysForSearch = () => ({
+    deepseek: providerStore.credentialForHost(DEEPSEEK_SEARCH_HOST),
+  });
   ipcMain.handle("search:get-config", (event) => {
     if (!isTrustedChatIpc(event)) return null;
-    return searchStore.toPublic(arcaneSparkForSearch());
+    return searchStore.toPublic(arcaneSparkForSearch(), ownChatKeysForSearch());
   });
   ipcMain.handle("search:save-config", (event, input) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };

@@ -4,6 +4,7 @@
 import { coerceSearchError, SearchError } from "./errors.js";
 import { toToolPayload, toUnifiedResult } from "./normalize.js";
 import { braveAdapter } from "./adapters/brave.js";
+import { deepseekAdapter } from "./adapters/deepseek.js";
 import { customAdapter, sparkAdapter } from "./adapters/spark.js";
 import { zaiAdapter } from "./adapters/zai.js";
 
@@ -12,6 +13,7 @@ const ADAPTERS = {
   custom: customAdapter,
   zai: zaiAdapter,
   brave: braveAdapter,
+  deepseek: deepseekAdapter,
 };
 
 const FRESHNESS_VALUES = new Set(["day", "week", "month", "year"]);
@@ -44,15 +46,17 @@ function capabilityWarnings(adapter, params) {
 /**
  * 一次 web_search 执行（tool execute 的内核）。
  * @param {any} rawParams 模型工具参数（query/count/freshness/domains）
- * @param {{ store: any, spark: any, cache: any, runKey: string, signal?: AbortSignal, fetchImpl?: any, log?: any }} deps
+ * @param {{ store: any, spark: any, ownChatKeys?: any, cache: any, runKey: string, signal?: AbortSignal, fetchImpl?: any, log?: any }} deps
+ *   ownChatKeys = 用户自己的聊天 provider 凭据快照（如 { deepseek: {apiKey} }），
+ *   用于 spark 模式下的 DeepSeek key 自动复用；缺省时退回纯 Spark 路径。
  * @returns {Promise<{ payload: string, usage: { used: number, backend: string, cached: boolean } }>}
  *   payload 是 toolResult 文本（≤16KB JSON）；usage 给 host.emit(search_usage)。
  */
-export async function executeSearch(rawParams, { store, spark, cache, runKey, signal, fetchImpl, log }) {
+export async function executeSearch(rawParams, { store, spark, ownChatKeys = null, cache, runKey, signal, fetchImpl, log }) {
   const params = sanitizeParams(rawParams);
-  const cred = store.credentialForUse(spark);
+  const cred = store.credentialForUse(spark, ownChatKeys);
   const adapter = ADAPTERS[cred.adapterId];
-  if (!store.usable(spark) || !adapter) throw new SearchError("notConfigured");
+  if (!adapter || !cred.apiKey) throw new SearchError("notConfigured");
 
   // 去重缓存：同 run 同 query 直接复用，不计次、不发包。
   const cached = cache.lookup(runKey, params.query);

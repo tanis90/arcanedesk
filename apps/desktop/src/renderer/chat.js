@@ -3360,8 +3360,14 @@ function renderSearchUi() {
   let state = "off";
   let text = t("ss.state.off");
   if (mode === "spark") {
-    state = cfg.sparkHasKey ? "ready" : "needs-key";
-    text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.spark");
+    // 优先级:用户自己的 DeepSeek key > Arcane Spark(v1 search PRD §5.2)
+    if (cfg.deepseekHasKey) {
+      state = "ready";
+      text = t("ss.state.ready.deepseek");
+    } else {
+      state = cfg.sparkHasKey ? "ready" : "needs-key";
+      text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.sparkOrDeepseek");
+    }
   } else if (ownKey) {
     if (cfg.hasKey) {
       state = "ready";
@@ -3375,7 +3381,8 @@ function renderSearchUi() {
   }
   ssStateEl.dataset.state = state;
   ssStateText.textContent = text;
-  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey);
+  // 有 DeepSeek key 时无需引导;两者都缺才指向模型页。
+  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey && !cfg.deepseekHasKey);
 }
 
 async function refreshSearchSettings() {

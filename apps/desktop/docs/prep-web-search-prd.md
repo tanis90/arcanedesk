@@ -11,18 +11,26 @@
 （Arcane Spark 中转或用户自带 key），并守住调研文档确立的三条底线：
 
 - 开源发行版默认不产生 Arcane 运营费用：新用户默认 Arcane Spark 模式——未登录 Spark
-  时不注册工具、零请求零费用；登录后用量计入用户自己的 Spark 账单。
-- "模型决定何时搜索"与"由哪个服务执行搜索"分离；不静默跟随当前模型产生额外费用。
+  时只有在自己配了 DeepSeek key 的情况下才会外发；两者都没有时不注册工具、零请求零费用。
+- "模型决定何时搜索"与"由哪个服务执行搜索"分离；不静默跟随当前模型换用付费上游。
 - 搜索与网页读取是两个工具；本期只做搜索，`web_fetch` 留到 P2。
+
+M2 补充（2026-10-20）：用户已经为自己的聊天模型配了 **DeepSeek key** 时，搜索自动复用
+那把 key 直连 DeepSeek 官方 tools API，扣用户自己的账单，无需在「联网搜索」页再配置一次。
 
 ## 2. 总体方案
 
 ```text
 prep agent
    -> web_search（Arcane 自有工具契约，defineTool 注册，仅 prep profile 可见）
+      ├─ DeepSeek 直连：用户自己的 DeepSeek 聊天 key → POST api.deepseek.com/v1/tools/search
       ├─ Arcane Spark：同一把 Spark key 调 POST /v1/search（服务端选上游、计量、熔断）
-      └─ BYOK 直连：智谱 z-ai / Brave（P1），Kimi / OpenAI（P2）
+      └─ BYOK 直连：智谱 z-ai / Brave / DeepSeek 自有 key（P1），Kimi / OpenAI（P2）
 ```
+
+**接入优先级**（M2 起，用户拍板）：spark 模式（产品默认）下，① 用户在模型页配了自己的
+DeepSeek key → 自动走 DeepSeek 直连；② 否则有 Arcane Spark key → 走既有 relay 路径；
+③ 都没有 → 工具不注入。`off` / `byok` / `custom` 是用户的显式选择，自动接入不覆盖它们。
 
 adapter 实现参考 `code-yeongyu/pi-websearch`（MIT，© 2026 Yeongyu）的 provider 模块
 （每个 backend 是 `buildRequest` + `normalizeResponse` 纯函数，逐个移植并收入
@@ -46,6 +54,7 @@ content,publish_date}`），使 Spark adapter 与 z-ai BYOK adapter 共享同一
 | 7 | Kimi / OpenAI key 复用（检测 + 一键确认启用） | 设置页 | P2 |
 | 8 | `web_fetch`（SSRF/大小/重定向防护） | 工具 | P2 |
 | 9 | i18n：双语文案、结构化错误、区域化默认端点 | 全局 | P1 |
+| 10 | 用户自带 DeepSeek 聊天 key 自动接管搜索（无需二次配置） | 搜索 | M2 |
 
 ## 4. 工具契约
 
@@ -124,13 +133,21 @@ Spark / BYOK 双路径布局与 key 掩码语义（renderer 只见 `•••`�
 
 | 模式 | 凭据 | 行为 | 阶段 |
 | --- | --- | --- | --- |
-| Arcane Spark（新用户默认） | 复用 Spark key | 调 `POST /v1/search`，用量并入 Spark 统一计量与账单；未登录 Spark 时工具不注册、零请求 | P1 |
-| 关闭 | — | 不注册 `web_search` | P1 |
+| DeepSeek 自动接入（spark 模式内，优先级 1） | 用户自己的 DeepSeek 聊天 key（模型页已配） | 主进程直连 `POST https://api.deepseek.com/v1/tools/search`，扣用户自己的 DeepSeek 账单；无需在搜索页二次配置 | M2 |
+| Arcane Spark（新用户默认；优先级 2） | 复用 Spark key | 调 `POST /v1/search`，用量并入 Spark 统一计量与账单；未登录 Spark 时工具不注册、零请求 | P1 |
+| 关闭 | — | 不注册 `web_search`；优先级最高，自动接入不会把它打开 | P1 |
 | 智谱 z-ai | 用户按量 key | 主进程直连 web_search API（search_std/pro） | P1 |
 | Brave | 用户 Brave key | 主进程直连 Brave Search API | P1 |
+| DeepSeek（显式 BYOK） | 用户搜索页填的 DeepSeek key | 同 DeepSeek 直连契约，key 走搜索页自己的 credential target | M2 |
 | Kimi 复用 | 现有 kimi-coding key | 调 `api.kimi.com/coding/v1/search`（见 §8 条款待确认） | P2 |
 | OpenAI 复用 | 现有 openai key | Responses `web_search`（按次计费，UI 明示） | P2 |
 | 自定义 | 用户 endpoint+key | Arcane 公开的 Search 兼容契约（可指自建 SearXNG 网关） | P1 |
+
+自动接入的边界：只按**端点 origin 匹配**（`api.deepseek.com`），要求该 provider 的
+credential target 校验通过；匹配不到就回到 Spark，绝不把 key 发给未绑定的 host。凭据在
+每次工具 execute 时重新解析，因此会话进行中保存/删除 DeepSeek key，下一次搜索即生效
+（工具池本身在 `attach()` 时构建，不热更新——已注册的工具不会被移除，新增能力需等下一次
+`attach()`／新会话）。
 
 ### 5.3 启用即知情（无确认弹窗）
 
@@ -160,10 +177,32 @@ Spark / BYOK 双路径布局与 key 掩码语义（renderer 只见 `•••`�
 
 - 卡片默认折叠为标题行，点击展开结果列表；每条结果「在外部浏览器打开」按钮。
 - 助手回答必须以可点击链接引用来源（system prompt 约束）；渲染层把 `ref_n`/序号映射回 URL。
-- 用量行只显示本轮次数与 backend（Spark / BYOK 同规则）；**不展示独立搜索剩余额度**——Spark
-  模式的搜索用量并入 Spark 统一计量与账单，与语音/模型用量合并呈现。
+- 用量行只显示本轮次数与 backend（DeepSeek / Spark / BYOK 同规则）；**不展示独立搜索剩余
+  额度**——Spark 模式的搜索用量并入 Spark 统一计量与账单，与语音/模型用量合并呈现；
+  DeepSeek 走势必在设置页探知珠明示「计入你的 DeepSeek 账单」。
 - 错误态：429（服务端预算熔断）显示"搜索服务暂时不可用，请稍后再试"并给出设置入口；后端
-  不可用自动降级链（Spark 服务端处理）在 `meta.warnings` 里留痕。
+  不可用自动降级链（Spark 服务端处理）在 `meta.warnings` 里留痕。DeepSeek 直连的上游错误面
+  （401/402/403/404/408/413/429/5xx）经同一 `fetchJson` 收敛：401/403 → `authFailed`，
+  402/429 → `quotaExceeded`，其余 → `backendUnavailable`，用户面文案复用 `err.search.*`。
+
+### 6.1 DeepSeek tools API 契约（M2）
+
+```http
+POST https://api.deepseek.com/v1/tools/search
+Authorization: Bearer <用户的 DeepSeek key>
+Content-Type: application/json
+
+{"query":"…","count":5,"need_content":true}
+→ 条目含 snippet(100–200 字) / summary(600–800 字) / date / rerank_score / authority，
+  无 request_id
+```
+
+- `query` ≤ 128 字符（域名过滤拼成 `site:` 后缀后整体截断，后缀优先保留）；`count` 1–50，
+  客户端仍按工具契约收敛到 1–20。
+- 契约不支持 `freshness`：传了就按能力声明在 `meta.warnings` 显式告警，不静默忽略。
+- 映射：`title`←`title|name`，`url`←`url|link`，`snippet`←`snippet|summary|content`，
+  `publishedAt`←`date|publish_date`，`source`←`media|source|authority`。
+- 无 `request_id`，`meta.requestId` 恒为 `null`；`normalize.js` 的 1000 字符 / 16KB 截断照旧。
 
 ## 7. Spark 服务端 `/v1/search`
 
@@ -271,6 +310,10 @@ Content-Type: application/json
 5. 持久化：单条 toolResult ≤ 16 KB；JSONL 恢复会话不丢失结果列表。
 6. 启用无弹窗：模式卡选卡即保存即生效；探知珠状态行如实呈现接收方与计费；未登录
    Spark（或 BYOK 未存 key）时工具不注册、零网络请求。
+6b. DeepSeek 自动接入：模型页已配 DeepSeek key 时，spark 模式下 `web_search` 直接调
+   `api.deepseek.com/v1/tools/search` 且只带用户自己的 key（不经过 Spark 中转）；未配时
+   回落 Spark relay；`off`/`byok`/`custom` 不受影响；探知珠显示「计入你的 DeepSeek 账单」；
+   会话中保存/删除该 key，下一次搜索即改变走向（无需重开会话）。
 7. i18n：新增文案 zh-CN / en-US 齐全（`ss.*`）；en-US 下设置行、模式卡、工具卡片完整显示
    不截断不溢出；主进程搜索错误经 `fmtIpc` 本地化，UI 不出现上游原始报错；`publishedAt`
    与费用币种按 locale/后端呈现；国内/国际发行包的智谱默认端点随区域 overlay 生效。
@@ -280,6 +323,8 @@ Content-Type: application/json
 - 不做通用浏览器/自动操作 Bing 网页（调研文档已否决）。
 - 不做模型原生 server tool 直通（Kimi `$web_search` builtin、GLM `type:"web_search"`）；
   Kimi 走独立 `/search` 端点。
-- 不默认跟随当前模型自动启用搜索；一切启用均为显式用户动作。
+- 不因「当前选中哪个聊天模型」而更换搜索上游。唯一的自动联动是按**端点 origin** 复用
+  用户自己已经配置的 DeepSeek key（同一把 key、同一个接收方、同一份账单）；其余上游仍需
+  用户在「联网搜索」页显式选择。`off` 模式优先级最高，自动接入不会把搜索重新打开。
 - combat 模式不提供 `web_search`。
 - 不在本期做搜索结果的历史聚合/研究工作台。

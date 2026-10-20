@@ -22,7 +22,7 @@ export function createArcaneSearchAdapter(id) {
         headers: contentHeaders({ Authorization: `Bearer ${ctx.apiKey}` }),
         body: JSON.stringify({
           query: params.query,
-          count: clamp(params.count ?? 5, 1, 5),
+          count: clamp(params.count ?? 5, 1, 20),
           ...(params.freshness ? { freshness: params.freshness } : {}),
           domains: params.domains ?? [],
         }),
