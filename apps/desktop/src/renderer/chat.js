@@ -2074,11 +2074,22 @@ async function sendSubmission(submission) {
   pruneOutboxes();
 }
 
+/** 新消息发出时清掉仍悬停的失败卡片：重发只是卡片上的一个按钮，用户发了别的消息，旧卡片即过期。 */
+function dismissStaleFailedInputs(sessionId) {
+  if (selectedSessionId !== sessionId) return;
+  for (const element of messages.querySelectorAll('[data-input-state="failed"], [data-input-state="send_failed"], [data-input-state="uncertain"]')) {
+    const node = /** @type {HTMLElement} */ (element);
+    if (node.dataset.commandId) outboxFor(sessionId).delete(node.dataset.commandId);
+    node.remove();
+  }
+}
+
 async function submit() {
   if (composerStopping() || selectedArchived) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
+  dismissStaleFailedInputs(selectedSessionId);
   const context = { ...modeContext(), commandId: crypto.randomUUID() };
   const submission = { context, text: text || t("chat.imagePlaceholder"), images, sending: false };
   // Capture the target before any await; a preflight response cannot steal B's draft.
