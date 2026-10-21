@@ -13,6 +13,7 @@ import { createAgentSession, createBashTool, createPowerShellTool, createReadToo
 import { Type } from "typebox";
 import { capturePageNavigationSafe, encodeFoundryScreenshot } from "./foundry-screenshot.js";
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
+import { jsonSafe } from "./json-safe.js";
 import { err, errorToIpc, I18nError } from "./i18n-error.mjs";
 import { claimSessionMode, isPathInside, readSessionMode, sessionDirForMode, SessionModeError } from "./session-mode.js";
 import { applyArcaneFvttOpsEnvironment } from "./subprocess-env.mjs";
@@ -162,7 +163,7 @@ export function arcaneShellTool(cwd, nodeBinary, platform = process.platform, op
  * @returns {import("@earendil-works/pi-coding-agent").AgentToolResult<any>}
  */
 function textResult(text, details) {
-  return { content: [{ type: "text", text }], details: details ?? { text } };
+  return { content: [{ type: "text", text }], details: jsonSafe(details ?? { text }) };
 }
 
 /** web_search 失败给模型的可执行指引(prompt 面,不进 UI 字典)。 */
