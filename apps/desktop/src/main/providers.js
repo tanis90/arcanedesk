@@ -3,6 +3,7 @@
 // 应用层自己持有这份配置,不去改 ~/.pi/agent/models.json 的格式——
  // 运行时注册(registerProvider)与 Pi 配置文件里的 provider 可以共存。
 import { readFileSync, writeFileSync } from "node:fs";
+import { isPlausibleApiKey } from "./api-key.js";
 import { decodeBoundCredential, encodeBoundCredential } from "./bound-credential.js";
 import { err } from "./i18n-error.mjs";
 import { providerCredentialTarget } from "./provider-endpoint.js";
@@ -261,6 +262,11 @@ export class ProviderStore {
     if (!target.ok) return target;
     const inputApiKey = String(input?.apiKey ?? "").trim();
     const reusesStoredKey = !inputApiKey || inputApiKey.startsWith("••••");
+    // 新输入的 key 只接受可打印 ASCII：粘贴/输入法带入的中文或空格会让
+    // Authorization 头编码失败，且永远认证不过——保存时直接拒收。
+    if (!reusesStoredKey && !isPlausibleApiKey(inputApiKey)) {
+      return { ok: false, error: err("err.provider.keyInvalidChars") };
+    }
     if (
       reusesStoredKey &&
       existing?.apiKey &&

@@ -330,3 +330,43 @@ test("web_fetch stays out of the pool for search-only BYOK backends", () => {
   const tools = buildHost({ store: deepseek, spark: false }).host.buildTools();
   assert.equal(tools.some((t) => t.name === "web_fetch"), true);
 });
+
+test("a DeepSeek key with non-ASCII characters fails as authFailed before any request", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetch(DEEPSEEK_BODY);
+  const { host, events } = buildHost({
+    store,
+    fetchImpl: impl,
+    spark: false,
+    // 真实事故形态：IME 把 key 第 4 位打成 零。
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-零eekseek-user" } }),
+  });
+
+  const tool = host.buildTools().find((t) => t.name === "web_search");
+  assert.ok(tool, "坏 key 不挡工具注册；错误必须可执行");
+  const result = await tool.execute("c1", { query: "dnd5e" }, undefined);
+  assert.equal(result.isError, true);
+  assert.equal(result.details.error, "authFailed");
+  assert.match(result.content[0].text, /authentication failed/i);
+  assert.equal(calls.length, 0, "坏 key 不发包");
+  const emitted = events.find((event) => event.type === "search_error");
+  assert.equal(emitted.data.code, "authFailed");
+});
+
+test("web_fetch with a non-ASCII key fails as authFailed before any request", async () => {
+  const store = makeStore({ mode: "spark" });
+  const { impl, calls } = stubFetchRaw([]);
+  const { host } = buildHost({
+    store,
+    fetchImpl: impl,
+    spark: false,
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-零eekseek-user" } }),
+  });
+
+  const tool = host.buildTools().find((t) => t.name === "web_fetch");
+  const result = await tool.execute("f1", { url: "https://example.com/a" }, undefined);
+  assert.equal(result.isError, true);
+  assert.equal(result.details.error, "authFailed");
+  assert.match(result.content[0].text, /authentication failed/i);
+  assert.equal(calls.length, 0);
+});

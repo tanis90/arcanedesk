@@ -170,6 +170,8 @@ function modelGuidance(error) {
   switch (error.code) {
     case "notConfigured":
       return "Web search is not configured. Ask the user to enable it in Arcane Desk settings (联网搜索).";
+    case "authFailed":
+      return "Web search authentication failed. The configured API key is invalid — if it was pasted, it may contain CJK/full-width characters or spaces. Ask the user to re-enter it in Arcane Desk settings (模型 / 联网搜索), or switch the search mode.";
     case "quotaExceeded":
       return "The search service is temporarily unavailable (quota). Retry later or continue from local knowledge.";
     case "empty":
@@ -185,6 +187,8 @@ function fetchGuidance(error) {
   switch (error.code) {
     case "notConfigured":
       return "Web fetch is not configured. Ask the user to enable web search in Arcane Desk settings (联网搜索).";
+    case "authFailed":
+      return "Web fetch authentication failed. The configured API key is invalid — if it was pasted, it may contain CJK/full-width characters or spaces. Ask the user to re-enter it in Arcane Desk settings (模型 / 联网搜索), or switch the search mode.";
     case "badRequest":
       return "Invalid URL. Pass an absolute http(s) URL with a host; local file and app schemes are rejected.";
     case "fetchUnavailable":

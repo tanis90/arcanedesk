@@ -536,3 +536,38 @@ test("credentialForHost skips providers without a usable key", () => {
   });
   assert.equal(store.credentialForHost("api.deepseek.com"), null);
 });
+
+test("rejects API keys with non-ASCII characters (paste/IME artifacts)", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  // 真实事故形态：中文 IME 把 key 第 4 位打成 零。
+  const cjk = store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-零eekseek-user",
+    models: [],
+  });
+  assert.equal(cjk.ok, false);
+  assert.equal(store.data.providers.length, 0, "rejected key must not persist");
+
+  // key 中间的空格同样是粘贴产物。
+  const spaced = store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-abc def",
+    models: [],
+  });
+  assert.equal(spaced.ok, false);
+  assert.equal(store.data.providers.length, 0);
+
+  // 合法 ASCII key 照常保存。
+  assert.deepEqual(store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [],
+  }), { ok: true });
+});

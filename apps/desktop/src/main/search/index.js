@@ -2,6 +2,7 @@
 // M2 的 defineTool("web_search") / M8 的 defineTool("web_fetch") 只包一层壳调用这里；
 // renderer 不 import 本模块。两个工具共享凭据解析与错误面，但各有自己的结果预算。
 
+import { isPlausibleApiKey } from "../api-key.js";
 import { coerceSearchError, SearchError } from "./errors.js";
 import { toToolPayload, toUnifiedResult } from "./normalize.js";
 import { toFetchPayload } from "./fetch-normalize.js";
@@ -58,6 +59,11 @@ function resolveAdapter(store, spark, ownChatKeys, supports) {
   const cred = store.credentialForUse(spark, ownChatKeys);
   const adapter = ADAPTERS[cred.adapterId];
   if (!adapter || !cred.apiKey || !supports(adapter)) throw new SearchError("notConfigured");
+  // 存量坏 key（非 ASCII，粘贴/IME 带入）在 fetch 层只会报 ByteString 编码错误，
+  // 表现为 backendUnavailable——提前拦下，给可执行的 authFailed 指引，且不发包。
+  if (!isPlausibleApiKey(cred.apiKey)) {
+    throw new SearchError("authFailed", { backend: adapter.id, detail: "api key contains non-ASCII characters" });
+  }
   return { cred, adapter };
 }
 

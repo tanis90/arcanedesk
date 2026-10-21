@@ -4,6 +4,7 @@
 // renderer 永远只拿 toPublic() 的掩码视图。
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { isPlausibleApiKey } from "../api-key.js";
 import { decodeBoundCredential, encodeBoundCredential } from "../bound-credential.js";
 import { err } from "../i18n-error.mjs";
 import { validateProviderBaseUrl } from "../provider-endpoint.js";
@@ -162,6 +163,10 @@ export class SearchStore {
 
     const inputApiKey = String(input?.apiKey ?? "").trim();
     const reusesStoredKey = !inputApiKey || inputApiKey.startsWith("••••");
+    // 与 ProviderStore 同一规则：新 key 只接受可打印 ASCII（粘贴/IME 产物拒收）。
+    if (usesOwnKey && !reusesStoredKey && !isPlausibleApiKey(inputApiKey)) {
+      return { ok: false, error: err("err.provider.keyInvalidChars") };
+    }
     if (reusesStoredKey && usesOwnKey && this.data.apiKey && this.data.credentialTarget && this.data.credentialTarget !== nextTarget) {
       return {
         ok: false,

@@ -245,3 +245,18 @@ test("defaults injection covers every backend endpoint (region overlay / staging
   assert.equal(store.credentialForUse(null).baseUrl, "https://staging.example/zai");
   assert.equal(store.credentialForUse(null).searchEngine, "search-staging");
 });
+
+test("byok/custom reject API keys with non-ASCII characters (paste/IME artifacts)", () => {
+  const { store } = tempStore();
+  const byok = store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "sk-零eekseek-user" }, SPARK);
+  assert.equal(byok.ok, false);
+  assert.equal(store.data.apiKey, "", "rejected key must not persist");
+
+  const custom = store.update({ mode: "custom", customBaseUrl: "https://search.example.com/v1", apiKey: "sk-abc def" }, SPARK);
+  assert.equal(custom.ok, false);
+  assert.equal(store.data.apiKey, "");
+
+  const good = store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "sk-deepseek-user" }, SPARK);
+  assert.equal(good.ok, true);
+  assert.equal(store.data.apiKey, "sk-deepseek-user");
+});
