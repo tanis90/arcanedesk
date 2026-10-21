@@ -98,7 +98,8 @@ const BYOK_ENDPOINTS = {
 | 1 | `mode === "spark"` 且 `ownChatKeys.deepseek` 有 key | `deepseek` | 用户自己的 DeepSeek 聊天 key |
 | 2 | `mode === "spark"` 其余情况 | `spark` | 内置 arcane-spark provider（relay） |
 | 3 | `mode === "off"` | — | 工具不注入 |
-| 4 | `mode === "byok"` / `"custom"` | 显式 backend | 搜索页自己的 key |
+| 4 | `mode === "byok"` 且 backend=deepseek 且搜索页未存 key | `deepseek` | 复用模型页的 DeepSeek 聊天 key（同 origin，不配两遍） |
+| 5 | `mode === "byok"` / `"custom"` 其余情况 | 显式 backend | 搜索页自己的 key |
 
 自动接入只按 **origin** 匹配：`ProviderStore.credentialForHost("api.deepseek.com")` 遍历
 provider，要求该 provider 的 `usableCredential` 通过（credential target 未被篡改），

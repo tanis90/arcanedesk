@@ -3375,6 +3375,11 @@ function renderSearchUi() {
   ssBackendRow.hidden = mode !== "byok";
   ssEndpointRow.hidden = mode !== "custom";
   ssApikeyLabel.textContent = t(mode === "custom" ? "ss.custom.key" : "ss.apikey");
+  // byok/deepseek 且搜索页未存 key 时:占位提示缺省复用模型页的聊天 key。
+  ssApikey.placeholder = t(
+    mode === "byok" && cfg.byokBackend === "deepseek" && !cfg.hasStoredKey && cfg.deepseekHasKey
+      ? "ss.apikeyPlaceholderDeepseekChat"
+      : "ss.apikeyPlaceholder");
   // 探知珠状态行
   let state = "off";
   let text = t("ss.state.off");
@@ -3390,9 +3395,12 @@ function renderSearchUi() {
   } else if (ownKey) {
     if (cfg.hasKey) {
       state = "ready";
-      text = mode === "byok"
-        ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
-        : t("ss.state.ready.custom");
+      // keySource=deepseek-chat:缺省复用模型页 key,不是搜索页另配的。
+      text = cfg.keySource === "deepseek-chat"
+        ? t("ss.state.ready.deepseek")
+        : mode === "byok"
+          ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
+          : t("ss.state.ready.custom");
     } else {
       state = "needs-key";
       text = t("ss.state.needsKey.own");

@@ -370,3 +370,21 @@ test("web_fetch with a non-ASCII key fails as authFailed before any request", as
   assert.match(result.content[0].text, /authentication failed/i);
   assert.equal(calls.length, 0);
 });
+
+test("byok deepseek without a stored key executes via the chat DeepSeek key", async () => {
+  const store = makeStore({ mode: "byok", byokBackend: "deepseek" });
+  const { impl, calls } = stubFetch(DEEPSEEK_BODY);
+  const { host } = buildHost({
+    store,
+    fetchImpl: impl,
+    spark: false,
+    ownChatKeys: () => ({ deepseek: { apiKey: "sk-deepseek-user" } }),
+  });
+
+  const tool = host.buildTools().find((t) => t.name === "web_search");
+  assert.ok(tool, "byok/deepseek 缺省复用聊天 key 即注册");
+  const result = await tool.execute("c1", { query: "dnd5e" }, undefined);
+  assert.equal(result.isError, undefined);
+  assert.equal(calls[0].url, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer sk-deepseek-user");
+});

@@ -260,3 +260,26 @@ test("byok/custom reject API keys with non-ASCII characters (paste/IME artifacts
   assert.equal(good.ok, true);
   assert.equal(store.data.apiKey, "sk-deepseek-user");
 });
+
+test("byok deepseek falls back to the chat DeepSeek key when no search key is stored", () => {
+  const { store } = tempStore();
+  store.update({ mode: "byok", byokBackend: "deepseek" }, SPARK);
+
+  // 没有聊天 key：与之前一样不可用。
+  assert.equal(store.usable(null, null), false);
+
+  // 模型页有 DeepSeek key：缺省复用，不再要求搜索页重配。
+  const ownChatKeys = { deepseek: { apiKey: "sk-deepseek-user" } };
+  const cred = store.credentialForUse(null, ownChatKeys);
+  assert.equal(cred.adapterId, "deepseek");
+  assert.equal(cred.apiKey, "sk-deepseek-user");
+  assert.equal(cred.keySource, "deepseek-chat");
+  assert.equal(cred.baseUrl, "https://api.deepseek.com/v1/tools/search");
+  assert.equal(store.usable(null, ownChatKeys), true);
+
+  // 搜索页显式存 key 后：显式 key 优先（可以是与聊天不同的 tools-only key）。
+  store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "sk-search-only" }, SPARK);
+  const explicit = store.credentialForUse(null, ownChatKeys);
+  assert.equal(explicit.apiKey, "sk-search-only");
+  assert.equal(explicit.keySource, "search");
+});

@@ -136,6 +136,8 @@ export class SearchStore {
       customBaseUrl: this.data.customBaseUrl,
       apiKey: resolved.apiKey ? `••••${resolved.apiKey.slice(-4)}` : "",
       hasKey: Boolean(resolved.apiKey),
+      // 搜索页自己存没存 key（区别于 deepseek-chat 缺省复用），驱动占位文案。
+      hasStoredKey: Boolean(this.data.apiKey),
       keySource: resolved.keySource ?? "search",
       sparkHasKey: Boolean(spark?.apiKey),
       // DeepSeek 聊天 key 与 tools/search 同 origin，自动复用；仅 spark 模式生效。
@@ -204,7 +206,9 @@ export class SearchStore {
    * 1. spark 模式（产品默认）且用户已有自己的 DeepSeek 聊天 key → deepseek 直连，
    *    扣用户自己的 key（两者同 origin，天然共享凭据）；
    * 2. 否则 spark 模式跟随 Spark provider（CN 区 relay 路径，行为不变）；
-   * 3. off/byok/custom 是用户的显式选择，不参与自动接管。
+   * 3. byok 且 backend=deepseek 且搜索页未存 key → 同样复用 DeepSeek 聊天 key
+   *    （同 origin，不让用户配两遍；搜索页显式存入的 key 优先）；
+   * 4. off、custom、byok 其它 backend 是用户的显式选择，不参与自动接管。
    */
   credentialForUse(spark = null, ownChatKeys = null) {
     if (this.data.mode === "spark") {
@@ -229,9 +233,20 @@ export class SearchStore {
       const endpoint = byokEndpoint(this.data.byokBackend, this.defaults);
       if (!endpoint) return { adapterId: null, apiKey: "", baseUrl: "", keySource: null };
       const target = consentTargetForBaseUrl(endpoint.baseUrl);
+      const storedKey = this.data.apiKey && this.data.credentialTarget === target ? this.data.apiKey : "";
+      // byok/deepseek 缺省复用模型页的聊天 key（同 origin）：搜索页没存 key 时
+      // 不让用户把同一把 DeepSeek key 再配一遍。
+      if (!storedKey && this.data.byokBackend === "deepseek" && ownChatKeys?.deepseek?.apiKey) {
+        return {
+          adapterId: "deepseek",
+          apiKey: String(ownChatKeys.deepseek.apiKey),
+          baseUrl: endpoint.baseUrl,
+          keySource: "deepseek-chat",
+        };
+      }
       return {
         adapterId: this.data.byokBackend,
-        apiKey: this.data.apiKey && this.data.credentialTarget === target ? this.data.apiKey : "",
+        apiKey: storedKey,
         baseUrl: endpoint.baseUrl,
         ...(endpoint.searchEngine ? { searchEngine: endpoint.searchEngine } : {}),
         keySource: "search",
