@@ -127,7 +127,7 @@ test("local-install.md keeps the local-track operational rules", async () => {
   assert.match(local, /--allow-missing-data-dir/);
   // Demo 环境默认安装，内容统一走 arcane mirror
   assert.match(local, /Demo 环境默认安装/);
-  assert.match(local, /不在 arcane mirror 选过的 mod\s+之内/s);
+  assert.match(local, /不在 Arcane 镜像的收录\s*范围/s);
   assert.match(local, /arcanedesk\.bitterbebop\.cn/);
   // 路径纪律：完整形态路径与装后回读
   assert.match(local, /<数据目录>\/Data\/systems\/dnd5e/);
@@ -203,9 +203,12 @@ test("mods skill covers non-index packages with one plain-language risk warning"
     "utf8",
   );
   // 未收录包：一次大白话风险提示 + 官网反馈渠道；不再有"展示哈希再次确认"的二次交互
-  assert.match(skill, /不在 arcane mirror 选过的 mod\s+之内/s);
+  assert.match(skill, /不在 Arcane 镜像的收录\s*范围/s);
   assert.match(skill, /arcanedesk\.bitterbebop\.cn/);
   assert.match(skill, /--accept-sha256/);
   assert.match(skill, /禁止混链校验/);
+  // GitHub 连不上时：搜当前可用加速前缀，--github-mirror-prefix 只改抓取通道不改校验口径
+  assert.match(skill, /--github-mirror-prefix/);
+  assert.match(skill, /不要凭记忆写死任何前缀/);
   assert.doesNotMatch(skill, /再次确认/);
 });

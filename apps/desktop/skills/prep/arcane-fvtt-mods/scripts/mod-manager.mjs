@@ -80,6 +80,29 @@ function httpsUrl(value, label) {
   return url.href;
 }
 
+const GITHUB_HOSTS = new Set([
+  "github.com",
+  "raw.githubusercontent.com",
+  "objects.githubusercontent.com",
+  "gist.githubusercontent.com",
+  "codeload.github.com",
+]);
+
+function withMirrorPrefix(fetchImpl, githubMirrorPrefix) {
+  if (githubMirrorPrefix == null || githubMirrorPrefix === "") return fetchImpl;
+  const prefix = httpsUrl(githubMirrorPrefix, "github mirror prefix").replace(/\/+$/, "");
+  return (url, init) => {
+    let hostname;
+    try {
+      hostname = new URL(String(url)).hostname.toLowerCase();
+    } catch {
+      return fetchImpl(url, init);
+    }
+    if (!GITHUB_HOSTS.has(hostname)) return fetchImpl(url, init);
+    return fetchImpl(`${prefix}/${url}`, init);
+  };
+}
+
 function moduleManifestUrl(value, label = "manifest URL") {
   const href = httpsUrl(value, label);
   const url = new URL(href);
@@ -1154,7 +1177,8 @@ function exactMirrorEntry(index, manifestUrl) {
   return index?.packages?.find((entry) => isModuleIndexEntry(entry) && entry.manifestUrl === manifestUrl) ?? null;
 }
 
-export async function inspectModule({ manifestUrl, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false }) {
+export async function inspectModule({ manifestUrl, dataDir, fetchImpl = fetch, indexUrl = MIRROR_INDEX_URL, allowMissingDataDir = false, githubMirrorPrefix = null }) {
+  fetchImpl = withMirrorPrefix(fetchImpl, githubMirrorPrefix);
   const [manifest, installed] = await Promise.all([
     loadManifest(fetchImpl, manifestUrl),
     listInstalledModules(dataDir, { allowMissingDataDir }),
@@ -1390,7 +1414,9 @@ export async function stageModule({
   indexUrl = MIRROR_INDEX_URL,
   tempRoot = os.tmpdir(),
   archiveExtractor = extractZip,
+  githubMirrorPrefix = null,
 }) {
+  fetchImpl = withMirrorPrefix(fetchImpl, githubMirrorPrefix);
   const { manifest, document: manifestDocument } = await loadManifestDocument(fetchImpl, manifestUrl);
   assertExpected(manifest.id, expectedId, "module id");
   assertExpected(manifest.version, expectedVersion, "module version");
@@ -2304,20 +2330,21 @@ function usage() {
     "  mod-manager catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 只对本机【已安装】mod 与镜像做版本对账；不含未安装的镜像 mod（全量清单用 mirror-catalog）",
     "  mod-manager world-catalog --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>] [--worlds-index-url <url>]   # 镜像可下载世界全量 + 本机安装状态（含站点展示元数据：简介/人数/时长/兼容性等）",
     "  mod-manager world-inspect --world-id <id> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 解析某世界的环境依赖计划",
-    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>]   # 检查单个 manifest 与本机状态",
+    "  mod-manager inspect --manifest-url <url> --data-dir <dir> [--allow-missing-data-dir] [--index-url <url>] [--github-mirror-prefix <url前缀>]   # 检查单个 manifest 与本机状态",
     "  mod-manager local-inspect --archive <zip> --data-dir <dir>   # 检查本地 zip 物料",
     "  mod-manager bundle-inspect --input <prepared-bundle.json>   # 检查构建输入（离线）",
     "",
     "构建与安装（写操作，staging/commit 分开，确认字段必须逐项来自本次 inspect 输出）：",
     "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
     "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
-    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>]",
+    "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>] [--github-mirror-prefix <url前缀>]",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
     "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
     "",
     "镜像索引地址：--index-url 参数 > ARCANE_MOD_INDEX_URL 环境变量（桌面端按构建 region 注入）；两者都缺失时报错。",
     "世界展示索引地址（world-catalog）：--worlds-index-url 参数 > ARCANE_WORLDS_INDEX_URL 环境变量 > 从根索引 URL 的 origin 派生 /worlds/index.json；展示索引获取或校验失败时命令照常成功，输出 displayIndexStatus: \"unavailable\" 且行内只有工件字段。",
+    "GitHub 加速前缀（仅 inspect/stage）：--github-mirror-prefix <https前缀> 只在本机连不上 GitHub 时使用；仅把 host 属于 github.com / *.githubusercontent.com / codeload.github.com 的 manifest 与 ZIP 请求改走 <前缀>/<原始URL> 拼接通道，镜像索引与其余地址不改写；expected-* 身份校验与镜像索引 bytes/SHA256 核对一律按原始 URL 口径，前缀只改变抓取通道。",
   ].join("\n");
 }
 
@@ -2344,6 +2371,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         dataDir: options["data-dir"],
         indexUrl: resolveIndexUrl(options["index-url"]),
         allowMissingDataDir: options["allow-missing-data-dir"] === true,
+        githubMirrorPrefix: options["github-mirror-prefix"] ?? null,
       });
     case "catalog":
       return catalogModules({
@@ -2360,6 +2388,7 @@ export async function runCli(argv = process.argv.slice(2)) {
         expectedVersion: options["expected-version"],
         expectedDownloadUrl: options["expected-download-url"],
         indexUrl: resolveIndexUrl(options["index-url"]),
+        githubMirrorPrefix: options["github-mirror-prefix"] ?? null,
       });
     case "commit":
       return commitStage({

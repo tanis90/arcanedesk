@@ -29,10 +29,11 @@ mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <数据目
   见第 5 节。
 
 计划是执行前告知，不等待批准：用户明确要求安装即授权。唯一要停下来取得确认的情况：主包或
-任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个不在 arcane mirror 选过的
-mod 之内，安装可能产生不可知后果，确认要安装吗？如果你希望 arcane mirror 收录这个 mod，
-可以去官网 https://arcanedesk.bitterbebop.cn/ 反馈我们。”用户确认后继续，后续环节不再
-二次确认。
+任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个 mod 不在 Arcane 镜像的收录
+范围，要从公开网络的原地址直接下载。镜像里的包我们都核对过来源和哈希，公开网络上的没人
+替你挡这一道——确认你信任它的作者和发布页，要继续吗？用着好的话也欢迎到官网
+https://arcanedesk.bitterbebop.cn/ 反馈，我们评估后把它收进镜像。”用户确认后继续，后续环节
+不再二次确认。
 
 ## 3. 下载并验证到 staging
 
@@ -51,6 +52,10 @@ archive 根 `module.json` 的 id/version。归档内的上游 manifest/download 
 - 镜像索引包：bytes 与 SHA256 必须匹配；匹配后按已说明的计划继续。
 - 非索引包：第 2 节的一次风险提示已覆盖本次安装，`requiresSecondConfirmation` 不再触发新的
   用户确认；把计算出的 SHA256 和实际体积写进最终报告，明确它只是本次下载指纹。
+- 网络层失败重试：若失败原因是连不上 GitHub（连接超时、reset、TLS 中断）且目标 host 是
+  github.com 或 *.githubusercontent.com，按 SKILL.md「共同边界」的 GitHub 加速条目搜一个当前
+  可用的加速前缀，给 `inspect` 和 `stage` 加同一个 `--github-mirror-prefix <前缀>` 重跑；
+  expected-* 字段仍按原始 URL 取值，不要换成加速后的地址。
 
 ## 4. 停服并提交
 

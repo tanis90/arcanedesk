@@ -87,11 +87,18 @@ macOS Bash 调用形态：
 - 索引中与 manifest URL 精确匹配的包必须逐字节核对 `bytes` 和 SHA256；不匹配即停止，
   不允许跳过校验。mirror 内容的验证基准只用索引声明的哈希；禁止混链校验（从 mirror 下载却拿
   其他来源的哈希验，mirror 为重打包，哈希本就不同，混链必误报）。
-- 不在索引中的包，先给用户一次大白话风险提示并取得确认：“这个不在 arcane mirror 选过的 mod
-  之内，安装可能产生不可知后果，确认要安装吗？如果你希望 arcane mirror 收录这个 mod，可以去
-  官网 https://arcanedesk.bitterbebop.cn/ 反馈我们。”确认后 `stage`；计算出的 SHA256 与实际体积
-  写入最终报告，它只是本次下载指纹，不能描述成发布方签名或官方哈希，也不再向用户二次确认；
-  随后 `commit` 必须传相同的 `--accept-sha256`。
+- 不在索引中的包，先给用户一次大白话风险提示并取得确认：“这个 mod 不在 Arcane 镜像的收录
+  范围，要从公开网络的原地址直接下载。镜像里的包我们都核对过来源和哈希，公开网络上的没人
+  替你挡这一道——确认你信任它的作者和发布页，要继续吗？用着好的话也欢迎到官网
+  https://arcanedesk.bitterbebop.cn/ 反馈，我们评估后把它收进镜像。”确认后 `stage`；计算出的
+  SHA256 与实际体积写入最终报告，它只是本次下载指纹，不能描述成发布方签名或官方哈希，也
+  不再向用户二次确认；随后 `commit` 必须传相同的 `--accept-sha256`。
+- `inspect` / `stage` 因网络层失败（连接超时、reset、TLS 中断）且目标 host 是 github.com 或
+  *.githubusercontent.com 时，先用 web_search 搜「GitHub 加速前缀 / github proxy mirror」，挑一个
+  当前搜到可用的加速服务（更迭快，不要凭记忆写死任何前缀），给 `inspect` / `stage` 加
+  `--github-mirror-prefix <前缀>` 重试。前缀只改抓取通道，expected-* 字段仍按原始 URL 取值，
+  镜像索引哈希校验口径不变；镜像已收录的包走国内 OSS 直连，永远用不到加速前缀；非索引包的
+  一次风险提示照常。
 - 已安装同 id module 不得静默覆盖。`commit` 会把旧目录移到
   `<数据目录>/Data/.arcane-mod-backups/modules/` 后再原子替换；必须把实际备份路径报告给用户。
 - 单独 mod 流程在安装前检查 `relationships.requires`：缺少的依赖单列进同一安装计划，mirror 收录的
