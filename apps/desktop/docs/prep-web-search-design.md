@@ -19,12 +19,12 @@
                │                                 │ search/ 模块                               │
                │                                 │   cache.js（run 级去重缓存 + 用量计数）     │
                │                                 │   store.js（SearchStore，safeStorage）     │
-               │                                 │   adapters/{spark,zai,brave,custom}.js    │
+               │                                 │   adapters/{spark,zai,deepseek,custom}.js │
                │                                 └──────┬──────────────────────────────────┘
                │                                        │ HTTPS（仅主进程，renderer 无明文 key）
                │                        ┌───────────────┼──────────────────┐
                │                        ▼               ▼                  ▼
-               │                 Arcane Spark /v1/search  z-ai(bigmodel/z.ai)  Brave
+               │                 Arcane Spark /v1/search  z-ai(bigmodel/z.ai)  DeepSeek
 ```
 
 职责一句话：**renderer 只见掩码与事件；主进程拥有工具、凭据、计量与适配；上游选择是
@@ -42,7 +42,7 @@ src/main/search/
   errors.js       # SearchError(code, upstream?) → I18nError("err.search.*"/"err.fetch.*")
   capabilities.js # 各后端能力声明（freshness/domains 支持度 → meta.warnings）
   adapters/
-    spark.js  zai.js  brave.js  deepseek.js  custom.js   # P1 + M2（spark/deepseek 带 fetch）
+    spark.js  zai.js  deepseek.js  custom.js             # P1 + M2（均带 fetch）
     kimi.js  openai-responses.js                         # P2（预留，不在首发）
 ```
 
@@ -66,7 +66,7 @@ src/main/search/
 {
   "mode": "spark",          // off | spark | byok | custom;新用户默认 spark(有 Spark 凭据即用,
                             // 没有时 usable()=false,工具不注册、零请求);byok/custom 始终显式选择
-  "byokBackend": "zai",     // zai | brave（mode=byok 时有效）
+  "byokBackend": "zai",     // zai | deepseek（mode=byok 时有效）
   "customBaseUrl": "",      // mode=custom 时的兼容端点（HTTPS/loopback 校验同 voice）
   // apiKey/apiKeyProtected/credentialTarget 同 voice 的存储方式
 }
@@ -82,11 +82,11 @@ src/main/search/
 **表驱动**：`BYOK_ENDPOINTS` 是 backend → `{baseUrlKey, searchEngineKey}` 的唯一登记表，
 `byokEndpoint()` 未登记即返回 `null`。历史上 byok 分支写死成 `backend === "brave" ? brave
 : zai`，任何未知值都会把 key 发到智谱端点——新增 backend 前必须先改表，这是硬约束。
+Brave 后端已于 2026-10 整体下架，表中只剩 zai / deepseek 两项。
 
 ```js
 const BYOK_ENDPOINTS = {
   zai:      { baseUrlKey: "zaiBaseUrl", searchEngineKey: "zaiSearchEngine" },
-  brave:    { baseUrlKey: "braveBaseUrl" },
   deepseek: { baseUrlKey: "deepseekBaseUrl" },
 };
 ```
@@ -157,8 +157,11 @@ const webSearch = defineTool({
   校验，再经 `resolveAdapter()` 复用与搜索完全一致的凭据优先级（DeepSeek key > Spark
   relay），最后 `toFetchPayload()` 按 64KB 截断。两个工具各自申明能力：只有实现了
   `fetch()` 的 adapter 才能承接抓取，没有就抛 `notConfigured`——不会出现"搜索能跑、
-  抓取静默复用错端点"。工具池用 `backendSupportsFetch(adapterId)` 再判一次：zai/brave
-  BYOK 只有搜索能力，`web_fetch` 因此不进池，而不是给用户一个永远 `notConfigured` 的工具。
+  抓取静默复用错端点"。工具池用 `backendSupportsFetch(adapterId)` 再判一次：当前所有
+  已上线后端（zai/deepseek 两个 BYOK、spark relay、custom 兼容端点）都同时支持搜索与
+  抓取，门控是为将来"只搜不抓"的后端（P2 的 kimi/openai-responses）预留——那种情况下
+  `web_fetch` 不进池，而不是给用户一个永远 `notConfigured` 的工具。zai 的抓取走智谱
+  网页阅读 API（search 端点同目录的 `/reader`，见 §3）。
 - 抓取**不进 run 级去重缓存**：同一 URL 可能因站点更新而变，且抓取不消耗搜索次数；
   缓存会掩盖"再抓一次拿最新正文"的需求。搜索的 cache 行为不受影响。
 
@@ -167,7 +170,7 @@ const webSearch = defineTool({
 统一签名（纯函数风格，便于 fixture 单测；移植自 pi-websearch 的 provider 模块）：
 
 ```js
-// adapters/zai.js（搜索）/ spark.js、deepseek.js（搜索 + 抓取）
+// adapters/zai.js、spark.js、deepseek.js、custom.js 均为「搜索 + 抓取」
 export const zaiAdapter = {
   id: "zai",
   capabilities: { count: true, freshness: true, domains: true },
@@ -188,7 +191,6 @@ export const zaiAdapter = {
 | 我们的文件 | 参考源（pi-websearch `src/websearch/providers/`） | 移植内容 |
 | --- | --- | --- |
 | `adapters/zai.js` | `z-ai.ts` | URL/headers/body 构造、`search_results` 字段映射 |
-| `adapters/brave.js` | `brave.ts` | header（`X-Subscription-Token`）、结果映射 |
 | `adapters/deepseek.js`（M2） | 无（官方 tools API 直写） | `POST /v1/tools/search` body、`snippet/summary` 字段映射、128 字符 query 上限 |
 | `adapters/kimi.js`（P2） | `kimi.ts` | `{text_query, limit, enable_page_crawling, timeout_seconds}` body、`search_results[].summary` 映射 |
 | `adapters/openai-responses.js`（P2） | `openai-responses.ts` | Responses `web_search` 调用与 sources/annotations 解析 |
@@ -219,17 +221,22 @@ POST https://api.deepseek.com/v1/tools/search   Authorization: Bearer <用户的
 - 不支持 `freshness` → 能力声明 `freshness: false`，由 `capabilityWarnings` 显式告警。
 - `snippet` 缺失时用 `summary` 兜底；`authority` 为字符串时用作 `source`，否则用 backend 名。
 
-`fetch()` 侧（`deepseek.js` / `spark.js`）：
+`fetch()` 侧（`zai.js` / `deepseek.js` / `spark.js`）：
 
 ```http
+POST {zaiSearchBase 同目录}/reader             {"url"}
+  ← {request_id, reader_result:{title, url, content}}        # 空 content → fetchUnavailable
 POST https://api.deepseek.com/v1/tools/fetch   {"url"}   ← {title, content(markdown)}
 POST {sparkBase}/v1/fetch                      {"url"}   ← {title, content, requestId, truncated}
 ```
 
+- zai 的抓取走智谱网页阅读 API：由 `zaiReaderUrl()` 从 search 端点同目录推出（默认
+  `https://open.bigmodel.cn/api/paas/v4/web_search` → `.../v4/reader`，只给到 `/v4` 的代理
+  也兼容），绝不跨 origin；超时 25s（正文提取比搜索慢），与 DeepSeek 一致。
 - DeepSeek 的 fetch 端点与 search 不同叶子（`/v1/tools/fetch`），由
   `deepseekFetchUrl()` 从 search base 推导，绝不跨 origin。
-- 两个 adapter 都用 `fetchJson` 的 `mapHttpError` 钩子做**分工具**错误映射：
-  DeepSeek 的 403→`fetchBlocked`、404→`fetchUnavailable`、413→`pageTooLarge`、
+- 三个 adapter 都用 `fetchJson` 的 `mapHttpError` 钩子做**分工具**错误映射：
+  zai/DeepSeek 的 403→`fetchBlocked`、404→`fetchUnavailable`、413→`pageTooLarge`、
   429→`rateLimited`；relay 额外支持 `{"error":{"code":"..."}}` 业务码
   （`RELAY_FETCH_ERROR_CODES`），优先级高于状态码——relay 的 429 被刻意降级成
   `503 + Retry-After`，桌面端因此映射到 `rateLimited` 而不是"额度耗尽"。
@@ -282,7 +289,8 @@ quota_exceeded(429), timeout, cancelled, empty}`，上抛为 `I18nError("err.sea
   `search.endpoints.zai = "https://api.bigmodel.cn" | "https://api.z.ai"`（国内/国际包
   不同值），`SearchStore` 构造时接收该值作为 byok=zai 的默认 baseUrl；adapter 只收
   参数。custom/spark 模式不受区域影响。
-- `publishedAt` 原样透传；币种文案 `ss.fee.zai`（¥）/`ss.fee.brave`（$）随 backend。
+- `publishedAt` 原样透传；状态行按 backend 取 `ss.state.ready.*` + `ss.backend.*`
+  （智谱 / DeepSeek / Spark / 自定义）文案，不新设按币种的费用 key。
 
 ## 7. system prompt 增量（`system-prompts/prep.md`）
 
@@ -332,19 +340,20 @@ model tool_call(url)
 ## 10. 测试（`node --test test/search-*.test.mjs`，沿用现有约定）
 
 - **adapter 单测**：fixture 用真实响应样本（移植时连同 pi-websearch 的测试样本一起搬），
-  覆盖 zai/brave/spark/deepseek/custom 的字段映射、空结果、429/503/超时/取消、headers 断言。
+  覆盖 zai/spark/deepseek/custom 的字段映射、空结果、429/503/超时/取消、headers 断言。
 - **cache 单测**：去重命中不计次、计数无上限增长、run 重置隔离、
   并发调用下计数原子性（Promise.all 场景）。
 - **store 单测**：掩码复用、KEY_REENTRY_REQUIRED、换 backend 弃 key、新用户默认 spark
   （无凭据零请求）、schema v2 不再持久化 consent、safeStorage 不可用降级（照 voice-store 现有测试）。
-- **端点/凭据解析单测（M2）**：表驱动下每个 backend 的 origin 隔离（zai/brave/deepseek 各
+- **端点/凭据解析单测（M2）**：表驱动下每个 backend 的 origin 隔离（zai/deepseek 各
   自 origin，未登记 backend 解析为 `null` 不回落智谱）；`credentialForHost` 按 host 命中、
   被篡改的 credential target 不吐 key、无 key 的 provider 跳过；spark 模式优先级与
   `off`/`byok`/`custom` 不被自动接管。
 - **web_fetch 单测（M8）**：URL 校验（http(s) 通过；file:/data:/javascript:/ftp:/userinfo/
-  超长拒绝且不发包）；UTF-8 字节截断不切碎中文；64KB 上限与 truncated 标记；DeepSeek 与
-  relay 两条契约的请求形状与鉴权头；两边的错误面映射（403/404/413/429+Retry-After/5xx）；
-  relay 未部署的 404 → `fetchUnavailable`；off/无凭据 → `notConfigured`。
+  超长拒绝且不发包）；UTF-8 字节截断不切碎中文；64KB 上限与 truncated 标记；zai reader /
+  DeepSeek / relay 三条契约的请求形状与鉴权头（含 zai 空 content → `fetchUnavailable`）；
+  各边错误面映射（403/404/413/429+Retry-After/5xx）；relay 未部署的 404 →
+  `fetchUnavailable`；off/无凭据 → `notConfigured`。
 - **集成**（mock fetch + 假 AgentHost）：prep allowlist 注册/未注册两态、事件到 renderer
   的 payload 形状、16KB/64KB 截断后 JSONL 可恢复、web_fetch 在 combat 池中不激活。
 - **手工验收**：对齐 PRD §11 各条（含 6b DeepSeek 自动接入）。
@@ -352,7 +361,7 @@ model tool_call(url)
 ## 11. 里程碑任务分解
 
 **P0（POC，不发布）**
-1. `search/{index,store,cache,errors,adapters/zai,adapters/brave}.js` + 单测（mock 起步）；
+1. `search/{index,store,cache,errors,adapters/zai}.js` + 单测（mock 起步）；
 2. prep allowlist 临时加 `web_search`，跑真实 query 评测脚本（50–100 条，两网络环境）。
 
 **P1（首发）**
@@ -385,7 +394,8 @@ model tool_call(url)
   下一次搜索；但「从无到有」把 `web_search` 加进池需要下一次 `attach()`（新会话或切换会话）。
   反过来，删掉唯一凭据后工具仍在池里，execute 返回 `notConfigured` 的可恢复指引而不是
   静默消失——与既有行为一致。
-- Brave 结果落盘条款未决前，brave adapter 的 snippet 持久化长度先取更保守的 200 字符。
+- Brave 后端已下架（2026-10），其"结果落盘条款"风险随之关闭；如需恢复该后端，需重新评估
+  其结果存储条款与 snippet 持久化长度。
 - Kimi / OpenAI 复用的第三方客户端资格（P2 前必须书面确认）。
 - Spark 网关 `/v1/search` 排期与 key scope（是否独立子额度）由服务端定，不阻塞 P1 桌面侧
   （先以 custom 端点 + 自部署 staging 验证）。
@@ -406,6 +416,7 @@ model tool_call(url)
 | M7 | `4441665` | 移除客户端成本限制：删除次数上限与软提示；count 上限 5→20；snippet 500→1000 字符；payload 8KB→16KB；`budget.js`→`cache.js`（`SearchRunCache`） |
 | M8（项目 M2） | `9253406` | 用户自带 DeepSeek 聊天 key 自动接管搜索：表驱动 `BYOK_ENDPOINTS`（消除写死的二元端点表达式）、`ProviderStore.credentialForHost()`、`adapters/deepseek.js`；spark 模式优先级 deepseek > relay |
 | M9（项目 M8） | 本次 | `web_fetch` 工具：`executeFetch` + `fetch-url.js` 校验 + `fetch-normalize.js`（64KB）+ DeepSeek/relay 两条上游 + `err.fetch.*` 错误面；工具池 / prep prompt / i18n / 文档同步 |
+| M10 | 本次 | 两处后端调整：① **Brave 后端整体下架**——删除 `adapters/brave.js`、`BYOK_ENDPOINTS.brave`、设置页选项与 i18n 文案；② **zai adapter 增加 `fetch()`**——走智谱网页阅读 API（search 端点同目录 `/reader`，超时 25s，空 content → `fetchUnavailable`），使 byok zai 与 deepseek、spark relay 一样同时支持搜索与抓取 |
 
 测试基线：desktop `npm test` 800 tests / 799 pass / 1 skip（M9/web_fetch 后；M8 为 777/776/1）、`tsc --noEmit` 干净；ops `services/arcane-spark-edge` `node --test test/*.test.mjs` 25/25。
 
@@ -429,8 +440,8 @@ model tool_call(url)
 
 ### 手工验收（对齐 PRD §11）
 
-- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费且无客户端次数上限、429/402 文案 key、16KB 截断、默认 spark 无凭据零外发（M6 测试）、双语占位符一致、en-US 布局待人工过一遍；web_fetch 的 URL 校验 / 64KB 截断 / 两上游契约 / relay 404 可恢复（M9 测试）。
-- 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、设置页探知珠视觉）；Brave 条款确认后再放开 Brave 后端（当前已实现未宣传）。
+- 自动化已覆盖：未配置零注册零请求（M2/M4 测试）、去重不重复计费且无客户端次数上限、429/402 文案 key、16KB 截断、默认 spark 无凭据零外发（M6 测试）、双语占位符一致、en-US 布局待人工过一遍；web_fetch 的 URL 校验 / 64KB 截断 / 三条抓取契约（zai reader、DeepSeek、relay）/ relay 404 可恢复（M9/M10 测试）。
+- 需人工：Electron 实机跑 prep 会话一次搜索（卡片链接、用量 chip、设置页探知珠视觉）；Brave 后端已下架（2026-10），无需再验证其条款与开关。
 
 ### 实测已知怪癖（2026-09-18 真实流量）
 

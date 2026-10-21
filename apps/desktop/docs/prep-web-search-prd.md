@@ -23,6 +23,12 @@ M8 补充（2026-10-20）：新增 `web_fetch` 工具，沿用与 `web_search` *
 优先级——用户自己的 DeepSeek key 优先直连 `api.deepseek.com/v1/tools/fetch`，否则 CN
 Spark 模式走 relay `/v1/fetch`，其余情况工具不进池。结果上限 64KB（与搜索的 16KB 分离）。
 
+M10 补充（2026-10-21）：两处后端调整。① **Brave 后端整体下架**，不再是产品选项
+（adapter、`BYOK_ENDPOINTS` 登记、设置页选项与文案均已删除）；自带搜索服务只剩
+智谱 z-ai 与 DeepSeek 两种。② **智谱 adapter 增加网页阅读能力**：`web_fetch` 在
+byok=zai 时调智谱网页阅读 API（`POST {search 端点同目录}/reader`），因此现在所有
+BYOK 后端（zai/deepseek）与 Spark relay 都同时支持 `web_search` 与 `web_fetch`。
+
 ## 2. 总体方案
 
 ```text
@@ -30,7 +36,7 @@ prep agent
    -> web_search（Arcane 自有工具契约，defineTool 注册，仅 prep profile 可见）
       ├─ DeepSeek 直连：用户自己的 DeepSeek 聊天 key → POST api.deepseek.com/v1/tools/search
       ├─ Arcane Spark：同一把 Spark key 调 POST /v1/search（服务端选上游、计量、熔断）
-      └─ BYOK 直连：智谱 z-ai / Brave / DeepSeek 自有 key（P1），Kimi / OpenAI（P2）
+      └─ BYOK 直连：智谱 z-ai / DeepSeek 自有 key（P1），Kimi / OpenAI（P2）
 ```
 
 **接入优先级**（M2 起，用户拍板）：spark 模式（产品默认）下，① 用户在模型页配了自己的
@@ -61,6 +67,8 @@ content,publish_date}`），使 Spark adapter 与 z-ai BYOK adapter 共享同一
 | 9 | i18n：双语文案、结构化错误、区域化默认端点 | 全局 | P1 |
 | 10 | 用户自带 DeepSeek 聊天 key 自动接管搜索（无需二次配置） | 搜索 | M2 |
 | 11 | `web_fetch` 工具 + prep prompt 用法约束 | 工具 | M8 |
+| 12 | Brave 后端整体下架（adapter、端点登记、设置页选项与文案移除） | 搜索 | M10 |
+| 13 | 智谱 z-ai adapter 增加网页阅读（`web_fetch` 走 `/reader`） | 搜索 | M10 |
 
 ## 4. 工具契约
 
@@ -142,12 +150,16 @@ Spark / BYOK 双路径布局与 key 掩码语义（renderer 只见 `•••`�
 | DeepSeek 自动接入（spark 模式内，优先级 1） | 用户自己的 DeepSeek 聊天 key（模型页已配） | 主进程直连 `POST https://api.deepseek.com/v1/tools/search`，扣用户自己的 DeepSeek 账单；无需在搜索页二次配置 | M2 |
 | Arcane Spark（新用户默认；优先级 2） | 复用 Spark key | 调 `POST /v1/search`，用量并入 Spark 统一计量与账单；未登录 Spark 时工具不注册、零请求 | P1 |
 | 关闭 | — | 不注册 `web_search`；优先级最高，自动接入不会把它打开 | P1 |
-| 智谱 z-ai | 用户按量 key | 主进程直连 web_search API（search_std/pro） | P1 |
-| Brave | 用户 Brave key | 主进程直连 Brave Search API | P1 |
+| 智谱 z-ai | 用户按量 key | 主进程直连 web_search API（search_std/pro）；`web_fetch` 走同一 key 的智谱网页阅读 API（search 端点同目录 `/reader`） | P1 / M10 |
 | DeepSeek（显式 BYOK） | 用户搜索页填的 DeepSeek key | 同 DeepSeek 直连契约，key 走搜索页自己的 credential target | M2 |
 | Kimi 复用 | 现有 kimi-coding key | 调 `api.kimi.com/coding/v1/search`（见 §8 条款待确认） | P2 |
 | OpenAI 复用 | 现有 openai key | Responses `web_search`（按次计费，UI 明示） | P2 |
 | 自定义 | 用户 endpoint+key | Arcane 公开的 Search 兼容契约（可指自建 SearXNG 网关） | P1 |
+
+所有已上线后端（Spark relay、智谱 z-ai、DeepSeek 直连、自定义兼容端点）都同时具备搜索与
+抓取能力；`backendSupportsFetch()` 的能力门控保留，只为将来"只搜不抓"的后端（P2 的 Kimi /
+OpenAI Responses）预留——那时 `web_fetch` 不进工具池，而不是给用户一个永远
+`notConfigured` 的工具。Brave 后端已于 2026-10 下架，不在矩阵内。
 
 自动接入的边界：只按**端点 origin 匹配**（`api.deepseek.com`），要求该 provider 的
 credential target 校验通过；匹配不到就回到 Spark，绝不把 key 发给未绑定的 host。凭据在
@@ -228,19 +240,22 @@ Content-Type: application/json
 **URL 校验（桌面端与 relay 同一套语法规则）**：`url` 必填字符串、去空白后非空、
 ≤ 8192 字符、scheme 只能是 `http`/`https`、必须有 host、不得含 `user:pass@`。桌面端自己
 先拦 `file:` / `data:` / `javascript:` / 自定义 app scheme——这类本地 scheme 永远不该出现在
-网络工具参数里。**不做**私网 IP / localhost / 端口 / 重定向链校验：抓取发生在 DeepSeek 侧，
-客户端与 relay 都不解析域名、不建连目标站（同 relay 的设计结论）。
+网络工具参数里。**不做**私网 IP / localhost / 端口 / 重定向链校验：抓取发生在上游（DeepSeek、
+智谱或 relay），客户端不解析域名、不建连目标站（同 relay 的设计结论）。
 
 **结果上限 64KB（Q7）**：与搜索的 16KB 分离。抓取是单篇正文、用途是精读，预算应更大；
 但仍必须有上限——超限按 UTF-8 字节截正文（不切碎多字节字符）并置 `meta.truncated=true`，
 `title`/`url` 永不截断。
 
-**两条上游**（优先级与 `web_search` 完全一致）：
+**抓取上游**（前两条沿用 `web_search` 的接入优先级，其余是显式 byok/custom）：
 
 | 条件 | 端点 | 凭据 |
 | --- | --- | --- |
 | spark 模式 + 用户自己的 DeepSeek key | `POST https://api.deepseek.com/v1/tools/fetch`，体 `{"url"}` | 用户自己的 key |
 | spark 模式 + 仅 Spark key（CN） | `POST {sparkBase}/v1/fetch`，体 `{"url"}` | Spark key（relay 计量） |
+| byok = 智谱 z-ai（M10） | `POST {search 端点同目录}/reader`，体 `{"url"}`；默认由 `https://open.bigmodel.cn/api/paas/v4/web_search` 推出 `.../v4/reader`；响应 `{request_id, reader_result:{title, url, content}}`，空 `content` 映射为 `fetch_unavailable`；超时 25s | 搜索页填的智谱 key |
+| byok = DeepSeek | `POST https://api.deepseek.com/v1/tools/fetch` | 搜索页自己的 DeepSeek key（credential target 隔离） |
+| custom 模式 | `POST {customBaseUrl 推导}/v1/fetch`，体 `{"url"}` | 端点自己的 key |
 | `off` / 无凭据 | 工具不进池 | — |
 
 **错误面**：`400 bad_request`（我方漏校验）、`404 fetch_unavailable`（页面不存在/无法提取，
@@ -277,12 +292,13 @@ Content-Type: application/json
 - **查询最小化**：prep system prompt 明确禁止发送 secret、token、绝对路径、私密 NPC/玩家
   信息和大段原文；只发检索所需关键词。
 - **内容不信任**：snippet 是数据不是指令；system prompt 要求忽略网页内嵌的提示注入。
-- **持久化**：toolResult 按第 4 节上限截断后进会话 JSONL；Brave 存储条款确认前，Brave
-  adapter 的结果落盘策略保持"截断摘要 + URL"并在设置页注明。
+- **持久化**：toolResult 按第 4 节上限截断后进会话 JSONL；搜索摘要只存"截断摘要 + URL"，
+  抓取正文按 64KB 截断，设置页注明结果保存在本地会话记录。
 - **遥测**：只记录 backend family、成功/错误、耗时、结果数、search units；不记录 query、
   snippet、完整 URL。
-- **条款待确认项**（沿用调研文档）：Kimi Coding Plan 第三方客户端资格；Brave 结果存储权；
-  智谱 Coding Plan MCP 不在本期范围。
+- **条款待确认项**（沿用调研文档）：Kimi Coding Plan 第三方客户端资格；智谱 Coding Plan
+  MCP 不在本期范围。（Brave 结果存储权一项随 Brave 后端 2026-10 下架而关闭；如恢复该
+  后端需重新评估。）
 
 ## 9. i18n 与区域
 
@@ -303,7 +319,7 @@ Content-Type: application/json
 
 - `publishedAt` 按 locale 呈现（zh-CN `08-30`；en-US 按产品现有日期惯例，如 `Aug 30, 2026`）；
   上游给什么就用什么字符串时（如 Kimi 的 `page_age` 原文），原样透传不猜测解析。
-- 费用展示按后端币种原样（智谱 ¥、Brave $、OpenAI $），不做汇率换算；状态行与模式卡
+- 费用展示按后端币种原样（智谱 ¥、DeepSeek / OpenAI $），不做汇率换算；状态行与模式卡
   文案随所选后端切换币种与单位。
 
 ### 9.3 不翻译面（沿用 i18n-plan 边界）
@@ -326,19 +342,26 @@ Content-Type: application/json
 ## 10. 分阶段交付
 
 **P0（契约与质量 POC，不发布）**
-1. `AgentHost` 注册 prep-only `web_search`，接 mock + 智谱按量 + Brave 两个 adapter。
+1. `AgentHost` 注册 prep-only `web_search`，接 mock + 智谱按量 + Brave adapter（Brave 已于
+   2026-10 随后端整体下架删除，此处为历史记录）。
 2. 跑 50–100 条真实备团 query（中文规则/模组、英文 Foundry 官方文档、指定域名、空结果），
    记录 top-5 有效率、权威来源占比、p50/p95、费用；国内/海外网络各一次。
 3. 验证取消、超时、429、空结果、会话恢复、引用渲染。
 
 **P1（开源 BYOK + Spark 首发）**
 1. 设置页「联网搜索」tab、SearchStore、首次外发确认、用量行。
-2. 发布 Spark / 智谱 / Brave / 自定义四种模式；未配置不注册工具。
+2. 发布 Spark / 智谱 / 自定义三种模式（首发时另有 Brave，Brave 后端已于 2026-10 下架）；未配置
+   不注册工具。
 3. Spark `/v1/search` 上线（z-ai 主 + 熔断 + 遥测）。
 4. i18n 随功能同批交付：`ss.*` 双语文案、结构化错误、智谱区域默认端点进 intl overlay。
 
 **M8（网页正文读取，已完成）**
 1. `web_fetch` 工具：http(s) only、64KB 上限、DeepSeek 直连 / CN relay 两条上游。
+
+**M10（后端调整，已完成）**
+1. Brave 后端整体下架：删除 adapter、`BYOK_ENDPOINTS.brave`、设置页选项与 i18n 文案。
+2. 智谱 z-ai 增加 `fetch()`：走智谱网页阅读 API（search 端点同目录 `/reader`，超时 25s，
+   空正文映射为 `fetch_unavailable`）；至此所有 BYOK 后端与 Spark relay 均支持搜索 + 抓取。
 
 **P2（key 复用）**
 1. Kimi / OpenAI 检测 + 一键确认启用（条款确认后）。
@@ -362,10 +385,11 @@ Content-Type: application/json
    `api.deepseek.com/v1/tools/search` 且只带用户自己的 key（不经过 Spark 中转）；未配时
    回落 Spark relay；`off`/`byok`/`custom` 不受影响；探知珠显示「计入你的 DeepSeek 账单」；
    会话中保存/删除该 key，下一次搜索即改变走向（无需重开会话）。
-6c. `web_fetch`：与 `web_search` 同一条凭据优先级（DeepSeek key 优先，否则 CN relay）；
-   只接受 http(s) 绝对 URL，`file:`/`data:`/`javascript:` 在发请求前即拒绝；relay 未部署
-   时 404 显示可恢复指引而不是错误崩溃；正文超 64KB 时截断并标 `truncated`；combat 模式
-   不提供该工具。
+6c. `web_fetch`：与 `web_search` 同一条凭据优先级（spark 模式下 DeepSeek key 优先，否则 CN
+   relay）；byok 模式下 zai/deepseek 均可用（zai 走智谱网页阅读 API `/reader`，空正文报
+   `fetch_unavailable`）；只接受 http(s) 绝对 URL，`file:`/`data:`/`javascript:` 在发请求前
+   即拒绝；relay 未部署时 404 显示可恢复指引而不是错误崩溃；正文超 64KB 时截断并标
+   `truncated`；combat 模式不提供该工具。
 7. i18n：新增文案 zh-CN / en-US 齐全（`ss.*`、`err.fetch.*`）；en-US 下设置行、模式卡、工具卡片完整显示
    不截断不溢出；主进程搜索错误经 `fmtIpc` 本地化，UI 不出现上游原始报错；`publishedAt`
    与费用币种按 locale/后端呈现；国内/国际发行包的智谱默认端点随区域 overlay 生效。
