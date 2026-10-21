@@ -7,7 +7,6 @@ import { coerceSearchError, SearchError } from "./errors.js";
 import { toToolPayload, toUnifiedResult } from "./normalize.js";
 import { toFetchPayload } from "./fetch-normalize.js";
 import { sanitizeFetchUrl } from "./fetch-url.js";
-import { braveAdapter } from "./adapters/brave.js";
 import { deepseekAdapter } from "./adapters/deepseek.js";
 import { customAdapter, sparkAdapter } from "./adapters/spark.js";
 import { zaiAdapter } from "./adapters/zai.js";
@@ -16,7 +15,6 @@ const ADAPTERS = {
   spark: sparkAdapter,
   custom: customAdapter,
   zai: zaiAdapter,
-  brave: braveAdapter,
   deepseek: deepseekAdapter,
 };
 
@@ -165,7 +163,7 @@ export async function executeFetch(rawParams, { store, spark, ownChatKeys = null
 
 /**
  * 某个 backend 是否具备抓取能力。工具池据此决定 web_fetch 是否进池——
- * 否则 byok zai/brave 用户会看到一个"永远 notConfigured"的工具。
+ * 否则只搜不抓的 backend 用户会看到一个"永远 notConfigured"的工具。
  * @param {string | null} adapterId
  */
 export function backendSupportsFetch(adapterId) {

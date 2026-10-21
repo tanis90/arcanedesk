@@ -10,14 +10,6 @@ export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Math.trunc(Number(value) || 0)));
 }
 
-/** 站内过滤拼进 query（z-ai 独立 API 只认单域 filter，brave 不认参数时的兜底）。 */
-export function appendDomainFilters(query, allowedDomains = [], blockedDomains = []) {
-  const parts = [query];
-  for (const domain of allowedDomains) parts.push(`site:${domain}`);
-  for (const domain of blockedDomains) parts.push(`-site:${domain}`);
-  return parts.join(" ");
-}
-
 export function getObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
 }
@@ -33,6 +25,18 @@ export function getString(value) {
 /** 带搜索错误码的 Error（coerceSearchError 按 .code 收拢为 SearchError）。 */
 export function codedError(code, message, meta = {}) {
   return Object.assign(new Error(message), { code }, meta);
+}
+
+/** 工具 API（search/fetch）HTTP 状态 → 客户端错误码（401/402/403/404/408/413/429/5xx）。 */
+export function toolHttpErrorCode({ status }) {
+  if (status === 401) return "authFailed";
+  if (status === 402) return "quotaExceeded";
+  if (status === 403) return "fetchBlocked";
+  if (status === 404) return "fetchUnavailable";
+  if (status === 408 || status === 504) return "timeout";
+  if (status === 413) return "pageTooLarge";
+  if (status === 429) return "rateLimited";
+  return "backendUnavailable";
 }
 
 /**

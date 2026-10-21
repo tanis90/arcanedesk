@@ -9,7 +9,7 @@
 //   {"url"}  ← {title, content(markdown)}；正文长度官方未公布上限。
 // 搜索契约不支持 freshness 参数；domains 折叠进 query 的 site: 过滤（受 128 字符上限约束）。
 
-import { clamp, codedError, contentHeaders, fetchJson, getArray, getObject, getString } from "./shared.js";
+import { clamp, codedError, contentHeaders, fetchJson, getArray, getObject, getString, toolHttpErrorCode } from "./shared.js";
 
 export const DEEPSEEK_CAPABILITIES = { count: true, freshness: false, domains: true };
 
@@ -31,16 +31,7 @@ export function deepseekFetchUrl(baseUrl) {
 }
 
 /** DeepSeek 工具 API 的错误面 → 客户端错误码（官方 401/402/403/404/408/413/429/5xx）。 */
-export function deepseekHttpErrorCode({ status }) {
-  if (status === 401) return "authFailed";
-  if (status === 402) return "quotaExceeded";
-  if (status === 403) return "fetchBlocked";
-  if (status === 404) return "fetchUnavailable";
-  if (status === 408 || status === 504) return "timeout";
-  if (status === 413) return "pageTooLarge";
-  if (status === 429) return "rateLimited";
-  return "backendUnavailable";
-}
+export const deepseekHttpErrorCode = toolHttpErrorCode;
 
 /** 结果数组可能挂在 results / search_results / data 下，逐个兼容。 */
 function resultRows(data) {

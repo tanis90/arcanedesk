@@ -8,6 +8,7 @@ import { executeSearch } from "../src/main/search/index.js";
 import { SearchError } from "../src/main/search/errors.js";
 import { SearchRunCache } from "../src/main/search/cache.js";
 import { SearchStore } from "../src/main/search/store.js";
+import { zaiAdapter } from "../src/main/search/adapters/zai.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
 const SPARK = { apiKey: "sk-spark-9999", baseUrl: "https://llm.example/v1" };
@@ -96,25 +97,40 @@ test("spark adapter posts the arcane /v1/search contract", async () => {
   assert.equal(parsed.meta.warnings.length, 0); // spark 契约全支持
 });
 
-test("brave adapter maps web.results and warns on domains", async () => {
+test("zai fetch reads a page via the reader endpoint", async () => {
   const fetch = stubFetch([{
-    body: JSON.stringify({ web: { results: [{ title: "B", url: "https://b.example/1", description: "D" }] } }),
+    body: JSON.stringify({
+      request_id: "req-r1",
+      reader_result: { title: "dnd5e 5.3.4", url: "https://foundryvtt.com/a", content: "# Release notes\n\n- fixed A" },
+    }),
   }]);
-  const store = makeStore({ mode: "byok", byokBackend: "brave", apiKey: "brave-key" });
 
-  const cache = new SearchRunCache();
-  cache.reset("run");
+  const page = await zaiAdapter.fetch({ url: "https://foundryvtt.com/a" }, {
+    apiKey: "zai-key",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4/web_search",
+    fetchImpl: fetch.impl,
+    log: () => {},
+  });
+  // reader 端点由 search 端点同目录推导，绝不跨 origin。
+  assert.equal(fetch.calls[0].url, "https://open.bigmodel.cn/api/paas/v4/reader");
+  assert.equal(fetch.calls[0].init.headers.Authorization, "Bearer zai-key");
+  assert.deepEqual(JSON.parse(fetch.calls[0].init.body), { url: "https://foundryvtt.com/a" });
+  assert.equal(page.title, "dnd5e 5.3.4");
+  assert.match(page.content, /Release notes/);
+  assert.equal(page.requestId, "req-r1");
+});
 
-  const { payload } = await executeSearch(
-    { query: "brave query", domains: ["example.com"] },
-    { store, spark: SPARK, cache, runKey: "run", fetchImpl: fetch.impl, log: () => {} },
+test("zai fetch maps an empty reader_result to fetchUnavailable", async () => {
+  const fetch = stubFetch([{ body: JSON.stringify({ request_id: "req-r2", reader_result: {} }) }]);
+  await assert.rejects(
+    zaiAdapter.fetch({ url: "https://example.com" }, {
+      apiKey: "zai-key",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4/web_search",
+      fetchImpl: fetch.impl,
+      log: () => {},
+    }),
+    (error) => error?.code === "fetchUnavailable",
   );
-  const url = new URL(fetch.calls[0].url);
-  assert.equal(url.hostname, "api.search.brave.com");
-  assert.equal(url.searchParams.get("q"), "brave query site:example.com");
-  const parsed = JSON.parse(payload);
-  assert.equal(parsed.meta.warnings.length, 1);
-  assert.match(parsed.meta.warnings[0], /domains/);
 });
 
 test("dedupe cache short-circuits identical queries in the same run", async () => {

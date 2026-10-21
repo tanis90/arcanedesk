@@ -44,7 +44,7 @@ export class SearchError extends Error {
   }
 }
 
-/** HTTP 状态 → 错误码的公共映射（z-ai/brave/spark 通用）。 */
+/** HTTP 状态 → 错误码的公共映射（z-ai/spark 通用）。 */
 export function statusToErrorCode(status) {
   if (status === 401 || status === 403) return "authFailed";
   if (status === 429) return "quotaExceeded";

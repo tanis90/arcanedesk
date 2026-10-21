@@ -316,19 +316,15 @@ test("web_fetch rate limiting tells the model to back off", async () => {
   assert.match(result.content[0].text, /5s/);
 });
 
-test("web_fetch stays out of the pool for search-only BYOK backends", () => {
-  // zai/brave 只有搜索能力：注册 web_fetch 只会得到一个永远 notConfigured 的工具。
-  for (const [backend, key] of [["zai", "zai-key-1234"], ["brave", "brave-key-777"]]) {
+test("every BYOK backend registers web_fetch alongside web_search", () => {
+  // zai(网页阅读 API) 与 deepseek 都有抓取能力;只搜不抓的后端才该被挡在池外。
+  for (const [backend, key] of [["zai", "zai-key-1234"], ["deepseek", "deepseek-key-1234"]]) {
     const store = makeStore({ mode: "byok", byokBackend: backend, apiKey: key });
     const { host } = buildHost({ store, spark: false });
     const tools = host.buildTools();
     assert.equal(tools.some((t) => t.name === "web_search"), true, `${backend} keeps search`);
-    assert.equal(tools.some((t) => t.name === "web_fetch"), false, `${backend} must not register fetch`);
+    assert.equal(tools.some((t) => t.name === "web_fetch"), true, `${backend} registers fetch`);
   }
-  // deepseek BYOK 两者都有。
-  const deepseek = makeStore({ mode: "byok", byokBackend: "deepseek", apiKey: "deepseek-key-1234" });
-  const tools = buildHost({ store: deepseek, spark: false }).host.buildTools();
-  assert.equal(tools.some((t) => t.name === "web_fetch"), true);
 });
 
 test("a DeepSeek key with non-ASCII characters fails as authFailed before any request", async () => {

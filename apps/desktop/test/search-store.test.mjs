@@ -69,13 +69,13 @@ test("mask reuse keeps the stored key; switching backend demands re-entry", () =
   assert.equal(store.data.apiKey, "zai-key-1234");
 
   // 换 backend（target 变化）时掩码提交不允许带走旧 key。
-  const switched = store.update({ mode: "byok", byokBackend: "brave", apiKey: "••••1234" }, SPARK);
+  const switched = store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "••••1234" }, SPARK);
   assert.equal(switched.ok, false);
   assert.equal(switched.code, "KEY_REENTRY_REQUIRED");
   // 显式输入新 key 才能完成切换。
-  const reentered = store.update({ mode: "byok", byokBackend: "brave", apiKey: "brave-key-777" }, SPARK);
+  const reentered = store.update({ mode: "byok", byokBackend: "deepseek", apiKey: "deepseek-key-777" }, SPARK);
   assert.equal(reentered.ok, true);
-  assert.equal(store.data.apiKey, "brave-key-777");
+  assert.equal(store.data.apiKey, "deepseek-key-777");
 });
 
 test("leaving own-key modes drops the key (never follows into another service)", () => {
@@ -126,7 +126,6 @@ test("endpoint resolution is table-driven: every backend keeps its own origin", 
   const { store } = tempStore();
   const cases = [
     { backend: "zai", origin: "https://open.bigmodel.cn", path: "/api/paas/v4/web_search" },
-    { backend: "brave", origin: "https://api.search.brave.com", path: "/res/v1/web/search" },
     { backend: "deepseek", origin: "https://api.deepseek.com", path: "/v1/tools/search" },
   ];
   for (const { backend, origin, path } of cases) {
@@ -207,10 +206,10 @@ test("explicit off/byok/custom modes ignore the DeepSeek chat key", () => {
   assert.equal(store.usable(SPARK, deepseek), false);
   assert.equal(store.credentialForUse(SPARK, deepseek).adapterId, null);
 
-  store.update({ mode: "byok", byokBackend: "brave", apiKey: "brave-key-777" }, SPARK);
+  store.update({ mode: "byok", byokBackend: "zai", apiKey: "zai-key-777" }, SPARK);
   const byok = store.credentialForUse(SPARK, deepseek);
-  assert.equal(byok.adapterId, "brave");
-  assert.equal(byok.apiKey, "brave-key-777");
+  assert.equal(byok.adapterId, "zai");
+  assert.equal(byok.apiKey, "zai-key-777");
 
   store.update({ mode: "custom", customBaseUrl: "https://search.example.com/v1", apiKey: "custom-key-42" }, SPARK);
   const custom = store.credentialForUse(SPARK, deepseek);

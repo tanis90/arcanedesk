@@ -14,7 +14,6 @@ export const MODES = new Set(["off", "spark", "byok", "custom"]);
 
 export const DEFAULT_ZAI_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/web_search";
 export const DEFAULT_ZAI_SEARCH_ENGINE = "search_pro";
-export const DEFAULT_BRAVE_BASE_URL = "https://api.search.brave.com/res/v1/web/search";
 /**
  * DeepSeek 聊天 key 按 origin 绑定；tools/search 与 chat 同源，同一把 key
  * 既是模型凭据也是搜索凭据。自动接入时用 ProviderStore.credentialForHost()
@@ -26,11 +25,10 @@ export const DEFAULT_DEEPSEEK_BASE_URL = `https://${DEEPSEEK_SEARCH_HOST}/v1/too
 /**
  * backend → 端点/引擎登记表（唯一事实来源）。每个 backend 必须显式登记，
  * 未登记的键解析为 null——绝不能回落到别的后端，否则一把 key 会被发到
- * 它没被授权接收的端点（历史上 brave 之外的未知值都落到智谱端点）。
+ * 它没被授权接收的端点（历史上未知值都落到智谱端点）。
  */
 const BYOK_ENDPOINTS = Object.freeze({
   zai: Object.freeze({ baseUrlKey: "zaiBaseUrl", searchEngineKey: "zaiSearchEngine" }),
-  brave: Object.freeze({ baseUrlKey: "braveBaseUrl" }),
   deepseek: Object.freeze({ baseUrlKey: "deepseekBaseUrl" }),
 });
 
@@ -76,7 +74,6 @@ export class SearchStore {
     this.defaults = {
       zaiBaseUrl: defaults.zaiBaseUrl ?? DEFAULT_ZAI_BASE_URL,
       zaiSearchEngine: defaults.zaiSearchEngine ?? DEFAULT_ZAI_SEARCH_ENGINE,
-      braveBaseUrl: DEFAULT_BRAVE_BASE_URL,
       deepseekBaseUrl: defaults.deepseekBaseUrl ?? DEFAULT_DEEPSEEK_BASE_URL,
     };
     this.data = this.load();

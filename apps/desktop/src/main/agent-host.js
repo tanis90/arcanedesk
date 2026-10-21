@@ -1292,7 +1292,7 @@ export class AgentHost {
       const { spark, ownChatKeys } = searchCredential();
       return deps.store.usable(spark, ownChatKeys);
     };
-    // 抓取是可选能力：zai/brave BYOK 只有搜索，web_fetch 不该出现在它们的工具池里。
+    // 抓取是可选能力：只搜不抓的 backend 不该让 web_fetch 出现在工具池里。
     const fetchUsable = () => {
       const deps = host.searchDeps;
       if (!deps) return false;
