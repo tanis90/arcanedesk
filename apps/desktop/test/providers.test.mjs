@@ -287,7 +287,7 @@ test("registers Qwen thinking compatibility only for verified official hybrid en
 });
 
 test("real Pi payload sends Qwen off and on flags before the network boundary", async () => {
-  const { streamSimple } = await import("../../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js");
+  const { streamSimple } = await import("@earendil-works/pi-ai/api/openai-completions");
   const { file } = tempConfig();
   const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
   store.upsertProvider({ id: "qwen-test", baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",

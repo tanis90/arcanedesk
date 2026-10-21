@@ -208,12 +208,14 @@ function fetchGuidance(error) {
   }
 }
 
-/** Tool images belong in the model transcript, not the renderer IPC payload. */
+/** Tool images and SDK structured payloads belong in the model transcript, not the renderer IPC payload. */
 function resultForRenderer(result) {
-  if (!Array.isArray(result?.content) || !result.content.some((part) => part?.type === "image")) return result;
+  const hasImage = Array.isArray(result?.content) && result.content.some((part) => part?.type === "image");
+  if (!hasImage && result?.structuredContent === undefined) return result;
   return {
     ...result,
-    content: result.content.filter((part) => part?.type === "text"),
+    ...(hasImage ? { content: result.content.filter((part) => part?.type === "text") } : {}),
+    structuredContent: undefined,
   };
 }
 

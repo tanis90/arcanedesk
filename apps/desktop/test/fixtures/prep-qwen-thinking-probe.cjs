@@ -11,7 +11,7 @@ app.whenReady().then(async () => {
   const load = file => import(pathToFileURL(path.join(repo, file)));
   const { ProviderStore } = await load("apps/desktop/src/main/providers.js");
   const { SecretStorage } = await load("apps/desktop/src/main/secret-storage.js");
-  const { streamSimple } = await load("node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js");
+  const { streamSimple } = await load("node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js");
   const store = new ProviderStore(path.join(root, "config/providers.json"), () => {}, {}, new SecretStorage(safeStorage));
   const selected = store.effectiveModel();
   if (selected.modelId !== "qwen3.7-plus") throw Error("Expected selected Qwen model");
