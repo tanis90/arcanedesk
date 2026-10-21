@@ -21,6 +21,7 @@ import { SessionProjection } from "./sync/session-projection.js";
 import { MessageIdentity, messageKey } from "./sync/message-identity.js";
 import { HistoryIndex } from "./sync/history-index.js";
 import { forkStoredSession } from "./conversations/session-fork.js";
+import { ensureSessionChainIntact } from "./conversations/session-integrity.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
@@ -343,6 +344,14 @@ export class AgentHost {
       throw new SessionModeError("SESSION_PATH_OUTSIDE_MODE_DIR", "会话文件不在当前模式目录内");
     }
     if (!statSync(sessionPath).isFile()) throw new Error("Session path is not a file");
+    // 落盘失败（序列化抛错/EPIPE/磁盘满）会在链上留下幻影 parentId，
+    // 重启后 Pi 回溯到断点静默截断，整段历史看似丢失。先就地修复再打开。
+    try {
+      const repair = ensureSessionChainIntact(sessionPath, { log: line => this.log(line) });
+      if (repair.repaired) this.log(`[agent:${this.profile.mode}] session chain repaired (${repair.inserted} inserted): ${sessionPath}`);
+    } catch (error) {
+      this.log(`[agent:${this.profile.mode}] session integrity check failed (opening anyway): ${error.message}`);
+    }
     const manager = SessionManager.open(sessionPath, this.sessionDir());
     claimSessionMode(manager, this.profile.mode);
     return manager;
