@@ -1342,11 +1342,202 @@ export async function stageLocalModule({ archivePath, expectedId, expectedVersio
   }
 }
 
-async function downloadArchive(fetchImpl, url, file, label = "module ZIP") {
-  const sourceUrl = httpsUrl(url, `${label} URL`);
+/**
+ * mirror-install 的 URL 校验：镜像返回的 poll_url / download_url 在生产只允许 HTTPS；
+ * HTTP 仅放行回环地址（本地 relay 与 hermetic 测试），避免预签名凭证走明文公网。
+ */
+function mirrorUrl(value, label) {
+  const raw = requireString(value, label);
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${label} must be an absolute URL`);
+  }
+  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1"
+    || url.hostname === "[::1]" || url.hostname === "::1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    throw new Error(`${label} must be an HTTPS URL (HTTP is only allowed for loopback)`);
+  }
+  if (url.username || url.password || url.hash) {
+    throw new Error(`${label} must not carry credentials or a fragment`);
+  }
+  return url.href;
+}
+
+function sleepMs(ms) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
+/** 安装流程里的非零退出：pending=2（已排队，稍后重试即秒取），其余=1。 */
+class MirrorInstallError extends Error {
+  constructor(message, exitCode = 1, code = "MIRROR_INSTALL_FAILED") {
+    super(message);
+    this.exitCode = exitCode;
+    this.code = code;
+  }
+}
+
+async function fetchJsonResponse(fetchImpl, url, label) {
+  const target = mirrorUrl(url, `${label} URL`);
+  const response = await fetchImpl(target, { cache: "no-store", redirect: "follow" });
+  if (!response?.ok) {
+    const status = response?.status ?? "unknown";
+    // 5xx/408 与鉴权/凭证过期都按可重试处理；404/410 等直接失败。
+    const retryable = status === 408 || status === 429 || (typeof status === "number" && status >= 500);
+    throw new MirrorInstallError(
+      `${label} request failed: HTTP ${status}`,
+      retryable ? 2 : 1,
+      retryable ? "MIRROR_PENDING" : "MIRROR_INSTALL_FAILED",
+    );
+  }
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new MirrorInstallError(`${label} response is not valid JSON`);
+  }
+}
+
+/** ready 体必须带合法的 sha256 与 download_url：缺一项就不许进入下载。 */
+function readyBody(body) {
+  if (typeof body?.sha256 !== "string" || !SHA256_PATTERN.test(body.sha256.toLowerCase())) {
+    throw new MirrorInstallError("mirror ready response is missing a valid sha256");
+  }
+  if (typeof body?.download_url !== "string" || !body.download_url) {
+    throw new MirrorInstallError("mirror ready response is missing download_url");
+  }
+  return body;
+}
+
+/** 轮询到 ready 或预算耗尽；返回 ready 体。 */
+async function pollMirrorJob({ pollUrl, waitSeconds, fetchImpl, sleep }) {
+  const deadline = Date.now() + Math.max(0, waitSeconds) * 1000;
+  for (;;) {
+    const body = await fetchJsonResponse(fetchImpl, pollUrl, "mirror job poll");
+    const status = String(body?.status ?? "");
+    if (status === "ready") return readyBody(body);
+    if (status === "failed") {
+      throw new MirrorInstallError(`mirror job failed: ${body?.reason ?? body?.error ?? "unknown reason"}`);
+    }
+    if (status !== "queued" && status !== "fetching") {
+      throw new MirrorInstallError(`mirror job returned an unknown status: ${status || "none"}`);
+    }
+    const retryAfter = Number(body?.retry_after);
+    const interval = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 15;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
+    await sleep(Math.min(interval * 1000, remaining));
+    if (Date.now() >= deadline) {
+      // 预算刚好在这里耗尽：再取一次，避免最后一个 ready 被白白丢掉。
+      const last = await fetchJsonResponse(fetchImpl, pollUrl, "mirror job poll");
+      return last?.status === "ready" ? readyBody(last) : null;
+    }
+  }
+}
+
+export async function mirrorInstall({
+  pollUrl,
+  dataDir,
+  waitSeconds = 120,
+  fetchImpl = fetch,
+  sleep = sleepMs,
+  tempRoot = os.tmpdir(),
+}) {
+  const poll = mirrorUrl(pollUrl, "mirror poll URL");
+  const layout = await assertDataDirectory(dataDir);
+  const budget = Number(waitSeconds);
+  if (!Number.isFinite(budget) || budget < 0) throw new Error("mirror-install --wait must be a non-negative number of seconds");
+  const ready = await pollMirrorJob({ pollUrl: poll, waitSeconds: budget, fetchImpl, sleep });
+  if (!ready) {
+    throw new MirrorInstallError(
+      "已排队，稍后重试即秒取：镜像任务仍在准备，这次先不下载安装。",
+      2,
+      "MIRROR_PENDING",
+    );
+  }
+
+  const expectedSha = String(ready.sha256).toLowerCase();
+  const expectedBytes = Number.isSafeInteger(Number(ready.size)) && Number(ready.size) >= 0 ? Number(ready.size) : null;
+  const downloadUrl = mirrorUrl(ready.download_url, "mirror download URL");
+  let archiveName = "module.zip";
+  try {
+    const tail = path.posix.basename(new URL(downloadUrl).pathname);
+    if (tail && /^[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/i.test(tail)) archiveName = tail;
+  } catch {
+    // mirrorUrl 已验证；这里只是文件名兜底。
+  }
+
+  await fsp.mkdir(path.resolve(tempRoot), { recursive: true });
+  const downloadDir = await fsp.mkdtemp(path.join(path.resolve(tempRoot), "arcane-fvtt-mirror-"));
+  const archive = path.join(downloadDir, archiveName);
+  let committed;
+  try {
+    let download;
+    try {
+      download = await downloadArchive(fetchImpl, downloadUrl, archive, "mirror module ZIP", mirrorUrl);
+    } catch (error) {
+      if (error instanceof MirrorInstallError) throw error;
+      throw new MirrorInstallError(`mirror module ZIP download failed: ${errorMessage(error)}`);
+    }
+    if (download.sha256 !== expectedSha) {
+      await fsp.rm(archive, { force: true }).catch(() => {});
+      throw new MirrorInstallError(
+        `校验失败：疑似内容被篡改（SHA256 不符：镜像声明 ${expectedSha}，实际 ${download.sha256}）。已删除下载文件，未安装。`,
+        1,
+        "MIRROR_SHA256_MISMATCH",
+      );
+    }
+    if (expectedBytes != null && download.bytes !== expectedBytes) {
+      await fsp.rm(archive, { force: true }).catch(() => {});
+      throw new MirrorInstallError(
+        `校验失败：疑似内容被篡改（体积不符：镜像声明 ${expectedBytes} 字节，实际 ${download.bytes} 字节）。已删除下载文件，未安装。`,
+        1,
+        "MIRROR_SIZE_MISMATCH",
+      );
+    }
+
+    // 复用既有的本地包校验与安装路径：manifest 身份先只读核对，再 staging → commit。
+    const inspected = await inspectLocalModule({ archivePath: archive, dataDir });
+    if (inspected.localConflict) {
+      throw new MirrorInstallError(
+        `multiple installed directories claim module id ${inspected.id}; 请先清理冲突目录再重试`,
+      );
+    }
+    const staged = await stageLocalModule({
+      archivePath: archive,
+      expectedId: inspected.id,
+      expectedVersion: inspected.version,
+      expectedSha256: download.sha256,
+      expectedBytes: download.bytes,
+    });
+    committed = await commitStage({
+      stageDir: staged.stageDir,
+      dataDir,
+      expectedCurrentVersion: inspected.local ? inspected.local.version : "none",
+      acceptSha256: download.sha256,
+    });
+  } finally {
+    // 下载目录只承载本次已校验的临时 ZIP；staging 已复制，commit 后不再需要。
+    await fsp.rm(downloadDir, { recursive: true, force: true }).catch(() => {});
+  }
+
+  return {
+    ...committed,
+    sourceKind: "mirror-job",
+    archiveName,
+    archiveSha256: expectedSha,
+    archiveBytes: ready.size ?? committed.archiveBytes,
+    downloadUrl,
+    dataDir: layout.dataDir,
+  };
+}
+
+async function downloadArchive(fetchImpl, url, file, label = "module ZIP", validateUrl = httpsUrl) {
+  const sourceUrl = validateUrl(url, `${label} URL`);
   const response = await fetchImpl(sourceUrl, { cache: "no-store", redirect: "follow" });
   if (!response?.ok) throw new Error(`${label} request failed: HTTP ${response?.status ?? "unknown"}`);
-  const finalUrl = httpsUrl(response.url || sourceUrl, `${label} final URL`);
+  const finalUrl = validateUrl(response.url || sourceUrl, `${label} final URL`);
   const declared = Number(response.headers?.get?.("content-length"));
   if (Number.isFinite(declared) && (declared < 0 || declared > MAX_ARCHIVE_BYTES)) {
     throw new Error(`${label} exceeds ${MAX_ARCHIVE_BYTES} bytes`);
@@ -2338,6 +2529,7 @@ function usage() {
     "  mod-manager bundle-build --input <prepared-bundle.json> --out <new-module-dir> --zip <new-module.zip> --expected-sha256 <input-sha256>",
     "  mod-manager local-stage --archive <zip> --expected-id <id> --expected-version <version> --expected-sha256 <sha256> --expected-bytes <bytes>",
     "  mod-manager stage --manifest-url <url> --expected-id <id> --expected-version <version> --expected-download-url <url> [--index-url <url>] [--github-mirror-prefix <url前缀>]",
+    "  mod-manager mirror-install --poll-url <url> --data-dir <dir> [--wait <秒>]   # 轮询镜像 job（间隔取 retry_after，默认 15s；总预算默认 120s）→ 预签名下载 → sha256 比对 → 复用本地包校验安装；准备中退出码 2（稍后重试即秒取），失败退出码 1",
     "  mod-manager commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none> [--accept-sha256 <sha256>]",
     "  mod-manager world-stage --world-id <id> --data-dir <dir> --expected-world-version <version> --expected-world-sha256 <sha256> --expected-profile-id <id> --expected-profile-revision <revision> --expected-profile-sha256 <sha256> --expected-index-generated <timestamp> --expected-resolution-sha256 <sha256> [--index-url <url>]",
     "  mod-manager world-commit --stage-dir <dir> --data-dir <dir> --expected-current-version <version|none>",
@@ -2389,6 +2581,12 @@ export async function runCli(argv = process.argv.slice(2)) {
         expectedDownloadUrl: options["expected-download-url"],
         indexUrl: resolveIndexUrl(options["index-url"]),
         githubMirrorPrefix: options["github-mirror-prefix"] ?? null,
+      });
+    case "mirror-install":
+      return mirrorInstall({
+        pollUrl: options["poll-url"],
+        dataDir: options["data-dir"],
+        waitSeconds: options.wait == null ? 120 : Number(options.wait),
       });
     case "commit":
       return commitStage({
@@ -2443,6 +2641,6 @@ if (invokedPath === await fsp.realpath(fileURLToPath(import.meta.url))) {
     .then((result) => process.stdout.write(`${JSON.stringify(result, null, 2)}\n`))
     .catch((error) => {
       process.stderr.write(`ERROR: ${errorMessage(error)}\n`);
-      process.exitCode = 1;
+      process.exitCode = Number.isInteger(error?.exitCode) ? error.exitCode : 1;
     });
 }

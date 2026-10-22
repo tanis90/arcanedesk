@@ -43,8 +43,9 @@ for (const mode of ["combat", "prep"]) test(`real Pi ${mode} session activates e
     assert.equal(session.getActiveToolNames().includes("request_user_input"), false);
     assert.equal(session.getActiveToolNames().includes("read"), false);
   } else {
-    assert.equal(expected.length, 26);
+    assert.equal(expected.length, 27);
     assert.equal(session.getActiveToolNames().includes("foundry_actor_advance"), true);
+    assert.equal(session.getActiveToolNames().includes("foundry_module_prepare"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_compendium_browse"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_advancement_plan"), true);
     assert.equal(session.getActiveToolNames().includes("foundry_scene_get"), true);
@@ -87,7 +88,7 @@ test("real Pi prep session activates web_search and web_fetch when search is con
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPool("prep", customTools);
-  assert.equal(expected.length, 28); // 26 基线 + web_search + web_fetch
+  assert.equal(expected.length, 29); // 27 基线 + web_search + web_fetch
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
     customTools, tools: expected });

@@ -1,6 +1,6 @@
 ---
 name: arcane-fvtt-mods
-description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或镜像发布的世界（含 Arcane Demo 与奥法世界授权世界包），或询问有哪些可下载的世界、某世界的简介/时长/人数/兼容性时使用。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
+description: 构建、安装、升级或检查本机 Foundry VTT 模块。当用户提供已准备的模块构建文件、本地模块 ZIP 或 module.json URL，要求生成安装包、安装/升级 mod、检查镜像更新、安装 dnd5e 或镜像发布的世界（含 Arcane Demo 与奥法世界授权世界包），或询问有哪些可下载的世界、某世界的简介/时长/人数/兼容性时使用。用户只报 mod 名字时用 foundry_module_prepare 走镜像发现流。构建和本地包检查离线完成，远端内容统一走 arcane mirror；Foundry Core 安装不属于本 skill。
 ---
 
 # Foundry VTT 模组管理
@@ -39,13 +39,17 @@ macOS Bash 调用形态：
 
 ## 路由
 
+- 用户只说 mod 名字（或“帮我装 XX mod”）且没给 URL：走发现流一跳——
+  `web_search` 确认是哪个 mod → 原生工具 `foundry_module_prepare`（备团模式可用）→
+  按返回状态取货安装（见下节「镜像发现流」）。工具不在（旧版本/战斗模式）时回退到
+  `mirror-catalog` + `inspect`/`stage` 的 CLI 路径。
 - 用户提供模块构建文件并要求生成安装包：读取
   [references/prepared-module.md](references/prepared-module.md)。只接受已准备的 module bundle，
   不把任意原始法术/职业 JSON 当成已完成自动化的内容。
 - 用户提供本地模块 ZIP，或要求安装本地生成的 Auto 2014 完整包：读取
   [references/local-module.md](references/local-module.md)。该路径全程离线，不上传包或描述。
-- 用户给出 `module.json` manifest URL，或点名安装/升级一个 mod：读取
-  [references/install.md](references/install.md)。
+- 用户给出 `module.json` manifest URL：读取
+  [references/install.md](references/install.md)（直连路径）。
 - 用户问 Arcane 包、国内镜像或本机 mod 有什么更新：读取
   [references/updates.md](references/updates.md)。
 - 用户问有什么世界可下载、某个世界的简介/时长/人数/兼容性：用只读的 `world-catalog`
@@ -68,6 +72,47 @@ macOS Bash 调用形态：
 安装/升级，或在更新表后说“升级”、“全部升级”或点名选择的包，即视为对表中准确版本、体积、
 备份与一次停服重启计划的授权；不要针对相同计划重复追问。只有 mirror 未收录的包需要额外
 一次风险提示（见「共同边界」）。
+
+## 镜像发现流（点名 mod 的一跳路径）
+
+用户只说想装哪个 mod（中文名、英文名或 id）时，不要先让用户去找 URL：
+
+1. `web_search` 查出它是什么（作者、Foundry 包页/仓库），确认分发的模块 id 或标题。
+2. 调原生工具 `foundry_module_prepare`（参数 `query`，需要时再加精确 `version`）。它走
+   Arcane 镜像、毫秒级返回，不做任何下载或安装。
+3. 按返回状态走：
+   - `ready`：拿到 `download_url`（预签名短时效）、`sha256`、`size`，直接进入安装。
+   - `preparing`：镜像正在回源。一条命令装完：
+     `mod-manager mirror-install --poll-url <poll_url> --data-dir <数据目录> --wait 120`
+     （内部轮询 + 下载 + sha256 比对 + 复用本地包校验安装；准备中退出码 2 =
+     “已排队，稍后重试即秒取”，不是失败）。也可以只 `curl` 一次 `poll_url` 看看。
+   - `candidates`：名字有歧义，把候选列表给用户看一眼、或用确切 `module_id` 再调一次
+     `foundry_module_prepare`；不要猜。
+   - `incompatible`：按 `user_message` 转述“最高只支持 vN”，不要硬装。
+   - `blocked`：按 `user_message` 转述（付费/额度/下架/未知）；付费与下架不要绕道。
+   - `not_configured`：还没配 ArcaneSpark，按提示引导配置；用户坚持现在装就走第 4 步的手工流。
+4. 手工流（工具不可用、或想自己核对时；命令随 `ARCANE_FVTT_NODE` 契约走）：
+
+   ```bash
+   curl -fsS "<poll_url>"                     # 看 status；ready 时给出 download_url/sha256/size
+   curl -fLO "<download_url>"                 # 文件名在 URL 尾部（curl -O 直接落原名）
+   sha256sum <文件名>                          # 与 ready 响应里的 sha256 逐字比对，不符立即删除并停止
+   mod-manager local-inspect --archive <下载的 zip> --data-dir <数据目录>
+   mod-manager local-stage ...                # 用 local-inspect 的 id/version/sha256/bytes
+   mod-manager commit ... --accept-sha256 <local-inspect 的 archiveSha256>
+   ```
+
+   Windows 上没有 `sha256sum` 时用
+   `Get-FileHash -Algorithm SHA256 <文件>`，或直接用 `mirror-install`（它自带校验）。
+
+`poll_url` / `download_url` 是 job 级短时效凭证：可以出现在对话与命令里，但不要贴到
+公开渠道、不要写进仓库或笔记；失效后重新调一次 `foundry_module_prepare` 就会重签。
+镜像来源强制 sha256（由 job 响应下发），不符即拒绝安装并报告，绝不跳过校验。
+
+镜像明确表示目录外/无法提供（`blocked` 且 `reason=unknown`，或 `not_configured`）时，仍可走
+既有直连路径（`inspect` → `stage` → `commit`）：此时包不在镜像收录范围，必须按「共同边界」
+给一次大白话风险提示；GitHub 连不上时按同一条目用 `--github-mirror-prefix` 兜底，校验口径不变。
+凡镜像 job 的安装都**不要**再用 `--github-mirror-prefix`——镜像流已经是国内直连。
 
 ## 共同边界
 

@@ -58,6 +58,20 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### arcane-fvtt-mods 镜像发现流（2026-10-22）
+
+- 点名 mod 的默认路径从「让用户给 manifest URL」改为 web_search → `foundry_module_prepare`
+  → `mirror-install`：用户往往只知道 mod 名字，URL 是 agent 该自己查的东西（C 类技术细节）。
+- 轮询/下载/安装不进原生工具：工具只做一次毫秒级 `POST /v1/mods/jobs` 透传，其余交给
+  agent 的既有能力（curl/CLI）。服务端 fire-and-forget，超时放弃零损失，下次 prepare 直接
+  ready——主进程因此不需要后台链、job Map 或 deadline 交接。
+- `mirror-install` 用退出码表达状态：2 = 仍在排队（不是失败，稍后重试即秒取），1 = 真失败
+  （含 sha256/体积不符的篡改判定，下载文件已删除）。agent 据退出码决定是否换路，不用解析文本。
+- `poll_url` / `download_url` 是 job 级短时效凭证：可入对话与命令，但不得外传或落进仓库；
+  key 只在主进程拼 Authorization，永远不进工具结果。
+- 镜像来源强制 sha256（job 响应下发），不符即拒装删文件；不再叠加用户确认——机器校验失败
+  是执行端的硬门，不是让小白判断的技术问题。
+
 ### arcane-fvtt-mods 世界展示索引与纯发现放宽（2026-10-13）
 
 - `world-catalog` 合并站点世界展示索引（tagline/description/compat/players/duration/stats/tags/
