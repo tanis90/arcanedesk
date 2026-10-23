@@ -12,7 +12,9 @@
 //   candidates    {candidates:[{module_id,title,foundry_v13_ok,cached,license}]}
 //   incompatible  {status:"incompatible", max_foundry}
 //   blocked       {status:"blocked", reason:"license_proprietary"|"quota"|"takedown"|"unknown", user_message}
-// HTTP 401/402/404/410/451 同样收敛进上述语义，不当作传输错误。
+// HTTP 401/402/404/410/451 在响应体是应用层 JSON 时收敛进上述语义；非 JSON 体
+// （网关/白名单拦截的裸 404 等，请求根本没到镜像服务）落回 MIRROR_UNAVAILABLE，
+// 不转述成业务结论——否则会把"路由没放行"误诊成"目录里没有这个模块"。
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -161,7 +163,7 @@ export function mapJobsResponse({ httpStatus, body }) {
     };
   }
   if (httpStatus === 402) return blockedResult("quota", value, 402);
-  if (httpStatus === 404) {
+  if (httpStatus === 404 && value) {
     return {
       status: "blocked",
       reason: "unknown",

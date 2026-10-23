@@ -140,11 +140,10 @@ test("blocked responses keep the reason and one plain-language message per reaso
   assert.equal(unknown.reason, "unknown");
 });
 
-test("HTTP 401/402/404/410/451 map into blocked semantics instead of transport errors", () => {
+test("HTTP 401/402/410/451 map into blocked semantics instead of transport errors", () => {
   const expectations = [
     [401, "blocked", "unknown"],
     [402, "blocked", "quota"],
-    [404, "blocked", "unknown"],
     [410, "blocked", "takedown"],
     [451, "blocked", "license_proprietary"],
   ];
@@ -155,6 +154,24 @@ test("HTTP 401/402/404/410/451 map into blocked semantics instead of transport e
     assert.equal(mapped.http_status, status);
     assert.ok(mapped.user_message.length > 0);
   }
+});
+
+test("404 with an application JSON body means the catalog has no such module", () => {
+  const mapped = mapJobsResponse({ httpStatus: 404, body: { error: "not_found", reason: "not_found" } });
+  assert.equal(mapped.status, "blocked");
+  assert.equal(mapped.code, "NOT_FOUND");
+  assert.equal(mapped.http_status, 404);
+  assert.match(mapped.user_message, /镜像目录/);
+});
+
+test("404 with a non-JSON body is a gateway-level miss, not an empty catalog", () => {
+  // 2026-10-23 教训：llm.* 网关未放行 /v1/mods/jobs 时返回 text/plain 裸 404，
+  // 曾被误诊成"镜像目录里没有 bg3-hud"。非 JSON 404 必须报通道不可用。
+  const mapped = mapJobsResponse({ httpStatus: 404, body: null });
+  assert.equal(mapped.status, "error");
+  assert.equal(mapped.code, "MIRROR_UNAVAILABLE");
+  assert.equal(mapped.http_status, 404);
+  assert.match(mapped.user_message, /稍后再试/);
 });
 
 test("an unconfigured spark key returns a structured guidance result without any request", async () => {
