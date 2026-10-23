@@ -124,8 +124,11 @@ test("blocked responses keep the reason and one plain-language message per reaso
 
   for (const [reason, pattern] of [
     ["license_proprietary", /许可证/],
+    ["license_unknown", /没有附带许可证/],
     ["quota", /额度/],
     ["takedown", /下架/],
+    ["no_download", /下载地址/],
+    ["incompatible", /v13/],
     ["unknown", /无法提供/],
   ]) {
     const mapped = mapJobsResponse({ httpStatus: 451, body: { status: "blocked", reason } });

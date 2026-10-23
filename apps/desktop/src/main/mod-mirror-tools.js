@@ -19,15 +19,18 @@ import { Type } from "typebox";
 import { jsonSafe } from "./json-safe.js";
 
 const REQUEST_TIMEOUT_MS = 10_000;
-const BLOCKED_REASONS = new Set(["license_proprietary", "quota", "takedown", "unknown"]);
+const BLOCKED_REASONS = new Set(["license_proprietary", "license_unknown", "quota", "takedown", "no_download", "incompatible", "unknown"]);
 const CANDIDATE_FIELDS = ["module_id", "title", "foundry_v13_ok", "cached", "license"];
 const IDENTITY_FIELDS = ["module_id", "title", "version", "sha256", "size", "download_url", "job_id", "poll_url", "retry_after"];
 
 /** 可直接转述给用户的中文话术；服务端给了 user_message 时以服务端为准。 */
 const BLOCKED_MESSAGES = Object.freeze({
   license_proprietary: "这个模块的许可证不允许镜像分发。请到 Foundry 官方商店或作者发布页自行购买/下载。",
+  license_unknown: "这个模块没有附带许可证声明，镜像不能合法分发它（多数情况是作者忘了写，不代表禁止）。可以试试同作者的其他模块，或去作者的代码仓库提个 issue 请他补个 LICENSE。",
   quota: "今天的镜像下载额度已用完，稍后再试；也可以改用公开网络直连（来源风险需自担）。",
   takedown: "这个模块已按权利人要求从镜像下架，无法再提供下载。",
+  no_download: "这个模块的发布清单里没有写下载地址（作者打包时漏了），镜像拿不到文件。可以去 Foundry 安装器或作者仓库手动装。",
+  incompatible: "这个模块没有适配 Foundry v13 的版本，装上也跑不起来。可以找同功能的替代模块。",
   unknown: "镜像暂时无法提供这个模块；可以换个模块名再试，或改用公开网络直连（来源风险需自担）。",
 });
 
