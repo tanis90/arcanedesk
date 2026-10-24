@@ -829,14 +829,14 @@ if (dryRun) {
 }
 
 // ---------- 云端：鉴权 ----------
-const TOKEN_URL = `${base}/auth/realms/MythicTable/protocol/openid-connect/token`;
+const TOKEN_URL = `${base}/auth/realms/arcanevtt/protocol/openid-connect/token`;
 async function login(username, password) {
   let res;
   try {
     res = await fetch(TOKEN_URL, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "password", client_id: "mythictable", username, password }),
+      body: new URLSearchParams({ grant_type: "password", client_id: "arcanevtt", username, password }),
       signal: AbortSignal.timeout(30_000),
     });
   } catch (e) {
