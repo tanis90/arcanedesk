@@ -72,6 +72,16 @@
 - 镜像来源强制 sha256（job 响应下发），不符即拒装删文件；不再叠加用户确认——机器校验失败
   是执行端的硬门，不是让小白判断的技术问题。
 
+### arcane-fvtt-mods 仓库 URL 直查（2026-10-26）
+
+- 用户给的是仓库链接时，整条 URL 原样进 `foundry_module_prepare` 的 `query`：owner/repo
+  归一化索引是服务端最精确的身份反查，agent 自己截路径猜 `module_id` 必错（repo 名、
+  release 包名、`module.json` 里的 id 三者经常不同）；仍是 C 类技术细节，零新增交互。
+- 安装身份只认响应里的 `module_id`，不认 URL 里的 repo 名；仓库首页不是 manifest，
+  直查 `blocked`/`not_configured` 才回落 manifest 直连并照常给一次风险提示。
+- `suggestions`（相近模块推荐）按条件式处理：响应里出现才用其中的确切 `module_id` 重试，
+  不承诺上线时点，也不作为新的状态分支。
+
 ### arcane-fvtt-mods 世界展示索引与纯发现放宽（2026-10-13）
 
 - `world-catalog` 合并站点世界展示索引（tagline/description/compat/players/duration/stats/tags/
