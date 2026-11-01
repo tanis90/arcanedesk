@@ -237,7 +237,9 @@ export async function prepareWorldProfile({
     throw new Error(`profile revision must advance by one from ${existingProfile.revision}`);
   }
 
-  const moduleIds = (distribution.modules ?? []).map((entry) => safeId(entry.id, "module id"));
+  // 世界条目可用自己的 modules[] 覆盖顶层默认环境模块集（首个非 dnd5e
+  // 世界 wudijushadazhan 起：CoC7 纯净环境不带任何模块）。
+  const moduleIds = (world.modules ?? distribution.modules ?? []).map((entry) => safeId(entry.id, "module id"));
   if (new Set(moduleIds).size !== moduleIds.length) throw new Error("distribution repeats a module id");
   const systemId = safeId(world.system, "world system id");
   const resolved = await Promise.all([
