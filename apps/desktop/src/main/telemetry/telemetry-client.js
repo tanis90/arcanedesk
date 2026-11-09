@@ -575,6 +575,16 @@ export class TelemetryClient {
     });
   }
 
+  /** 投递时现场注入结果(play-turn-injection-spec §6):只记结果与延迟桶,不记现场内容与失败原因。 */
+  turnInjected(mode, { outcome, latencyMs } = {}) {
+    return this.#safe("turnInjected", () => {
+      this.#record("play.turn_injected", mode, null, {
+        outcome,
+        latencyBucket: latencyBucket(latencyMs),
+      });
+    });
+  }
+
   /** DirectFoundryRuntime 调用结果(§16.3):归入战斗模式活动回合。 */
   foundryRuntimeResult(record = {}, mode = "combat") {
     return this.#safe("foundryRuntimeResult", () => {

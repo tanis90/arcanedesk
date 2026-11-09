@@ -24,6 +24,7 @@ import { forkStoredSession } from "./conversations/session-fork.js";
 import { ensureSessionChainIntact } from "./conversations/session-integrity.js";
 import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
+import { createTurnInjector, turnInjectionEnabled } from "./foundry-turn-injection.js";
 import { FoundryServices } from "./foundry-services.js";
 import { createFoundryTools } from "./foundry-tools.js";
 import { createModMirrorTools } from "./mod-mirror-tools.js";
@@ -303,6 +304,7 @@ export class AgentHost {
     this.taskStorageDir = taskStorageDir;
     this.operationStorageDir = operationStorageDir;
     this._foundryServices = null;
+    this._turnInjector = null;
     this.approvals = new Map();
     this.approvalSnapshots = new Map();
     this.profile = { ...COMBAT_PROFILE, ...(profile ?? {}) };
@@ -827,6 +829,27 @@ export class AgentHost {
     return this._foundryServices;
   }
 
+  /** 投递时现场注入(play-turn-injection-spec §4):三个用户侧投递入口统一收口到这一个注入器。 */
+  turnInjector() {
+    if (!this._turnInjector) {
+      this._turnInjector = createTurnInjector({
+        getServices: () => this.foundryServices(),
+        mode: this.profile.mode,
+        enabled: turnInjectionEnabled,
+        locale: () => this.getLocale?.() ?? "zh-CN",
+        onInject: outcome => this.telemetry?.turnInjected?.(this.profile.mode, outcome),
+      });
+    }
+    return this._turnInjector;
+  }
+
+  /** prompt/steer/followUp 共用:注入成功时现场块预拼在文本前,失败原样投递(spec §4② 降级)。
+   * images 的形态差异(prompt 收 {images}、steer/followUp 收裸数组)留在调用点,这里只管文本。 */
+  async deliverUserText(deliver, text, images) {
+    const finalText = await this.turnInjector().prepend(text);
+    return deliver(finalText, images);
+  }
+
   taskCoordinator() {
     if (this.tasks) return this.tasks;
     const sessionId = this.describeCurrent()?.id ?? "unattached";
@@ -849,9 +872,9 @@ export class AgentHost {
           if (!result.ok || result.pendingKey) throw new Error(result.error ?? "Selected model requires configuration");
           if (this.tasks.pendingModel === pending) this.tasks.setPendingModel(null);
         },
-        prompt: (text, images) => this.session.prompt(text, images?.length ? { images } : undefined),
-        steer: (text, images) => this.session.steer(text, images?.length ? images : undefined),
-        followUp: (text, images) => this.session.followUp(text, images?.length ? images : undefined),
+        prompt: (text, images) => this.deliverUserText((finalText, imgs) => this.session.prompt(finalText, imgs?.length ? { images: imgs } : undefined), text, images),
+        steer: (text, images) => this.deliverUserText((finalText, imgs) => this.session.steer(finalText, imgs?.length ? imgs : undefined), text, images),
+        followUp: (text, images) => this.deliverUserText((finalText, imgs) => this.session.followUp(finalText, imgs?.length ? imgs : undefined), text, images),
         streamingDelivery: () => this.profile.streamingInput ?? "steer",
         isStreaming: () => Boolean(this.session?.isStreaming),
         clearQueue: () => this.session?.clearQueue?.(),
