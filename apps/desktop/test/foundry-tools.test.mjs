@@ -58,3 +58,15 @@ test("condition approval pins the consumed input and denial does not create an o
   const declined = tool.execute("next", params); approved(false);
   assert.equal((await declined).details.code, "DECLINED"); assert.equal(called, 1);
 });
+
+test("tool results survive circular service payloads (dnd5e back-references)", async () => {
+  const actor = { name: "Cleric", system: { attributes: {} } };
+  // structured-clone from the page preserves cycles; dnd5e 5.3 actors carry them
+  actor.system.attributes.hd = actor;
+  const host = { foundryServices: () => ({ actorRead: async () => ({ actor }) }) };
+  const tool = createFoundryTools(host).find(value => value.name === "foundry_actor_get");
+  const result = await tool.execute("call", { actorUuid: "Actor.a" });
+  assert.doesNotThrow(() => JSON.stringify(result));
+  assert.equal(result.details.actor.system.attributes.hd, "[Circular]");
+  assert.equal(JSON.parse(result.content[0].text).actor.name, "Cleric");
+});

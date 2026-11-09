@@ -3,8 +3,10 @@ import test from "node:test";
 import vm from "node:vm";
 import { runtimeFunction } from "../dist/runtime.js";
 
+let advSeq = 0;
 class BaseAdvancement {
   constructor(configuration = {}, title = "") {
+    this.id = "adv" + (++advSeq);
     this.configuration = configuration;
     this.title = title;
     this.applied = [];
@@ -23,7 +25,7 @@ class AbilityScoreImprovementAdvancement extends BaseAdvancement {
   get allowFeat() { return this._allowFeat ?? false; }
 }
 
-function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [], traitPaths = false } = {}) {
+function fixture({ classFlows = [], raceFlows = [], subclassFlows = [], spells = [], classSystem = {}, actorLevel = 0, actorHp = null, actorType = "character", actorSpells = null, traitExpansion = {}, actorItems = [], traitPaths = false } = {}) {
   let writes = 0;
   const itemUpdates = [], itemDeletes = [];
   const preItems = actorItems.map(item => ({ ...item }));
@@ -46,7 +48,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
   const docs = new Map();
   docs.set("Compendium.packs.rules.Item.class", source("Compendium.packs.rules.Item.class", "class", classFlows, { identifier: "wizard", ...classSystem }));
   docs.set("Compendium.packs.rules.Item.race", source("Compendium.packs.rules.Item.race", "race", raceFlows));
-  docs.set("Compendium.packs.rules.Item.sub", source("Compendium.packs.rules.Item.sub", "subclass", []));
+  docs.set("Compendium.packs.rules.Item.sub", source("Compendium.packs.rules.Item.sub", "subclass", subclassFlows));
   docs.set(actor.uuid, actor);
   const spellIndex = spells.map(([id, name, level, identifier, flags]) => ({ _id: id, name, type: "spell", system: { identifier, level }, ...(flags ? { flags } : {}) }));
   for (const [id, name, level, identifier] of spells) {
@@ -84,6 +86,7 @@ function fixture({ classFlows = [], raceFlows = [], spells = [], classSystem = {
         }
         return { asSet: () => out };
       } } : {}) } } },
+    getDocumentClass: () => class { constructor(data = {}) { Object.assign(this, data); } },
     fromUuid: async uuid => docs.get(uuid) ?? null,
   });
   const run = vm.runInContext(`(${runtimeFunction})`, context);
@@ -110,18 +113,35 @@ test("missing required choices reject with every slot listed and zero writes", a
   assert.equal(f.writes(), 0);
 });
 
-test("trait pools consume pool keys per pool and include grants in chosen", async () => {
+test("trait pools read their own bySlot keys per pool and include grants in chosen", async () => {
   const trait = new TraitAdvancement({ grants: ["saves:int"], choices: [
     { count: 2, pool: ["skills:arc", "skills:his", "skills:med"] },
     { count: 1, pool: ["tool:art:brewer", "tool:art:mason"] }] }, "Proficiencies");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: trait }] });
-  const result = await f.advance({ choices: { skills: ["skills:arc", "skills:med"], tools: ["tool:art:mason"] } });
+  const result = await f.advance({ choices: { bySlot: {
+    "class:1:TraitAdvancement:0.pool0": ["skills:arc", "skills:med"],
+    "class:1:TraitAdvancement:0.pool1": ["tool:art:mason"] } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(trait.applied), [[1, { chosen: ["saves:int", "skills:arc", "skills:med", "tool:art:mason"] }]]);
   assert.equal(result.warnings.length, 0);
 });
 
-test("expertise picks ride choices.expertise and may re-pick a same-call proficiency slot value", async () => {
+test("defense trait pools (dr/di/ci/dv) are addressable via bySlot instead of native defaults", async () => {
+  // Dragonborn damage resistance (e2e B14): the dr:* pool enumerates and the pick lands in chosen.
+  const resist = new TraitAdvancement({ grants: [], choices: [
+    { count: 1, pool: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] }] }, "伤害抗性");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: resist }] });
+  const result = await f.advance({ choices: { bySlot: { "class:1:TraitAdvancement:0.pool0": ["dr:fire"] } } });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(applied(resist.applied), [[1, { chosen: ["dr:fire"] }]]);
+  const missing = fixture({ classFlows: [hp(1), { level: 1, advancement: new TraitAdvancement({ grants: [], choices: [
+    { count: 1, pool: ["dr:acid", "dr:cold", "dr:fire", "dr:lightning", "dr:poison"] }] }, "伤害抗性") }] });
+  const rejected = await missing.advance({ choices: { bySlot: {} } });
+  assert.equal(rejected.status, "rejected");
+  assert.match(rejected.message, /class:1:TraitAdvancement:0\.pool0/);
+});
+
+test("expertise picks ride their own slot and may re-pick a same-call proficiency slot value", async () => {
   const skills = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Skills");
   const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Expertise");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: skills }, { level: 1, advancement: expertise }] });
@@ -129,7 +149,9 @@ test("expertise picks ride choices.expertise and may re-pick a same-call profici
   // Simulate the native apply order: the proficiency slot lands value 1, expertise upgrades to 2.
   skills.apply = async (_level, data) => { for (const key of data.chosen ?? []) if (key.startsWith("skills:")) f.actor.system.skills[key.slice(7)].value = 1; };
   expertise.apply = async (_level, data) => { for (const key of data.chosen ?? []) if (key.startsWith("skills:")) f.actor.system.skills[key.slice(7)].value = 2; };
-  const result = await f.advance({ choices: { skills: ["skills:slt"], expertise: ["skills:slt"] } });
+  const result = await f.advance({ choices: { bySlot: {
+    "class:1:TraitAdvancement:0.pool0": ["skills:slt"],
+    "class:1:TraitAdvancement:1.pool0": ["skills:slt"] } } });
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.equal(result.warnings.length, 0);
   assert.deepEqual(result.verification.traits.skills, ["slt"]);
@@ -140,7 +162,7 @@ test("expertise picks outside the proficient set reject the whole advance before
   const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt", "skills:ste"] }] }, "Expertise");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: expertise }] });
   f.actor.system.skills = { slt: { value: 0 }, ste: { value: 1 } };
-  const result = await f.advance({ choices: { expertise: ["skills:slt"] } });
+  const result = await f.advance({ choices: { bySlot: { "class:1:TraitAdvancement:0.pool0": ["skills:slt"] } } });
   assert.equal(result.status, "rejected");
   assert.equal(result.code, "ADVANCEMENT_NEEDS_CHOICE");
   assert.match(result.message, /expertise picks not proficient: skills:slt/);
@@ -166,12 +188,27 @@ test("landed trait grants produce no landing warnings", async () => {
   assert.equal(result.warnings.length, 0);
 });
 
+test("trait landing audit accepts dnd5e leaf storage for nested keys", async () => {
+  const profs = new TraitAdvancement({ grants: ["weapon:sim:dagger"] }, "武器熟练");
+  profs.autoValue = { chosen: ["weapon:sim:dagger"] };
+  const lang = new TraitAdvancement({ grants: ["languages:standard:common"],
+    choices: [{ count: 1, pool: ["languages:standard:draconic", "languages:standard:dwarvish"] }] }, "语言");
+  const f = fixture({ classFlows: [hp(1), { level: 1, advancement: profs }],
+    raceFlows: [{ level: 0, advancement: lang }], traitPaths: true });
+  // dnd5e stores the leaf segment: weapon:sim:dagger lands as "dagger", languages as "common".
+  f.actor.system.traits = { weaponProf: { value: new Set(["dagger"]) }, languages: { value: new Set(["common", "draconic"]) } };
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race",
+    choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["languages:standard:draconic"] } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.warnings.length, 0);
+});
+
 test("the post-write net reports EXPERTISE_NOT_LANDED when the native apply drops a valid pick", async () => {
   const expertise = new TraitAdvancement({ mode: "expertise", grants: [], choices: [{ count: 1, pool: ["skills:slt"] }] }, "Expertise");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: expertise }] });
   f.actor.system.skills = { slt: { value: 1 } };
   // The mock apply never upgrades the value, emulating a native drop the pre-write check passed.
-  const result = await f.advance({ choices: { expertise: ["skills:slt"] } });
+  const result = await f.advance({ choices: { bySlot: { "class:1:TraitAdvancement:0.pool0": ["skills:slt"] } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(result.warnings.map(w => w.code), ["EXPERTISE_NOT_LANDED"]);
   assert.equal(result.warnings[0].value, "skills:slt");
@@ -189,14 +226,15 @@ test("additionalItems receipt entries report the created item's activity count",
   assert.equal(result.verification.createdItems[0].activities, 1);
 });
 
-test("item choice uses per-level counts and routes selections by pool membership", async () => {
+test("item choice uses per-level counts and validates selections against each slot's pool", async () => {
   const cantripFlow = new ItemChoiceAdvancement({ type: "spell", choices: { 1: { count: 2 } },
     pool: [{ uuid: "Compendium.packs.spells.Item.c1" }, { uuid: "Compendium.packs.spells.Item.c2" }, { uuid: "Compendium.packs.spells.Item.c3" }] }, "Cantrips");
   const bookFlow = new ItemChoiceAdvancement({ type: "spell", choices: { 1: { count: 2 } },
     pool: ["p1", "p2", "p3"].map(s => ({ uuid: "Compendium.packs.spells.Item." + s })) }, "Spellbook");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: cantripFlow }, { level: 1, advancement: bookFlow }] });
-  const result = await f.advance({ choices: { cantrips: ["Compendium.packs.spells.Item.c1", "Compendium.packs.spells.Item.c2"],
-    preparedSpells: ["Compendium.packs.spells.Item.p1", "Compendium.packs.spells.Item.p2"] } });
+  const result = await f.advance({ choices: { bySlot: {
+    "class:1:ItemChoiceAdvancement:0": ["Compendium.packs.spells.Item.c1", "Compendium.packs.spells.Item.c2"],
+    "class:1:ItemChoiceAdvancement:1": ["Compendium.packs.spells.Item.p1", "Compendium.packs.spells.Item.p2"] } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(cantripFlow.applied), [[1, { selected: ["Compendium.packs.spells.Item.c1", "Compendium.packs.spells.Item.c2"] }]]);
   assert.deepEqual(applied(bookFlow.applied), [[1, { selected: ["Compendium.packs.spells.Item.p1", "Compendium.packs.spells.Item.p2"] }]]);
@@ -206,36 +244,83 @@ test("open-pool spell choice validates candidates by restriction level", async (
   const choice = new ItemChoiceAdvancement({ type: "spell", choices: { 1: { count: 1 } }, pool: [], restriction: { level: "0", list: [] } }, "Cantrip");
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: choice }] });
   f.docs.set("Compendium.packs.spells.Item.cantrip", { documentName: "Item", uuid: "Compendium.packs.spells.Item.cantrip", type: "spell", system: { level: 0 } });
+  f.docs.set("Compendium.packs.spells.Item.cantrip2", { documentName: "Item", uuid: "Compendium.packs.spells.Item.cantrip2", type: "spell", system: { level: 0 } });
   f.docs.set("Compendium.packs.spells.Item.leveled", { documentName: "Item", uuid: "Compendium.packs.spells.Item.leveled", type: "spell", system: { level: 1 } });
-  const rejected = await f.advance({ choices: { cantrips: ["Compendium.packs.spells.Item.leveled"] } });
+  const rejected = await f.advance({ choices: { bySlot: { "class:1:ItemChoiceAdvancement:0": ["Compendium.packs.spells.Item.leveled"] } } });
   assert.equal(rejected.status, "rejected");
+  assert.match(rejected.message, /outside candidate pool/);
   assert.equal(f.writes(), 0);
-  const result = await f.advance({ choices: { cantrips: ["Compendium.packs.spells.Item.leveled", "Compendium.packs.spells.Item.cantrip"] } });
+  const overlong = await f.advance({ choices: { bySlot: { "class:1:ItemChoiceAdvancement:0": ["Compendium.packs.spells.Item.cantrip", "Compendium.packs.spells.Item.cantrip2"] } } });
+  assert.equal(overlong.status, "rejected");
+  assert.match(overlong.message, /need 1, have 2/);
+  assert.equal(f.writes(), 0);
+  const result = await f.advance({ choices: { bySlot: { "class:1:ItemChoiceAdvancement:0": ["Compendium.packs.spells.Item.cantrip"] } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(choice.applied), [[1, { selected: ["Compendium.packs.spells.Item.cantrip"] }]]);
-  assert.deepEqual(result.warnings.map(w => w.fill), ["choices.cantrips"]);
+  assert.equal(result.warnings.length, 0);
 });
 
-test("ability score improvement applies native shapes and enforces cap and points", async () => {
+test("ability score improvement applies native shapes and enforces cap and exact points", async () => {
   const asi = new AbilityScoreImprovementAdvancement(asiConfig(), "ASI");
   const f = fixture({ classFlows: [hp(1), { level: 4, advancement: asi }] });
-  assert.equal((await f.advance({ targetLevel: 4, choices: { abilityScore: { str: 3 } } })).status, "rejected");
-  assert.equal((await f.advance({ targetLevel: 4, choices: { abilityScore: { str: 2, dex: 1 } } })).status, "rejected");
-  const result = await f.advance({ targetLevel: 4, choices: { abilityScore: { str: 2 } } });
+  const slot = "class:4:AbilityScoreImprovementAdvancement:0";
+  assert.equal((await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { abilityScore: { str: 3 } } } } })).status, "rejected");
+  assert.equal((await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { abilityScore: { str: 2, dex: 1 } } } } })).status, "rejected");
+  assert.equal((await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { abilityScore: { str: 1 } } } } })).status, "rejected");
+  const result = await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { abilityScore: { str: 2 } } } } });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(asi.applied), [[4, { type: "asi", assignments: { str: 2 } }]]);
   assert.equal(result.verification.abilities.str.asi, 2);
   assert.equal(result.verification.abilities.dex.asi, 0);
 });
 
-test("feat branch consumes one feat per ASI step and warns on leftover abilityScore", async () => {
+test("feat branch applies the slot's feat uuid; abilityScore and feat are mutually exclusive", async () => {
   const asi = new AbilityScoreImprovementAdvancement(asiConfig(), "ASI");
   asi._allowFeat = true;
   const f = fixture({ classFlows: [hp(1), { level: 4, advancement: asi }] });
-  const result = await f.advance({ targetLevel: 4, choices: { feats: ["Compendium.packs.feats.Item.alert"], abilityScore: { str: 2 } } });
-  assert.equal(result.status, "completed");
+  f.docs.set("Compendium.packs.feats.Item.alert", { documentName: "Item", uuid: "Compendium.packs.feats.Item.alert", pack: "packs.feats", type: "feat", name: "Alert",
+    toObject: () => ({ uuid: "Compendium.packs.feats.Item.alert", type: "feat", name: "Alert" }) });
+  const slot = "class:4:AbilityScoreImprovementAdvancement:0";
+  const both = await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { abilityScore: { str: 2 }, feat: "Compendium.packs.feats.Item.alert" } } } });
+  assert.equal(both.status, "rejected");
+  assert.match(both.message, /either abilityScore or feat/);
+  const missing = await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { feat: "Compendium.packs.feats.Item.missing" } } } });
+  assert.equal(missing.status, "rejected");
+  assert.match(missing.message, /does not resolve to an Item/);
+  const result = await f.advance({ targetLevel: 4, choices: { bySlot: { [slot]: { feat: "Compendium.packs.feats.Item.alert" } } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(applied(asi.applied), [[4, { type: "feat", uuid: "Compendium.packs.feats.Item.alert" }]]);
-  assert.deepEqual(result.warnings.map(w => w.fill), ["choices.abilityScore"]);
+});
+
+test("class feat-choice, class ASI and race variant coexist via bySlot (v9 half-elf regression)", async () => {
+  // The v9 incident: a blind asi-or-feat take() on the shared feats bucket starved the race
+  // variant ItemChoice five retries in a row, and the race's fixed cha+2 never reached the sheet.
+  const metamagic = new ItemChoiceAdvancement({ type: "feat", choices: { 3: { count: 2 } },
+    pool: ["m1", "m2", "m3"].map(s => ({ uuid: "Compendium.packs.classfeatures.Item." + s })) }, "Metamagic");
+  const classAsi = new AbilityScoreImprovementAdvancement(asiConfig(), "Ability Score Improvement");
+  classAsi._allowFeat = true;
+  const raceAsi = new AbilityScoreImprovementAdvancement(asiConfig({ fixed: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 2 } }), "Ability Score Increase");
+  const variant = new ItemChoiceAdvancement({ type: "feat", choices: { 0: { count: 1 } },
+    pool: [{ uuid: "Compendium.packs.racialtraits.Item.v1" }, { uuid: "Compendium.packs.racialtraits.Item.v2" }] }, "Half-Elf Variant");
+  const f = fixture({
+    classFlows: [hp(1), { level: 3, advancement: metamagic }, { level: 4, advancement: classAsi }],
+    raceFlows: [{ level: 0, advancement: raceAsi }, { level: 0, advancement: variant }] });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", targetLevel: 5, choices: { bySlot: {
+    "class:3:ItemChoiceAdvancement:0": ["Compendium.packs.classfeatures.Item.m1", "Compendium.packs.classfeatures.Item.m2"],
+    "class:4:AbilityScoreImprovementAdvancement:0": { abilityScore: { str: 2 } },
+    "race:0:AbilityScoreImprovementAdvancement:0": { abilityScore: { con: 1, dex: 1 } },
+    "race:0:ItemChoiceAdvancement:0": ["Compendium.packs.racialtraits.Item.v1"] } } });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.deepEqual(applied(metamagic.applied), [[3, { selected: ["Compendium.packs.classfeatures.Item.m1", "Compendium.packs.classfeatures.Item.m2"] }]]);
+  assert.deepEqual(applied(classAsi.applied), [[4, { type: "asi", assignments: { str: 2 } }]]);
+  // Mixed ASI: the fixed cha+2 merges with the floating con/dex picks into one assignments object.
+  assert.deepEqual(applied(raceAsi.applied), [[0, { type: "asi", assignments: { cha: 2, con: 1, dex: 1 } }]]);
+  assert.deepEqual(applied(variant.applied), [[0, { selected: ["Compendium.packs.racialtraits.Item.v1"] }]]);
+  assert.equal(result.verification.abilities.cha.race, 2);
+  assert.equal(result.verification.abilities.con.race, 1);
+  assert.equal(result.verification.abilities.dex.race, 1);
+  assert.equal(result.verification.abilities.str.asi, 2);
+  assert.equal(result.verification.abilities.str.race, 0);
 });
 
 test("race fixed ability bonuses apply automatically without choices", async () => {
@@ -251,15 +336,22 @@ test("race fixed ability bonuses apply automatically without choices", async () 
   assert.deepEqual(result.verification.race, { uuid: "Compendium.packs.rules.Item.race", name: "人类", size: null });
 });
 
-test("item grants select non-optional items; spell selections without a consuming step warn", async () => {
+test("item grants select non-optional items; bySlot keys outside the plan reject as unknown slots", async () => {
   const grant = new ItemGrantAdvancement({ items: [{ uuid: "Compendium.packs.rules.Item.feature" }, { uuid: "Compendium.packs.rules.Item.opt", optional: true }] }, "Features");
   const scale = new ScaleValueAdvancement({}, "Cantrips Known");
   scale.autoValue = { configuration: {} };
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: grant }, { level: 1, advancement: scale }] });
-  const result = await f.advance({ choices: { cantrips: ["Compendium.packs.spells.Item.c1"] } });
+  const result = await f.advance({});
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(grant.applied), [[1, { selected: ["Compendium.packs.rules.Item.feature"] }]]);
-  assert.deepEqual(result.warnings, [{ code: "UNCONSUMED_CHOICE", fill: "choices.cantrips", value: "Compendium.packs.spells.Item.c1" }]);
+  // Slot-addressed choices cannot be "left over": a bySlot key the plan never listed is a
+  // pre-write rejection that names the valid slots (replaces the old UNCONSUMED_CHOICE warning).
+  const stray = fixture({ classFlows: [hp(1)] });
+  const unknown = await stray.advance({ choices: { bySlot: { "class:1:ScaleValueAdvancement:0": ["Compendium.packs.spells.Item.c1"] } } });
+  assert.equal(unknown.status, "rejected");
+  assert.equal(unknown.code, "CHOICE_SLOT_UNKNOWN");
+  assert.match(unknown.message, /class:1:ScaleValueAdvancement:0/);
+  assert.equal(stray.writes(), 0);
 });
 
 test("subclass requires subclassUuid; unknown advancement without native default rejects", async () => {
@@ -293,17 +385,51 @@ test("hit points default to max at level 1 and avg later unless overridden", asy
 });
 
 test("subclass item's own grants apply in the same session after the subclass step", async () => {
+  // Deferred enumeration: steps resolve from the subclass source data (temp item), the apply is
+  // remapped onto the real item the SubclassAdvancement apply inserted ("sub-clone" here).
   const grant = new ItemGrantAdvancement({ items: [{ uuid: "Compendium.packs.rules.Item.feature" }] }, "Tradition Features");
-  grant.autoValue = { selected: ["Compendium.packs.rules.Item.feature"] };
   const subclass = new SubclassAdvancement({}, "Arcane Tradition");
   subclass.apply = async function (level, data) { this.applied.push([level, data]); this.value = { document: "sub-clone", uuid: data.uuid }; };
-  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }] });
+  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }], subclassFlows: [{ level: 2, advancement: grant }] });
   f.preItems.push({ _id: "sub-clone", __flows: [{ level: 2, advancement: grant }] });
   const result = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub" });
   assert.equal(result.status, "completed");
   assert.deepEqual(applied(grant.applied), [[2, { selected: ["Compendium.packs.rules.Item.feature"] }]]);
-  assert.ok(result.steps.some(step => step.label === "subclass" && step.kind === "ItemGrantAdvancement"));
+  assert.ok(result.steps.some(step => step.label === "subclass" && step.kind === "ItemGrantAdvancement" && step.slot === "subclass:2:ItemGrantAdvancement:0"));
   assert.equal(result.warnings.length, 0);
+});
+
+test("subclass choice slots resolve through bySlot and apply on the inserted item", async () => {
+  const choice = new ItemChoiceAdvancement({ type: "feat", choices: { 2: { count: 1 } },
+    pool: [{ uuid: "Compendium.packs.rules.Item.m1" }, { uuid: "Compendium.packs.rules.Item.m2" }], restriction: {} }, "Maneuvers");
+  const subclass = new SubclassAdvancement({}, "Archetype");
+  subclass.apply = async function (level, data) { this.applied.push([level, data]); this.value = { document: "sub-clone", uuid: data.uuid }; };
+  const f = fixture({ classFlows: [hp(1), { level: 2, advancement: subclass }], subclassFlows: [{ level: 2, advancement: choice }] });
+  f.preItems.push({ _id: "sub-clone", __flows: [{ level: 2, advancement: choice }] });
+  const missing = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub" });
+  assert.equal(missing.status, "rejected");
+  assert.equal(missing.code, "ADVANCEMENT_NEEDS_CHOICE");
+  assert.match(missing.message, /subclass:2:ItemChoiceAdvancement:0/);
+  assert.equal(f.writes(), 0);
+  const done = await f.advance({ targetLevel: 2, subclassUuid: "Compendium.packs.rules.Item.sub",
+    choices: { bySlot: { "subclass:2:ItemChoiceAdvancement:0": ["Compendium.packs.rules.Item.m2"] } } });
+  assert.equal(done.status, "completed", JSON.stringify(done));
+  assert.deepEqual(applied(choice.applied), [[2, { selected: ["Compendium.packs.rules.Item.m2"] }]]);
+  assert.equal(done.warnings.length, 0);
+});
+
+test("spellcasting receipt splits cantrips and spells by granting source", async () => {
+  const f = fixture({ classFlows: [hp(1)], actorItems: [
+    { _id: "raceitem", type: "race", name: "Elf", system: {} },
+    { _id: "classitem", type: "class", name: "Cleric", system: {}, updateSource() {} },
+    { _id: "sp1", type: "spell", name: "Fire Bolt", system: { level: 0 }, flags: { dnd5e: { advancementOrigin: "raceitem.adv1" } } },
+    { _id: "sp2", type: "spell", name: "Mage Hand", system: { level: 0 }, flags: { dnd5e: { advancementRoot: "classitem.adv2", advancementOrigin: "featitem.adv9" } } },
+    { _id: "sp3", type: "spell", name: "Bless", system: { level: 1 } }] });
+  const result = await f.advance({ targetLevel: 1 });
+  assert.equal(result.status, "completed", JSON.stringify(result));
+  assert.equal(result.verification.spellcasting.cantrips, 2);
+  assert.deepEqual(result.verification.spellcasting.cantripsBySource, { race: 1, class: 1 });
+  assert.deepEqual(result.verification.spellcasting.spellsBySource, { granted: 1 });
 });
 
 test("fullSpellList grants the annotated class spell list after advancement; other classes reject before writes", async () => {
@@ -392,7 +518,7 @@ test("NPC preservation diff names the exact trait path that changed", async () =
   const f = fixture({ classFlows: [hp(1), { level: 1, advancement: lang }], actorType: "npc" });
   f.actor.system.traits = { di: { value: ["poison"] }, size: "med" };
   lang.apply = async (_level, data) => { f.actor.system.traits.languages = { value: data.chosen.map(key => key.split(":").pop()) }; };
-  const result = await f.advance({ targetLevel: 1, choices: { languages: ["languages:standard:elvish"] } });
+  const result = await f.advance({ targetLevel: 1, choices: { bySlot: { "class:1:TraitAdvancement:0.pool0": ["languages:standard:elvish"] } } });
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(result.verification.preservation.changed, [{ path: "traits.languages", before: null, after: { value: ["elvish"] } }]);
 });
@@ -407,11 +533,11 @@ test("grantedItems entries carry the item identifier when the source has one", a
   assert.equal(raceGrant?.identifier, "human");
 });
 
-test("race language pools consume choices.languages with grants included", async () => {
+test("race language pools consume their own bySlot pool key with grants included", async () => {
   const trait = new TraitAdvancement({ grants: ["languages:standard:common"], choices: [
     { count: 1, pool: ["languages:standard:elvish", "languages:standard:dwarvish"] }] }, "Languages");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }] });
-  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:standard:elvish"] } });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["languages:standard:elvish"] } } });
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:common", "languages:standard:elvish"] }]]);
   assert.equal(result.warnings.length, 0);
@@ -422,10 +548,10 @@ test("wildcard trait pools expand and accept any matching concrete key", async (
     { count: 1, pool: ["languages:*"] }] }, "Languages");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }],
     traitExpansion: { languages: ["languages:standard:elvish", "languages:exotic:deep", "languages:cant"] } });
-  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:exotic:deep"] } });
+  const result = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["languages:exotic:deep"] } } });
   assert.equal(result.status, "completed", JSON.stringify(result));
   assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:common", "languages:exotic:deep"] }]]);
-  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["skills:arc"] } });
+  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["skills:arc"] } } });
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.code, "ADVANCEMENT_NEEDS_CHOICE");
 });
@@ -433,10 +559,10 @@ test("wildcard trait pools expand and accept any matching concrete key", async (
 test("wildcard pools fall back to raw keys plus prefix matching when the trait registry is unavailable", async () => {
   const trait = new TraitAdvancement({ grants: [], choices: [{ count: 1, pool: ["languages:*"] }] }, "Languages");
   const f = fixture({ classFlows: [hp(1)], raceFlows: [{ level: 0, advancement: trait }], traitExpansion: null });
-  const prefixed = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["languages:standard:elvish"] } });
+  const prefixed = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["languages:standard:elvish"] } } });
   assert.equal(prefixed.status, "completed", JSON.stringify(prefixed));
   assert.deepEqual(applied(trait.applied), [[0, { chosen: ["languages:standard:elvish"] }]]);
-  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { languages: ["skills:arc"] } });
+  const rejected = await f.advance({ raceUuid: "Compendium.packs.rules.Item.race", choices: { bySlot: { "race:0:TraitAdvancement:0.pool0": ["skills:arc"] } } });
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.code, "ADVANCEMENT_NEEDS_CHOICE");
 });

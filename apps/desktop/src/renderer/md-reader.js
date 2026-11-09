@@ -16,6 +16,9 @@
   const doc = document.getElementById("reader-doc");
   const errorBox = document.getElementById("reader-error");
   const errorText = errorBox.querySelector("p");
+  const emptyBox = document.getElementById("reader-empty");
+  const emptyTitle = emptyBox.querySelector(".empty-title");
+  const emptyBody = emptyBox.querySelector(".empty-body");
 
   // §5.5 的错误文案键:与 md-reader-note.js 的 reason 一一对应。
   // 未知 reason 落到 missing——"找不到这份笔记 + 让 agent 重新生成"对读不动的文件
@@ -29,8 +32,20 @@
   function showError(key) {
     errorText.textContent = t(key);
     errorBox.hidden = false;
+    emptyBox.hidden = true;
     scroll.hidden = true;
     notice.hidden = true;
+  }
+
+  /** 空态兜底:从未打开过文档时切换丸切过来的落点。不是错误,不用 role=alert。 */
+  function showEmpty() {
+    emptyTitle.textContent = t("reader.empty.title");
+    emptyBody.textContent = t("reader.empty.body");
+    emptyBox.hidden = false;
+    errorBox.hidden = true;
+    scroll.hidden = true;
+    notice.hidden = true;
+    document.title = "ArcaneDesk";
   }
 
   /** 上一次渲染的笔记路径:分辨"同一份被唤回"与"换了一份"。 */
@@ -91,6 +106,7 @@
     const keepScroll = sameNote ? scroll.scrollTop : 0;
     shownPath = payload.path ?? null;
     errorBox.hidden = true;
+    emptyBox.hidden = true;
     scroll.hidden = false;
     doc.textContent = "";
     notice.textContent = payload.truncated ? t("reader.truncated") : "";
@@ -104,6 +120,11 @@
   window.arcaneReader.onContent(payload => {
     cancelScrollGuard(); // 换内容(含错误页)后,旧笔记的回正窗口不再有意义
     lastPayload = payload ?? null;
+    if (payload?.empty) {
+      shownPath = null; // 空态不是任何一份笔记:之后真打开时不该当成"同一份"
+      showEmpty();
+      return;
+    }
     if (payload?.error) {
       shownPath = null; // 错误页不是任何一份笔记:下次真读到东西时不该当成"同一份"
       document.title = "ArcaneDesk";
@@ -119,11 +140,14 @@
   });
 
   // 语言热切换(review M2):ArcaneI18n.setLocale 会更新 <html lang> 并回填 data-i18n;
-  // 本页没有 data-i18n 节点,chrome 文案(截断提示/错误页)全是 JS 按状态
+  // 本页没有 data-i18n 节点,chrome 文案(截断提示/错误页/空态)全是 JS 按状态
   // 派生的,按最后一次 payload 重上一遍即可,正文不碰(重渲染会丢滚动位置)。
   window.arcaneReader.onLocale(locale => {
     window.ArcaneI18n.setLocale(locale);
-    if (lastPayload?.error) {
+    if (lastPayload?.empty) {
+      emptyTitle.textContent = t("reader.empty.title");
+      emptyBody.textContent = t("reader.empty.body");
+    } else if (lastPayload?.error) {
       errorText.textContent = t(ERROR_KEYS[lastPayload.error] ?? ERROR_KEYS.missing);
     } else if (lastPayload) {
       notice.textContent = lastPayload.truncated ? t("reader.truncated") : "";

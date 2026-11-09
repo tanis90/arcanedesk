@@ -76,7 +76,13 @@ if (!["cn", "intl"].includes(buildRegion)) {
 }
 
 const commit = resolveSourceCommit();
-const latestFile = path.join(desktopRoot, "distribution", "desktop-latest.json");
+// rollback 链按 region 各自回指：读本区 latest 指针文件，否则 cn 先发版会把
+// intl 基座的 previousReleaseId 带成 cn 的 release id（跨区错链）。
+const latestFile = path.join(
+  desktopRoot,
+  "distribution",
+  buildRegion === "intl" ? "desktop-latest-intl.json" : "desktop-latest.json",
+);
 const previousReleaseId = fs.existsSync(latestFile) ? readJson(latestFile).releaseId ?? null : null;
 const sourceLabel = /^0+$/.test(commit) ? "working-tree" : commit.slice(0, 8);
 // intl 默认 releaseId 带 -intl 后缀（国际化方案 D5），与 cn 版本目录/GitHub tag 区分；
@@ -116,6 +122,15 @@ if (process.env.ARCANE_RELEASE_PUBLISHED_AT) manifest.publishedAt = process.env.
 
 const regionManifest = { schemaVersion: 1, region: buildRegion };
 
+// electron-updater 运行期硬依赖（auto-update-design §5.1/§5.4）：下载阶段必读
+// resources/app-update.yml 的 updaterCacheDirName（缺失 ENOENT），不走 builder publish
+// 则 electron-builder 不会生成它。占位 url 无发布语义，运行期被 setFeedURL 整体覆盖。
+const appUpdateManifest = {
+  provider: "generic",
+  url: "https://127.0.0.1/",
+  updaterCacheDirName: appPackage.productName,
+};
+
 const output = path.join(desktopRoot, "generated", "desktop-release.json");
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -124,16 +139,28 @@ fs.writeFileSync(
   `${JSON.stringify(regionManifest, null, 2)}\n`,
   "utf8",
 );
+fs.writeFileSync(
+  path.join(desktopRoot, "generated", "app-update.yml"),
+  [
+    `# ${appPackage.productName} auto-update runtime config (placeholder; overridden by setFeedURL at runtime).`,
+    `provider: ${appUpdateManifest.provider}`,
+    `url: ${appUpdateManifest.url}`,
+    `updaterCacheDirName: ${appUpdateManifest.updaterCacheDirName}`,
+    "",
+  ].join("\n"),
+  "utf8",
+);
 
-// intl flavor 的包内英文基线（国际化方案 M4）：组合 skills（cn 脚本单源 +
-// skills/prep-intl 翻译覆盖，组合器自带孤儿/覆盖率/CJK 渗漏门禁），并复制
-// system-prompts-intl（同样过 CJK 门禁）。运行期目录选择见 region.mjs 默认值表。
+// intl flavor 的包内英文基线：skills 两 flavor 共用中文单源 skills/prep（skill 是
+// 模型侧指令，不随界面语言分叉）；system-prompts-intl 仍是独立英文树，复制时过
+// CJK 渗漏门禁。运行期目录选择见 region.mjs 默认值表。
 // cn 构建清掉可能残留的 intl 基线，避免陈旧内容随包。
-const intlSkillsOut = path.join(desktopRoot, "generated", "skills-intl", "prep");
+const CJK_PATTERN = /[㐀-䶿一-鿿豈-﫿]/;
+const assertNoCjkLeak = (body, label) => {
+  if (CJK_PATTERN.test(body)) throw new Error(`${label} contains CJK characters (Chinese leakage)`);
+};
 const intlPromptsOut = path.join(desktopRoot, "generated", "system-prompts-intl");
 if (buildRegion === "intl") {
-  const { composeIntlSkills, assertNoCjkLeak } = await import("./compose-intl-skills.mjs");
-  await composeIntlSkills({ outDir: intlSkillsOut });
   const promptsSource = path.join(desktopRoot, "system-prompts-intl");
   fs.rmSync(intlPromptsOut, { recursive: true, force: true });
   fs.mkdirSync(intlPromptsOut, { recursive: true });
@@ -142,9 +169,8 @@ if (buildRegion === "intl") {
     assertNoCjkLeak(body, `system-prompts-intl/${name}`);
     fs.writeFileSync(path.join(intlPromptsOut, name), body, "utf8");
   }
-  process.stdout.write("Intl baselines composed: generated/skills-intl/prep + generated/system-prompts-intl\n");
+  process.stdout.write("Intl baseline composed: generated/system-prompts-intl\n");
 } else {
-  fs.rmSync(path.join(desktopRoot, "generated", "skills-intl"), { recursive: true, force: true });
   fs.rmSync(intlPromptsOut, { recursive: true, force: true });
 }
 process.stdout.write(`Prepared Desktop release ${releaseId} (${electronRuntime.electron}/${electronRuntime.node}, region ${buildRegion})\n`);

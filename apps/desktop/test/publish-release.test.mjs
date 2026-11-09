@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  assertPublishChannelMatchesManifest,
   createR2Client,
   parseArgs,
   platformForFile,
@@ -74,6 +75,20 @@ test("release publisher parses --region and --signed-dir", () => {
   );
 });
 
+test("release publisher refuses publish channel that differs from the baked manifest channel", () => {
+  assert.doesNotThrow(() =>
+    assertPublishChannelMatchesManifest({ channel: "private-beta" }, "private-beta"));
+  // 0.6.0 intl 事故形态：包烙 development、feed 发 private-beta，客户端静默收不到更新。
+  assert.throws(
+    () => assertPublishChannelMatchesManifest({ channel: "development" }, "private-beta"),
+    /channel \(development\) != publish channel \(private-beta\)/,
+  );
+  assert.throws(
+    () => assertPublishChannelMatchesManifest({}, "private-beta"),
+    /channel \(missing\)/,
+  );
+});
+
 test("publish targets: cn keeps OSS, intl goes to R2 behind dl.arcanedesk.app", () => {
   assert.deepEqual(resolveTarget("cn"), {
     clientKind: "oss",
@@ -83,6 +98,7 @@ test("publish targets: cn keeps OSS, intl goes to R2 behind dl.arcanedesk.app", 
     latestKey: "desktop/arcane-desk/latest.json",
     repoLatestFile: "desktop-latest.json",
     skillsRoot: "desktop/arcane-desk/skills",
+    serverRoot: "desktop/arcane-desk/server",
   });
   assert.deepEqual(resolveTarget("intl"), {
     clientKind: "r2",
@@ -92,6 +108,7 @@ test("publish targets: cn keeps OSS, intl goes to R2 behind dl.arcanedesk.app", 
     latestKey: "desktop/arcane-desk-intl/latest.json",
     repoLatestFile: "desktop-latest-intl.json",
     skillsRoot: "desktop/arcane-desk-intl/skills",
+    serverRoot: "desktop/arcane-desk-intl/server",
   });
   assert.throws(() => resolveTarget("us"), /unknown publish region/);
 });
@@ -174,7 +191,9 @@ test("R2 client requires credentials", async () => {
   delete process.env.R2_ACCESS_KEY_ID;
   delete process.env.R2_SECRET_ACCESS_KEY;
   try {
-    await assert.rejects(() => createR2Client(), /missing R2 credentials/);
+    // 本机 ops conf 可能存在（intl 本地发布），注入不存在的 conf 验证无凭证报错语义。
+    const absentConf = path.join(os.tmpdir(), "arcane-release-absent.conf");
+    await assert.rejects(() => createR2Client({ confFile: absentConf }), /missing R2 credentials/);
   } finally {
     for (const [key, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[key];

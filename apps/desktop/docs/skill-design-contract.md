@@ -58,10 +58,45 @@
 
 已拍板的具体决策按 skill 归档，一行一条：决策 + 一句理由。改决策先改这里。
 
+### arcane-fvtt-mods 镜像发现流（2026-10-22）
+
+- 点名 mod 的默认路径从「让用户给 manifest URL」改为 web_search → `foundry_module_prepare`
+  → `mirror-install`：用户往往只知道 mod 名字，URL 是 agent 该自己查的东西（C 类技术细节）。
+- 轮询/下载/安装不进原生工具：工具只做一次毫秒级 `POST /v1/mods/jobs` 透传，其余交给
+  agent 的既有能力（curl/CLI）。服务端 fire-and-forget，超时放弃零损失，下次 prepare 直接
+  ready——主进程因此不需要后台链、job Map 或 deadline 交接。
+- `mirror-install` 用退出码表达状态：2 = 仍在排队（不是失败，稍后重试即秒取），1 = 真失败
+  （含 sha256/体积不符的篡改判定，下载文件已删除）。agent 据退出码决定是否换路，不用解析文本。
+- `poll_url` / `download_url` 是 job 级短时效凭证：可入对话与命令，但不得外传或落进仓库；
+  key 只在主进程拼 Authorization，永远不进工具结果。
+- 镜像来源强制 sha256（job 响应下发），不符即拒装删文件；不再叠加用户确认——机器校验失败
+  是执行端的硬门，不是让小白判断的技术问题。
+
+### arcane-fvtt-mods 仓库 URL 直查（2026-10-26）
+
+- 用户给的是仓库链接时，整条 URL 原样进 `foundry_module_prepare` 的 `query`：owner/repo
+  归一化索引是服务端最精确的身份反查，agent 自己截路径猜 `module_id` 必错（repo 名、
+  release 包名、`module.json` 里的 id 三者经常不同）；仍是 C 类技术细节，零新增交互。
+- 安装身份只认响应里的 `module_id`，不认 URL 里的 repo 名；仓库首页不是 manifest，
+  直查 `blocked`/`not_configured` 才回落 manifest 直连并照常给一次风险提示。
+- `suggestions`（相近模块推荐）按条件式处理：响应里出现才用其中的确切 `module_id` 重试，
+  不承诺上线时点，也不作为新的状态分支。
+
+### arcane-fvtt-mods 世界展示索引与纯发现放宽（2026-10-13）
+
+- `world-catalog` 合并站点世界展示索引（tagline/description/compat/players/duration/stats/tags/
+  credits/moduleLinks，字段只增不改）：rows 的工件事实（version/bytes/sha256/URL）永远只取根
+  索引，展示数据获取/解析/校验失败整体降级为 `displayIndexStatus: "unavailable"`，不部分应用、
+  不阻塞对账；web 视觉素材（previewBase/cover/maps/characters）不进 CLI 输出，看图引导去官网
+  世界页。
+- `--allow-missing-data-dir` 放宽到纯发现：只读 `world-catalog` 在用户尚未安装 FVTT、Data 目录
+  可能不存在时也可传该旗标（先看有什么世界再决定装不装）；修订 2026-08-31 记录中"仅 setup
+  全新安装流程使用"的范围限定，stage/commit 永远严格不变，写路径的硬报错警报器保留。
+
 ### A 组缺口 G1/G2 与 NPC 入口（2026-09-15）
 
 - G1 种族 Trait 选择进 plan/advance：race 流程的技能/工具/语言 Trait 池下发为
-  `choiceRequirements`（fill `choices.skills/tools/languages`），通配符池
+  `choiceRequirements`（fill 键约定后被 2026-09-16 槽位寻址取代为 `key` + `choices.bySlot`），通配符池
   （`languages:*`）用系统自带 `Trait.mixedChoices` 展开为具体 key 再下发——候选与
   匹配共用一套词汇表，模型拿到的是可执行枚举不是通配符；注册表不可用时回退原始池
   + 前缀匹配。实证：人类额外语言池原生就是 `languages:*`，不展开模型无从填写。
@@ -100,7 +135,8 @@
 
 ### 专精落地检测与回执活动计数（2026-09-15）
 
-- 专精槽独立 fill 键 `choices.expertise`：与 choices.skills 共用词汇表（skills:/tool:
+- 专精槽独立 fill 键 `choices.expertise`（后被 2026-09-16 槽位寻址取代为专精槽自己的
+  bySlot key，机制不变）：与 choices.skills 共用词汇表（skills:/tool:
   key）但不共消费队列——take() 每值只消费一次，同 key 双填在唯一性约束下本就不可表达
   （v5 B2 模型发 4 熟练 + 2 新 key，dnd5e 原生对未熟练目标静默丢弃 1→2 从不 0→2，
   模型被迫裸写 `skills.slt.value:2` 补锅，读取 before=0 实锤）。
@@ -150,6 +186,36 @@
   装完必须从最终绝对路径回读 manifest（id/version），当场验收。
 - 逐次下载确认、无预声明哈希时再确认、单项超 250 MB 确认：全部取消，并入计划确认门。
 - 覆盖冲突：自动时间戳备份即授权，备份成功才继续，备份位置写进报告。
+
+### arcane-fvtt-mods 新装 mod 自动启用（2026-09-30）
+
+- 新装 mod 默认自动启用：用户让装 mod 即含“装完能用”的预期，装完让用户自己去
+  Manage Modules 勾选是纯打扰。该纪律自 6db6973 起存在但当时未留档，本次补记并修订。
+- 启用状态的实体是 world core setting `moduleConfiguration`（v13 存于 LevelDB，实证于
+  本机 arcane-demo world 的 `data/settings/`）。唯一安全的写路径是 ready GM 会话里
+  `game.settings.set`——与官方 Manage Modules UI 完全同源；直写数据库或 LevelDB
+  settings 文件的禁令原样保留。
+- 写入必须合并：先读现有配置，并入新 mod 与安装计划已解析的 required dependencies，不动
+  已有条目；`game.reload()` 后回读 `version`/`active` 验收。
+- 启用是写操作，并入安装计划的确认门一并告知，不做计划外静默副作用。够不到 ready GM
+  会话（世界未运行、无 GM 权限、目标世界不明确）时回退为提醒用户手动启用。
+
+### arcane-module-to-fvtt / arcane-module-style-marking（2026-09-26）
+
+- 两个新 skill 收编自真实模组建设项目的 `.pi/skills/`。交互预算：module-to-fvtt 恒定 2 次
+  （阶段 0 决策清单一页合并确认，每项带推荐默认值；完工后偏差清单随报告一次评审），
+  style-marking 恒定 0 次（人工确认清单是交付物不是交互点，信号够不着的段落不猜不问）。
+- style-marking 的写入脚本移植为 Node（mark-apply.mjs，仅 node builtins）：bundle 全平台
+  分发，ps1 只能跑 Windows；三阶段纪律（先全部断言 → 时间戳备份 → 剥除比对核验）原样保留。
+- 模组 PDF 版面 JSON 走 `mineru-open-api extract -f json`（精准模式，需 Token）；免 Token 的
+  flash-extract 只有 md 没有 bbox，信号 B（版面几何）不可用——前提写进 SKILL.md。
+- 服务器启停、锁文件、端口清理归 arcane-fvtt-ops，module-to-fvtt 不碰进程；脚本一律
+  用 ARCANE_FVTT_NODE 运行，与 ops 的环境约定同源。
+- 条目来源优先级沿用 arcane-actor-update（2026-09-01）既有决策，覆盖建世界全流程：Item 条目
+  默认从 arcane-dnd5e-2014-automation 模块合集包拿，缺条目才回退 dnd5e.* 并在报告写明来源，
+  禁止凭记忆手写条目数据。module-to-fvtt 原稿只写"合集已有就引用、不重复自建"，漏了来源
+  优先级——工具流（browse/plan 去重模块包优先）天然遵守，手工 content_search/eval 路径现由
+  SKILL.md 阶段 3 与 dnd5e-pitfalls §5 补齐；怪物 Actor 模块包不收，引系统包。
 
 ### arcane-module-reader（2026-08-31）
 
@@ -206,6 +272,43 @@
   领域法术 = 10"改为"2014 牧师 ≤2 环全列表 = 34"（SRD 32 + 典礼术/借鉴才学，验收器按
   计数制，非 SRD 条目不参与 known-membership 校验）。
 
+### arcane-fvtt-server（2026-09-20）
+
+（2026-10-01 更新：本 skill 已并入 `arcane-fvtt-setup`，见下方合并记录；以下条目继续
+约束服务器轨道的行为，预算与话术原样有效。）
+
+- 交互预算 5 点：接入三事实问 / 用户终端跑公钥安装命令 / 冲突三选一 / "停着要不要启动" /
+  激活面板用户自填 adminKey+license。安全组放行、下载源选择、发行版探测等全部是 skill
+  侧探测或并行提示，不占交互点。
+- 决策三分法：探测序列 P1-P7 只读采集（C 类技术细节，零问话）；冲突三选一与残余问点是
+  B 类用户偏好；license/adminKey/SSH 私钥是 A 类用户资产，agent 永不代填/永不接触
+  （私钥永不进对话，会话会被持久化快照重放）。
+- 部署形态：镜像 tar.gz 走 arcane mirror（零 docker pull/registry）；公网开放 30000 是
+  部署目的，安全边界是 FVTT 账号体系；CDP 调试端口绝不可公网暴露。
+
+### arcane-fvtt-setup 吸收 arcane-fvtt-server（2026-10-01）
+
+- 合并为单一安装 skill，保留 `arcane-fvtt-setup` 名字：触发面、system prompt 断言与
+  skill.loaded 遥测归因连续；`arcane-fvtt-server` 目录删除，其 references 以
+  `server-*` 前缀迁入 setup 的 references/。
+- 目标判定进 skill 内部：local | server 由用户语境判定（明说服务器/云/ECS/SSH →
+  server，其余默认 local），路由是 skill 内的判定不再是 skill 边界；确认门前两条
+  轨道全部只读，判定可无损切换。
+- 交互预算改轨道制：local 4 点 / server 5 点，分别沿用 2026-08-31 与 2026-09-20
+  记录，合并不新增、不合并交互点。
+- 共享主干只写一次：本体三要素话术（入口同为 Purchased Licenses → Older Stable
+  13.351，Operating System 下拉按轨道分叉）；钉版基线声明（本机以
+  community-distribution.json、服务器以 server-release.json 为准，发布管线保证一致）；
+  Demo 环境收口 arcane-fvtt-mods；验收统一 `/api/status` 口径；安全底线取两边并集
+  （并入 server 的"私钥永不进对话"与"零 docker pull"）。
+- 轨道细节只进 references（硬规矩）：server 的 Docker/镜像通道/冲突处理/裸机纪律、
+  local 的平台物料细节都不进 SKILL.md，防主干 token 膨胀；fvtt-skills 测试按
+  SKILL.md 与 local-install.md 分层锁定。
+- 服务器接管运维归本 skill server 轨道：服务器在跑且基线一致时由 setup 直接接管
+  （沿用 server-ssh.md 的 SSH 通道与探测口径）；`arcane-fvtt-ops` 只管本机既有
+  实例，其"远程模式"仍是 server-deploy-plan 里未实现的规划，路由与文案不得再
+  引用它，待该规划真正实现时再改口。
+
 ### arcane-actor-update（2026-09-14）
 
 - 法术授予不置 `system.prepared`：dnd5e 5.3.3 源码确认 prepared 只是法术书页签标记，
@@ -251,6 +354,36 @@
   不再直接给法术书公式（原 6+2×(L−1)=14），让工具臂 spellBudget 的优势在评测中显形，
   不与历史报告求可比（用户裁决）。
 
+### autoGrantedSpells 与 weapon 族 trait 池（2026-09-17）
+
+- plan 新增 `autoGrantedSpells`：本次 advance 会经固定 ItemGrant 自动授予的法术清单
+  （职业/子职业/种族链 ≤目标等级；ItemChoice 自选池不在其列）。月之术法案实证：术士
+  known 6 自选撞上白送的 9 个，写入去重静默烧掉一个名额（granted 5 ≠ budget 6，卡面
+  14 合法但少一个有效自选）。纯增量信息下发，harness 填值器排除、skill 教模型避开，
+  回执 spellsBySource 的 subclass/race 桶口径不变。否决备选：oracle 容忍重合（把浪费
+  合法化）；包数据改 ItemChoice（违背规则原文）。
+- trait 选择池白名单加 `weapon:`：剑圣宗 L3 近战武器 21 选 1 实证（monk sweep 唯一红案，
+  修后 10/10 绿）。下游零改动——expandTraitPool 经 `Trait.mixedChoices` 族无关展开、
+  weaponProf 是集合添加幂等（无 0/1/2 踩踏语义，不入 default 模式重复选取守卫）、
+  traitLanded 审计经 actorKeyPath 族无关解析。armor/saves/senses 仍落 uncovered，
+  等矩阵案例驱动。
+
+### 三环施法者 spellBudget（2026-09-17）
+
+- 本条取代 2026-09-14 spellBudget 记录的"第三施法者（奥法骑士/诡术贼）v1 放弃"。实证缺口：
+  扩展层扫描（`e2e-advance-matrix.mjs --subclasses-of fighter`）中奥法骑士落卡 3 环位
+  0 环法照绿——环级法术在原生数据里无 advancement 载体（子职业 `system.spellcasting.
+  progression="third"` 只驱动系统自动派生槽位），plan 无槽、表无行、oracle 无查。
+- 全量核实：全世界 Item 包扫 `spellcasting.progression`，2014 仅奥法骑士/诡术师两个
+  子职业引入施法，共用同一 PHB 三环表（wikidot PHB 转录逐行核对）；四象宗武僧等为气点
+  施法无环位，正确不命中。2024 子职业无此配置（未调研形态，不下发）。
+- 实现：plan 侧 `spellBudgetForClass` 收 subclassData，职业不施法而子职业 progression
+  非空时按三环表下发 `known` + `source:"subclass"` + `maxSpellLevel`（progression 环位
+  公式 `min(4, ceil(L/6))`）+ `spellListClassUuid`（法师列表，browse eligibility 回传
+  它）；戏法不下发——走子职业自带 ItemChoice 槽，避免双口径。学派限制（EK 防护/塑能、
+  AT 附魔/幻术、AT 固定 Mage Hand）是自然语言规则，以 `note` 提示不校验。法术选取复用
+  additionalItems（known 语义），advance 侧零改动。
+
 ### subclass-uuid 候选池（2026-09-14）
 
 - `choiceRequirements` 中 `valueFormat:"subclass-uuid"` 的要求现挂 `candidates`（uuid）+
@@ -294,6 +427,25 @@
   skill 教义：收到即披露，不要回读数据模型求证，不要手工修补。
 - 回执 `traits.tools` 同步修正为 `toolProf` ∪ `system.tools` 中 value≥1 的 key——NPC
   的工具熟练住在 `system.tools`，旧口径在 NPC 上恒为空。
+
+### advance choices 槽位寻址（2026-09-16）
+
+- `choices` 从共享桶（skills/tools/feats/abilityScore/languages/expertise 各键）改为槽位
+  寻址：plan 的 `choiceRequirements[].key` 原样抄为 `choices.bySlot` 的键，一槽一值
+  互不抢占；`subclass-uuid` 仍填顶层入参。实证（会话 01a0a8f6 五连拒）：职业 ASI
+  （allowFeat）的 `take("choices.feats")` 盲抓共享桶第一个剩余值，把半精灵变体特性
+  UUID 当职业专长消费，种族 ItemChoice 恒 `need 1, have 0`；共享键也无法表达职业 ASI
+  与种族 ASI 两组不同加点（旧 spec backlog 已记）。本条取代 G1 记录的 fill 键约定与
+  专精记录的 `choices.expertise` 独立键——机制决定（先熟练后专精、双层防护）不变。
+- 混合 ASI（半精灵魅力+2 固定 + 2 浮动点）：fixed 由运行时并入 assignments——dnd5e
+  原生只在 `options.initial` 下注入 fixed，我们不传 initial，旧代码直接丢 +2。plan 侧
+  fixed 部分进 `automaticSteps` 摘要（`fixed ability bonuses: cha+2`），只向模型要浮动
+  点；校验要求浮动点 total===points、每项 ≤cap、非 locked。
+- 未知槽位写入前拒 `CHOICE_SLOT_UNKNOWN` 并列出合法槽位，取代 UNCONSUMED_CHOICE 警告
+  （槽位寻址下值不可能"剩下"）；`fillAllocation` 聚合随之废除，`choicesTemplate` 给每个
+  bySlot 键一个填空骨架（trait/池槽 `[]`、ASI 槽 `{ abilityScore: {} }`）。
+- 回执 abilities 分解口径：race 列 = 种族 stepSet 的 ASI assignments 合计（含 fixed），
+  asi 列 = 职业+子职业合计。D3 记录的"选择型种族 v1 走 SET 补终值"执行路径由本条收口。
 
 ### 跑团模式回执从简（2026-09-16）
 

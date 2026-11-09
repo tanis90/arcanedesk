@@ -14,3 +14,5 @@ installation commands.
 - [`mvp-run-2026-09-03.md`](mvp-run-2026-09-03.md): initial discovery and read path.
 - [`p1-write-safety-run-2026-09-03.md`](p1-write-safety-run-2026-09-03.md): write review and interruption recovery.
 - [`p2-execute-turn-run-2026-09-03.md`](p2-execute-turn-run-2026-09-03.md): real guarded turn execution.
+- [`play-tools-design-2026-09-21.md`](play-tools-design-2026-09-21.md): play-mode (跑团) tool surface design — scope, guards, ledger, Desktop parity decisions.
+- [`prep-tools-plan-2026-09-24.md`](prep-tools-plan-2026-09-24.md): 备团(prep)模式对齐计划（已随模块 0.6.0 实现） — readRef 会话机制、审批层决策、11 工具三期分期。

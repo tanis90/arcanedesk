@@ -54,6 +54,57 @@ function testTurnExecutor() {
   };
 }
 
+function testPlayTools() {
+  return {
+    staticContext: async () => ({ manual: true }),
+    playContext: async (input) => ({ view: input?.view ?? "current" }),
+    executeAction: async (input) => ({ requestId: input.requestId, executed: true }),
+    conditionsSet: async (input) => ({ requestId: input.requestId, set: true }),
+  };
+}
+
+function testPrepTools() {
+  return {
+    contentSearch: async () => ({}),
+    compendiumBrowse: async () => ({}),
+    advancementPlan: async () => ({}),
+    actorGet: async () => ({ readRef: "read-1" }),
+    sceneGet: async () => ({ readRef: "read-2" }),
+    actorCreate: async (input) => ({ requestId: input.requestId, created: true }),
+    actorUpdate: async (input) => ({ requestId: input.requestId, updated: true }),
+    actorGrantItems: async (input) => ({ requestId: input.requestId, granted: true }),
+    actorAdvance: async (input) => ({ requestId: input.requestId, advanced: true }),
+    sceneApply: async (input) => ({ requestId: input.requestId, applied: true }),
+    image: async (input) => ({ requestId: input.requestId, applied: true }),
+  };
+}
+
+const EXPECTED_TOOL_NAMES = [
+  "arcane_probe",
+  "arcane_world_info",
+  "arcane_battle_context",
+  "arcane_turn_context",
+  "arcane_static_context",
+  "arcane_play_context",
+  "arcane_write_probe_state",
+  "arcane_execute_turn_receipts",
+  "arcane_write_probe",
+  "arcane_execute_action",
+  "arcane_conditions_set",
+  "arcane_content_search",
+  "arcane_compendium_browse",
+  "arcane_advancement_plan",
+  "arcane_actor_get",
+  "arcane_scene_get",
+  "arcane_actor_create",
+  "arcane_actor_update",
+  "arcane_actor_grant_items",
+  "arcane_actor_advance",
+  "arcane_scene_apply",
+  "arcane_image",
+  "arcane_execute_turn",
+];
+
 test("canonical SDK runtime compiles and executes worldInfo in page context", async () => {
   const game = testGame();
   globalThis.game = game;
@@ -75,30 +126,36 @@ test("tool definitions are narrow and marked read-only", () => {
     moduleVersion: "0.1.0",
     writeProbeStore: testWriteProbeStore(),
     turnExecutor: testTurnExecutor(),
+    playTools: testPlayTools(),
+    prepTools: testPrepTools(),
     bridgeIdentity: testBridgeIdentity(),
   });
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    [
-      "arcane_probe",
-      "arcane_world_info",
-      "arcane_battle_context",
-      "arcane_turn_context",
-      "arcane_write_probe_state",
-      "arcane_execute_turn_receipts",
-      "arcane_write_probe",
-      "arcane_execute_turn",
-    ],
+    EXPECTED_TOOL_NAMES,
   );
-  assert.ok(tools.slice(0, 6).every((tool) => tool.annotations.readOnlyHint === true));
-  assert.deepEqual(tools.at(-2).annotations, {
+  assert.ok(tools.slice(0, 8).every((tool) => tool.annotations.readOnlyHint === true));
+  const byName = new Map(tools.map((tool) => [tool.name, tool]));
+  assert.deepEqual(byName.get("arcane_execute_turn").annotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(byName.get("arcane_write_probe").annotations, {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
   });
-  assert.deepEqual(tools.at(-1).annotations, {
+  assert.deepEqual(byName.get("arcane_execute_action").annotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(byName.get("arcane_conditions_set").annotations, {
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
@@ -127,21 +184,14 @@ test("registration uses the top-level document modelContext", async () => {
     moduleVersion: "0.1.0",
     writeProbeStore: testWriteProbeStore(),
     turnExecutor: testTurnExecutor(),
+    playTools: testPlayTools(),
+    prepTools: testPrepTools(),
     bridgeIdentity: testBridgeIdentity(),
   });
 
   assert.equal(result.status, "registered");
-  assert.deepEqual(result.tools, [
-    "arcane_probe",
-    "arcane_world_info",
-    "arcane_battle_context",
-    "arcane_turn_context",
-    "arcane_write_probe_state",
-    "arcane_execute_turn_receipts",
-    "arcane_write_probe",
-    "arcane_execute_turn",
-  ]);
-  assert.equal(registered.length, 8);
+  assert.deepEqual(result.tools, EXPECTED_TOOL_NAMES);
+  assert.equal(registered.length, EXPECTED_TOOL_NAMES.length);
 });
 
 test("registration fails closed outside top-level or without WebMCP", async () => {
@@ -172,6 +222,7 @@ test("arcane_world_info preserves the SDK GM guard", async () => {
     moduleVersion: "0.1.0",
     writeProbeStore: testWriteProbeStore(),
     turnExecutor: testTurnExecutor(),
+    playTools: testPlayTools(),
     bridgeIdentity: testBridgeIdentity(),
   });
 
@@ -198,6 +249,7 @@ test("write probe tools delegate to the isolated probe store", async () => {
       },
     },
     turnExecutor: testTurnExecutor(),
+    playTools: testPlayTools(),
   });
 
   assert.deepEqual(
@@ -229,6 +281,7 @@ test("battle and turn tools preserve the canonical SDK action boundary", async (
     moduleVersion: "0.3.0",
     writeProbeStore: testWriteProbeStore(),
     turnExecutor: testTurnExecutor(),
+    playTools: testPlayTools(),
     bridgeIdentity: testBridgeIdentity(),
   });
 
@@ -263,6 +316,7 @@ test("execute-turn tools delegate through the guarded executor", async () => {
         return { executed: true };
       },
     },
+    playTools: testPlayTools(),
   });
 
   assert.deepEqual(

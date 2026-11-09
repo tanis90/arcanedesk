@@ -1,13 +1,20 @@
 # Arcane Desktop release runbook
 
-The public repository has two manual release surfaces:
+The public repository has three manual release surfaces:
 
 - `Build release candidates` builds short-lived SDK, CLI, and two-host Desktop
   candidates without publishing them.
-- `Release Arcane Desktop` is the official four-platform Desktop pipeline. It
-  can run build-only, publish an immutable OSS release, optionally create a
-  GitHub prerelease/release, and optionally promote the verified release to the
-  public `latest.json` pointer.
+- `Release Arcane Desktop` is the official four-platform Desktop build
+  pipeline — build only, it never publishes.
+- `Stage Arcane Desktop Release` is phase 1 of a signed release: it relays the
+  build's mac and windows-zip objects into the immutable release directories
+  and opens the draft GitHub releases. Phase 2 (signing, `release.json`,
+  promotion) always runs locally, because CI cannot hold the Windows
+  certificate.
+
+A signed release therefore has three phases: build (CI) → stage (CI) →
+sign + finalize (local). Design and idempotency contract:
+`phased-release-design.md` in this directory.
 
 ## Release topology
 
@@ -28,16 +35,21 @@ check. Rollback revalidates an existing release and changes only `latest.json`.
 
 ## GitHub credentials
 
-The `desktop-release` GitHub Environment owns these secrets:
+The `Stage Arcane Desktop Release` workflow publishes to both regions from CI
+and reads these repository-level secrets:
 
-- `OSS_RELEASE_KEY_ID`
-- `OSS_RELEASE_KEY_SECRET`
+- `OSS_RELEASE_KEY_ID` / `OSS_RELEASE_KEY_SECRET` (cn, Aliyun OSS)
+- `CF_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (intl, R2)
 
-They belong to the dedicated RAM user `ArcaneDeskGithubRelease`, which has only
-the custom `ArcaneDeskReleasePublish` policy. That policy grants bucket metadata
-and list access plus Put/Get under `desktop/arcane-desk/*`; it grants no Delete
-permission. Secrets must never be printed, persisted in repository files, or
-shared with the legacy release identity.
+Their values are the same credentials the local ops file
+`~/.ossutil/arcane-release.conf` carries (`[ArcaneDeskRelease]` for cn,
+`[ArcaneDeskIntlRelease]` for the R2 token scoped to Object Read & Write on
+`arcane-desk-intl`). Set them with `gh secret set`, never printing values.
+The original plan of a dedicated `desktop-release` GitHub Environment with a
+least-privilege RAM user (`ArcaneDeskGithubRelease`, no Delete permission)
+was never created; migrating these five secrets into that environment is the
+intended tightening. Secrets must never be printed, persisted in repository
+files, or shared with the legacy release identity.
 
 ## macOS signing and notarization
 
@@ -95,46 +107,196 @@ xcrun stapler validate dist/Arcane-Desk-*-mac-arm64.dmg
 When the certificate or API key is rotated, re-export a clean p12 (Developer
 ID identity only) and update the five secrets; no workflow change is needed.
 
-## Build-only verification
+## Windows code signing (Windows builds locally; CI stages mac only)
 
-Dispatch `Release Arcane Desktop` with:
+Windows installers are built AND signed locally; CI never touches them
+(2026-09 restructure — before that, CI built unsigned Windows artifacts that
+had to be downloaded across the ocean, the slowest and most fragile leg of
+every release, and the hours between build and signing let the SimplySign
+session expire). The certificate is a Certum OV code signing certificate
+(`CN=Qi Yang`, thumbprint pinned in `scripts/sign-windows.mjs`, valid until
+2027-09-07) whose private key lives in Certum's SimplySign cloud and is
+non-exportable — the certificate store reports `SimplySign CSP` /
+`私钥不能导出` — so it cannot become a p12 GitHub secret. Signing runs on a
+machine with SimplySign Desktop installed and logged in; a signing session
+may ask for an OTP confirmation in the SimplySign mobile app.
 
-- `skip_oss=true`
-- `update_latest=false`
-- `create_github_release=false`
+The sequence: mac builds in CI (signing/notarization secrets cannot leave
+it), Windows builds on the local machine, sign locally BEFORE anything
+touches the cloud, stage (mac from CI, windows zips from local), finalize
+locally:
 
-(`skip_oss` defaults to `true`, so an unmodified dispatch is always build-only;
-the flags are listed explicitly for clarity. Turn `skip_oss` off only for a real
-signed release, per the sign-first rule.)
+1. Dispatch `Release Arcane Desktop` at the commit to ship. The four mac
+   matrix legs must pass; artifacts come out signed and notarized.
+2. Dispatch `Stage Arcane Desktop Release` with `build_run_id` (and the same
+   explicit `release_id`, if any). It uploads the mac objects into
+   `releases/<id>/<platform>/`, emits `release-fragment-<region>` artifacts
+   (mac-only), and opens the draft GitHub releases with the mac assets.
+   If the runner-to-OSS-Beijing route is broken (seen 2026-09-21: multipart
+   uploads stall with `ResponseTimeoutError` while R2 works), staging can
+   run locally instead — download the mac artifacts from the build run, lay
+   them out as `staging/<platform>/`, run `stage-release.mjs --staging ...
+   --region cn --release-id <id>` from this machine, then create the draft
+   yourself with the staged assets.
+3. Build and verify all four Windows variants locally. The orchestrator pins
+   the release commit (its sha8 must equal HEAD, tracked tree clean),
+   replicates the CI env, and runs `verify-package` per variant — the same
+   gate that caught the app-update.yml layout bug:
 
-All four matrix jobs must pass source typechecking, Electron packaging,
-package-resource verification, checksum generation, provenance attestation,
-and artifact upload. The publish job is intentionally skipped and no OSS
-credential is read.
+   ```bash
+   npm ci --workspaces --include-workspace-root   # if the tree moved
+   npm run build:sdk
+   node apps/desktop/scripts/build-windows-release.mjs --release-id <id>
+   ```
 
-## Immutable gray release
+   Output tree: `windows-release-build/installers/` (unsigned exes, flat),
+   `windows-release-build/stage/staging-<region>/windows-<arch>/*.zip`, and
+   unsigned-baseline SHA256SUMS under `records/`.
+4. Sign immediately (the session-expiry window is now minutes, not hours):
 
-After build-only succeeds, dispatch the same pinned commit with:
+   ```bash
+   node apps/desktop/scripts/sign-windows.mjs \
+     --in apps/desktop/windows-release-build/installers
+   ```
 
-- `channel=private-beta`
-- `skip_oss=false`
-- `update_latest=false`
-- `create_github_release=false`
+   If SimplySign died (black window, `certutil` hangs, signtool reports no
+   certificates), restart the app and log in again — nothing cloud-side has
+   happened yet, so re-running this step is free. Do NOT delete
+   `apps/desktop/dist-signed` or pass `--force` on a release id already being
+   finalized: re-signing changes bytes, and the finalize journal hard-rejects
+   changed bytes for that release id.
+5. Stage the windows zips from the local machine (one fragment per region;
+   bucket idempotency makes this rerunnable):
 
-The publish job uploads a new immutable release, then sends an identity-encoded
-HEAD request for every object and requires HTTP 200 with the exact byte length.
-Because `update_latest` is false, the public download pointer remains unchanged.
+   ```bash
+   node apps/desktop/scripts/stage-release.mjs \
+     --staging apps/desktop/windows-release-build/stage/staging-cn \
+     --region cn --release-id <id> \
+     --out-fragment apps/desktop/generated/frag-win/fragment-win-cn.json
+   # intl mirrors: staging-intl, --region intl, --release-id <id>-intl
+   ```
 
-## Formal release
+6. Finalize each region with BOTH fragments (cn shown; intl mirrors with the
+   `-intl` release id and `--region intl`). The `--staging` dir must be
+   exe-only with platform subdirs — move the region's exes from the flat
+   `installers/` tree into `installers/cn/windows-x64/` and
+   `installers/cn/windows-arm64/` first:
 
-A formal release uses the same workflow with `create_github_release=true` and,
-only after every object is verified, `update_latest=true`. Non-`stable` channels
-create a GitHub prerelease. Do not enable either option merely to test CI.
+   ```bash
+   gh run download <stage-run-id> -n release-fragment-cn-<id> -D fragments
+   ARCANE_SOURCE_COMMIT=<sha> ARCANE_BUILD_REGION=cn ARCANE_RELEASE_CHANNEL=private-beta \
+     npm run prepare:desktop-release --workspace arcane-desktop
+   # ARCANE_RELEASE_CHANNEL 不能省：prepare 默认 development，finalize 的 channel
+   # 守卫会拒绝发布（这是 0.6.0 事故的防线，不是障碍）。
+   node apps/desktop/scripts/publish-release.mjs --finalize \
+     --staging apps/desktop/windows-release-build/installers/cn \
+     --signed-dir apps/desktop/dist-signed \
+     --fragment fragments/fragment-cn.json \
+     --fragment apps/desktop/generated/frag-win/fragment-win-cn.json \
+     --region cn --release-id <id> --channel private-beta
+   ```
 
-Current Desktop artifacts: macOS builds are Developer ID signed and notarized
-(see the next section), so Gatekeeper opens them without any prompt. Windows
-builds remain unsigned and can trigger SmartScreen; the documented path is
-More info > Run anyway.
+   `--fragment` is repeatable; entries must be disjoint across fragments.
+   `--finalize` rebuilds the windows SHA256SUMS from the signed installers,
+   merges the fragments into a full `release.json`, cross-checks mac hashes
+   against the published CI sums, uploads, HEAD-verifies every object, and —
+   unless `--skip-latest` — promotes `latest.json` and the update feeds in
+   the same breath.
+   The `prepare:desktop-release` call is mandatory, not optional:
+   `--finalize` merges the local `generated/desktop-release.json` base, and a
+   stale base silently ships the previous version's `product.version` /
+   `source.commit` into `release.json` and the update feeds (this happened to
+   cn on 0.5.0 and had to be patched in place). Guards now hard-fail when the
+   base `product.version` disagrees with the `<version>-` prefix of the
+   release id, or when `source.commit` disagrees with the id's sha8 (a HEAD
+   moved by another session mid-release); rerun prepare with the matching
+   `ARCANE_BUILD_REGION` and `ARCANE_SOURCE_COMMIT`.
+   Rerun-after-crash is safe: already-uploaded objects are skipped, an
+   already-finalized release id is refused (`--promote-release` instead), and
+   a re-signed installer is rejected outright.
+7. Complete the GitHub releases (drafts hold mac assets only; windows assets
+   all come from the local machine now):
+
+   ```bash
+   base=https://arcane-package.oss-cn-beijing.aliyuncs.com/desktop/arcane-desk/releases/<id>
+   curl -s "$base/windows-x64/SHA256SUMS.txt" -o SHA256SUMS-windows-x64.txt
+   curl -s "$base/windows-arm64/SHA256SUMS.txt" -o SHA256SUMS-windows-arm64.txt
+   gh release upload <id> \
+     apps/desktop/windows-release-build/stage/staging-cn/windows-x64/Arcane-Desk-<version>-win-x64.zip \
+     apps/desktop/windows-release-build/stage/staging-cn/windows-arm64/Arcane-Desk-<version>-win-arm64.zip \
+     apps/desktop/dist-signed/Arcane-Desk-<version>-win-x64.exe \
+     apps/desktop/dist-signed/Arcane-Desk-<version>-win-arm64.exe \
+     SHA256SUMS-windows-x64.txt SHA256SUMS-windows-arm64.txt
+   gh release edit <id> --draft=false --prerelease --notes-file notes.txt
+   # the intl leg mirrors with -intl asset names, its release id, and the R2 base
+   ```
+
+8. Commit the repo metadata the publisher wrote
+   (`distribution/desktop-latest*.json`) and delete the transient
+   `distribution/releases/` audit directory — `verify-source.mjs` forbids it
+   in the source tree, so leaving it behind breaks local
+   `npm test`/`typecheck`/`start`.
+
+Trade-off recorded: Windows artifacts built locally have no GitHub Actions
+provenance attestation (no OIDC subject on a personal machine). Nothing
+downstream consumes those attestations today; the release.json sha256/sha512
+anchors remain the integrity contract.
+
+## Auto-update feeds (electron-updater)
+
+Installed clients update in-app via electron-updater against per-channel feed
+files (design: `docs/auto-update-design.md`):
+
+- Mutable objects, rewritten atomically with `latest.json` in the same
+  "switch latest" action (all publish paths: full publish, `--finalize`,
+  `--promote-release`): `update/<channel>/latest.yml` (Windows, lists every
+  architecture's `.exe` in one file) and `update/<channel>/latest-mac.yml`
+  (macOS zips). `latest-arm64.yml` variants do not exist — the client picks
+  per-arch files from `files[]` at download time.
+- Feeds carry only relative paths (`../../releases/...`) and base64 sha512
+  values computed from the signed bytes. Every feed upload is HEAD-verified;
+  any failure aborts the release announcement, same as `latest.json`.
+- Unsigned gate: a release containing Windows `.exe` artifacts with
+  `windowsInstallersSigned: false` hard-fails at switch-latest time.
+  `--allow-unsigned-feed` overrides for emergencies only.
+- `--skip-latest` staging uploads never touch feeds.
+- Rollback = `--promote-release <old-id>`: feeds are regenerated from the
+  promoted manifest (pre-feed manifests missing sha512 are filled by
+  downloading the published bytes and hashing them; the immutable manifest is
+  never rewritten).
+- Backfill for the pre-feed 0.4.3 release (no sha512 in its manifest):
+  `node apps/desktop/scripts/publish-release.mjs --backfill-feeds 0.4.3-1b1e90da --region cn`
+  (`0.4.3-1b1e90da-intl` for intl). sha512 is anchored either on local signed
+  bytes (`--assets-dir`, sha256 must match the manifest) or on bytes
+  downloaded back from the bucket (same sha256 anchor). Backfill only writes
+  the feed objects — it never touches `latest.json` or immutable objects.
+- Client behavior: packaged instances check ~30 s after launch (plus jitter)
+  and then every 24 h; the only visible effect is a badge in the top-left
+  header. Downloads and installs are always explicit user clicks;
+  `ARCANE_UPDATE_FEED_BASE_URL` can point a test build at a loopback feed
+  server, and `ARCANE_DISABLE_UPDATE_CHECK=1` silences the channel.
+- Feed contract smoke (after any backfill/publish, both regions):
+  `node apps/desktop/scripts/verify-update-feed.mjs --region cn` (and
+  `--region intl`). Fetches feeds the way electron-updater does (noCache
+  query, js-yaml parse), resolves relative URLs, applies per-arch file
+  selection, and HEAD-verifies size for every entry.
+- Local full-flow E2E (packaged app, zero production touch):
+  1. Build two versions locally (e.g. `ARCANE_RELEASE_ID=0.4.90-e2e npm run
+     prepare:desktop-release && npm run dist` then package; bump to 0.4.91 and
+     repeat), keeping both installers plus the 0.4.91 `generated/` tree.
+  2. `node apps/desktop/scripts/e2e-local-feed-server.mjs --port 8788`
+  3. Generate the 0.4.91 feed and stage the installer bytes:
+     `node apps/desktop/scripts/e2e-make-feed.mjs --exe dist/Arcane-Desk-0.4.91-win-x64.exe --root generated/e2e-feed --channel private-beta --version 0.4.91`,
+     then copy the installer to `generated/e2e-feed/files/`.
+     (Production feeds are always generated by publish-release.mjs; this helper
+     exists only for the local E2E "new version" side.)
+  4. Install the 0.4.90 package, launch it with
+     `ARCANE_UPDATE_FEED_BASE_URL=http://127.0.0.1:8788/update`.
+  5. Walk the checklist: badge appears (available) → popover → Download →
+     progress → ready → Restart and update → app relaunches on 0.4.91. Then:
+     relaunch 0.4.91 before installing (ready must survive restart via the
+     pending cache), install guard (call install before ready — no-op), and an
+     arm64 machine must receive the arm64 artifact, never the x64 fallback.
 
 ## Skills bundle publish
 
@@ -185,7 +347,12 @@ npm run publish:release --workspace arcane-desktop -- --from-dist dist `
 Local credentials may be supplied with `OSS_RELEASE_KEY_ID` and
 `OSS_RELEASE_KEY_SECRET`, or through the `ArcaneDeskRelease` section of
 `~/.ossutil/arcane-release.conf`. The GitHub CI key is not copied to the local
-profile.
+profile. The intl leg resolves the same way: `CF_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` env first, then the
+`[ArcaneDeskIntlRelease]` section of the same conf file (fields:
+`accountId`/`accessKeyID`/`accessKeySecret`). That R2 token is an
+Object-Read-&-Write account API token scoped to the `arcane-desk-intl` bucket
+only, created 2026-09; rotate it from the Cloudflare R2 API tokens page.
 
 ## Completion checks
 

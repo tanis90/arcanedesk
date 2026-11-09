@@ -25,8 +25,12 @@ export const requiredFiles = [
   "skills/prep/bundle.json",
   "skills/prep/arcane-fvtt-ops/SKILL.md",
   "skills/prep/arcane-fvtt-setup/SKILL.md",
+  "skills/prep/arcane-fvtt-setup/references/local-install.md",
   "skills/prep/arcane-fvtt-setup/references/windows-install.md",
   "skills/prep/arcane-fvtt-setup/references/macos-install.md",
+  "skills/prep/arcane-fvtt-setup/references/server-ssh.md",
+  "skills/prep/arcane-fvtt-setup/references/server-deploy.md",
+  "skills/prep/arcane-fvtt-setup/references/server-vendor-map.md",
   "skills/prep/arcane-fvtt-mods/SKILL.md",
   "skills/prep/arcane-fvtt-mods/references/install.md",
   "skills/prep/arcane-fvtt-mods/references/updates.md",
@@ -36,7 +40,13 @@ export const requiredFiles = [
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/yauzl/package.json",
   "skills/prep/arcane-fvtt-mods/scripts/node_modules/pend/package.json",
   "skills/prep/arcane-actor-update/SKILL.md",
+  "skills/prep/arcane-content-catalog/SKILL.md",
   "skills/prep/arcane-module-reader/SKILL.md",
+  "skills/prep/arcane-module-style-marking/SKILL.md",
+  "skills/prep/arcane-module-style-marking/scripts/mark-apply.mjs",
+  "skills/prep/arcane-module-to-fvtt/SKILL.md",
+  "skills/prep/arcane-module-to-fvtt/scripts/crop-token.mjs",
+  "skills/prep/arcane-module-to-fvtt/scripts/render-pdf-map.mjs",
   "skills/prep/arcane-dnd5e-rules/SKILL.md",
   "skills/prep/arcane-dnd5e-rules/NOTICE.md",
   "skills/prep/arcane-dnd5e-rules/references/character/classes/wizard.md",
@@ -65,6 +75,8 @@ export const requiredFiles = [
   "node_modules/katex/dist/katex.min.css",
   "node_modules/katex/dist/fonts/KaTeX_Main-Regular.woff2",
   "node_modules/mermaid/dist/mermaid.min.js",
+  "node_modules/electron-updater/package.json",
+  "node_modules/electron-updater/out/main.js",
 ];
 
 const forbiddenPaths = [
@@ -77,30 +89,24 @@ const forbiddenPaths = [
 
 export const exactDirectories = new Map([
   ["system-prompts", ["combat.md", "prep.md"]],
-  ["skills/prep", ["arcane-actor-update", "arcane-dnd5e-rules", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "bundle.json"]],
+  ["skills/prep", ["arcane-actor-update", "arcane-content-catalog", "arcane-dnd5e-rules", "arcane-fvtt-mods", "arcane-fvtt-ops", "arcane-fvtt-setup", "arcane-module-reader", "arcane-module-style-marking", "arcane-module-to-fvtt", "bundle.json"]],
   ["skills/prep/arcane-fvtt-mods/scripts", ["archive-zip.mjs", "mod-manager.mjs", "node_modules"]],
   ["scripts", ["archive-zip.mjs", "archive.mjs"]],
   ["distribution", ["community-distribution.json"]],
   ["generated", ["desktop-release.json", "region.json", "renderer-assets"]],
 ]);
 
-// generated/ 的精确清单随 region flavor 变化（国际化方案 M4，评审 P1 修复）：
-// intl 包必须携带组合产出的英文基线（generated/skills-intl/prep 与
-// generated/system-prompts-intl，由 prepare-desktop-release 组合并过 CJK 门禁），
-// cn 包则必须没有它们（cn 构建会清除残留）。组合产出与 skills/prep 同构
-// （cn 全文事实源 + intl 散文覆盖），顶层清单直接复用，新增技能时只需改一处。
+// generated/ 的精确清单随 region flavor 变化：intl 包必须携带英文 system prompts
+// 基线（generated/system-prompts-intl，由 prepare-desktop-release 复制并过 CJK
+// 门禁），cn 包则必须没有它（cn 构建会清除残留）。skills 基线两 flavor 同为
+// 中文单源 skills/prep，不再有组合产物。
 export function packagedLayout(region) {
   if (region !== "intl") return { required: requiredFiles, exact: exactDirectories };
-  const skillTopLevel = exactDirectories.get("skills/prep");
   const exact = new Map(exactDirectories);
-  exact.set("generated", [...exactDirectories.get("generated"), "skills-intl", "system-prompts-intl"]);
-  exact.set("generated/skills-intl", ["prep"]);
-  exact.set("generated/skills-intl/prep", skillTopLevel);
+  exact.set("generated", [...exactDirectories.get("generated"), "system-prompts-intl"]);
   exact.set("generated/system-prompts-intl", ["combat.md", "prep.md"]);
   const required = [
     ...requiredFiles,
-    "generated/skills-intl/prep/bundle.json",
-    ...skillTopLevel.filter((entry) => entry !== "bundle.json").map((id) => `generated/skills-intl/prep/${id}/SKILL.md`),
     "generated/system-prompts-intl/combat.md",
     "generated/system-prompts-intl/prep.md",
   ];
@@ -230,6 +236,16 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     }
   }
 
+  // app-update.yml 是 extraResources 落在 resources/ 根（appRoot 的兄弟，与
+  // runtime/node 同级），不在 asar 应用目录内；electron-updater 运行期必读它，
+  // 缺 updaterCacheDirName 会在更新下载阶段 ENOENT。
+  const appUpdateYml = path.join(path.dirname(appRoot), "app-update.yml");
+  if (!fs.existsSync(appUpdateYml) || !fs.statSync(appUpdateYml).isFile()) {
+    errors.push("missing required file: app-update.yml (resources root)");
+  } else if (!fs.readFileSync(appUpdateYml, "utf8").includes("updaterCacheDirName:")) {
+    errors.push("resources root app-update.yml is missing updaterCacheDirName");
+  }
+
   for (const candidates of electronLicensePaths(appRoot)) {
     const found = candidates.find((p) => fs.existsSync(p));
     if (found) continue;
@@ -254,6 +270,11 @@ export function verifyPackagedApp(appRootArg, options = {}) {
     }
     if (options.expectedRegion && regionManifest.region !== options.expectedRegion) {
       errors.push(`packaged region: expected ${options.expectedRegion}; got ${regionManifest.region}`);
+    }
+    // channel 校验：发布腿必须确认包烙的是目标轨道——烙错轨道的包装出去后，
+    // 客户端轮询的是另一条永不发布的 feed，静默永远收不到更新（0.6.0 事故）。
+    if (options.expectedChannel && releaseManifest.channel !== options.expectedChannel) {
+      errors.push(`packaged release channel: expected ${options.expectedChannel}; got ${String(releaseManifest.channel ?? "missing")}`);
     }
     const directPackages = directDependencyPackages(appRoot, appPackage);
     const electronRuntime = options.electronRuntime ?? inspectElectronRuntime(
@@ -291,11 +312,13 @@ if (invokedPath === import.meta.url) {
   let runtimeFromManifest = false;
   let expectedNodePlatform = null;
   let expectedRegion = null;
+  let expectedChannel = null;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--runtime-from-manifest") runtimeFromManifest = true;
     else if (value === "--expected-node-platform") expectedNodePlatform = argv[++index] ?? null;
     else if (value === "--expected-region") expectedRegion = argv[++index] ?? null;
+    else if (value === "--expected-channel") expectedChannel = argv[++index] ?? null;
     else if (value.startsWith("--")) {
       console.error(`unknown option: ${value}`);
       process.exit(2);
@@ -309,8 +332,12 @@ if (invokedPath === import.meta.url) {
     console.error(`--expected-region must be one of cn/intl; got: ${expectedRegion}`);
     process.exit(2);
   }
+  if (expectedChannel && !/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(expectedChannel)) {
+    console.error(`--expected-channel is not a safe channel name: ${expectedChannel}`);
+    process.exit(2);
+  }
   if (!appRootArg) {
-    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>]");
+    console.error("usage: node scripts/verify-package.mjs <packaged-resources-app-dir> [--runtime-from-manifest] [--expected-node-platform <platform>] [--expected-region <cn|intl>] [--expected-channel <channel>]");
     process.exit(2);
   }
   // 交叉构建（x64 runner 打 arm64 包）无法执行目标 exe：改用包内 manifest 的
@@ -325,6 +352,7 @@ if (invokedPath === import.meta.url) {
     : {};
   options.expectedNodePlatform = expectedNodePlatform;
   options.expectedRegion = expectedRegion;
+  options.expectedChannel = expectedChannel;
   const result = verifyPackagedApp(appRootArg, options);
   const stream = result.ok ? process.stdout : process.stderr;
   stream.write(`${JSON.stringify(result, null, 2)}\n`);

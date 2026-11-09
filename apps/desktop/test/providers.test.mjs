@@ -287,7 +287,7 @@ test("registers Qwen thinking compatibility only for verified official hybrid en
 });
 
 test("real Pi payload sends Qwen off and on flags before the network boundary", async () => {
-  const { streamSimple } = await import("../../../node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js");
+  const { streamSimple } = await import("@earendil-works/pi-ai/api/openai-completions");
   const { file } = tempConfig();
   const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
   store.upsertProvider({ id: "qwen-test", baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
@@ -297,7 +297,8 @@ test("real Pi payload sends Qwen off and on flags before the network boundary", 
   const model = { ...config.models[0], provider: "qwen-test", api: config.api, baseUrl: config.baseUrl };
   for (const reasoning of ["off", "low"]) {
     let payload;
-    const result = await streamSimple(model, { systemPrompt: "You are a concise assistant.", messages: [{ role: "user", content: "OK", timestamp: 0 }] }, {
+    // pi-ai 0.86+:低层 API 收 TranscriptContext,system prompt 作为首条 system 消息传入
+    const result = await streamSimple(model, { messages: [{ role: "system", content: "You are a concise assistant.", timestamp: 0 }, { role: "user", content: "OK", timestamp: 0 }] }, {
       apiKey: "dummy-no-network", reasoning,
       onPayload(value) { payload = value; throw Error("DRY_RUN_STOP_BEFORE_NETWORK"); },
     }).result();
@@ -476,4 +477,97 @@ test("migrates a pre-v3 protected key into a target-bound encrypted payload", ()
     secret: "legacy-protected-key",
     target: "origin:https://provider.example",
   });
+});
+
+test("credentialForHost finds a provider by endpoint host, regardless of path", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "deepseek",
+    name: "DeepSeek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [{ id: "deepseek-flash" }],
+  });
+
+  const cred = store.credentialForHost("api.deepseek.com");
+  assert.deepEqual(cred, {
+    apiKey: "sk-deepseek-user",
+    baseUrl: "https://api.deepseek.com/v1",
+    providerId: "deepseek",
+  });
+  // 大小写与协议不敏感；未知 host 返回 null（绝不回落到别的 provider）。
+  assert.equal(store.credentialForHost("API.DEEPSEEK.COM")?.apiKey, "sk-deepseek-user");
+  assert.equal(store.credentialForHost("api.bigmodel.cn"), null);
+  assert.equal(store.credentialForHost(""), null);
+});
+
+test("credentialForHost refuses providers whose credential target was tampered with", () => {
+  const { file } = tempConfig();
+  const storage = testSecretStorage();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [],
+  });
+  const persisted = JSON.parse(readFileSync(file, "utf8"));
+  persisted.providers[0].baseUrl = "https://attacker.example/v1";
+  writeFileSync(file, JSON.stringify(persisted));
+
+  const reloaded = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, storage);
+  // key 的 credential target 仍绑在 deepseek origin：被改过的公开配置拿不到 key。
+  assert.equal(reloaded.credentialForHost("api.deepseek.com"), null);
+  assert.equal(reloaded.credentialForHost("attacker.example"), null);
+});
+
+test("credentialForHost skips providers without a usable key", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "",
+    models: [],
+  });
+  assert.equal(store.credentialForHost("api.deepseek.com"), null);
+});
+
+test("rejects API keys with non-ASCII characters (paste/IME artifacts)", () => {
+  const { file } = tempConfig();
+  const store = new ProviderStore(file, () => {}, { ARCANE_SPARK_ENABLED: "0" }, testSecretStorage());
+  // 真实事故形态：中文 IME 把 key 第 4 位打成 零。
+  const cjk = store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-零eekseek-user",
+    models: [],
+  });
+  assert.equal(cjk.ok, false);
+  assert.equal(store.data.providers.length, 0, "rejected key must not persist");
+
+  // key 中间的空格同样是粘贴产物。
+  const spaced = store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-abc def",
+    models: [],
+  });
+  assert.equal(spaced.ok, false);
+  assert.equal(store.data.providers.length, 0);
+
+  // 合法 ASCII key 照常保存。
+  assert.deepEqual(store.upsertProvider({
+    id: "deepseek",
+    api: "openai-completions",
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "sk-deepseek-user",
+    models: [],
+  }), { ok: true });
 });

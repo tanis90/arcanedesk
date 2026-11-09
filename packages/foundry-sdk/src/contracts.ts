@@ -432,7 +432,13 @@ export interface ActorChanges {
 }
 export interface ActorEditInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; changes: ActorChanges }
 export interface ActorGrantInput extends PrepWriteIdentity { actorUuid: string; readState: ActorReadState; items: CompendiumGrant[] }
-export interface ActorAdvanceChoices { skills?: string[]; tools?: string[]; cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg"; abilityScore?: Record<string, number>; languages?: string[] }
+/** Slot-addressed choices: every key is a slot string copied verbatim from advancement_plan
+ *  choiceRequirements[].key. Trait/pool slots take an array of trait keys or pool UUIDs whose
+ *  length must equal the requirement's count; ASI slots take { abilityScore } with per-ability
+ *  floating picks (race fixed bonuses merge in automatically); asi-or-feat slots take either
+ *  { abilityScore } or { feat: uuid }, never both. hp stays a hidden override for HP steps. */
+export type ActorAdvanceSlotValue = string[] | { abilityScore?: Record<string, number>; feat?: string };
+export interface ActorAdvanceChoices { bySlot?: Record<string, ActorAdvanceSlotValue>; hp?: "max" | "avg" }
 /** fullSpellList: when true and the class is a prepared-list caster (its advancement_plan spellBudget
  *  carries fullList), the runtime grants the whole annotated class spell list up to the target
  *  level's highest slot level after advancement, chunked and deduplicated by source UUID.
@@ -490,7 +496,9 @@ export interface CompendiumBrowseInput {
 export interface ContentListStepSummary { slot: string; level: number; kind: string; label: string; summary?: string }
 export interface ContentListChoiceRequirement {
   slot: string; level: number; kind: string; label: string; count: number;
-  valueFormat: string; fill: string[]; candidates?: string[]; candidateNames?: Record<string, string>; cap?: number; required: boolean;
+  /** Where the value goes on actor_advance: bySlot[key], except "subclassUuid" which stays the
+   *  top-level subclassUuid argument. For every other valueFormat, key === slot. */
+  valueFormat: string; key: string; candidates?: string[]; candidateNames?: Record<string, string>; cap?: number; mode?: string; note?: string; required: boolean;
 }
 export interface ContentListCandidate {
   uuid: string; name: string; identifier?: string | null; type: string | null; level: number | null;
@@ -513,14 +521,33 @@ export interface ContentListFullSpellList {
  *  computes slots. Prepared-list casters (2014 cleric/druid/paladin/artificer) instead receive
  *  fullList — every class spell up to their highest slot level, enumerated from module-annotated
  *  spell packs (flags.<moduleId>.spellClasses) — because they "know" their whole class list and
- *  preparation is left to the DM and players. Null for non-spellcasting classes. */
+ *  preparation is left to the DM and players. Null for non-spellcasting classes.
+ *  Subclass-introduced casting (source "subclass"; 2014 Eldritch Knight / Arcane Trickster via
+ *  the shared third-caster table): known only — cantrips ride the subclass's own ItemChoice
+ *  advancement slot and are deliberately absent here; leveled picks go additionalItems, drawn
+ *  from the spellListClassUuid list (the wizard list) with browse maxLevel = maxSpellLevel. */
 export interface ContentListSpellBudget {
   ability: string | null;
   progression: string;
+  source?: "subclass";
   cantrips?: number;
   known?: number;
   book?: number;
   fullList?: ContentListFullSpellList;
+  /** Highest slot level at the target level (subclass casters only); browse maxLevel filter. */
+  maxSpellLevel?: number;
+  /** Class whose spell list the picks come from; feed back to compendium_browse classUuid. */
+  spellListClassUuid?: string;
+  /** Advisory natural-language rule note (school restrictions, fixed Mage Hand). Never validated. */
+  note?: string;
+}
+/** A spell the advance will grant automatically via a fixed ItemGrant on the class/subclass/race
+ *  chain (up to targetLevel). Known/cantrip-budget casters must not spend self-picks on these:
+ *  the write dedupes the duplicate and silently wastes one budget slot (lunar sorcery lesson,
+ *  2026-09-17). ItemChoice pools are not listed — they are choices in choiceRequirements. */
+export interface AutoGrantedSpell {
+  uuid: string; name: string | null; spellLevel: number | null; grantLevel: number;
+  source: "class" | "subclass" | "race" | string;
 }
 export interface AdvancementPlanResult {
   status: "completed" | "rejected"; code?: string; message?: string;
@@ -530,10 +557,14 @@ export interface AdvancementPlanResult {
   race?: { uuid: string; name: string | null; movement: Record<string, string | number> | null };
   automaticSteps?: ContentListStepSummary[];
   choiceRequirements?: ContentListChoiceRequirement[];
-  /** Aggregate per single-fill choices key: total values needed and the consuming slots in order.
-   *  Shared keys (rogue skills 4+1+2) otherwise read as independent requirements. */
-  fillAllocation?: Array<{ fill: string; total: number; slots: Array<{ slot: string; label: string; count: number }>; note?: string }>;
+  /** One skeleton per bySlot key so the caller fills blanks instead of reconstructing shapes:
+   *  [] for trait-key/pool-uuid slots, { abilityScore: {} } for ASI slots (asi-or-feat may
+   *  substitute { feat: "<uuid>" }). subclass-uuid requirements have no entry. */
+  choicesTemplate?: Record<string, string[] | { abilityScore: Record<string, number> }>;
   spellBudget?: ContentListSpellBudget | null;
+  /** Spells this advance auto-grants via fixed ItemGrants (subclass bonus spells, race spell
+   *  grants). Exclude from known/cantrip self-picks. Absent when none. */
+  autoGrantedSpells?: AutoGrantedSpell[];
   coverage?: { nativeStepCount: number; automaticStepCount: number; choiceStepCount: number; uncoveredRequiredSteps: string[] };
   warnings?: Array<RuntimeArguments>;
 }

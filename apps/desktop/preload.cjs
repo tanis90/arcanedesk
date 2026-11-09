@@ -53,6 +53,8 @@ contextBridge.exposeInMainWorld("arcane", {
   prepGetDir: () => ipcRenderer.invoke("prep:get-dir"),
   /** Pick a prep directory via OS dialog; switching dir starts a NEW prep session. */
   prepChooseDir: (context) => ipcRenderer.invoke("prep:choose-dir", context),
+  /** Switch to a recent prep directory picked from the in-app dropdown (no OS dialog); also starts a NEW prep session. */
+  prepSetDir: (context, path) => ipcRenderer.invoke("prep:set-dir", { ...context, path }),
   /** Session management (Pi SessionManager JSONL sessions). */
   listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
   sessionNavigation: () => ipcRenderer.invoke("sessions:navigation"),
@@ -116,6 +118,18 @@ contextBridge.exposeInMainWorld("arcane", {
   fetchProviderModels: (input) => ipcRenderer.invoke("providers:fetch-models", input),
   /** Open the Arcane Desk website in the user's default browser. */
   openArcaneWebsite: () => ipcRenderer.invoke("app:open-arcane-website"),
+  /** 应用内更新（auto-update-design §5.3）：药丸/浮层的全部动作与状态订阅。 */
+  checkUpdates: () => ipcRenderer.invoke("update:check"),
+  downloadUpdate: () => ipcRenderer.invoke("update:download"),
+  installUpdate: () => ipcRenderer.invoke("update:install"),
+  updateState: () => ipcRenderer.invoke("update:state"),
+  onUpdateState: (callback) => {
+    const listener = (_event, payload) => {
+      if (payload?.type === "update_state") callback(payload.state);
+    };
+    ipcRenderer.on("arcane:event", listener);
+    return () => ipcRenderer.removeListener("arcane:event", listener);
+  },
   /** Region 派生的对外链接:{ region, websiteUrl, supportLinks }（D1，renderer 不硬编码域名）。 */
   getAppLinks: () => ipcRenderer.invoke("app:links"),
   /** Packaged app version shown in Settings → General. */

@@ -1,6 +1,7 @@
-// search/errors.js — 搜索错误的统一形状。
+// search/errors.js — 搜索/抓取错误的统一形状。
 // adapter/服务端只抛 SearchError(code)；上游原始报错留在 detail 里只进日志，
 // 用户可见文案全部走 err.search.* 的 IPC 结构化 key（renderer fmtIpc 本地化）。
+// web_fetch 复用同一类型与 key 前缀：两工具共享凭据、超时与错误面。
 
 import { err } from "../i18n-error.mjs";
 
@@ -11,16 +12,20 @@ const IPC_KEYS = {
   backendUnavailable: "err.search.backendUnavailable",
   timeout: "err.search.timeout",
   cancelled: "err.search.cancelled",
-  budgetExhausted: "err.search.budgetExhausted",
   empty: "err.search.empty",
   notConfigured: "err.search.notConfigured",
   badRequest: "err.search.badRequest",
+  // web_fetch（M8）
+  pageTooLarge: "err.fetch.pageTooLarge",
+  fetchBlocked: "err.fetch.blocked",
+  fetchUnavailable: "err.fetch.unavailable",
+  rateLimited: "err.fetch.rateLimited",
 };
 
 export class SearchError extends Error {
   /**
    * @param {keyof typeof IPC_KEYS} code
-   * @param {{ detail?: string, backend?: string, used?: number | string }} meta
+   * @param {{ detail?: string, backend?: string, used?: number | string, retryAfter?: number }} meta
    */
   constructor(code, meta = {}) {
     super(`search:${code}${meta.detail ? ` (${meta.detail})` : ""}`);
@@ -34,11 +39,12 @@ export class SearchError extends Error {
     return err(IPC_KEYS[this.code] ?? "err.search.backendUnavailable", {
       ...(this.meta?.backend ? { backend: this.meta.backend } : {}),
       ...(this.meta?.used != null ? { used: String(this.meta.used) } : {}),
+      ...(this.meta?.retryAfter != null ? { seconds: String(this.meta.retryAfter) } : {}),
     });
   }
 }
 
-/** HTTP 状态 → 错误码的公共映射（z-ai/brave/spark 通用）。 */
+/** HTTP 状态 → 错误码的公共映射（z-ai/spark 通用）。 */
 export function statusToErrorCode(status) {
   if (status === 401 || status === 403) return "authFailed";
   if (status === 429) return "quotaExceeded";
@@ -53,5 +59,6 @@ export function coerceSearchError(error, backend) {
   return new SearchError(code, {
     backend,
     ...(error?.message ? { detail: String(error.message).slice(0, 200) } : {}),
+    ...(error?.retryAfter != null ? { retryAfter: error.retryAfter } : {}),
   });
 }

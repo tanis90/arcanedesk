@@ -8,6 +8,7 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const crashPhase = process.argv.find(arg => arg.startsWith("--crash-phase="))?.split("=")[1];
 const panelUi = process.argv.includes("--panel-ui");
+const panelSwitchProbe = process.argv.includes("--panel-switch-probe");
 const mdReader = process.argv.includes("--md-reader");
 const mdReaderReview = process.argv.includes("--md-reader-review");
 const sidebarRestart = process.argv.includes("--sidebar-restart");
@@ -178,6 +179,7 @@ app.on("will-quit", () => {
       return;
     }
     if (panelUi) { assert.equal(requests.length, 0); console.log("PASS panel UI: real connection retry, right-pane failure, agent recovery and reload"); return; }
+    if (panelSwitchProbe) { assert.equal(requests.length, 0); return; }
     if (mdReader) { assert.equal(requests.length, 0); console.log("PASS md reader: note click opens the right pane, both exits, Foundry takeover with keep-alive and the error pages"); return; }
     if (foundryScenario) {
       assert.deepEqual(requests, ["A", "B", "A"]);
@@ -275,11 +277,15 @@ app.on("quit", () => {
     await require("./panel-ui.cjs")({ window, evaluate, ui, until });
     finalExit = true; app.quit(); return;
   }
-  if (mdReader || mdReaderReview) {
+  if (mdReader || mdReaderReview || panelSwitchProbe) {
     // 阅读器的 resolve 基准是当前会话的工作目录(spec §4.2),所以先把备团目录指到 scratch 里。
     pickedDirectory = path.join(scratch, "campaign"); mkdirSync(pickedDirectory, { recursive: true });
     assert.equal((await evaluate('window.arcane.prepChooseDir(modeContext())')).ok, true);
     await ui('workspaceReady.has(selectedSessionId) && !restoringView');
+    if (panelSwitchProbe) {
+      await require("./panel-switch-probe.cjs")({ window, evaluate, ui, until, sleep, project: pickedDirectory });
+      finalExit = true; app.quit(); return;
+    }
     if (mdReaderReview) {
       // CDP 验收(test/review-md-reader.mjs)从进程外驱动:这里只把现场准备好然后待命。
       // 笔记写在真的磁盘上,点击、换页、Esc 全部由 runner 通过 CDP 发——

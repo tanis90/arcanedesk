@@ -189,6 +189,8 @@ Desktop 注入 `requestId`、会话/任务/toolCall 身份、绑定 world、必�
 证据；模型 schema 不暴露这些字段。读取的 UUID 与动作引用可直接用于下一步。
 消息所属会话、世界、选中目标不随当前可见聊天或用户后来点选改变。
 world 绑定包含 Foundry origin 与 worldId，避免不同服务器的同名/同 ID 世界相互混淆。
+origin 比较前对 loopback 写法归一（`localhost`/`127.0.0.1`/`[::1]` 视为等价，scheme 与端口仍须一致），
+其余主机名维持逐字节精确比较。
 在用户消息入队时固定代码读取轻量 page/world/selection 身份，写入该输入的宿主元数据，
 不将整场景注入 prompt；当时未连接则记录空身份，不能执行时猜测 selected 指向。
 

@@ -12,13 +12,17 @@ import {
   buildCatalog,
   buildWorldCatalog,
   catalogModules,
+  catalogWorlds,
   commitStage,
   commitWorldStage,
   compareVersions,
+  deriveWorldsIndexUrl,
+  inspectModule,
   inspectWorldEnvironment,
   listInstalledModules,
-  MIRROR_INDEX_URL,
+  mirrorCatalog,
   resolveIndexUrl,
+  resolveWorldsIndexUrl,
   runCli,
   stageModule,
   stageWorldEnvironment,
@@ -30,6 +34,7 @@ const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const manifestUrl = "https://packages.example.test/demo/2.0.0/module.json";
 const downloadUrl = "https://packages.example.test/demo/2.0.0/demo.zip";
 const indexUrl = "https://packages.example.test/index.json";
+const worldsIndexUrl = "https://packages.example.test/worlds/index.json";
 
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
@@ -69,6 +74,78 @@ async function createContentZip(file, directory, manifestName, manifest, extraNa
     extraName,
   ]);
   return readFile(file);
+}
+
+// world-catalog 展示索引合并测试的公共夹具：根索引是唯一工件事实来源，
+// 展示索引只提供白名单展示字段 + web 专用视觉字段 + 未知字段。
+function worldRootIndex() {
+  return {
+    generated: "2026-10-13T00:00:00+08:00",
+    packages: [],
+    worlds: [{
+      id: "arcane-demo",
+      title: "Arcane Demo",
+      version: "0.2.0",
+      manifestUrl: "https://packages.example.test/worlds/arcane-demo/0.2.0/world.json",
+      manifestBytes: 500,
+      manifestSha256: "9".repeat(64),
+      downloadUrl: "https://packages.example.test/worlds/arcane-demo/0.2.0/arcane-demo.zip",
+      bytes: 600,
+      sha256: "8".repeat(64),
+      defaultProfile: "arcane-demo-full",
+    }],
+    profiles: [{
+      id: "arcane-demo-full",
+      revision: 1,
+      profileUrl: "https://packages.example.test/profiles/arcane-demo-full/1/profile.json",
+      profileBytes: 10,
+      profileSha256: "7".repeat(64),
+    }],
+  };
+}
+
+const displayEntryFixture = {
+  id: "arcane-demo",
+  version: "0.2.0",
+  tagline: "酒馆、火球与一场即兴冒险",
+  description: "为新手 DM 准备的演示世界。",
+  compat: "Foundry 13.351 · dnd5e 5.3.3",
+  players: "3-5 名玩家",
+  duration: "2-4 小时",
+  stats: { scenes: 3, actors: 12, journals: 5 },
+  tags: ["官方示例", "新手友好"],
+  credits: [
+    { author: "Arcane Team", role: "世界设计", name: "某位作者", items: ["酒馆", "地窖"] },
+    { author: "某位画师", role: "美术" },
+  ],
+  moduleLinks: [{ label: "CNMods", url: "https://www.cnmods.net/web/moduleDetail?keyId=1" }],
+  previewBase: "https://cdn.example.test/worlds/arcane-demo/previews",
+  cover: "cover.webp",
+  maps: [{ file: "maps/tavern.webp", thumb: "maps/tavern.thumb.webp" }],
+  characters: [{ file: "characters/bella.webp", name: "贝拉" }],
+  unknownFutureField: { anything: "goes" },
+};
+
+function displayIndexFor(worlds) {
+  return { generated: "2026-10-13T01:00:00+08:00", worlds };
+}
+
+function worldCatalogFetch(rootIndex, worldsIndex) {
+  return async (url) => {
+    if (url === indexUrl) return jsonResponse(rootIndex);
+    if (url === worldsIndexUrl) return worldsIndex();
+    return new Response("not found", { status: 404 });
+  };
+}
+
+async function runWorldCatalog(fetchImpl, worldsIndexOverride = worldsIndexUrl) {
+  return catalogWorlds({
+    dataDir: path.join(os.tmpdir(), "arcane-definitely-missing-data-dir"),
+    fetchImpl,
+    indexUrl,
+    worldsIndexUrl: worldsIndexOverride,
+    allowMissingDataDir: true,
+  });
 }
 
 test("loose Foundry versions compare numerically and refuse ambiguous formats", () => {
@@ -297,6 +374,78 @@ test("an unindexed stage cannot commit without accepting its exact computed hash
   });
   assert.equal(committed.version, "2.0.0");
   assert.equal(committed.backup, null);
+});
+
+test("github mirror prefix only rewrites GitHub hosts and keeps identity checks on original URLs", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "arcane-mod-manager-prefix-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const ghManifestUrl = "https://github.com/demo/mod/releases/latest/download/module.json";
+  const ghDownloadUrl = "https://github.com/demo/mod/releases/download/2.0.0/module.zip";
+  const prefix = "https://gh-proxy.example.test";
+  const remoteManifest = { id: "demo", title: "Demo", version: "2.0.0", download: ghDownloadUrl, manifest: ghManifestUrl };
+  const zipFile = path.join(root, "fixture.zip");
+  await execFileAsync("python", [
+    "-c",
+    "import json,sys,zipfile; m=json.loads(sys.argv[2]); z=zipfile.ZipFile(sys.argv[1],'w'); z.writestr('module.json',json.dumps(m)); z.close()",
+    zipFile,
+    JSON.stringify(remoteManifest),
+  ]);
+  const zip = await readFile(zipFile);
+  const requested = [];
+  const fakeFetch = async (url) => {
+    requested.push(url);
+    if (url === `${prefix}/${ghManifestUrl}`) return jsonResponse(remoteManifest);
+    if (url === `${prefix}/${ghDownloadUrl}`) return binaryResponse(zip);
+    if (url === indexUrl) return jsonResponse({ generated: "now", packages: [] });
+    return new Response("not found", { status: 404 });
+  };
+  const staged = await stageModule({
+    manifestUrl: ghManifestUrl,
+    expectedId: "demo",
+    expectedVersion: "2.0.0",
+    expectedDownloadUrl: ghDownloadUrl,
+    fetchImpl: fakeFetch,
+    indexUrl,
+    tempRoot: root,
+    githubMirrorPrefix: prefix,
+  });
+  assert.equal(staged.requiresSecondConfirmation, true);
+  assert.equal(staged.manifestUrl, ghManifestUrl);
+  assert.equal(staged.downloadUrl, ghDownloadUrl);
+  assert.equal(staged.archiveSha256, sha256(zip));
+  assert.deepEqual(
+    [...requested].sort(),
+    [`${prefix}/${ghManifestUrl}`, `${prefix}/${ghDownloadUrl}`, indexUrl].sort(),
+  );
+});
+
+test("github mirror prefix must be a plain https URL", async () => {
+  const neverFetch = async () => {
+    throw new Error("must not fetch");
+  };
+  await assert.rejects(
+    stageModule({
+      manifestUrl,
+      expectedId: "demo",
+      expectedVersion: "2.0.0",
+      expectedDownloadUrl: downloadUrl,
+      fetchImpl: neverFetch,
+      indexUrl,
+      githubMirrorPrefix: "http://gh-proxy.example.test",
+    }),
+    /github mirror prefix must be an HTTPS URL/,
+  );
+  await assert.rejects(
+    inspectModule({
+      manifestUrl,
+      dataDir: path.join(os.tmpdir(), "arcane-definitely-missing-data-dir"),
+      allowMissingDataDir: true,
+      fetchImpl: neverFetch,
+      indexUrl,
+      githubMirrorPrefix: "gh-proxy.example.test",
+    }),
+    /github mirror prefix must be an absolute URL/,
+  );
 });
 
 test("world profiles resolve current stable packages independently from world artifacts", async (t) => {
@@ -636,10 +785,10 @@ test("world profiles resolve current stable packages independently from world ar
   assert.equal(secondReceipt.packages.find((entry) => entry.id === "demo-module").resolvedVersion, "2.1.0");
 });
 
-test("resolveIndexUrl: --index-url 参数 > ARCANE_MOD_INDEX_URL > 内置默认（M1 钉死的语义）", () => {
+test("resolveIndexUrl: --index-url 参数 > ARCANE_MOD_INDEX_URL；两者都缺失时报错，不静默回落", () => {
   const intl = "https://dl.arcanedesk.app/mods/index-en.json";
-  assert.equal(resolveIndexUrl(undefined, {}), MIRROR_INDEX_URL);
-  assert.equal(resolveIndexUrl("", {}), MIRROR_INDEX_URL);
+  assert.throws(() => resolveIndexUrl(undefined, {}), /mod index URL is required/);
+  assert.throws(() => resolveIndexUrl("", {}), /mod index URL is required/);
   assert.equal(resolveIndexUrl(undefined, { ARCANE_MOD_INDEX_URL: intl }), intl);
   assert.equal(resolveIndexUrl("  ", { ARCANE_MOD_INDEX_URL: intl }), intl);
   assert.equal(
@@ -667,6 +816,139 @@ test("catalog/world catalog report the index URL actually used", async () => {
   assert.equal(worldCatalog.indexUrl, indexUrl);
 });
 
+test("world-catalog merges whitelisted display fields into rows without touching artifact facts", async () => {
+  const catalog = await runWorldCatalog(worldCatalogFetch(worldRootIndex(), () => jsonResponse(displayIndexFor([displayEntryFixture]))));
+  assert.equal(catalog.displayIndexStatus, "ok");
+  assert.equal(catalog.displayIndexUrl, worldsIndexUrl);
+  assert.equal(catalog.displayIndexGenerated, "2026-10-13T01:00:00+08:00");
+  const row = catalog.rows[0];
+  // 工件字段全部来自根索引
+  assert.equal(row.id, "arcane-demo");
+  assert.equal(row.mirrorVersion, "0.2.0");
+  assert.equal(row.bytes, 600);
+  assert.equal(row.sha256, "8".repeat(64));
+  assert.equal(row.manifestUrl, "https://packages.example.test/worlds/arcane-demo/0.2.0/world.json");
+  assert.equal(row.downloadUrl, "https://packages.example.test/worlds/arcane-demo/0.2.0/arcane-demo.zip");
+  // 展示字段平铺进行内
+  assert.equal(row.tagline, "酒馆、火球与一场即兴冒险");
+  assert.equal(row.description, "为新手 DM 准备的演示世界。");
+  assert.equal(row.compat, "Foundry 13.351 · dnd5e 5.3.3");
+  assert.equal(row.players, "3-5 名玩家");
+  assert.equal(row.duration, "2-4 小时");
+  assert.deepEqual(row.stats, { scenes: 3, actors: 12, journals: 5 });
+  assert.deepEqual(row.tags, ["官方示例", "新手友好"]);
+  assert.deepEqual(row.credits, [
+    { author: "Arcane Team", role: "世界设计", name: "某位作者", items: ["酒馆", "地窖"] },
+    { author: "某位画师", role: "美术" },
+  ]);
+  assert.deepEqual(row.moduleLinks, [{ label: "CNMods", url: "https://www.cnmods.net/web/moduleDetail?keyId=1" }]);
+  // version 与根索引一致时不挂 displayVersion
+  assert.equal("displayVersion" in row, false);
+});
+
+test("world-catalog degrades to artifact-only rows when the display index is unusable", async () => {
+  const rootIndex = worldRootIndex();
+  const displayFields = ["tagline", "description", "compat", "players", "duration", "stats", "tags", "credits", "moduleLinks", "displayVersion"];
+  const cases = {
+    "HTTP 404": () => new Response("nope", { status: 404 }),
+    "invalid JSON": () => bufferResponse(Buffer.from("<html>definitely not json</html>"), "application/json"),
+    "field type error": () => jsonResponse(displayIndexFor([{ id: "arcane-demo", players: 42 }])),
+    "stats not a number": () => jsonResponse(displayIndexFor([{ id: "arcane-demo", stats: { scenes: 3, actors: "12", journals: 5 } }])),
+    "credits missing author": () => jsonResponse(displayIndexFor([{ id: "arcane-demo", credits: [{ role: "美术" }] }])),
+    "moduleLinks insecure URL": () => jsonResponse(displayIndexFor([{ id: "arcane-demo", moduleLinks: [{ label: "x", url: "http://www.cnmods.net/" }] }])),
+    "one broken entry poisons the whole index": () => jsonResponse(displayIndexFor([
+      displayEntryFixture,
+      { id: "another-world", tagline: "好简介" },
+      { id: "broken-world", tags: "not-an-array" },
+    ])),
+  };
+  for (const [label, respond] of Object.entries(cases)) {
+    const catalog = await runWorldCatalog(worldCatalogFetch(rootIndex, respond));
+    assert.equal(catalog.displayIndexStatus, "unavailable", label);
+    assert.equal(catalog.displayIndexUrl, worldsIndexUrl, label);
+    assert.equal(catalog.displayIndexGenerated, null, label);
+    const row = catalog.rows[0];
+    assert.equal(row.id, "arcane-demo", label);
+    assert.equal(row.mirrorVersion, "0.2.0", label);
+    for (const field of displayFields) {
+      assert.equal(field in row, false, `${label}: ${field} must be absent`);
+    }
+    // 不部分应用：好条目也不能在坏索引下保留展示字段
+    assert.equal(row.tagline, undefined, label);
+  }
+});
+
+test("display index version mismatch becomes displayVersion while artifacts stay root-index-only", async () => {
+  const entry = { ...displayEntryFixture, version: "0.3.0" };
+  const catalog = await runWorldCatalog(worldCatalogFetch(worldRootIndex(), () => jsonResponse(displayIndexFor([entry]))));
+  const row = catalog.rows[0];
+  assert.equal(row.mirrorVersion, "0.2.0");
+  assert.equal(row.bytes, 600);
+  assert.equal(row.sha256, "8".repeat(64));
+  assert.equal(row.manifestUrl, "https://packages.example.test/worlds/arcane-demo/0.2.0/world.json");
+  assert.equal(row.downloadUrl, "https://packages.example.test/worlds/arcane-demo/0.2.0/arcane-demo.zip");
+  assert.equal(row.displayVersion, "0.3.0");
+  assert.equal(row.tagline, displayEntryFixture.tagline);
+});
+
+test("display index web-only assets and unknown fields never reach the output", async () => {
+  const catalog = await runWorldCatalog(worldCatalogFetch(worldRootIndex(), () => jsonResponse(displayIndexFor([displayEntryFixture]))));
+  const row = catalog.rows[0];
+  for (const field of ["previewBase", "cover", "maps", "characters", "unknownFutureField", "version"]) {
+    assert.equal(field in row, false, `${field} must never appear in world-catalog rows`);
+  }
+  assert.equal(typeof row.tagline, "string");
+});
+
+test("buildWorldCatalog without a display payload reports the derived display index as unavailable", () => {
+  const catalog = buildWorldCatalog(worldRootIndex(), { worlds: [] }, indexUrl);
+  assert.equal(catalog.displayIndexStatus, "unavailable");
+  assert.equal(catalog.displayIndexUrl, "https://packages.example.test/worlds/index.json");
+  assert.equal(catalog.displayIndexGenerated, null);
+  const row = catalog.rows[0];
+  assert.equal(row.mirrorVersion, "0.2.0");
+  assert.equal(row.tagline, undefined);
+});
+
+test("resolveWorldsIndexUrl: --worlds-index-url 参数 > ARCANE_WORLDS_INDEX_URL > 根索引 origin 派生", () => {
+  const cnRoot = "https://arcane-package.oss-cn-beijing.aliyuncs.com/index.json";
+  const intlRoot = "https://dl.arcanedesk.app/mods/index-en.json";
+  // 派生：origin + /worlds/index.json；intl 派生地址目前 404，由展示降级路径吸收，是预期行为
+  assert.equal(deriveWorldsIndexUrl(cnRoot), "https://arcane-package.oss-cn-beijing.aliyuncs.com/worlds/index.json");
+  assert.equal(deriveWorldsIndexUrl(intlRoot), "https://dl.arcanedesk.app/worlds/index.json");
+  assert.equal(resolveWorldsIndexUrl(undefined, intlRoot, {}), "https://dl.arcanedesk.app/worlds/index.json");
+  assert.equal(resolveWorldsIndexUrl("", intlRoot, {}), "https://dl.arcanedesk.app/worlds/index.json");
+  assert.equal(
+    resolveWorldsIndexUrl(undefined, intlRoot, { ARCANE_WORLDS_INDEX_URL: "https://env.example.test/worlds.json" }),
+    "https://env.example.test/worlds.json",
+  );
+  assert.equal(
+    resolveWorldsIndexUrl("https://flag.example.test/worlds.json", intlRoot, { ARCANE_WORLDS_INDEX_URL: "https://env.example.test/worlds.json" }),
+    "https://flag.example.test/worlds.json",
+  );
+  assert.throws(() => resolveWorldsIndexUrl("http://insecure.example.test/worlds.json", intlRoot, {}), /HTTPS/);
+  assert.throws(() => resolveWorldsIndexUrl(undefined, "not-a-url", {}), /absolute URL/);
+});
+
+test("--worlds-index-url 参数优先于派生地址：展示索引请求打到显式地址", async () => {
+  const requested = [];
+  const overrideUrl = "https://operator.example.test/worlds/display.json";
+  const fetchImpl = async (url) => {
+    requested.push(String(url));
+    if (url === indexUrl) return jsonResponse(worldRootIndex());
+    if (url === overrideUrl) return jsonResponse(displayIndexFor([{ id: "arcane-demo", tagline: "运维显式地址" }]));
+    return new Response("not found", { status: 404 });
+  };
+  const catalog = await runWorldCatalog(fetchImpl, overrideUrl);
+  assert.equal(catalog.displayIndexUrl, overrideUrl);
+  assert.equal(catalog.displayIndexStatus, "ok");
+  assert.equal(catalog.rows[0].tagline, "运维显式地址");
+  // 派生地址从未被请求
+  assert.equal(requested.includes(worldsIndexUrl), false);
+  const help = await runCli(["help"]);
+  assert.match(help.usage, /--worlds-index-url/);
+});
+
 test("CLI rejects an insecure --index-url before any network access", async () => {
   await assert.rejects(
     runCli(["catalog", "--data-dir", os.tmpdir(), "--index-url", "http://insecure.example.test/index.json"]),
@@ -676,4 +958,90 @@ test("CLI rejects an insecure --index-url before any network access", async () =
     runCli(["world-catalog", "--data-dir", os.tmpdir(), "--index-url", "not-a-url"]),
     /must be an absolute URL/,
   );
+});
+
+test("catalog marks itself as a local-vs-mirror reconciliation and reports mirror scope", () => {
+  const mirrorIndex = {
+    generated: "2026-09-27T05:30:28.016+00:00",
+    packages: [
+      { id: "dnd5e", version: "5.3.3", group: "system", bytes: 10, sha256: "a".repeat(64), zipUrl: "https://packages.example.test/dnd5e/5.3.3/dnd5e-5.3.3.zip", manifestUrl: "https://packages.example.test/dnd5e/5.3.3/system.json" },
+      { id: "demo-module", version: "2.0.0", group: "core", bytes: 20, sha256: "b".repeat(64), zipUrl: "https://packages.example.test/demo-module/2.0.0/demo-module-2.0.0.zip", manifestUrl: "https://packages.example.test/demo-module/2.0.0/module.json" },
+      { id: "mirror-only-module", version: "1.0.0", group: "ui", bytes: 30, sha256: "c".repeat(64), zipUrl: "https://packages.example.test/mirror-only-module/1.0.0/mirror-only-module-1.0.0.zip", manifestUrl: "https://packages.example.test/mirror-only-module/1.0.0/module.json" },
+    ],
+    worlds: [],
+    profiles: [],
+  };
+  const catalog = buildCatalog(mirrorIndex, { modules: [] });
+  assert.equal(catalog.kind, "local-vs-mirror");
+  assert.equal(catalog.mirrorModuleCount, 2);
+  assert.equal(catalog.rows.length, 0);
+});
+
+test("mirror-catalog enumerates the full mirror and flags default-profile modules", async () => {
+  const profileUrl = "https://packages.example.test/profiles/arcane-demo-full/2/profile.json";
+  const profile = {
+    schemaVersion: 1,
+    kind: "foundry-environment-profile",
+    id: "arcane-demo-full",
+    title: "Arcane Demo Full",
+    revision: 2,
+    packageChannel: "stable",
+    system: "dnd5e",
+    modules: ["demo-module"],
+  };
+  const profileBuffer = Buffer.from(JSON.stringify(profile));
+  const mirrorIndex = {
+    generated: "2026-09-27T05:30:28.016+00:00",
+    foundry: "13.351",
+    dnd5e: "5.3.3",
+    packages: [
+      { id: "dnd5e", version: "5.3.3", group: "system", bytes: 10, sha256: "a".repeat(64), zipUrl: "https://packages.example.test/dnd5e/5.3.3/dnd5e-5.3.3.zip", manifestUrl: "https://packages.example.test/dnd5e/5.3.3/system.json" },
+      { id: "demo-module", version: "2.0.0", group: "core", bytes: 20, sha256: "b".repeat(64), zipUrl: "https://packages.example.test/demo-module/2.0.0/demo-module-2.0.0.zip", manifestUrl: "https://packages.example.test/demo-module/2.0.0/module.json" },
+      { id: "optional-module", version: "1.0.0", group: "ui", bytes: 30, sha256: "c".repeat(64), zipUrl: "https://packages.example.test/optional-module/1.0.0/optional-module-1.0.0.zip", manifestUrl: "https://packages.example.test/optional-module/1.0.0/module.json" },
+    ],
+    worlds: [{
+      id: "arcane-demo",
+      title: "Arcane Demo",
+      version: "0.1.2",
+      manifestUrl: "https://packages.example.test/worlds/arcane-demo/0.1.2/world.json",
+      manifestBytes: 500,
+      manifestSha256: "d".repeat(64),
+      downloadUrl: "https://packages.example.test/worlds/arcane-demo/0.1.2/arcane-demo-0.1.2.zip",
+      bytes: 600,
+      sha256: "e".repeat(64),
+      defaultProfile: "arcane-demo-full",
+    }],
+    profiles: [{
+      id: "arcane-demo-full",
+      title: "Arcane Demo Full",
+      revision: 2,
+      profileUrl,
+      profileBytes: profileBuffer.length,
+      profileSha256: sha256(profileBuffer),
+    }],
+  };
+  const fakeFetch = async (url) => {
+    if (url === indexUrl) return bufferResponse(Buffer.from(JSON.stringify(mirrorIndex)), "application/json");
+    if (url === profileUrl) return bufferResponse(profileBuffer, "application/json");
+    return new Response("not found", { status: 404 });
+  };
+  const catalog = await mirrorCatalog({ fetchImpl: fakeFetch, indexUrl });
+  assert.equal(catalog.kind, "mirror-catalog");
+  assert.equal(catalog.packageCount, 3);
+  assert.equal(catalog.moduleCount, 2);
+  assert.equal(catalog.systemCount, 1);
+  assert.deepEqual(
+    catalog.packages.find((entry) => entry.id === "demo-module").defaultProfiles,
+    ["arcane-demo-full@2"],
+  );
+  assert.deepEqual(catalog.packages.find((entry) => entry.id === "optional-module").defaultProfiles, []);
+  assert.equal(catalog.worlds[0].id, "arcane-demo");
+  assert.deepEqual(catalog.profiles[0].modules, ["demo-module"]);
+});
+
+test("help is reachable as command and as a boolean option", async () => {
+  const direct = await runCli(["help"]);
+  assert.match(direct.usage, /mirror-catalog/);
+  const viaOption = await runCli(["catalog", "--help"]);
+  assert.match(viaOption.usage, /mirror-catalog/);
 });

@@ -1,6 +1,6 @@
 // Browser functions invoked explicitly via arcane-fvtt debug-eval. Never used by tested models.
-async function snapshot({ids,sourceUuid}) {
-  if(game.world.id!=='COS'||!game.user.isGM)throw Error('Review world guard');
+async function snapshot({ids,sourceUuid,worldId}) {
+  if(game.world.id!==(worldId||'COS')||!game.user.isGM)throw Error('Review world guard');
   const result=[];
   for(const id of ids){const a=game.actors.get(id);if(!a)throw Error('Review Actor missing');const s=a.system;const currentSource=sourceUuid?(await fromUuid(sourceUuid))?.toObject():null;
     result.push({id:a.id,name:a.name,type:a.type,raw:a.toObject(),sameNameCount:game.actors.filter(x=>x.name===a.name).length,
@@ -10,8 +10,8 @@ async function snapshot({ids,sourceUuid}) {
         hd:{value:s.attributes.hd?.value,max:s.attributes.hd?.max},scale:a.getRollData().scale,items:a.items.map(i=>({id:i.id,identifier:i.system.identifier,type:i.type,uses:i.system.uses,activities:Array.from(i.system.activities||[]).map(x=>x.toObject())}))}});
   }return JSON.parse(JSON.stringify(result,(_key,value)=>value instanceof Set?[...value]:value));
 }
-async function build({plan,runId,folderName}) {
-  if(game.world.id!=='COS'||!game.user.isGM)throw Error('Review world guard');
+async function build({plan,runId,folderName,worldId}) {
+  if(game.world.id!==(worldId||'COS')||!game.user.isGM)throw Error('Review world guard');
   const name=`${plan.id} ${plan.title}〔验收样例 v3〕`;
   if(game.actors.some(a=>a.flags.arcanedesk?.benchReview?.runId===runId&&a.flags.arcanedesk?.benchReview?.caseId===plan.id))throw Error('Already created: inspect, do not replay');
   const cls=await fromUuid(plan.classUuid),sub=await fromUuid(plan.subclassUuid),race=plan.raceUuid?await fromUuid(plan.raceUuid):null,base=plan.sourceUuid?await fromUuid(plan.sourceUuid):null;

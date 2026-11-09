@@ -32,7 +32,7 @@ jobs:
       - name: Set up Node.js 24
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.12.0
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -43,7 +43,7 @@ jobs:
         run: npm run verify
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev
+        run: node scripts/audit-production.mjs
 
   skills-revision:
     name: Check skills bundle revision bump
@@ -59,10 +59,13 @@ jobs:
       - name: Set up Node.js 24
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.12.0
 
       - name: Check skills revision bump
         run: node apps/desktop/scripts/check-skills-revision.mjs origin/${{ github.base_ref }}
+
+      - name: Check server image revision bump
+        run: node apps/desktop/scripts/check-server-image-revision.mjs origin/${{ github.base_ref }}
 
   dependency-review:
     name: Review dependency changes

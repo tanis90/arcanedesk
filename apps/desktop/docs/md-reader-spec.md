@@ -69,7 +69,7 @@ chat 中 agent 产出的 `.md` 路径变为可点击；点击后，Markdown 阅�
 
 1. **① 顶栏「面板」按钮**：右屏唯一的 chrome 开关。开/关右屏；重新打开时恢复关闭前的当前内容（reader 侧 = 重读文件重渲染，见 §2 保活范围）。
 2. **② 点 chat 里的 md 路径**：内容寻址。当前内容 = 该笔记；面板关着则顺带打开；快照 origin；阅读中再点 = 原地换内容。（2026-09-12 修订：② 现在有两个调用方——chat 渲染层的 `md-reader:open` IPC，与 agent 的 `open_document` 工具；两者都进同一个 `showReader()`，围栏、错误页与状态转移完全一致，不单独列入口。）
-3. **③ 顶栏 FVTT/文档切换**：chat 页顶栏的两段开关（bridge `arcane.switchPanelSurface(target)`，target 为 `"foundry"`/`"reader"`）。只切两个已打开的内容：显隐切换，永不触发 FVTT 加载、不读新文件。目标从未打开过时如实报空（`{ ok:false, empty, state }`，提示显示在 chat）：READER_C 下切 FVTT 必然报空（底下没有 Foundry 现场），Foundry 上切文档报空。收起整个右屏仍走 ①（2026-09-11 修订：页内返回栏已拆，返回 FVTT 由顶栏切换接管，不再承担"拉起一次 FVTT 加载"）。
+3. **③ 顶栏 FVTT/文档切换**：chat 页顶栏的两段开关（bridge `arcane.switchPanelSurface(target)`，target 为 `"foundry"`/`"reader"`；悬浮切换丸走同构的 `panel-switch:switch`）。只切两个已打开的内容：显隐切换，永不触发 FVTT 加载、不读新文件。目标从未打开过时：切 FVTT 如实报空（`{ ok:false, empty, state }`，提示在切换丸上闪烁）——READER_C 下切 FVTT 必然报空（底下没有 Foundry 现场）；切文档**不再报空**（2026-09-26 修订），落进阅读器的空态兜底页（origin 照常按底下有没有活 Foundry 快照，之后 ② 点笔记照常进内容）。收起整个右屏仍走 ①（2026-09-11 修订：页内返回栏已拆，返回 FVTT 由顶栏切换接管，不再承担"拉起一次 FVTT 加载"）。
 4. **④ FVTT 打开**（agent `foundry_open`，以及任何使 foundryView 变为可见的路径）：当前内容 = foundry，面板开；阅读器若在场则隐藏保活，不销毁、不通知。切模式本身不改变 surface（§4.4），不在此处列举。
 
 ### 3.3 状态图
@@ -96,8 +96,8 @@ stateDiagram-v2
 
 | 当前 | ①顶栏 | ②点 md 路径 | ③顶栏切换 | ④FVTT 打开 |
 |---|---|---|---|---|
-| CLOSED | 恢复关闭前内容：foundry（含 READER_F 关闭）→ FOUNDRY；READER_C 关闭的笔记 → READER_C | READER_C | 无操作/报空 | FOUNDRY |
-| FOUNDRY | CLOSED | READER_F | READER_F（笔记保活时）；否则报空 | （已在） |
+| CLOSED | 恢复关闭前内容：foundry（含 READER_F 关闭）→ FOUNDRY；READER_C 关闭的笔记 → READER_C；关闭时停在空态 → 空态 READER_C | READER_C | FVTT 报空；文档 → 空态 READER_C | FOUNDRY |
+| FOUNDRY | CLOSED | READER_F | READER_F（笔记保活时）；无笔记 → 空态 READER_F | （已在） |
 | READER_F | CLOSED（记 foundry，重开落 FOUNDRY） | READER_F（换内容） | FOUNDRY（显隐切换） | FOUNDRY（阅读器隐藏保活） |
 | READER_C | CLOSED（记 reader，重开落 READER_C） | READER_C（换内容） | 报空，停留 READER_C | FOUNDRY（阅读器隐藏保活） |
 
@@ -111,7 +111,7 @@ stateDiagram-v2
 2. `READER_F` ⟹ foundryView 活着；顶栏切换只做显隐切换，永不加载 FVTT。
 3. `READER_C` ⟹ 打开时 foundryView 不存在；此状态下经顶栏切 FVTT 如实报空，绝不静默拉起加载——拉起 FVTT 是 ④/agent 路径的事，收右屏只属于 ①。
 4. 阅读器状态全在内存，不落盘；崩溃/重启后回到 CLOSED，无需对账（R1）。
-5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。payload = `{ name, text, truncated, path }` 或 `{ error, path }`。
+5. readerView 的内容只由 main 侧单一 payload 推送：`did-finish-load` 与 `showReader()` 共用一条 `pushReaderContent()`。页面自身不持久化、不自行读盘，因此 Chromium 默认 F5 重载页面后内容必然回来，无需为刷新另设通道。payload = `{ name, text, truncated, path }` 或 `{ error, path }` 或 `{ empty: true, path: null }`（空态兜底：从未打开过文档时 ③ 切文档的落点）。
 
 ## 4. 交互语义
 

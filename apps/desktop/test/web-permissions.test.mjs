@@ -101,6 +101,19 @@ test("chat receives audio only, never camera or unknown media", () => {
   assert.equal(unknown, false);
 });
 
+test("chat can write clipboard but not read it", () => {
+  const { chat, policy } = policyFixture();
+  assert.equal(policy.check(chat, "clipboard-sanitized-write", "null", checkDetails()), true);
+  assert.equal(policy.check(chat, "clipboard-read", "null", checkDetails()), false);
+
+  let write;
+  policy.request(chat, "clipboard-sanitized-write", (granted) => { write = granted; }, {});
+  assert.equal(write, true);
+  let read;
+  policy.request(chat, "clipboard-read", (granted) => { read = granted; }, {});
+  assert.equal(read, false);
+});
+
 test("Foundry fixed allows require exact origin and the main frame", () => {
   const { foundry, policy } = policyFixture();
   assert.equal(policy.check(foundry, "fullscreen", "https://foundry.example", checkDetails()), true);

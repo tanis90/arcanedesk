@@ -22,7 +22,7 @@ import { StartupReconciler } from "./conversations/startup-reconciler.js";
 import "../shared/i18n/messages.js";
 import { configDir, configPath, migrateLegacyConfig } from "./config-dir.js";
 import { VoiceStore } from "./voice/voice-store.js";
-import { SearchStore } from "./search/store.js";
+import { DEEPSEEK_SEARCH_HOST, SearchStore } from "./search/store.js";
 import { transcribe } from "./voice/asr.js";
 import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
@@ -30,6 +30,7 @@ import { DisplayMediaController, installDevicePermissionDenials } from "./permis
 import { err, errorToIpc } from "./i18n-error.mjs";
 import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
+import { AppUpdater, buildFeedUrl, readReleaseChannel } from "./app-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
 import { SecretStorage } from "./secret-storage.js";
 import { PanelSurfaceController } from "./panel-surface-controller.js";
@@ -47,6 +48,12 @@ const REGION = regionConfig();
 if (!String(process.env.ARCANE_MOD_INDEX_URL ?? "").trim()) {
   process.env.ARCANE_MOD_INDEX_URL = REGION.modIndexUrl;
 }
+// 服务器部署轨道（server-deploy-plan.md §5）：arcane-fvtt-setup（server 轨道）经
+// ARCANE_SERVER_RELEASE_BASE 拿镜像通道根前缀（latest.json → <revision>/…）。
+// 与 modIndexUrl 同一接线模式；运维联调可显式覆盖。
+if (!String(process.env.ARCANE_SERVER_RELEASE_BASE ?? "").trim()) {
+  process.env.ARCANE_SERVER_RELEASE_BASE = REGION.serverDeployBaseUrl;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARCANE_APP_ID = "cn.bitterbebop.arcanedesk";
@@ -60,7 +67,9 @@ const ARCANE_APP_ICON = path.join(
 // --dev:detach 打开两侧 DevTools(chat renderer + Foundry view)
 const isDev = process.argv.includes("--dev");
 
-const DEFAULT_FOUNDRY_URL = process.env.ARCANE_FOUNDRY_URL || "http://localhost:30000";
+// Foundry 连接目标是"对话状态"而不是设置项(server-deploy-plan §7):foundry_open 带
+// url 时用之;不带则用上一次打开的地址(跨重启持久化到 userData/panel-target.json);
+// 两者都没有时不回落任何隐式默认——工具返回错误,面板保持空态。
 const ARCANE_WEBSITE_URL = REGION.websiteUrl;
 const CHAT_WIDTH_RATIO = 0.3;
 const CHAT_MIN_WIDTH = 320;
@@ -74,26 +83,70 @@ const TITLEBAR_HEIGHT = 36;
 
 // 应用身份:userData 目录由 app 名决定(~/Library/Application Support/<name>)。
 // 打包版用 productName "ArcaneDesk";dev(npm start)保持 "arcane-desktop",
-// 继续用既有 userData,两份配置互不干扰。
-if (!app.isPackaged) app.setName("arcane-desktop");
+// 继续用既有 userData,两份配置互不干扰。dev 联调可用 ARCANE_USER_DATA_DIR 显式
+// 指向另一份 userData(如安装版),与其共享会话/项目/provider 配置——此时单实例锁
+// 也与该份数据互斥,目标安装版必须先退出。
+const devUserDataOverride = app.isPackaged
+  ? ""
+  : String(process.env.ARCANE_USER_DATA_DIR ?? "").trim();
+if (!app.isPackaged) {
+  if (devUserDataOverride) app.setPath("userData", devUserDataOverride);
+  else app.setName("arcane-desktop");
+}
 // Windows 任务栏按 Application User Model ID 识别和分组应用。开发版实际
 // 运行的是 electron.exe；不给独立 ID 时，Shell 会继续显示 Electron 图标。
 // dev 使用独立后缀，避免与已安装的正式版合并成同一个任务栏分组。
 if (process.platform === "win32") {
   app.setAppUserModelId(app.isPackaged ? ARCANE_APP_ID : `${ARCANE_APP_ID}.development`);
 }
+// 单实例:重复打开(开始菜单/任务栏/快捷方式)不养第二个进程——拿不到锁就当场退,
+// 第一实例(可能正收在托盘里)经 second-instance 把窗口叫回前台。
+// 位置跟在 setName 之后:锁按 app 身份(userData)划界,dev 与已装正式版互不挡;
+// app.exit 不走 before-quit 拦截——第二实例从未启动,没有可收拾的现场。
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+} else {
+  app.on("second-instance", () => restoreMainWindow());
+}
 // 打包版的 pi agent 目录收进 app 私有 userData,不与本机 pi CLI 共享 ~/.pi/agent——
 // 否则 pi CLI 的 settings.json 默认模型(如 kimi-coding/k3)与同 cwd 会话会漏进 app。
 // (SDK 的环境变量名见 dist/config.js:ENV_AGENT_DIR = PI_CODING_AGENT_DIR;
-//  getAgentDir() 每次调用时现读,这里设置即可覆盖全部内部路径)
-if (app.isPackaged) {
+//  getAgentDir() 每次调用时现读,这里设置即可覆盖全部内部路径)。
+// ARCANE_USER_DATA_DIR 指到安装版时同样收进该份 userData——模型/键位等 agent
+// 配置才跟着安装版走,而不是落回 ~/.pi/agent。
+if (app.isPackaged || devUserDataOverride) {
   const agentDir = path.join(app.getPath("userData"), "agent");
   mkdirSync(agentDir, { recursive: true });
   process.env.PI_CODING_AGENT_DIR = agentDir;
 }
 
 let mainWindow = null;
-let foundryTargetUrl = DEFAULT_FOUNDRY_URL;
+let foundryTargetUrl = null;
+
+// 上次打开地址的持久化(启动时读,成功打开时写)。文件损坏按"没有记忆"处理,
+// 不抛错——首次打开的面板行为等价于全新安装。
+function panelTargetFile() {
+  return path.join(app.getPath("userData"), "panel-target.json");
+}
+function readRememberedFoundryTarget() {
+  try {
+    const parsed = JSON.parse(readFileSync(panelTargetFile(), "utf8"));
+    return typeof parsed?.url === "string" && /^https?:\/\//i.test(parsed.url) ? parsed.url : null;
+  } catch {
+    return null;
+  }
+}
+function rememberFoundryTarget(url) {
+  try {
+    writeFileSync(panelTargetFile(), `${JSON.stringify({ url }, null, 2)}\n`);
+  } catch (error) {
+    console.log("[panel-target] failed to persist:", error?.message ?? error);
+  }
+}
+function resolvedFoundryTarget() {
+  if (foundryTargetUrl === null) foundryTargetUrl = readRememberedFoundryTarget();
+  return foundryTargetUrl;
+}
 // 右屏两个 view(foundry / md 阅读器)的生命周期归 panel-surface 控制器(spec §8),
 // main.js 只留只读访问,不再持有可变引用——否则 readerView 可见时下面这些直摸点会静默失效。
 let panelSurfaces = null; // whenReady 里建;建好之前没有任何面板可排
@@ -110,6 +163,11 @@ let webPermissionPolicy = null;
 let displayMediaController = null;
 let activityCenter = null;
 let prepareExit = null, backgroundTray = null, quitAllowed = false, exitRequested = false;
+// macOS Squirrel 的 quitAndInstall 先关全部窗口再退出（Electron 文档明确该序列）：
+// 关窗被托盘拦截(收进托盘)时 before-quit 永远不会触发，ShipIt 等不到进程退出，
+// 以 "App Still Running Error" 取消安装。用户点「重启并更新」即显式退出意图，
+// 由 update:install 置位，关窗拦截对此放行；退出清理仍走 requestExit 既有路径。
+let updateInstallRequested = false;
 function restoreMainWindow() {
   if (exitRequested) return;
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
@@ -128,7 +186,7 @@ function enableBackgroundEntry() {
     ]));
     backgroundTray.on("click", restoreMainWindow);
     return true;
-  } catch { backgroundTray?.destroy(); backgroundTray = null; return false; }
+  } catch (error) { console.error("[tray] enableBackgroundEntry failed:", error); backgroundTray?.destroy(); backgroundTray = null; return false; }
 }
 function requestExit() {
   if (exitRequested) return;
@@ -511,13 +569,56 @@ function layoutPanelSwitch() {
 }
 
 /**
+ * 顶栏「面板」开关在还没有 Foundry 地址时的落点:面板照常打开,右屏落空态页,
+ * 提示用户在聊天里给出地址——这不是错误,不往 chat 抛状态行。
+ * 地址一旦出现(foundry_open 成功)就按正常导航覆盖掉这页;F5 也用它重落空态。
+ */
+async function showFoundryEmptyState() {
+  panelSurfaces.showFoundry();
+  const contents = foundryView()?.webContents;
+  if (contents && !contents.isDestroyed() && !contents.isCrashed()) {
+    const dict = globalThis.ARCANE_MESSAGES[resolveLocale()];
+    await contents.loadFile(path.join(__dirname, "../renderer/foundry-empty.html"), {
+      query: {
+        title: dict["panel.empty.title"],
+        body: dict["panel.empty.body"],
+        theme: resolveTheme(),
+      },
+    }).catch(() => {});
+  }
+  return {
+    ok: true,
+    state: panelSurfaces.state,
+    summary: "panel opened on the empty state: no Foundry address provided yet",
+  };
+}
+
+/**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
  * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
-  const target = /^https?:\/\//i.test(rawUrl ?? "") ? rawUrl : DEFAULT_FOUNDRY_URL;
+  const explicit = typeof rawUrl === "string" && rawUrl.trim() ? rawUrl.trim() : null;
+  if (explicit && !/^https?:\/\//i.test(explicit)) {
+    return {
+      ok: false,
+      error: err("err.panel.invalidUrl", { url: rawUrl ?? "" }),
+      summary: `ERROR: invalid URL: ${rawUrl}`,
+    };
+  }
+  const target = explicit ?? resolvedFoundryTarget();
+  if (!target) {
+    return {
+      ok: false,
+      error: err("err.panel.noTarget"),
+      summary:
+        "ERROR: no Foundry address to open yet — pass a url to foundry_open "
+        + "(e.g. http://localhost:30000 for the local server, or the deployed server URL); "
+        + "the panel has no implicit default",
+    };
+  }
   let origin;
   try {
     origin = new URL(target).origin;
@@ -530,6 +631,7 @@ async function openFoundryView(rawUrl) {
   }
 
   foundryTargetUrl = target;
+  rememberFoundryTarget(target);
 
   // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
   // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
@@ -785,7 +887,7 @@ function createWindow() {
     panelSwitchView = null;
   });
   mainWindow.on("close", event => {
-    if (quitAllowed) return;
+    if (quitAllowed || updateInstallRequested) return;
     event.preventDefault();
     if (enableBackgroundEntry()) mainWindow.hide();
     else requestExit();
@@ -826,6 +928,9 @@ app.whenReady().then(async () => {
   installDevicePermissionDenials(webSession);
 
   createWindow();
+  // 托盘从启动就注册:关窗 = 收进托盘(见 close 处理),图标不该到第一次关窗才出现。
+  // 注册失败不留图标也无所谓——close 时会重试,仍不行才走 requestExit。
+  enableBackgroundEntry();
   // 右屏 surface 状态机(spec §3/§8):两个 view 的创建、显隐、销毁与 bounds 分发全在这里。
   // hooks 引用的 foundryRuntime / prepUiCwd / modeController 都是惰性调用(用户点击或 agent 工具),
   // 不存在初始化时序问题。
@@ -845,15 +950,23 @@ app.whenReady().then(async () => {
     createReaderView,
     destroyReaderView: detachAndCloseView,
     // ① 重开面板要回到关闭前那个 Foundry 地址,而不是默认地址(spec §3.4 CLOSED 行"恢复关闭前内容")。
-    // foundryTargetUrl 初值就是 DEFAULT_FOUNDRY_URL,所以首次打开的行为与改造前一致;
-    // 而"关掉面板再打开就从远端 world 掉回 localhost:30000"是既有缺陷,在这里一并修掉。
-    loadFoundry: () => openFoundryView(foundryTargetUrl),
+    // foundryTargetUrl 现在是"上一次打开的地址"(跨重启持久化);还没有任何地址时不报错、
+    // 也不拉去某个隐式默认——面板照常打开,落空态页提示在聊天里给地址(server-deploy-plan §7)。
+    loadFoundry: () => {
+      const target = resolvedFoundryTarget();
+      return target ? openFoundryView(target) : showFoundryEmptyState();
+    },
     reloadFoundry: async () => {
       // 崩掉的 view 先经控制器重建(N3):只查 isDestroyed 会让崩溃的 Foundry
       // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
       // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
       const view = panelSurfaces.ensureFoundryView();
-      return loadFoundryPage(/^https?:/.test(view.webContents.getURL()) ? view.webContents.getURL() : foundryTargetUrl);
+      const target = /^https?:/.test(view.webContents.getURL())
+        ? view.webContents.getURL()
+        : resolvedFoundryTarget();
+      // 空态页上的 F5:没有地址可刷,重落空态(顺带吃上最新主题/语言),不算错误。
+      if (!target) return showFoundryEmptyState();
+      return loadFoundryPage(target);
     },
     // §7 读链:基准 = 当前活动会话的工作目录,取不到时退回备团工作目录(spec §4.2)。
     readNote: rawPath => loadNotePayload(rawPath, noteBaseDir()),
@@ -885,6 +998,9 @@ app.whenReady().then(async () => {
     console.log,
     secretStorage,
     providerStore.baseUrlForProvider("arcane-spark") ?? DEFAULT_NEW_API_BASE_URL,
+    // prompt/热词预设跟随界面语言(resolveLocale 同为 ui.json + 系统语言,热切换后
+    // 立即反映到下一次识别与设置页回显,无需重启)
+    () => resolveLocale(),
   );
   const prepStore = new PrepStore(configPath("prep.json"));
   // 联网搜索（PRD prep-web-search）：凭据存储同 voice；智谱 BYOK 默认端点按
@@ -937,6 +1053,19 @@ app.whenReady().then(async () => {
   });
   // 启动后后台刷新一次;失败静默保留现状,绝不阻塞启动。
   skillsUpdater.refresh().catch((error) => console.error("[skills] unexpected refresh failure:", error));
+  // 应用内自动更新通道（auto-update-design §5）：仅打包实例启用；显式
+  // ARCANE_ENABLE_UPDATE_CHECK=1 可在 dev/E2E 强制打开，ARCANE_DISABLE_UPDATE_CHECK=1 可静默关闭。
+  // feed URL 只来自 region 默认值 / ARCANE_UPDATE_FEED_BASE_URL；channel 构建期烘进
+  // generated/desktop-release.json。状态经 arcane:event 总线单向推给渲染层，不落盘。
+  const appUpdater = (app.isPackaged || process.env.ARCANE_ENABLE_UPDATE_CHECK === "1")
+    && process.env.ARCANE_DISABLE_UPDATE_CHECK !== "1"
+    ? new AppUpdater({
+      feedUrl: buildFeedUrl(REGION.updateFeedBaseUrl, readReleaseChannel()),
+      currentVersion: app.getVersion(),
+      onState: (state) => sendToRenderer({ type: "update_state", state }),
+    }).start()
+    : null;
+  if (!appUpdater) console.log("[app-update] updater disabled (unpackaged or disabled by env)");
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");
@@ -965,6 +1094,13 @@ app.whenReady().then(async () => {
   // UI 只展示用户明确选择过的项目目录。prepFallbackWorkspace 只是让 Pi 在
   // 尚未选目录时也有稳定 cwd 的内部实现细节，不能冒充用户的备团项目。
   const prepUiCwd = () => prepStore.data.lastCwd ?? undefined;
+  // 下发给渲染层展示用的 cwd:host 真实工作目录,但内部 fallback 不下发
+  // (未选目录 → undefined → 目录 chip 出"选择目录"虚线请柬态)。
+  const prepFallbackResolved = path.resolve(prepFallbackWorkspace);
+  const prepDisplayCwd = host => {
+    const cwd = host.cwd();
+    return cwd === prepFallbackResolved ? undefined : cwd;
+  };
 
   /** md 阅读器相对路径的 resolve 基准(spec §4.2):当前活动会话的工作目录。
       战斗模式下同样按此规则——一律用 prep cwd 会让战斗会话里的相对路径静默解析到
@@ -1026,10 +1162,14 @@ app.whenReady().then(async () => {
         fence: true,
         streamingInput: "followUp", // 备团:流式期间输入排队,不打断当前任务(见 docs/streaming-input-queue-spec.md)
       },
-      // web_search 仅 prep 注入;spark 凭据运行时取 arcane-spark provider。
+      // web_search 仅 prep 注入;凭据每次 execute 时重取——spark 走内置 provider,
+      // ownChatKeys 让「用户自己的 DeepSeek 聊天 key」自动接管搜索(同 origin)。
       search: {
         store: searchStore,
         spark: () => providerStore.credentialForProvider("arcane-spark"),
+        ownChatKeys: () => ({
+          deepseek: providerStore.credentialForHost(DEEPSEEK_SEARCH_HOST),
+        }),
       },
     }); } }),
   };
@@ -1074,6 +1214,30 @@ app.whenReady().then(async () => {
   ipcMain.handle("notifications:get", event => isTrustedChatIpc(event) ? { ok: true, ...desktopNotifications.status() } : { ok: false });
   ipcMain.handle("notifications:set", (event, enabled) => isTrustedChatIpc(event) ? desktopNotifications.setEnabled(enabled) : { ok: false });
   ipcMain.handle("notifications:take-target", event => isTrustedChatIpc(event) ? desktopNotifications.takeTarget() : null);
+  // 应用内更新（auto-update-design §5.2）：check/download/install 全显式，渲染层刷新后
+  // 用 update:state 拉快照，不依赖事件时序。未启用（dev/禁用环境变量）时一律空响应。
+  const updateUnavailable = { ok: false, code: "UPDATER_DISABLED" };
+  ipcMain.handle("update:check", async (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    return { ok: true, state: await appUpdater.check() };
+  });
+  ipcMain.handle("update:download", async (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    return { ok: true, state: await appUpdater.download() };
+  });
+  ipcMain.handle("update:install", (event) => {
+    if (!isTrustedChatIpc(event)) return { ok: false };
+    if (!appUpdater) return updateUnavailable;
+    // 仅在真正进入安装前置位（install 内部有 ready 守卫）：避免误置位后
+    // 普通关窗不再收进托盘。置位后无法撤回——quitAndInstall 没有取消语义。
+    if (appUpdater.snapshot().status === "ready") updateInstallRequested = true;
+    return { ok: true, state: appUpdater.install() };
+  });
+  ipcMain.handle("update:state", event => isTrustedChatIpc(event)
+    ? (appUpdater ? { ok: true, state: appUpdater.snapshot() } : { ok: true, state: { status: "disabled", currentVersion: app.getVersion() } })
+    : { ok: false });
   // Region 派生的对外链接（官网/社区支持）：renderer 不持有任何硬编码域名。
   ipcMain.handle("app:links", event => isTrustedChatIpc(event)
     ? { ok: true, region: REGION.region, websiteUrl: REGION.websiteUrl, supportLinks: REGION.supportLinks }
@@ -1128,7 +1292,8 @@ app.whenReady().then(async () => {
       ...activityHostPayload(context.host),
       ...modeController.publicSnapshot(context),
       busy: context.host.busy,
-      cwd: context.mode === "prep" ? context.host.cwd() : undefined,
+      // UI 只展示真实项目目录;未选时给 undefined,渲染层出"选择目录"虚线 CTA
+      cwd: context.mode === "prep" ? prepDisplayCwd(context.host) : undefined,
       worldInfo: foundryRuntime.lastWorldInfo,
     };
   }
@@ -1154,7 +1319,8 @@ app.whenReady().then(async () => {
       stale,
       busy: host.busy,
       ...activityHostPayload(host),
-      cwd: context.mode === "prep" ? host.cwd() : undefined,
+      // 同上:UI 只认真实项目目录,不下发内部 fallback
+      cwd: context.mode === "prep" ? prepDisplayCwd(host) : undefined,
     };
   });
 
@@ -1175,14 +1341,48 @@ app.whenReady().then(async () => {
       return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
     }
     const nextHost = await hosts.prep.select(null, true);
-    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost) });
+    // 事件必须带 cwd:渲染层 installSnapshot 会按事件重置 chip,不带就被清成"选择备团目录"
+    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost), cwd: prepDisplayCwd(nextHost) });
+    return { ok: true, cwd, ...modeController.publicSnapshot(context) };
+  });
+  // 工作区下拉(kimi web 式"最近的文件夹"):不换系统对话框,直接切到传入目录;
+  // 与 choose-dir 同一语义——setCwd 持久化 + 起新空会话。内部 fallback 目录拒绝冒充用户项目。
+  ipcMain.handle("prep:set-dir", async (_event, request) => {
+    const validated = await validateModeRequest(request);
+    if (!validated.ok || validated.context.mode !== "prep") return staleModeResponse();
+    const context = validated.context;
+    if (!modeController.matches(context)) return staleModeResponse();
+    const dir = String(request?.path ?? "").trim();
+    try {
+      if (!path.isAbsolute(dir) || !statSync(dir).isDirectory()) throw new Error("Project directory is unavailable");
+    } catch (error) {
+      return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message };
+    }
+    if (path.resolve(dir) === prepFallbackResolved) {
+      return { ok: false, code: "PREP_FALLBACK_DIR", error: "Internal workspace is not a project directory" };
+    }
+    let cwd;
+    try {
+      cwd = prepStore.setCwd(dir);
+    } catch (error) {
+      return { ok: false, error: errorToIpc(error), ...modeController.publicSnapshot(context) };
+    }
+    const nextHost = await hosts.prep.select(null, true);
+    nextHost.emit({ type: "session_switched", ...activityHostPayload(nextHost), cwd: prepDisplayCwd(nextHost) });
     return { ok: true, cwd, ...modeController.publicSnapshot(context) };
   });
 
   // Navigation spans modes; commands resolve an owned session rather than the selected view.
   async function navigationRows() {
     const result = await Promise.all(["prep", "combat"].map(async mode => {
-      return (await hosts[mode].listSessions()).map(row => ({ ...row, mode, projectKey: projectKey(row.cwd), activity: activityCenter.get(row.id) }));
+      return (await hosts[mode].listSessions()).map(row => ({
+        ...row,
+        mode,
+        projectKey: projectKey(row.cwd),
+        // 内部兜底工作区里的会话:侧边栏照列,但工作区下拉的"最近的文件夹"要跳过它
+        internal: mode === "prep" && typeof row.cwd === "string" && path.resolve(row.cwd) === prepFallbackResolved,
+        activity: activityCenter.get(row.id),
+      }));
     }));
     return result.flat();
   }
@@ -1255,7 +1455,7 @@ app.whenReady().then(async () => {
       for (const registry of Object.values(hosts)) { host = await registry.getOrLoad(sessionId); if (host) break; }
     } catch (error) { return { ok: false, code: error.code ?? "SESSION_LOAD_FAILED", error: error.message }; }
     if (!host) return { ok: false, code: "SESSION_NOT_FOUND" };
-    try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.cwd() }; }
+    try { return { ok: true, ...activityHostPayload(host, historyQuery), mode: host.profile.mode, cwd: host.profile.mode === "prep" ? prepDisplayCwd(host) : undefined }; }
     catch (error) { return { ok: false, code: error.code ?? "HISTORY_LOAD_FAILED", error: error.message }; }
   });
   ipcMain.handle("sessions:identities", async event => {
@@ -1275,7 +1475,7 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, code: "PROJECT_UNAVAILABLE", error: error.message }; }
     }
     const nextHost = await hosts[context.mode].select(null, true, selection, directory);
-    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.cwd(), ...modeController.publicSnapshot(context) };
+    return { ok: true, ...activityHostPayload(nextHost), cwd: nextHost.profile.mode === "prep" ? prepDisplayCwd(nextHost) : undefined, ...modeController.publicSnapshot(context) };
   });
   ipcMain.handle("sessions:open", async (_event, request) => {
     const validated = await validateModeRequest(request);
@@ -1506,9 +1706,13 @@ app.whenReady().then(async () => {
   // ---- 联网搜索(PRD prep-web-search):配置保存;无 consent 流程——启用即知情 ----
   // spark 模式与语音同源:复用内置 arcane-spark provider 的凭据。
   const arcaneSparkForSearch = () => providerStore.credentialForProvider("arcane-spark");
+  // 用户自己的 DeepSeek 聊天 key(模型页配置):与 tools/search 同 origin,自动复用。
+  const ownChatKeysForSearch = () => ({
+    deepseek: providerStore.credentialForHost(DEEPSEEK_SEARCH_HOST),
+  });
   ipcMain.handle("search:get-config", (event) => {
     if (!isTrustedChatIpc(event)) return null;
-    return searchStore.toPublic(arcaneSparkForSearch());
+    return searchStore.toPublic(arcaneSparkForSearch(), ownChatKeysForSearch());
   });
   ipcMain.handle("search:save-config", (event, input) => {
     if (!isTrustedChatIpc(event)) return { ok: false, error: err("err.provider.untrustedRequest") };
@@ -1549,14 +1753,15 @@ app.whenReady().then(async () => {
     if (buffer.length < 1000) return { ok: false, error: err("err.voice.tooShort") };
     if (buffer.length > 25 * 1024 * 1024) return { ok: false, error: err("err.voice.tooLarge") };
     const credentials = voiceStore.credentialForUse(spark);
+    const effective = voiceStore.effective();
     try {
       const result = await transcribe({
         provider: voiceStore.data.provider,
         apiKey: credentials.apiKey,
         baseUrl: credentials.baseUrl,
         wavBuffer: buffer,
-        prompt: voiceStore.data.prompt,
-        hotwords: voiceStore.data.hotwords,
+        prompt: effective.prompt,
+        hotwords: effective.hotwords,
       });
       return { ok: true, text: result.text, latency: result.latency };
     } catch (error) {
@@ -1776,7 +1981,8 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
-  // 顶栏 FVTT/文档切换:只切已存在的内容,目标从未打开时返回 empty,提示在 chat 侧显示。
+  // 顶栏 FVTT/文档切换:只切已存在的内容。foundry 从未打开时返回 empty(提示在切换丸上
+  // 闪烁);reader 从未打开时不再报空,控制器直接切去阅读器的空态兜底页。
   ipcMain.handle("panel:switch", (event, target) => {
     if (!isTrustedChatIpc(event)) return { ok: false };
     try { return panelSurfaces.switchSurface(target); }

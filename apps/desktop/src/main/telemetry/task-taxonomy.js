@@ -15,6 +15,8 @@ export function toolFamily(toolName) {
     case "foundry_content_search":
     case "foundry_actor_get":
     case "foundry_scene_get":
+    // 镜像模块查询只读：解析/排队远端缓存，不写 Foundry 世界。
+    case "foundry_module_prepare":
       return "world.inspect";
     case "combat_battle_context":
     case "foundry_static_context":

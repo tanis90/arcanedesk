@@ -150,6 +150,11 @@ const modeSegs = {
   combat: document.getElementById("mode-seg-combat"),
 };
 const dirChip = document.getElementById("dir-chip");
+const dirPopup = document.getElementById("dir-popup");
+const dirContext = document.getElementById("composer-context");
+// 线性图标(kimi web 式):描边取 currentColor,随 chip 常态/hover/虚线请柬态一起变色
+const DIR_ICON_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+const CHEVRON_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 const queueList = document.getElementById("queue-list");
 const scrollBottomBtn = document.getElementById("scroll-bottom");
 const togglePanelBtn = document.getElementById("toggle-panel");
@@ -483,7 +488,10 @@ function acceptModeSnapshot(payload) {
 let conversationEmpty = true;
 
 function syncDirChip() {
-  dirChip.style.display = currentMode === "prep" && conversationEmpty ? "" : "none";
+  const show = currentMode === "prep" && conversationEmpty;
+  dirChip.style.display = show ? "" : "none";
+  dirContext.hidden = !show;
+  if (!show) closeDirPopup();
 }
 
 // 备团队列列表(spec §3⑤):排队消息不进对话流,在 composer 上方成行(立即/编辑/删除)。
@@ -539,11 +547,13 @@ function noteInputState(commandId, state, meta = null, fromSnapshot = false) {
   if (previous === state) return;
   if (inputTerminalStates.includes(state)) inputStateByCommand.delete(commandId);
   else inputStateByCommand.set(commandId, state);
-  // 气泡迁移(仅备团实时事件):queued 移出对话流;离开后(投递/取消/兜底)在底部重建。
+  // 气泡迁移(仅备团实时事件):queued 移出对话流;投递/失败离开队列后在底部重建。
+  // cancelled 不重建、已有的也移除——排队中取消 = 从没发出去,不该在对话流里留痕
+  // (✎ 编辑的文本已回填 composer,更不会丢)。
   // 快照恢复不走这里——installSnapshot 的 inputs 循环自己负责落位(给历史节点打
   // data-command-id / 补回显),抢跑会在去重标记打好之前往底部重复建气泡。
   if (!fromSnapshot && currentMode === "prep") {
-    if (state === "queued") inputBubbleNode(commandId)?.remove();
+    if (state === "queued" || state === "cancelled") inputBubbleNode(commandId)?.remove();
     else ensureInputBubble(commandId);
   }
   syncQueueList();
@@ -559,7 +569,7 @@ async function queueAction(commandId, action) {
   const meta = inputMetaByCommand.get(commandId);
   if (!meta?.inputId) return;
   if (action === "edit") {
-    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 事件自动把气泡放回对话流。
+    // 取消 + 文本回填 composer(图片不还原,与 Kimi 召回一致);cancelled 不落气泡——没发出去过。
     const result = await window.arcane.updateQueuedInput(modeContext(), meta.inputId, "cancel");
     if (result?.ok && typeof meta.text === "string") {
       input.value = meta.text;
@@ -584,13 +594,26 @@ function applyModeUi(mode, cwd) {
   syncDirChip();
   syncQueueList();
   lastPrepCwd = cwd || null;
+  const dirIcon = document.createElement("span");
+  dirIcon.className = "dir-icon";
+  dirIcon.setAttribute("aria-hidden", "true");
+  dirIcon.innerHTML = DIR_ICON_SVG;
+  const dirLabel = document.createElement("span");
+  dirLabel.className = "dir-label";
+  const dirCaret = document.createElement("span");
+  dirCaret.className = "caret";
+  dirCaret.setAttribute("aria-hidden", "true");
+  dirCaret.innerHTML = CHEVRON_SVG;
   if (cwd) {
-    dirChip.textContent = `📁 ${cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd} ⌄`;
+    dirLabel.textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
     dirChip.title = t("header.dir.titleWith", { path: cwd });
   } else {
-    dirChip.textContent = `📁 ${t("header.dir.chooseLabel")} ⌄`;
+    dirLabel.textContent = t("header.dir.chooseLabel");
     dirChip.title = t("header.dir.chooseTitle");
   }
+  dirChip.replaceChildren(dirIcon, dirLabel, dirCaret);
+  // 未选目录 = 主页第一动作:虚线请柬样式(见 .chip.dir.empty)
+  dirChip.classList.toggle("empty", !cwd);
 }
 
 async function switchMode(next) {
@@ -632,9 +655,35 @@ async function switchMode(next) {
 modeSegs.prep.addEventListener("click", () => switchMode("prep"));
 modeSegs.combat.addEventListener("click", () => switchMode("combat"));
 
-dirChip.addEventListener("click", async () => {
-  const context = modeContext();
-  const result = await window.arcane.prepChooseDir(context);
+// 工作区下拉(kimi web 式):点 chip 列"最近的文件夹"(当前项 ✓),底部"选择文件夹…"走系统对话框。
+// 来源 = 当前目录 + 侧边栏导航里的备团项目(内部兜底工作区由 main 标 internal,跳过)。
+function recentPrepDirs() {
+  const seen = new Set();
+  const out = [];
+  const push = cwd => {
+    if (!cwd || typeof cwd !== "string") return;
+    const key = cwd.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(cwd);
+  };
+  push(lastPrepCwd);
+  if (navigationView?.rows) {
+    for (const row of navigationView.rows.values()) {
+      if (out.length >= 8) break;
+      if (row?.mode === "prep" && !row.internal) push(row.cwd);
+    }
+  }
+  return out;
+}
+
+function closeDirPopup() {
+  dirPopup.hidden = true;
+  dirChip.classList.remove("open");
+}
+
+// choose-dir(系统对话框)与下拉点选共用同一段收尾:换目录 = main 已起新空会话
+async function applyPrepDirResult(context, result) {
   if (!result?.ok) {
     if (!result?.canceled) {
       addStatus(t("chat.status.prepDirFailed", {
@@ -648,6 +697,74 @@ dirChip.addEventListener("click", async () => {
   invalidateSlashItems(); // cwd 变了,项目级 skills/模板可能不同
   // 换目录 = main 侧已开新 session,session_switched 事件会带历史来
   refreshSessions();
+}
+
+async function pickPrepDir(dirPath) {
+  closeDirPopup();
+  // 点当前已选目录 = 无事发生,不要为它重启会话
+  if (dirPath != null && lastPrepCwd && dirPath.toLowerCase() === lastPrepCwd.toLowerCase()) return;
+  const context = modeContext();
+  const result = dirPath == null
+    ? await window.arcane.prepChooseDir(context)
+    : await window.arcane.prepSetDir(context, dirPath);
+  await applyPrepDirResult(context, result);
+}
+
+function openDirPopup() {
+  const dirs = recentPrepDirs();
+  dirPopup.replaceChildren();
+  if (dirs.length) {
+    const head = document.createElement("div");
+    head.className = "dir-popup-head";
+    head.textContent = t("dirPopup.recent");
+    dirPopup.append(head);
+    for (const cwd of dirs) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "dir-item";
+      item.title = cwd;
+      const icon = document.createElement("span");
+      icon.className = "dir-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = DIR_ICON_SVG;
+      const text = document.createElement("span");
+      text.className = "dir-text";
+      const name = document.createElement("span");
+      name.className = "dir-name";
+      name.textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
+      const pathEl = document.createElement("span");
+      pathEl.className = "dir-path";
+      pathEl.textContent = cwd;
+      text.append(name, pathEl);
+      item.append(icon, text);
+      if (lastPrepCwd && cwd.toLowerCase() === lastPrepCwd.toLowerCase()) {
+        const check = document.createElement("span");
+        check.className = "dir-check";
+        check.textContent = "✓";
+        item.append(check);
+      }
+      item.addEventListener("click", () => { void pickPrepDir(cwd); });
+      dirPopup.append(item);
+    }
+  }
+  const choose = document.createElement("button");
+  choose.type = "button";
+  choose.className = "dir-item dir-choose";
+  choose.textContent = t("dirPopup.choose");
+  choose.addEventListener("click", () => { void pickPrepDir(null); });
+  dirPopup.append(choose);
+  dirPopup.hidden = false;
+  dirChip.classList.add("open");
+}
+
+dirChip.addEventListener("click", () => {
+  if (dirPopup.hidden) openDirPopup(); else closeDirPopup();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!dirPopup.hidden && e.target instanceof Node && !dirPopup.contains(e.target) && !dirChip.contains(e.target)) closeDirPopup();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !dirPopup.hidden) closeDirPopup();
 });
 
 // ---------- scrolling ----------
@@ -681,11 +798,19 @@ scrollBottomBtn.addEventListener("click", () => scrollToEnd(true));
 
 // ---------- helpers ----------
 
+// 空会话 = 主页布局:composer 浮到视觉中心(ZCode 式),建议 chips 横排在卡片下方;
+// 有消息后回落底部。纯 CSS(body.home)切换,composer 节点不挪窝——resetConversation
+// 的 innerHTML="" 会清空 messages,把 composer 挪进去会被连根销毁。
+function syncHomeLayout() {
+  document.body.classList.toggle("home", conversationEmpty);
+}
+
 // 欢迎页用显示/隐藏而不是移除:切换到空的全新会话时要能再展示回来。
 function dismissWelcome() {
   welcome.style.display = "none";
   conversationEmpty = false;
   syncDirChip();
+  syncHomeLayout();
 }
 
 function showWelcome() {
@@ -696,6 +821,7 @@ function showWelcome() {
   window.ArcaneI18n?.apply(welcome);
   conversationEmpty = true;
   syncDirChip();
+  syncHomeLayout();
 }
 
 // markdown 渲染管线(marked + KaTeX + hljs + mermaid)在 markdown.js。
@@ -964,6 +1090,10 @@ function summarizeArgs(toolName, args) {
         const q = String(args.query ?? "").trim();
         return q.length > 80 ? `“${q.slice(0, 80)}…”` : `“${q}”`;
       }
+      case "web_fetch": {
+        const url = String(args.url ?? "").trim();
+        return url.length > 100 ? `${url.slice(0, 100)}…` : url;
+      }
       default:
         return "";
     }
@@ -1099,6 +1229,21 @@ function finishToolCard(toolCallId, toolName, event) {
         body.appendChild(el("div", "ss-results-note", `${parsed.meta.backend} · ${note}`));
       }
       body.appendChild(list);
+    } catch {
+      body.appendChild(el("pre", null, shorten(text)));
+    }
+  } else if (toolName === "web_fetch" && !event.isError) {
+    // 抓取结果：标题链接 + 正文（卡片本身默认收起，避免 64KB 正文撑爆时间线）。
+    try {
+      const parsed = JSON.parse(text);
+      const head = el("div", "ss-results");
+      const link = el("a", "ss-result", parsed.title || parsed.url);
+      link.href = parsed.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      head.appendChild(link);
+      const note = [parsed.meta?.backend, parsed.meta?.truncated ? "· truncated" : null].filter(Boolean).join(" ");
+      if (note) body.appendChild(el("div", "ss-results-note", note));
+      body.appendChild(head);
+      body.appendChild(el("pre", null, shorten(parsed.content ?? "")));
     } catch {
       body.appendChild(el("pre", null, shorten(text)));
     }
@@ -1828,7 +1973,7 @@ function pruneOutboxes() {
   }
 }
 const inputStateKeys = {
-  failed: "chat.input.failed", send_failed: "chat.input.sendFailed", cancelled: "chat.input.cancelled",
+  failed: "chat.input.failed", send_failed: "chat.input.sendFailed",
   interrupted: "chat.input.interrupted", uncertain: "chat.input.uncertain",
 };
 function outboxFor(id) {
@@ -1841,7 +1986,9 @@ function updateInputReceipt(commandId, state) {
   if (!node) return;
   node.dataset.inputState = state;
   if (!["failed", "send_failed", "uncertain"].includes(state)) node.querySelector(".retry-input")?.remove();
-  if (!["failed", "send_failed", "cancelled", "interrupted", "uncertain"].includes(state)) {
+  // cancelled 不渲染回执:它只能来自用户自己的动作(队列 ×、✎ 编辑、⏹ 停止后的清扫),
+  // 系统故障走的是 failed——自己点掉的再来一行"已取消"只是噪音。
+  if (!["failed", "send_failed", "interrupted", "uncertain"].includes(state)) {
     node.querySelector(".input-state")?.remove();
     return;
   }
@@ -1901,8 +2048,9 @@ async function sendSubmission(submission) {
   if (result?.ok) {
     outboxFor(id).delete(submission.context.commandId);
     if (selectedSessionId === id) {
-      const node = submissionNode(submission);
-      if (!["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
+      // 备团 queued 事件先于本 ack 到达,气泡已移入队列列表;只更新现存气泡,不得重建回对话流。
+      const node = inputBubbleNode(submission.context.commandId);
+      if (node && !["consumed", "handled", "cancelled", "failed", "interrupted"].includes(node.dataset.inputState)) {
         updateInputReceipt(submission.context.commandId, result.compacted ? "handled" : "accepted");
       }
       if (result.compacted) setBusy(false);
@@ -1926,11 +2074,22 @@ async function sendSubmission(submission) {
   pruneOutboxes();
 }
 
+/** 新消息发出时清掉仍悬停的失败卡片：重发只是卡片上的一个按钮，用户发了别的消息，旧卡片即过期。 */
+function dismissStaleFailedInputs(sessionId) {
+  if (selectedSessionId !== sessionId) return;
+  for (const element of messages.querySelectorAll('[data-input-state="failed"], [data-input-state="send_failed"], [data-input-state="uncertain"]')) {
+    const node = /** @type {HTMLElement} */ (element);
+    if (node.dataset.commandId) outboxFor(sessionId).delete(node.dataset.commandId);
+    node.remove();
+  }
+}
+
 async function submit() {
   if (composerStopping() || selectedArchived) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
+  dismissStaleFailedInputs(selectedSessionId);
   const context = { ...modeContext(), commandId: crypto.randomUUID() };
   const submission = { context, text: text || t("chat.imagePlaceholder"), images, sending: false };
   // Capture the target before any await; a preflight response cannot steal B's draft.
@@ -1963,7 +2122,7 @@ stop.addEventListener("click", async () => {
 });
 togglePanelBtn.addEventListener("click", async () => {
   const result = await (panelOpen ? window.arcane.closePanel() : window.arcane.openPanel());
-  if (result?.ok === false && result.error) addStatus(result.error);
+  if (result?.ok === false && result.error) addStatus(fmtIpc(result.error));
 });
 
 input.addEventListener("input", () => {
@@ -2835,7 +2994,7 @@ function providerDisplayName(pid) {
   return providerNames[pid] ?? pid;
 }
 
-// 顶栏不再放模型 chip(与 composer 右下角的选择器重复),标签只更新 modelPicker;短标签 = 去掉 provider 前缀
+// 顶栏不再放模型 chip(与 composer 底行的选择器重复),标签只更新 modelPicker;短标签 = 去掉 provider 前缀
 function updateModelLabels(label) {
   if (!label) return;
   currentModelLabel = label;
@@ -3227,18 +3386,32 @@ function renderSearchUi() {
   ssBackendRow.hidden = mode !== "byok";
   ssEndpointRow.hidden = mode !== "custom";
   ssApikeyLabel.textContent = t(mode === "custom" ? "ss.custom.key" : "ss.apikey");
+  // byok/deepseek 且搜索页未存 key 时:占位提示缺省复用模型页的聊天 key。
+  ssApikey.placeholder = t(
+    mode === "byok" && cfg.byokBackend === "deepseek" && !cfg.hasStoredKey && cfg.deepseekHasKey
+      ? "ss.apikeyPlaceholderDeepseekChat"
+      : "ss.apikeyPlaceholder");
   // 探知珠状态行
   let state = "off";
   let text = t("ss.state.off");
   if (mode === "spark") {
-    state = cfg.sparkHasKey ? "ready" : "needs-key";
-    text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.spark");
+    // 优先级:用户自己的 DeepSeek key > Arcane Spark(v1 search PRD §5.2)
+    if (cfg.deepseekHasKey) {
+      state = "ready";
+      text = t("ss.state.ready.deepseek");
+    } else {
+      state = cfg.sparkHasKey ? "ready" : "needs-key";
+      text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.sparkOrDeepseek");
+    }
   } else if (ownKey) {
     if (cfg.hasKey) {
       state = "ready";
-      text = mode === "byok"
-        ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
-        : t("ss.state.ready.custom");
+      // keySource=deepseek-chat:缺省复用模型页 key,不是搜索页另配的。
+      text = cfg.keySource === "deepseek-chat"
+        ? t("ss.state.ready.deepseek")
+        : mode === "byok"
+          ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
+          : t("ss.state.ready.custom");
     } else {
       state = "needs-key";
       text = t("ss.state.needsKey.own");
@@ -3246,7 +3419,8 @@ function renderSearchUi() {
   }
   ssStateEl.dataset.state = state;
   ssStateText.textContent = text;
-  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey);
+  // 有 DeepSeek key 时无需引导;两者都缺才指向模型页。
+  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey && !cfg.deepseekHasKey);
 }
 
 async function refreshSearchSettings() {
@@ -3327,7 +3501,7 @@ window.ArcaneShortcuts?.register("panel.reload", {
   chords: ["F5"],
   onTap: async () => {
     const result = await window.arcane.reloadPanel?.();
-    if (result?.ok === false && result.error) addStatus(result.error);
+    if (result?.ok === false && result.error) addStatus(fmtIpc(result.error));
   },
 });
 
@@ -3350,6 +3524,7 @@ window.ArcaneI18n.onLocaleChange(() => {
 
 // 首帧就用当前语言落一次模式徽章/目录 chip(applyI18n 对 dynamic 节点是跳过的)
 applyModeUi(currentMode, lastPrepCwd);
+syncHomeLayout();
 refreshTelemetryConsent();
 
 input.focus();

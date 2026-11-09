@@ -4,11 +4,23 @@
 // 职责（顺序固定）：
 //   1. 组装 staging 树（--from-dist 按 artifact 名自动分拣，或 --staging 直读平台子目录；
 //      --signed-dir 用签名副本覆盖同名 artifact，实现先签后发）
-//   2. 计算 bytes/sha256，合并 generated/desktop-release.json 生成 release.json
+//   2. 计算 bytes/sha256/sha512，合并 generated/desktop-release.json 生成 release.json
 //   3. 上传到 region 对应的对象存储 desktop/arcane-desk[-intl]/releases/<id>/（路径版本化、不可变）
 //   4. 上传后全量 verify：每个 URL HEAD，200 且 content-length == bytes（镜像契约规则 3）
-//   5. 更新 desktop/arcane-desk[-intl]/latest.json（唯一可覆盖对象，no-cache）
+//   5. 更新 desktop/arcane-desk[-intl]/latest.json（唯一可覆盖对象，no-cache）；
+//      同一步生成 update/<channel>/latest.yml + latest-mac.yml（electron-updater feed）
+//      一并上传 verify——含 Windows .exe 且 windowsInstallersSigned=false 时硬失败
+//      （--allow-unsigned-feed 仅限应急）
 //   6. 回写仓库元数据 distribution/releases/<id>.json + distribution/desktop-latest[-intl].json
+//
+// 子命令：
+//   --promote-release <id>   回滚/复切：从桶读 release.json 重切 latest + 重生成 feed
+//   --finalize               分阶段发布收口（CI 分片 + 本地签名 exe）
+//   --backfill-feeds <id>    存量版本（pre-feed manifest，如 0.4.3）feed 回填：从桶读
+//                            manifest，逐件锚定 sha512——优先 --assets-dir 本地已签名
+//                            字节，缺件回源桶内已发布字节下载现算（两种来源都要求
+//                            与 manifest sha256 逐件一致）。只写 update/<channel>/*.yml，
+//                            不触碰 latest.json 与不可变版本目录；feed 可覆写可重跑。
 //
 // 发布双轨（国际化方案 D5）：--region cn|intl，默认读 generated/region.json，再回落 cn。
 //   cn   → 阿里云 OSS arcane-package 桶，公网 <bucket>.oss-cn-beijing.aliyuncs.com
@@ -48,6 +60,7 @@ const TARGETS = Object.freeze({
     latestKey: LATEST_KEY,
     repoLatestFile: "desktop-latest.json",
     skillsRoot: "desktop/arcane-desk/skills",
+    serverRoot: "desktop/arcane-desk/server",
   }),
   intl: Object.freeze({
     clientKind: "r2",
@@ -57,6 +70,7 @@ const TARGETS = Object.freeze({
     latestKey: "desktop/arcane-desk-intl/latest.json",
     repoLatestFile: "desktop-latest-intl.json",
     skillsRoot: "desktop/arcane-desk-intl/skills",
+    serverRoot: "desktop/arcane-desk-intl/server",
   }),
 });
 
@@ -89,6 +103,7 @@ const CONTENT_TYPES = {
   ".dmg": "application/x-apple-diskimage",
   ".zip": "application/zip",
   ".exe": "application/x-msdownload",
+  ".yml": "application/yaml; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".json": "application/json; charset=utf-8",
@@ -107,25 +122,41 @@ function parseArgs(argv) {
     else if (a === "--staging") args.staging = takeValue(a, i++);
     else if (a === "--release-id") args.releaseId = takeValue(a, i++);
     else if (a === "--promote-release") args.promoteRelease = takeValue(a, i++);
+    else if (a === "--backfill-feeds") args.backfillFeeds = takeValue(a, i++);
+    else if (a === "--assets-dir") args.assetsDir = takeValue(a, i++);
     else if (a === "--channel") args.channel = takeValue(a, i++);
     else if (a === "--region") args.region = takeValue(a, i++);
     else if (a === "--signed-dir") args.signedDir = takeValue(a, i++);
     else if (a === "--platforms") args.platforms = takeValue(a, i++).split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--skip-latest") args.skipLatest = true;
+    else if (a === "--allow-unsigned-feed") args.allowUnsignedFeed = true;
     else if (a === "--dry-run") args.dryRun = true;
     else if (a === "--no-repo-metadata") args.noRepoMetadata = true;
+    else if (a === "--finalize") args.finalize = true;
+    else if (a === "--fragment") (args.fragments ??= []).push(takeValue(a, i++));
     else throw new Error(`unknown option: ${a}`);
   }
   if (args.fromDist && args.staging) throw new Error("use only one of --from-dist or --staging");
   if (args.promoteRelease && (args.fromDist || args.staging || args.releaseId || args.skipLatest || args.signedDir)) {
     throw new Error("--promote-release cannot be combined with staging, release-id, signed-dir, or skip-latest options");
   }
+  if (args.backfillFeeds && (args.fromDist || args.staging || args.releaseId || args.promoteRelease || args.skipLatest || args.signedDir || args.finalize)) {
+    throw new Error("--backfill-feeds cannot be combined with staging, release-id, promote-release, signed-dir, finalize, or skip-latest options");
+  }
+  if (args.finalize) {
+    if (args.promoteRelease || args.fromDist || args.platforms) {
+      throw new Error("--finalize cannot be combined with promote-release, from-dist, or platforms");
+    }
+    if (!args.fragments?.length) throw new Error("--finalize requires at least one --fragment (stage-release output; repeatable, mac from CI + windows zips from local)");
+    if (!args.staging) throw new Error("--finalize requires --staging (windows installer directory)");
+    if (!args.signedDir) throw new Error("--finalize requires --signed-dir (signed installer overlay)");
+  }
   if (args.region && !REGION_IDS.includes(args.region)) {
     throw new Error(`unsupported region: ${args.region} (expected ${REGION_IDS.join("/")})`);
   }
   const unsupportedPlatforms = args.platforms?.filter((platform) => !PLATFORM_DIRS.includes(platform)) ?? [];
   if (unsupportedPlatforms.length) throw new Error(`unsupported platform(s): ${unsupportedPlatforms.join(", ")}`);
-  if (!args.promoteRelease && !args.fromDist && !args.staging) {
+  if (!args.promoteRelease && !args.fromDist && !args.staging && !args.backfillFeeds) {
     args.fromDist = path.join(desktopRoot, "dist");
   }
   return args;
@@ -142,26 +173,66 @@ export {
   createOssClient,
   createR2Client,
   createStorageClient,
+  kindFor,
+  contentTypeFor,
+  sha256File,
+  sha512File,
+  buildUpdateFeedObjects,
+  feedRelativePath,
+  assertFeedGate,
+  deriveWindowsSignedFlag,
   BASE_URL,
 };
+
+// ~/.ossutil/arcane-release.conf 按段读取：本地发布凭证的 ops 约定位置，
+// 环境变量（CI）优先，本地回落该文件（见 release-runbook「GitHub credentials」）。
+const defaultConfFile = () => path.join(os.homedir(), ".ossutil", "arcane-release.conf");
+
+function readConfSection(sectionName, confFile = defaultConfFile()) {
+  if (!fs.existsSync(confFile)) return null;
+  const text = fs.readFileSync(confFile, "utf8");
+  const section = text.split(/^\[(.+)\]$/m).findIndex((name) => name === sectionName);
+  if (section === -1) return null;
+  const body = text.split(/^\[(.+)\]$/m).slice(section + 1, section + 2)[0] ?? "";
+  const pick = (key) => body.match(new RegExp(`^\\s*${key}\\s*=\\s*(\\S+)`, "m"))?.[1];
+  return pick;
+}
 
 function loadCredentials() {
   if (process.env.OSS_RELEASE_KEY_ID && process.env.OSS_RELEASE_KEY_SECRET) {
     return { accessKeyId: process.env.OSS_RELEASE_KEY_ID, accessKeySecret: process.env.OSS_RELEASE_KEY_SECRET };
   }
-  const conf = path.join(os.homedir(), ".ossutil", "arcane-release.conf");
-  if (!fs.existsSync(conf)) {
+  const pick = readConfSection("ArcaneDeskRelease");
+  if (!pick) {
     throw new Error("missing OSS credentials: set OSS_RELEASE_KEY_ID and OSS_RELEASE_KEY_SECRET or create ~/.ossutil/arcane-release.conf");
   }
-  const text = fs.readFileSync(conf, "utf8");
-  const section = text.split(/^\[(.+)\]$/m).findIndex((name) => name === "ArcaneDeskRelease");
-  if (section === -1) throw new Error("arcane-release.conf has no [ArcaneDeskRelease] section");
-  const body = text.split(/^\[(.+)\]$/m).slice(section + 1, section + 2)[0] ?? "";
-  const pick = (key) => body.match(new RegExp(`^\\s*${key}\\s*=\\s*(\\S+)`, "m"))?.[1];
   const accessKeyId = pick("accessKeyID");
   const accessKeySecret = pick("accessKeySecret");
   if (!accessKeyId || !accessKeySecret) throw new Error("arcane-release.conf is missing accessKeyID/accessKeySecret");
   return { accessKeyId, accessKeySecret };
+}
+
+// intl 腿（R2）与 cn 腿（OSS）同构的凭证解析：env（CI publish job）优先，
+// 本地回落 arcane-release.conf 的 [ArcaneDeskIntlRelease] 段（accountId/accessKeyID/accessKeySecret）。
+function loadR2Credentials(confFile) {
+  if (process.env.CF_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) {
+    return {
+      accountId: process.env.CF_ACCOUNT_ID,
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    };
+  }
+  const pick = readConfSection("ArcaneDeskIntlRelease", confFile);
+  if (!pick) {
+    throw new Error("missing R2 credentials: set CF_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY or add [ArcaneDeskIntlRelease] to ~/.ossutil/arcane-release.conf");
+  }
+  const accountId = pick("accountId");
+  const accessKeyId = pick("accessKeyID");
+  const secretAccessKey = pick("accessKeySecret");
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error("arcane-release.conf [ArcaneDeskIntlRelease] is missing accountId/accessKeyID/accessKeySecret");
+  }
+  return { accountId, accessKeyId, secretAccessKey };
 }
 
 // 按 electron-builder artifactName（Arcane-Desk-<version>-<win|mac>-<arch>[-intl].<ext>）分拣到平台目录。
@@ -192,6 +263,158 @@ async function sha256File(file) {
   const hash = crypto.createHash("sha256");
   await pipeline(fs.createReadStream(file), hash);
   return hash.digest("hex");
+}
+
+// electron-updater 契约：sha512 必须 base64（其 hashFile 默认 base64 编码比对）。
+async function sha512File(file) {
+  const hash = crypto.createHash("sha512");
+  await pipeline(fs.createReadStream(file), hash);
+  return hash.digest("base64");
+}
+
+// windowsInstallersSigned：发布含 Windows .exe 时，它们是否全部来自签名目录。
+// applySignedOverlay 在给了 signedDir 却缺任一签名件时直接抛错，所以 staging 走到
+// 这里时「exe 的目录 == signedDir」即等价于「全部被签名副本覆盖」。无 Windows .exe
+// 时取 true（未签名门禁只看「含 .exe 且 === false」）。
+function deriveWindowsSignedFlag(staged, signedDir) {
+  const installers = staged.filter(({ platform, file }) => platform.startsWith("windows") && /\.exe$/i.test(file));
+  if (!installers.length) return true;
+  if (!signedDir) return false;
+  const resolved = path.resolve(signedDir);
+  return installers.every(({ file }) => path.dirname(path.resolve(file)) === resolved);
+}
+
+// ---- electron-updater feed（update/<channel>/latest*.yml）------------------
+// 客户端契约已按 electron-updater 6.8.9 dist 实证（见 docs/auto-update-design.md §8）：
+// 频道文件名只由平台决定（win: latest.yml / mac: latest-mac.yml），架构不进文件名；
+// 架构选择在客户端下载阶段按 process.arch 匹配 files[].url 路径名，匹配不到回退
+// 第一个文件。因此每个 feed 必须列齐该平台全部架构产物——单架构 feed 会让另一
+// 架构静默装错包（如 arm64 装上 x64），不得按架构拆文件。
+
+const FEED_PLATFORM_GROUPS = Object.freeze({
+  "latest.yml": (f) => f.platform.startsWith("windows") && /\.exe$/i.test(f.name),
+  "latest-mac.yml": (f) => f.platform.startsWith("macos") && /\.zip$/i.test(f.name),
+});
+
+function isFeedFile(f) {
+  return Object.values(FEED_PLATFORM_GROUPS).some((pick) => pick(f));
+}
+
+function updateFeedPrefix(target, channel) {
+  return `${target.latestKey.slice(0, target.latestKey.lastIndexOf("/"))}/update/${channel}`;
+}
+
+// feed 内相对路径：按 URL 标准从 update/<channel>/ 解析回版本目录（纯函数）。
+// 拒绝任何落不到本桶前缀内的地址——feed 内容不含绝对 URL、不可外跳。
+function feedRelativePath(target, channel, entry) {
+  const prefix = `${target.baseUrl}/`;
+  if (typeof entry.url !== "string" || !entry.url.startsWith(prefix)) {
+    throw new Error(`release file url outside bucket base (${target.baseUrl}): ${entry.url}`);
+  }
+  const rel = entry.url.slice(prefix.length); // desktop/arcane-desk[-intl]/releases/<id>/<platform>/<name>
+  return path.posix.relative(updateFeedPrefix(target, channel), rel); // ../../releases/...
+}
+
+// 手写 YAML（不新增依赖）：标量全部 JSON 双引号转义；releaseDate 沿用 electron-builder
+// 习惯的未引号 ISO 形式（js-yaml 会解析成 Date，electron-updater 不做逻辑使用）。
+function updateFeedYaml({ version, releaseDate, primary, files }) {
+  const lines = [
+    `version: ${JSON.stringify(version)}`,
+    `path: ${JSON.stringify(primary.url)}`,
+    `sha512: ${JSON.stringify(primary.sha512)}`,
+    `releaseDate: ${releaseDate}`,
+    "files:",
+    ...files.flatMap((f) => [
+      `  - url: ${JSON.stringify(f.url)}`,
+      `    sha512: ${JSON.stringify(f.sha512)}`,
+      `    size: ${f.size}`,
+    ]),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+// 由 release manifest 构造 feed 上传对象（纯函数；sha512 缺失即抛错——由调用方
+// 先从本地字节（backfill）或桶内字节（promote/finalize）补齐）。
+function buildUpdateFeedObjects(release, target) {
+  const version = release.product?.version;
+  const channel = release.channel;
+  if (!version || !channel) {
+    throw new Error(`release manifest missing product.version/channel; cannot build update feeds (${release.manifestUrl ?? release.releaseId})`);
+  }
+  const objects = [];
+  for (const [channelFile, pick] of Object.entries(FEED_PLATFORM_GROUPS)) {
+    const entries = (release.files ?? []).filter(pick).map((f) => ({
+      url: feedRelativePath(target, channel, f),
+      sha512: f.sha512,
+      size: f.bytes,
+    }));
+    if (!entries.length) continue; // 本次发布未含该平台产物：保留桶上既有 feed 不动
+    const missing = entries.filter((e) => typeof e.sha512 !== "string" || !e.sha512);
+    if (missing.length) {
+      throw new Error(
+        `${channelFile} requires sha512 for every entry (missing for ${missing.map((m) => m.url).join(", ")}); `
+        + `run --backfill-feeds for pre-feed releases`,
+      );
+    }
+    const primary = entries.find((e) => !e.url.includes("arm64")) ?? entries[0];
+    const body = updateFeedYaml({ version, releaseDate: release.publishedAt, primary, files: entries });
+    objects.push({
+      key: `${updateFeedPrefix(target, channel)}/${channelFile}`,
+      body,
+      bytes: Buffer.byteLength(body),
+      cache: "no-cache",
+      contentType: CONTENT_TYPES[".yml"],
+    });
+  }
+  return objects;
+}
+
+// 未签名门禁：feed 直达已安装用户，比下载页敏感。manifest 带 windowsInstallersSigned
+// === false 且含 Windows .exe 时拒绝切 latest / 上传 feed；显式 --allow-unsigned-feed
+// 仅限应急。manifest 缺该字段（pre-feed 存量版本）不触发——完整性由 sha512 锚定。
+function assertFeedGate(release, { allowUnsignedFeed = false } = {}) {
+  if (allowUnsignedFeed) return;
+  const hasWindowsInstaller = (release.files ?? []).some((f) => f.platform.startsWith("windows") && /\.exe$/i.test(f.name));
+  if (!hasWindowsInstaller) return;
+  if (release.windowsInstallersSigned === false) {
+    throw new Error(
+      `refusing to publish update feeds for unsigned Windows installers (release ${release.releaseId}); `
+      + `re-sign via --signed-dir, or pass --allow-unsigned-feed for emergencies only`,
+    );
+  }
+}
+
+// 切 latest 同批：latest 指针 + update feeds 一起上传、一起 verify，任一失败即发布失败。
+async function uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed = false } = {}) {
+  assertFeedGate(release, { allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
+  await uploadObject(client, latestObject);
+  for (const feed of feedObjects) await uploadObject(client, feed);
+  if (!(await verifyObject(target, latestObject))) {
+    throw new Error("latest.json failed verification; do NOT announce this release");
+  }
+  for (const feed of feedObjects) {
+    if (!(await verifyObject(target, feed))) {
+      throw new Error(`update feed ${feed.key} failed verification; do NOT announce this release`);
+    }
+  }
+}
+
+// feed 相关条目缺 sha512（pre-feed 旧分片/旧 manifest）时，从桶内已发布字节现算
+// 补齐内存对象——manifest 属不可变对象永不回写。调用前相关对象必须已在桶上。
+async function fillMissingFeedSha512(files) {
+  for (const f of files) {
+    if (typeof f.sha512 === "string" && f.sha512) continue;
+    if (!isFeedFile(f)) continue;
+    const res = await fetch(f.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`cannot fetch ${f.url} to compute sha512: HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length !== f.bytes) {
+      throw new Error(`bucket bytes for ${f.name} (${buffer.length}) != manifest bytes (${f.bytes}); refusing to compute sha512`);
+    }
+    f.sha512 = crypto.createHash("sha512").update(buffer).digest("base64");
+    console.log(`computed sha512 from published bytes: ${f.platform}/${f.name}`);
+  }
 }
 
 // 平台内重建 SHA256SUMS.txt：对 overlay 后的实际发布文件算 hash，
@@ -306,13 +529,16 @@ function amzDateOf(date) {
 }
 
 async function createR2Client(overrides = {}) {
-  const accountId = overrides.accountId ?? process.env.CF_ACCOUNT_ID;
-  const accessKeyId = overrides.accessKeyId ?? process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = overrides.secretAccessKey ?? process.env.R2_SECRET_ACCESS_KEY;
+  // 完整显式覆盖（accountId/accessKeyId/secretAccessKey 三键齐备）= 测试/干跑语境：
+  // 不 consult 环境变量与 ~/.ossutil 的 ops 凭证——CI 上凭证测试要用注入值而不是本机配置。
+  const fullyOverridden = Boolean(overrides.accountId && overrides.accessKeyId && overrides.secretAccessKey);
+  const conf = fullyOverridden
+    ? { accountId: undefined, accessKeyId: undefined, secretAccessKey: undefined }
+    : loadR2Credentials(overrides.confFile);
+  const accountId = overrides.accountId ?? conf.accountId;
+  const accessKeyId = overrides.accessKeyId ?? conf.accessKeyId;
+  const secretAccessKey = overrides.secretAccessKey ?? conf.secretAccessKey;
   const bucket = overrides.bucket ?? TARGETS.intl.bucket;
-  if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error("missing R2 credentials: set CF_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY");
-  }
   const fetchImpl = overrides.fetchImpl ?? fetch;
   const now = overrides.now ?? (() => new Date());
   const host = `${accountId}.r2.cloudflarestorage.com`;
@@ -487,6 +713,11 @@ async function promoteRelease(args) {
   }
   if (!release.files?.length) throw new Error(`release ${releaseId} has no files`);
 
+  // pre-feed 旧 manifest 可能缺 sha512 / windowsInstallersSigned：sha512 现算补齐
+  // （feed 派生对象需要），门禁只对显式 false 生效；二者都不回写不可变 manifest。
+  await fillMissingFeedSha512(release.files);
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+
   const latest = {
     schemaVersion: 1,
     channel: release.channel,
@@ -510,20 +741,435 @@ async function promoteRelease(args) {
       "utf8",
     );
   }
+  const feedObjects = buildUpdateFeedObjects(release, target);
   if (args.dryRun) {
-    console.log(`dry-run: release ${releaseId} is complete; latest upload skipped`);
+    console.log(`dry-run: release ${releaseId} is complete; ${feedObjects.length} update feed(s) ready; latest upload skipped`);
     return;
   }
   const client = await createStorageClient(target);
-  await uploadObject(client, latestObject);
-  if (!(await verifyObject(target, latestObject))) throw new Error("latest.json failed verification");
+  await uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
   console.log(`latest now points to verified release ${releaseId} (${target.clientKind})`);
+}
+
+// --backfill-feeds <release-id>：pre-feed 存量版本（0.4.3）的 feed 回填。从桶读
+// manifest，逐件锚定 sha512——优先 --assets-dir 本地字节（sha256 与 manifest 一致
+// 才采用），缺件回源桶内已发布字节下载现算（同一 sha256 锚定，下错即失败）。
+// 只写 update/<channel>/*.yml，不触碰 latest.json 与不可变版本目录；可重复执行。
+async function backfillReleaseFeeds(args) {
+  const releaseId = args.backfillFeeds;
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) {
+    throw new Error(`unsafe release id: ${releaseId}`);
+  }
+  const target = resolveTarget(resolvePublishRegion(args));
+  const manifestUrl = `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`;
+  const response = await fetch(manifestUrl, { cache: "no-store" });
+  if (!response.ok) throw new Error(`cannot load release manifest: HTTP ${response.status} ${manifestUrl}`);
+  const release = await response.json();
+  if (release.releaseId !== releaseId || !release.product?.version || !release.channel) {
+    throw new Error(`release manifest is invalid or mismatched: ${manifestUrl}`);
+  }
+  const assetsDir = args.assetsDir ? path.resolve(args.assetsDir) : null;
+  if (assetsDir && !fs.existsSync(assetsDir)) throw new Error(`--assets-dir not found: ${assetsDir}`);
+  // 完整性锚定：sha256 一致 ⇒ 字节 == 桶上已发布件 ⇒ 算的 sha512 可进 feed。
+  for (const f of release.files ?? []) {
+    if (!isFeedFile(f)) continue;
+    const local = assetsDir ? path.join(assetsDir, f.name) : null;
+    if (local && fs.existsSync(local)) {
+      const [sha256, stat] = await Promise.all([sha256File(local), fsp.stat(local)]);
+      if (sha256 !== f.sha256 || stat.size !== f.bytes) {
+        throw new Error(
+          `local bytes for ${f.name} do not match published manifest `
+          + `(local sha256 ${sha256.slice(0, 12)}… vs manifest ${String(f.sha256).slice(0, 12)}…); refusing to backfill from mismatched bytes`,
+        );
+      }
+      f.sha512 = await sha512File(local);
+      console.log(`anchored sha512 on local bytes: ${f.platform}/${f.name}`);
+      continue;
+    }
+    const res = await fetch(f.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`cannot fetch ${f.url} (and no matching local bytes in --assets-dir): HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length !== f.bytes) {
+      throw new Error(`bucket bytes for ${f.name} (${buffer.length}) != manifest bytes (${f.bytes}); refusing to compute sha512`);
+    }
+    const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+    if (sha256 !== f.sha256) {
+      throw new Error(`bucket bytes for ${f.name} fail sha256 anchor (${sha256.slice(0, 12)}… vs manifest ${String(f.sha256).slice(0, 12)}…)`);
+    }
+    f.sha512 = crypto.createHash("sha512").update(buffer).digest("base64");
+    console.log(`anchored sha512 on published bytes: ${f.platform}/${f.name}`);
+  }
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
+  if (args.dryRun) {
+    for (const feed of feedObjects) console.log(`--- ${feed.key} (${feed.bytes} bytes) ---\n${feed.body}`);
+    console.log(`dry-run: ${feedObjects.length} update feed(s) for ${releaseId} (${target.clientKind}); upload skipped`);
+    return;
+  }
+  const client = await createStorageClient(target);
+  for (const feed of feedObjects) await uploadObject(client, feed);
+  for (const feed of feedObjects) {
+    if (!(await verifyObject(target, feed))) {
+      throw new Error(`update feed ${feed.key} failed verification`);
+    }
+  }
+  console.log(`backfilled ${feedObjects.length} update feed(s) for ${releaseId} (${target.clientKind})`);
+}
+
+// ---- 分阶段发布·阶段 2：finalize（设计见 docs/phased-release-design.md）-----
+//
+// 分片（stage-release 产物）提供 mac 与 windows zip 的条目；本地只补签名后的
+// exe、按签名件重建 windows SHA256SUMS、合成全量 release.json 并收口。journal
+// 记录本命令上传过的每个对象：重跑时哈希一致跳过、哈希变化硬拦——Authenticode
+// 签名内嵌时间戳，重签字节必变，若放行会把桶里旧签名对象与 manifest 新哈希
+// 静默错配（HEAD 验证只比长度查不出同长错配）。
+
+function journalFileFor(releaseId) {
+  return path.join(desktopRoot, "generated", `release-journal-${releaseId}.json`);
+}
+
+export function loadJournal(releaseId, file = journalFileFor(releaseId)) {
+  if (!fs.existsSync(file)) return new Map();
+  const entries = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!Array.isArray(entries)) throw new Error(`journal is malformed: ${file}`);
+  return new Map(entries.map((entry) => [`${entry.region}:${entry.key}`, entry]));
+}
+
+async function saveJournal(releaseId, journal) {
+  await fsp.mkdir(path.join(desktopRoot, "generated"), { recursive: true });
+  await fsp.writeFile(journalFileFor(releaseId), `${JSON.stringify([...journal.values()], null, 2)}\n`, "utf8");
+}
+
+// 单次 HEAD：区分 404（待上传）与 200 长度比对（已上传/污染）。不重试——
+// verifyUrl 的重试语义仅用于上传后的最终验证。
+export async function headStatus(url) {
+  const bust = `_cb=${Date.now().toString(36)}`;
+  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}${bust}`, {
+    method: "HEAD",
+    cache: "no-store",
+    headers: { "accept-encoding": "identity" },
+  });
+  return { status: res.status, length: Number(res.headers.get("content-length")) };
+}
+
+// finalize 的 staging 只允许 exe（本地仅下载 -exe artifact），overlay 语义与
+// 全量发布共用 applySignedOverlay：缺任一签名件即失败。
+export function collectFinalizeInstallers(stagingDir, signedDir) {
+  const staged = [];
+  for (const platform of fs.readdirSync(stagingDir, { withFileTypes: true })) {
+    if (!platform.isDirectory()) continue;
+    const dir = path.join(stagingDir, platform.name);
+    for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!file.isFile()) continue;
+      if (!/\.exe$/i.test(file.name)) {
+        throw new Error(`finalize staging accepts installers only: ${platform.name}/${file.name} (other artifacts were staged from CI)`);
+      }
+      staged.push({ platform: platform.name, file: path.join(dir, file.name) });
+    }
+  }
+  if (!staged.length) throw new Error(`no installers found under ${stagingDir}`);
+  return applySignedOverlay(staged, signedDir);
+}
+
+async function fetchMacSumsMap(target, releaseId, platform) {
+  const url = `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/SHA256SUMS.txt`;
+  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}_cb=${Date.now().toString(36)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`mac SHA256SUMS cross-check failed: HTTP ${res.status} ${url}`);
+  const map = new Map();
+  for (const line of (await res.text()).split("\n").filter(Boolean)) {
+    const match = line.match(/^([0-9a-f]{64})\s{2}(.+)$/);
+    if (!match) throw new Error(`unparsable published sums line for ${platform}: ${line}`);
+    map.set(match[2], match[1]);
+  }
+  return map;
+}
+
+// 基座新鲜度守卫（0.5.0 cn 事故）：releaseId 形如 <version>-<sha8>[-intl] 时，
+// 本地基座的 product.version 必须一致——finalize 合并的是 generated/ 基座，
+// 忘跑 prepare 会把上一版的 version/source.commit 合进本版 release.json 与 feed。
+export function assertBaseManifestFresh(manifest, releaseId) {
+  const idVersion = releaseId.match(/^(\d+\.\d+\.\d+)(?:[-.].+)?$/)?.[1];
+  if (idVersion && manifest.product?.version !== idVersion) {
+    throw new Error(
+      `generated/desktop-release.json product.version (${manifest.product?.version}) != release id version (${idVersion}); `
+      + `rerun npm run prepare:desktop-release (with matching ARCANE_BUILD_REGION) before --finalize`,
+    );
+  }
+}
+
+// 提交钉死守卫（0.6.0 intl 未遂事故）：releaseId 形如 <version>-<sha8>[-intl] 时，
+// 本地基座的 source.commit 必须与之同源——发版中途 HEAD 被其它会话推进后忘钉
+// ARCANE_SOURCE_COMMIT 的 prepare 会把别人的提交烤进 release.json。
+export function assertSourceCommitMatchesReleaseId(manifest, releaseId) {
+  const sha8 = releaseId.match(/^\d+\.\d+\.\d+-([0-9a-f]{8})(?:-intl)?$/)?.[1];
+  if (!sha8) return; // 非版本-提交型 release id（自定义/工作树构建）：不设卡
+  const commit = String(manifest.source?.commit ?? "");
+  if (!commit.startsWith(sha8)) {
+    throw new Error(
+      `generated/desktop-release.json source.commit (${commit.slice(0, 8) || "missing"}) != release id sha8 (${sha8}); `
+      + `rerun npm run prepare:desktop-release with ARCANE_SOURCE_COMMIT pinned to the release commit`,
+    );
+  }
+}
+
+// 发布 channel 守卫（0.6.0 事故，2026-09-22 定位）：包内烙入的 channel（prepare 期
+// ARCANE_RELEASE_CHANNEL 写入，客户端运行期拿它拼 feed URL 的轨道名）必须与本次
+// 发布 --channel 一致。不一致时 feed 发在客户端永不轮询的轨道上，已装用户静默
+// 永远收不到更新，且无任何线上报错。
+export function assertPublishChannelMatchesManifest(manifest, channel) {
+  const baked = String(manifest?.channel ?? "");
+  if (baked !== channel) {
+    throw new Error(
+      `generated/desktop-release.json channel (${baked || "missing"}) != publish channel (${channel}); `
+      + `clients poll update/${baked || "<none>"}/latest.yml and would never see this release; `
+      + `rebuild with ARCANE_RELEASE_CHANNEL=${channel} before publishing`,
+    );
+  }
+}
+
+// 合并多份 stage 分片（mac 来自 CI stage workflow，windows zip 来自本机
+// stage-release）：逐片校验 schemaVersion/releaseId/region；分片集合本应互不
+// 相交，跨片同名同平台重复即拒绝——重复意味着同一对象被两个来源各自声明。
+export function mergeFragmentFiles(fragments, { releaseId, region }) {
+  const files = [];
+  for (const fragment of fragments) {
+    if (fragment.schemaVersion !== 1) throw new Error(`unsupported fragment schemaVersion: ${fragment.schemaVersion}`);
+    if (fragment.releaseId !== releaseId) throw new Error(`fragment releaseId ${fragment.releaseId} != ${releaseId}`);
+    if (fragment.region !== region) throw new Error(`fragment region ${fragment.region} != ${region}`);
+    const part = fragment.files ?? [];
+    if (!part.length) throw new Error("fragment carries no files");
+    if (part.some((f) => /\.exe$/i.test(f.name))) {
+      throw new Error("fragment must not carry installers (stage-release never uploads them)");
+    }
+    files.push(...part);
+  }
+  const seen = new Set();
+  for (const f of files) {
+    const key = `${f.platform}/${f.name}`;
+    if (seen.has(key)) throw new Error(`duplicate fragment entry across fragments: ${key}`);
+    seen.add(key);
+  }
+  return files;
+}
+
+async function finalizeRelease(args) {
+  const region = resolvePublishRegion(args);
+  const target = resolveTarget(region);
+  const manifestPath = path.join(desktopRoot, "generated", "desktop-release.json");
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error("generated/desktop-release.json is missing; run npm run prepare:desktop-release first");
+  }
+  const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+  const releaseId = args.releaseId ?? manifest.releaseId;
+  assertBaseManifestFresh(manifest, releaseId);
+  assertSourceCommitMatchesReleaseId(manifest, releaseId);
+  const channel = args.channel ?? "private-beta";
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$/.test(releaseId)) throw new Error(`unsafe release id: ${releaseId}`);
+  if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) throw new Error(`unsafe release channel: ${channel}`);
+  assertPublishChannelMatchesManifest(manifest, channel);
+
+  const fragments = await Promise.all(args.fragments.map(async (file) =>
+    JSON.parse(await fsp.readFile(path.resolve(file), "utf8"))));
+  const fragmentFiles = mergeFragmentFiles(fragments, { releaseId, region });
+
+  const installers = await Promise.all(
+    collectFinalizeInstallers(path.resolve(args.staging), args.signedDir).map(async ({ platform, file }) => {
+      const name = path.basename(file);
+      const [sha256, sha512, stat] = await Promise.all([sha256File(file), sha512File(file), fsp.stat(file)]);
+      return { platform, name, bytes: stat.size, sha256, sha512, kind: kindFor(name), contentType: contentTypeFor(name), file };
+    }),
+  );
+
+  const files = fragmentFiles.map((f) => ({
+    ...f,
+    url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${f.platform}/${f.name}`,
+  }));
+  for (const installer of installers) {
+    files.push({ ...installer, url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${installer.platform}/${installer.name}` });
+  }
+
+  // mac 双源交叉校验：分片哈希必须与桶上 CI 清单一致（都在线，代价是两个小 GET）。
+  for (const platform of new Set(fragmentFiles.filter((f) => f.platform.startsWith("macos")).map((f) => f.platform))) {
+    const published = await fetchMacSumsMap(target, releaseId, platform);
+    for (const f of fragmentFiles.filter((x) => x.platform === platform && /\.(dmg|zip)$/i.test(x.name))) {
+      if (published.get(f.name) !== f.sha256) {
+        throw new Error(`fragment hash for ${platform}/${f.name} disagrees with published SHA256SUMS (${published.get(f.name)})`);
+      }
+    }
+  }
+
+  // windows SHA256SUMS：签名 exe（本地）+ zip（分片），按名字排序重建。
+  for (const platform of new Set(installers.map((i) => i.platform))) {
+    const platformInstallers = installers.filter((i) => i.platform === platform);
+    if (platformInstallers.length !== 1) {
+      throw new Error(`expected exactly one installer for ${platform}; got ${platformInstallers.map((i) => i.name).join(", ")}`);
+    }
+    const zips = fragmentFiles.filter((f) => f.platform === platform && /\.zip$/i.test(f.name));
+    if (zips.length !== 1) throw new Error(`fragment must carry exactly one zip for ${platform}`);
+    const body = `${[platformInstallers[0], ...zips]
+      .map((f) => ({ name: f.name, sha256: f.sha256 }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => `${f.sha256}  ${f.name}`)
+      .join("\n")}\n`;
+    files.push({
+      platform,
+      name: "SHA256SUMS.txt",
+      bytes: Buffer.byteLength(body),
+      sha256: crypto.createHash("sha256").update(body, "utf8").digest("hex"),
+      kind: "checksums",
+      contentType: CONTENT_TYPES[".txt"],
+      body,
+      url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/SHA256SUMS.txt`,
+    });
+  }
+  files.sort((a, b) => a.platform.localeCompare(b.platform) || a.name.localeCompare(b.name));
+
+  // 分片产物（mac zip 等 feed 相关件）缺 sha512 时（旧分片 schema），此时它们已在
+  // 桶上，按已发布字节现算补齐（新分片由 stage-release 直接携带 sha512）。
+  await fillMissingFeedSha512(files);
+
+  const publishedAt = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+  const release = {
+    ...manifest,
+    channel,
+    releaseId,
+    publishedAt,
+    windowsInstallersSigned: deriveWindowsSignedFlag(
+      installers.map(({ platform, file }) => ({ platform, file })),
+      args.signedDir,
+    ),
+    manifestUrl: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`,
+    files: files.map(({ file, body, ...entry }) => entry),
+  };
+  const releaseBody = `${JSON.stringify(release, null, 2)}\n`;
+  const latest = {
+    schemaVersion: 1,
+    channel,
+    releaseId,
+    version: manifest.product.version,
+    publishedAt,
+    manifest: release.manifestUrl,
+  };
+  const latestBody = `${JSON.stringify(latest, null, 2)}\n`;
+
+  console.log(`Finalize ${releaseId} (${channel}, ${target.clientKind}) — fragment ${fragmentFiles.length} + local ${installers.length} files`);
+  for (const f of files) console.log(`  ${f.platform}/${f.name}  ${f.bytes}  ${f.sha256.slice(0, 12)}…`);
+
+  if (!args.noRepoMetadata) {
+    const releasesDir = path.join(desktopRoot, "distribution", "releases");
+    await fsp.mkdir(releasesDir, { recursive: true });
+    await fsp.writeFile(path.join(releasesDir, `${releaseId}.json`), releaseBody, "utf8");
+  }
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
+  if (args.dryRun) {
+    console.log(`dry-run: ${feedObjects.length} update feed(s) ready; skip upload & verify`);
+    return;
+  }
+
+  const client = await createStorageClient(target);
+  const journal = loadJournal(releaseId);
+  const manifestObject = {
+    key: `${target.releaseRoot}/${releaseId}/release.json`,
+    body: releaseBody,
+    bytes: Buffer.byteLength(releaseBody),
+    sha256: crypto.createHash("sha256").update(releaseBody, "utf8").digest("hex"),
+    cache: "public, max-age=31536000, immutable",
+    contentType: CONTENT_TYPES[".json"],
+    immutable: true,
+    mustBeNew: true,
+  };
+  const objects = [
+    ...installers.map((i) => ({
+      key: `${target.releaseRoot}/${releaseId}/${i.platform}/${i.name}`,
+      file: i.file,
+      bytes: i.bytes,
+      sha256: i.sha256,
+      cache: "public, max-age=31536000, immutable",
+      contentType: i.contentType,
+      immutable: true,
+      mustBeNew: false, // 同字节续传合法（崩溃重跑）；只有 release.json 必须是新的
+    })),
+    ...files.filter((f) => f.kind === "checksums").map((f) => ({
+      key: `${target.releaseRoot}/${releaseId}/${f.platform}/${f.name}`,
+      body: f.body,
+      bytes: f.bytes,
+      sha256: f.sha256,
+      cache: "public, max-age=31536000, immutable",
+      contentType: f.contentType,
+      immutable: true,
+      mustBeNew: false,
+    })),
+    manifestObject,
+  ];
+
+  for (const obj of objects) {
+    const journalKey = `${region}:${obj.key}`;
+    const url = `${target.baseUrl}/${obj.key}`;
+    const recorded = journal.get(journalKey);
+    if (recorded && recorded.sha256 !== obj.sha256) {
+      throw new Error(
+        `local bytes changed since the last finalize attempt for ${obj.key} `
+        + `(journal ${recorded.sha256.slice(0, 12)}… != ${obj.sha256.slice(0, 12)}…); `
+        + `a re-signed installer poisons this release id — use a new --release-id`,
+      );
+    }
+    const head = await headStatus(url);
+    if (head.status === 200 && obj.mustBeNew) {
+      throw new Error(`release manifest already exists: ${obj.key} (this release id is finalized; run --promote-release instead)`);
+    }
+    if (head.status === 200 && head.length === obj.bytes) {
+      // 覆盖"上传后、记账前"的崩溃窗口：桶上长度一致即收养记账。
+      journal.set(journalKey, { region, key: obj.key, sha256: obj.sha256, bytes: obj.bytes });
+      await saveJournal(releaseId, journal);
+      console.log(`already uploaded ${obj.key}`);
+      continue;
+    }
+    if (head.status === 200) {
+      throw new Error(`object exists with different length: ${obj.key} (bucket ${head.length} != local ${obj.bytes}); use a new --release-id`);
+    }
+    if (head.status !== 404) throw new Error(`unexpected HEAD status ${head.status} for ${obj.key}`);
+    await uploadObject(client, obj);
+    journal.set(journalKey, { region, key: obj.key, sha256: obj.sha256, bytes: obj.bytes });
+    await saveJournal(releaseId, journal);
+  }
+
+  // 收口验证：分片对象 + 本地对象 + release.json 全量 HEAD。
+  let failures = 0;
+  for (const f of files) {
+    if (!(await verifyUrl(f.url, f.bytes, `${f.platform}/${f.name}`))) failures += 1;
+  }
+  if (!(await verifyUrl(`${target.baseUrl}/${manifestObject.key}`, manifestObject.bytes, manifestObject.key))) failures += 1;
+  if (failures) throw new Error(`${failures} object(s) failed verification; do NOT announce this release`);
+
+  if (!args.skipLatest) {
+    const latestObject = {
+      key: target.latestKey,
+      body: latestBody,
+      bytes: Buffer.byteLength(latestBody),
+      cache: "no-cache",
+      contentType: CONTENT_TYPES[".json"],
+    };
+    await uploadLatestWithFeeds(client, target, latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
+    if (!args.noRepoMetadata) {
+      await fsp.writeFile(path.join(desktopRoot, "distribution", target.repoLatestFile), latestBody, "utf8");
+    }
+  }
+  console.log(`release ${releaseId} finalized and verified: ${release.manifestUrl}`);
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.promoteRelease) {
     await promoteRelease(args);
+    return;
+  }
+  if (args.backfillFeeds) {
+    await backfillReleaseFeeds(args);
+    return;
+  }
+  if (args.finalize) {
+    await finalizeRelease(args);
     return;
   }
   const target = resolveTarget(resolvePublishRegion(args));
@@ -540,6 +1186,7 @@ async function main() {
   if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$/.test(channel)) {
     throw new Error(`unsafe release channel: ${channel}`);
   }
+  assertPublishChannelMatchesManifest(manifest, channel);
 
   const staging = args.staging
     ? await stageFromStagingDir(args.staging, args.platforms, args.signedDir)
@@ -550,13 +1197,14 @@ async function main() {
   const files = [];
   for (const { platform, file } of staging) {
     const name = path.basename(file);
-    const [sha256, stat] = await Promise.all([sha256File(file), fsp.stat(file)]);
+    const [sha256, sha512, stat] = await Promise.all([sha256File(file), sha512File(file), fsp.stat(file)]);
     files.push({
       kind: kindFor(name),
       platform,
       name,
       bytes: stat.size,
       sha256,
+      sha512,
       contentType: contentTypeFor(name),
       url: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/${platform}/${name}`,
     });
@@ -568,6 +1216,7 @@ async function main() {
     channel,
     releaseId,
     publishedAt,
+    windowsInstallersSigned: deriveWindowsSignedFlag(staging, args.signedDir),
     manifestUrl: `${target.baseUrl}/${target.releaseRoot}/${releaseId}/release.json`,
     files,
   };
@@ -635,8 +1284,10 @@ async function main() {
     }
   }
 
+  assertFeedGate(release, { allowUnsignedFeed: args.allowUnsignedFeed });
+  const feedObjects = buildUpdateFeedObjects(release, target);
   if (args.dryRun) {
-    console.log("dry-run: skip upload & verify");
+    console.log(`dry-run: ${feedObjects.length} update feed(s) ready; skip upload & verify`);
     return;
   }
 
@@ -666,10 +1317,7 @@ async function main() {
   if (failures) throw new Error(`${failures} object(s) failed verification; do NOT announce this release`);
 
   if (!args.skipLatest) {
-    await uploadObject(client, plan.latestObject);
-    if (!(await verifyObject(target, plan.latestObject))) {
-      throw new Error("latest.json failed verification; do NOT announce this release");
-    }
+    await uploadLatestWithFeeds(client, target, plan.latestObject, release, { allowUnsignedFeed: args.allowUnsignedFeed });
   }
   console.log(`release ${releaseId} published and verified: ${release.manifestUrl}`);
 }

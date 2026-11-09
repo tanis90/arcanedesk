@@ -147,17 +147,36 @@ output: {
   automaticSteps: Array<{ slot: string; level: number; kind: string; label: string;
     summary?: string }>;                // advance 自动完成，禁止手工重复添加
   choiceRequirements: Array<{ slot: string; level: number; kind: string; label: string;
-    count: number; valueFormat: string; fill: string[]; candidates?: string[];
-    candidateNames?: Record<string, string>; cap?: number; required: boolean }>;
+    count: number; valueFormat: string; key: string; candidates?: string[];
+    candidateNames?: Record<string, string>; cap?: number; required: boolean;
+    note?: string }>;
+  choicesTemplate: Record<string, unknown>;  // 每个 bySlot 槽位的填空骨架，照抄改值即可
   spellBudget: { ability: string | null; progression: string; cantrips?: number;
     known?: number; book?: number;
+    source?: "subclass";            // 子职业引入施法（三环）时标 "subclass"
+    maxSpellLevel?: number;         // 子职业施法者：目标等级最高环位（browse maxLevel 回传）
+    spellListClassUuid?: string;    // 子职业施法者：法术列表所在职业（2014 三环 = 法师）
+    note?: string;                  // 规则提示（学派限制/固定戏法），不校验
     fullList?: { maxLevel: number; count: number;
       candidates: Array<{ uuid: string; name: string; level: number }> } } | null;
+  autoGrantedSpells?: Array<{ uuid: string; name: string | null;
+    spellLevel: number | null;      // 0 = 戏法
+    grantLevel: number;             // 授予发生的职业等级
+    source: "class" | "subclass" | "race" }>;  // 无自动授予时整个字段缺省
   coverage: { nativeStepCount: number; automaticStepCount: number;
     choiceStepCount: number; uncoveredRequiredSteps: string[] };
   warnings: object[];
 }
 ```
+
+**choiceRequirements.key（2026-09-16 槽位寻址定稿，取代 fill/fillAllocation）**：key 指明
+这个选择填到 advance 入参的哪个位置——key 形如 `class:3:ItemChoiceAdvancement:0`
+（即 slot 本身）的填到 `choices.bySlot[key]`；key 为 `subclassUuid` 的填顶层入参
+`subclassUuid`。choicesTemplate 按 valueFormat 给骨架：`trait-key`/`pool-uuid` →
+`[]`（数组，长度须等于 count）；`asi-assignment` → `{ "abilityScore": {} }`；
+`asi-or-feat` → `{ "abilityScore": {} }` 且 note 注明可用 `{ "feat": "<uuid>" }` 替代。
+同一升级里多个 ASI 节点（如职业 4 级 + 种族浮动）各占独立 slot、各填各的，
+不再共享一个 abilityScore 键。
 
 语义备注：
 
@@ -168,22 +187,53 @@ output: {
   `languages:*`）在 plan 出口用系统自带 `Trait.mixedChoices` 展开为具体 key
   （`languages:standard:elvish` 等 24 个）并附 candidateNames；模型照抄池中 key
   即可。注册表不可用时回退原始池，advance 侧匹配仍按通配符前缀语义接受具体 key。
+- **trait 池可寻址族**（2026-09-17 扩）：模型可填的 Trait 选择池为
+  skills/tool/languages、武器熟练 `weapon:`（剑圣宗近战武器 21 选 1 为准案，
+  monk sweep）加防御族 `dr:`/`di:`/`ci:`/`dv:`（龙裔伤害抗性，e2e B14）；其余族
+  （armor/saves/senses 等）仍走原生默认值并在 uncoveredRequiredSteps 显性报告，
+  待矩阵案例驱动再扩。
 - **NPC 支持**：actor 类型门为 character|npc。NPC（怪物加职业等级）的 HP 摘要
   按怪物体型骰（actor hd.denomination）下发"fixed N (dX average)"，无首级满骰。
 - **子职业两次调用约定**：不带 subclassUuid 先拿计划（choiceRequirements 里
   valueFormat="subclass-uuid" 的步骤自带 candidates/candidateNames 池）；定下子职业后
   带 subclassUuid 重调一次，子职业自身的授予/选择步骤才会枚举（slot 带 subclass: 前缀）。
+  **advance 接受 subclass: 槽位**（2026-09-17 定稿）：子职业步骤与 class/race 走同一条
+  enumerate+normalize 管线——枚举用不落入世界的临时条目（避免与 SubclassAdvancement
+  apply 插入的真卡重复），apply 时按 advancement id 映射到真卡上执行，授出条目的
+  advancementOrigin 因此指向存活卡。plan 与 advance 的槽宇宙严格同源。
+- **空池 ItemChoice 按 restriction 枚举**（2026-09-17 定稿）：pool 为空是 dnd5e 表达
+  "按限制自选"的标准编码（高等精灵戏法 pool:[] + restriction.level:"0"，系统包与模块
+  一致；原生 UI 在选择器里按 restriction 过滤）。plan 对这种槽按 restriction 枚举候选：
+  spell+整数环 → 该环全部法术；feat → 全部专长；统一 identifier 去重、arcane 包优先、
+  按 classUuid 锚定的 rules 版本过滤。不可枚举形状（level:"available" 的魔法奥秘、
+  无 type 的条目）保持 candidates 缺省，视为已知边界。校验侧本就按 restriction 验收，
+  枚举集是它的子集，天然自洽。
 - **HP 永不进 choiceRequirements**（D1）：1 级满骰、后续级固定均值，dnd5e 原生计算；
   automaticSteps 给信息性摘要（"hp: max hit die (6) + con mod" / "hp: fixed 4 (d6
   average) + con mod"）。choices.hp 保留为 advance 隐藏覆盖项（DM 掷骰 HP 才传），
   plan 不下发、不询问。不做 HP 数值 preview（D2）——对错由验收夹具判断，skill 引导
   模型信任工具而非自行验算。
-- **choiceRequirements 是唯一的填写清单**：fill 指明填到 advance 入参的哪个键
-  （choices.skills / choices.cantrips / choices.abilityScore / subclass-uuid …），
-  candidates 是该步骤的合法候选池，从池中选，不凭记忆。
+- **choiceRequirements 是唯一的填写清单**：key 指明填到 advance 入参的哪个位置
+  （`choices.bySlot[key]`，或顶层 `subclassUuid`），candidates 是该步骤的合法候选池，
+  从池中选，不凭记忆。
+- **混合 ASI 的 fixed 部分进 automaticSteps**：fixed 非零且 points>0 的节点（半精灵
+  +2 魅力 + 两点浮动）除浮动 choiceRequirement 外，另发一条
+  "fixed ability bonuses: cha+2" 自动步——固定加成不需要模型填，但必须事前可见。
 - **spellBudget.fullList**：准备施法者（2014 牧师/德鲁伊/圣武士/奇械）能会的全部法术
   （按环位上限枚举自模块标注包）。这类职业"会"整个职业法术列表，准备是 DM 与玩家
   游戏时决定的页签标记，工具不管理。配套 advance 的 fullSpellList 开关使用。
+- **spellBudget 子职业施法（2026-09-17 定稿，取代"v1 放弃"）**：职业不施法而子职业
+  `system.spellcasting.progression` 非空时（2014 仅奥法骑士/诡术师，全世界包扫描 +
+  PHB 三环表逐行核实），按三环表下发 `known` + `source:"subclass"` + `maxSpellLevel` +
+  `spellListClassUuid`（法师列表）。环级法术走 additionalItems（known 语义，browse 回传
+  spellListClassUuid 拿 eligibility）；戏法不下发——走子职业自带 ItemChoice 槽，避免
+  双口径。学派限制/固定 Mage Hand 进 `note` 提示，不校验。2024 子职业施法形态未调研，
+  不下发。
+- **autoGrantedSpells（2026-09-17 定稿）**：本次 advance 会经固定 ItemGrant 自动授予的
+  法术清单（职业/子职业/种族链 ≤目标等级，复用 resolved steps 的 `dataFor.selected`，
+  与写路径严格同源；ItemChoice 自选池不在其列）。known/cantrip 预算的自选必须避开
+  它们——重复选择会被写入去重、静默烧掉一个名额（月之术法 A10s 实证：subclass 9 +
+  granted 5 ≠ budget 6）。纯增量信息下发，不改写路径与既有字段语义。
 - rules 由 classUuid 锚定推导，模型不传。
 
 ### 3.4 foundry_actor_get（现状不变）
@@ -219,17 +269,38 @@ CompendiumGrant: { uuid?: string; packId?: string; entryId?: string;
 按来源去重（已存在跳过，不叠加不替换），回执报 created/skipped。advance 之外的补充
 授予出口；能走 advance.additionalItems 的优先走 advance（单次写入、统一回执）。
 
-### 3.8 foundry_actor_advance（现状 + fullSpellList 已落地）
+### 3.8 foundry_actor_advance（2026-09-16 槽位寻址定稿）
 
 ```ts
 input: { actorUuid: string; readRef: string; classUuid: string; subclassUuid?: string;
   raceUuid?: string; targetLevel: number;
-  choices?: { skills?: string[]; tools?: string[]; languages?: string[];
-    cantrips?: string[]; preparedSpells?: string[]; feats?: string[]; hp?: "max" | "avg";
-    abilityScore?: Record<string, 1 | 2> };
+  choices?: {
+    bySlot?: Record<string, SlotValue>;  // key 原样抄自 plan 的 choiceRequirements[].key
+    hp?: "max" | "avg"                   // 隐藏覆盖（DM 掷骰 HP 才传），plan 不下发
+  };
   additionalItems?: CompendiumGrant[];   // ≤ 50；法术书、装备同一出口
   fullSpellList?: boolean }              // 仅 fullList 职业合法，否则写入前拒绝
+
+SlotValue =                              // 形状由该槽的 valueFormat 决定：
+  | string[]                             //   trait-key / pool-uuid：长度须等于 count
+  | { abilityScore: Record<string, 1|2> } //  asi-assignment / asi-or-feat
+  | { feat: string }                     //   仅 asi-or-feat：一个专长/特性 UUID
 ```
+
+**槽位寻址语义**：每个 choiceRequirement 的值放到它自己的 key 下，节点之间不共享、
+不排序、不互相消费——同一个 bySlot 里可以有任意多个 ASI 节点各自加点。校验全部
+写入前完成：
+
+- 未知 slot key → 拒绝 `CHOICE_SLOT_UNKNOWN` 并列出合法 key（取代旧
+  UNCONSUMED_CHOICE 警告——值不再可能"剩下"）。
+- 必填 slot 缺失或数组长度 ≠ count → 拒绝 `ADVANCEMENT_NEEDS_CHOICE` 点名 slot。
+- pool-uuid 值不在 candidates → 同码拒绝，点名 slot 与违规值。
+- asi-assignment：属性合法且未 locked、每项 ≤ cap、合计 ≤ points（只约束浮动部分）。
+- asi-or-feat：`{ abilityScore }` 与 `{ feat }` 二选一，都传或都不传都拒绝；
+  `{ feat }` 的 UUID 须可解析为 Item。
+- 混合 ASI（fixed 非零 + points>0）：fixed 自动并入 assignments（native 语义
+  value.assignments = fixed + floating，浮动部分可叠在 fixed 属性上），
+  fixed 不受 cap/points 限制。
 
 actor 类型门为 character|npc（2026-09-15 放开）。NPC 加职业等级：HP 步用怪物
 体型骰固定均值（无首级满骰、无 hpFill），法术位照常派生。
@@ -239,8 +310,12 @@ verification 覆盖 actor 终态全字段（D3）：abilities（每属性 before
 分解，回答"人类 +1 是否落地"类问题）、subclass（uuid/name）、race（uuid/name/size）、
 movement（walk 及非零其他）、languages（applied + 种族默认池 note）、traits（豁免/
 技能/护甲/武器/工具熟练）、proficiency.bonus、spellcasting（ability/slots/戏法与法术
-计数）、ac、resources（带 uses 条目）、hpFill/slotFill/spellFill。hpFill 与 slotFill
-同属 0 级建档收尾（hpFill 仅 character；slotFill 把 spellN/pact 的 value 填到 max）。
+计数 + **cantripsBySource/spellsBySource 来源拆分**——2026-09-17 定稿：按
+advancementRoot/Origin 解析授予条目类型分 class/subclass/race/granted 四桶，
+budget 只对 class+granted 两桶，种族白送的戏法/环法不再造成假差 1）、ac、
+resources（带 uses 条目）、hpFill/slotFill/spellFill。hpFill 与 slotFill
+同属 0 级建档收尾（hpFill 仅 character 且仅发生拉满时出现——种族不加 con 无漂移时
+自然满血、无 hpFill；slotFill 把 spellN/pact 的 value 填到 max）。
 收到回执即对账完成，禁止再裸 eval 自检；回执未覆盖的字段先视为工具缺口上报，再考虑
 补读。
 
@@ -663,3 +738,90 @@ preservation 回执 + skill 教义（收到警告即披露）消除了 B1 那种
 退出评估结论：**break loop**。工具臂时长 42-93s（js 臂 67-284s），core 全绿，残余
 裸写无系统性工具问题。观察项（不修，下轮数据恶化再议）：写后自查回读若在未来批次
 重新放大，优先考虑在回执里附"报告可直接引用的终态摘要块"而非加新工具。
+
+## 13. 第六轮：choices 槽位寻址（2026-09-16 定稿）
+
+### 13.1 触发：线上会话五连拒
+
+备团会话造「半精灵龙脉术士 5 级」（arcane 2014 包），actor_advance 连续 5 次
+写入前拒绝。模型五次尝试传的都是合法候选（野性面具等 UUID 就在 plan 下发的
+candidates 里），全部被拒。逐条归因（回执 + runtime 源码 + 模块 leveldb 原始
+配置三方互证）：
+
+- **Bug A：职业 ASI 盲抢 feats 桶**。`asi-or-feat` 节点（2014 每职业 4/8/12/16/19
+  级）执行 `take("choices.feats", () => true, 1)`——不看候选池，抓桶里剩下的
+  第一个值。stepSets 按 class → race → subclass 顺序破坏性消费共享桶，种族
+  「半精灵变体」ItemChoice 排在职业 4 级 ASI 之后，它的变体值永远先被 ASI
+  抢走当"专长"，于是恒报 `need 1, have 0`。双重腐蚀：ASI 侧也被写进一个
+  种族特性 UUID 冒充的假专长（native feat 分支不校验类型，仅拒绝兜底挡住了写入）。
+- **Bug B1：种族 ASI 不查 abilityScoreUsed**。race 侧 ASI 分支直接读
+  `choices.abilityScore`，职业 ASI 用过后种族会再应用一次同一组加点。
+- **Bug B2：单一 abilityScore 键**（旧 backlog 已记）：职业 4 级 ASI 与种族
+  浮动 ASI 共用一个键，表达不了两组不同分配。
+- **Bug C：混合 ASI 丢 fixed**。半精灵种族 ASI 真实配置
+  `points:2, fixed:{cha:2}`，旧代码 `if (points <= 0)` 才把 fixed 写进
+  assignments——points>0 时 +2 魅力整段丢失。native 语义（dnd5e 编译源码实证）：
+  `value.assignments = fixed + floating` 合并存储，flow 的已用点算法也是
+  `assignments - fixed`；我们非 initial 路径下 fixed 不会自动应用，必须自己并入。
+
+根因同构：choices 按"值类别"设公共桶（feats/abilityScore/…），节点按固定顺序
+破坏性消费——一个桶喂多个节点、且有节点不做池匹配盲抓时，退化成先到先得，
+模型无法表达"这个值给哪个节点"。
+
+### 13.2 方案：槽位寻址
+
+choices 改为 `bySlot: Record<slot, SlotValue>`：key 原样抄自 plan 的
+choiceRequirements[].key（= slot），每个节点只读自己的 key。线格式与校验见
+§3.8；plan 侧新增 choicesTemplate 填空骨架、key 字段取代 fill、删除
+fillAllocation，见 §3.3。
+
+破坏性变更（探索期不留双格式）：
+
+- advance 删除旧桶：`choices.{skills,tools,cantrips,preparedSpells,feats,languages,
+  expertise,abilityScore}` 全部移除；`choices.hp` 保留为隐藏覆盖（plan 不下发）。
+- plan 删除 `fillAllocation`；choiceRequirements 的 `fill` 字段被 `key` 取代
+  （subclass-uuid 的 key 就是字符串 "subclassUuid"，仍填顶层入参）。
+- 旧 UNCONSUMED_CHOICE 警告随桶一起消失，未知 slot 变成写入前拒绝。
+
+实现纪律（写进代码注释与测试）：
+
+1. **slot 稳定性**：slot = `label:level:kind:序号`，plan 与 advance 走同一份
+   enumerateAdvancementStepSets 枚举，序号确定性一致——回归测试锁死两边 slot 集合相等。
+2. **子职业对齐**：plan 预插 subclass 枚举、advance 在 SubclassAdvancement apply 后
+   扫子职业步骤，两条路径产生的 subclass: 前缀 slot 必须一致。
+3. **专精顺序约束保留**：expertise 槽校验"须已熟练（卡面或本次调用更早槽位）"，
+   landedTraits 仍按步骤顺序累积——这是规则本身的数据依赖，不是桶消费。
+4. **default 槽重复选取拒绝（2026-09-17，逸闻学院案）**：dnd5e `TraitAdvancement.apply`
+   对 `mode:"default"` 无条件写熟练值 1——重选已熟练项会把已落专精（2）踩回 1
+   （原生 UI 把已熟练项标 selected 不可再选，API 侧本无护栏）。default 模式槽的
+   skills:/tool: 选取若已在 landedTraits（卡面或本次调用更早槽位）中，写入前整体
+   拒绝并点名。languages/dr/di/ci/dv 是集合添加、幂等无害，不在拒绝范围；
+   expertise/upgrade 模式本就要求已熟练项，也不受影响。
+   已知边界：若某池全部候选都已在卡面（理论情形），原生会按需减 count 而我们仍
+   要求满额——暂无真实案命中，命中再议。
+
+### 13.3 验收
+
+正路一条链路：browse class → plan（含子职业池）→ browse race → plan（带
+subclassUuid）→ advance 一次通过。半精灵龙脉术士 5 级：变体特性进 race 槽、
+超魔法 ×2 进 class:3 槽、职业与种族 ASI 各填各的；回执 abilities 分解里
+cha 的 race 分量 = +2。
+
+实测记录（2026-09-16，COS 世界 / dnd5e 5.3.3 / fvtt-cli --port 9230 直连）：
+browse class/race 目录 → plan（不带 subclass 拿 8 项子职业池）→ plan（带龙族血脉）
+→ actor_create（标准数组随 dnd5e.abilities 落地）→ names[] 批量解析 11 法术 + 2 装备
+→ advance 一次 completed。回执：cha 15→19（race+2 为固定加成、asi+2 为 4 级加点）、
+con 14 / wis 13（种族浮动点）、hp 37/37（含龙族体魄每级 +1）、slotFill 4/3/2、
+语言 draconic+common+elvish、技能 arc/per、超魔法瞬发+孪生、变体特性敏锐感官落地、
+16 granted + 13 created。第一次提交被 SOURCE_MISMATCH 拒（火球术在 arcane 包实名就是
+"火球术"而非"火球术 Fireball"）——expectedName 漂移护栏按设计工作，零写入，
+照抄 browse 原名后通过。
+
+### 13.4 附带修复：trait 落地审计的叶存储口径
+
+首轮实测暴露出 TRAIT_GRANT_NOT_LANDED 8 连误报：审计按 full remainder
+（`sim:dagger`/`standard:common`）查卡面，而 dnd5e 实际只存叶段
+（`dagger`/`common`）——audit 改成 full remainder 与叶段双口径匹配（skills/saves
+本就只有一段，不受影响；tool 分支同样补叶段回退）。回归测试：叶存储的
+weapon:sim:dagger 与 languages:standard:* 不再产生警告。误报若留着会训练模型
+忽视真警告（v7 B1 那种 NPC 护甲/武器熟练真丢失），必须修。

@@ -226,3 +226,103 @@ test("voice config tampering cannot redirect a protected relay key", () => {
     baseUrl: "https://llm.arcanedesk.bitterbebop.cn/v1",
   });
 });
+
+// ---------- prompt/hotwords 按 locale 播种(方案 A:未自定义跟随语言,自定义即冻结) ----------
+
+import { VOICE_PRESETS } from "../src/main/voice/preset.js";
+
+const enStore = (file) => new VoiceStore(file, () => {}, testSecretStorage(), undefined, () => "en-US");
+
+test("fresh config follows the UI locale preset instead of materializing zh", () => {
+  const { file } = tempVoiceConfig();
+  const store = new VoiceStore(file, () => {}, testSecretStorage());
+  assert.equal(store.data.prompt, null);
+  assert.equal(store.data.hotwords, null);
+  assert.equal(store.effective().prompt, VOICE_PRESETS["zh-CN"].prompt);
+  assert.deepEqual(store.effective().hotwords, VOICE_PRESETS["zh-CN"].hotwords);
+
+  const english = enStore(file);
+  assert.equal(english.effective().prompt, VOICE_PRESETS["en-US"].prompt);
+  assert.deepEqual(english.effective().hotwords, VOICE_PRESETS["en-US"].hotwords);
+  assert.equal(english.toPublic().prompt, VOICE_PRESETS["en-US"].prompt);
+});
+
+test("v3 configs that materialized a preset reclassify to locale-following", () => {
+  const { file } = tempVoiceConfig();
+  writeFileSync(file, JSON.stringify({
+    schemaVersion: 3,
+    enabled: true,
+    provider: "arcane-relay",
+    baseUrl: "",
+    prompt: VOICE_PRESETS["zh-CN"].prompt,
+    hotwords: VOICE_PRESETS["zh-CN"].hotwords,
+    holdKey: "F9",
+    toggleKey: "",
+  }));
+  const store = enStore(file);
+  assert.equal(store.data.prompt, null);
+  assert.equal(store.data.hotwords, null);
+  assert.equal(store.effective().prompt, VOICE_PRESETS["en-US"].prompt);
+});
+
+test("customized values freeze and survive the save/reload round trip", () => {
+  const { file } = tempVoiceConfig();
+  const store = new VoiceStore(file, () => {}, testSecretStorage(), undefined, () => "en-US");
+  store.update({
+    enabled: true,
+    provider: "arcane-relay",
+    apiKey: "",
+    baseUrl: "",
+    prompt: "My table's prompt",
+    hotwords: ["Baldur's Gate", "Faerûn"],
+    holdKey: "F9",
+    toggleKey: "",
+  });
+  assert.equal(store.data.prompt, "My table's prompt");
+  assert.deepEqual(store.data.hotwords, ["Baldur's Gate", "Faerûn"]);
+
+  const reloaded = enStore(file);
+  assert.equal(reloaded.data.prompt, "My table's prompt");
+  assert.deepEqual(reloaded.data.hotwords, ["Baldur's Gate", "Faerûn"]);
+});
+
+test("saving a preset verbatim keeps following the locale; edits freeze only the edited field", () => {
+  const { file } = tempVoiceConfig();
+  const store = new VoiceStore(file, () => {}, testSecretStorage(), undefined, () => "en-US");
+  store.update({
+    enabled: true,
+    provider: "arcane-relay",
+    apiKey: "",
+    baseUrl: "",
+    prompt: VOICE_PRESETS["en-US"].prompt, // 设置页原样保存,不固化
+    hotwords: [...VOICE_PRESETS["en-US"].hotwords, "Strahd"], // 热词加了一个团名词
+    holdKey: "F9",
+    toggleKey: "",
+  });
+  assert.equal(store.data.prompt, null);
+  assert.deepEqual(store.data.hotwords, [...VOICE_PRESETS["en-US"].hotwords, "Strahd"]);
+
+  // 切回中文界面:prompt 跟随,prompt 冻结的对照由上一用例覆盖
+  const zhView = new VoiceStore(file, () => {}, testSecretStorage(), undefined, () => "zh-CN");
+  assert.equal(zhView.effective().prompt, VOICE_PRESETS["zh-CN"].prompt);
+  assert.deepEqual(zhView.effective().hotwords, [...VOICE_PRESETS["en-US"].hotwords, "Strahd"]);
+});
+
+test("cleared prompt stays an explicit empty override, not locale-following", () => {
+  const { file } = tempVoiceConfig();
+  const store = new VoiceStore(file, () => {}, testSecretStorage(), undefined, () => "en-US");
+  store.update({
+    enabled: true,
+    provider: "arcane-relay",
+    apiKey: "",
+    baseUrl: "",
+    prompt: "",
+    hotwords: [],
+    holdKey: "F9",
+    toggleKey: "",
+  });
+  assert.equal(store.data.prompt, "");
+  assert.deepEqual(store.data.hotwords, []);
+  assert.equal(store.effective().prompt, "");
+  assert.deepEqual(store.effective().hotwords, []);
+});

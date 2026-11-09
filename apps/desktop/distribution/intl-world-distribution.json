@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "world": {
+    "id": "arcane-demo-intl",
+    "title": "Arcane Demo",
+    "version": "0.1.1",
+    "system": "dnd5e",
+    "manifestUrl": "https://dl.arcanedesk.app/mods/worlds/arcane-demo-intl/0.1.1/world.json",
+    "downloadUrl": "https://dl.arcanedesk.app/mods/worlds/arcane-demo-intl/0.1.1/arcane-demo-intl-0.1.1.zip",
+    "manifestBytes": 554,
+    "manifestSha256": "458c5b16e6dd590c170bb509d54606c16a6def1aa85e225de884bcf92897af1c",
+    "bytes": 170067,
+    "sha256": "e26a23e02027dfb4c220627d6fe5a471f85f45755c2569bbd766e5200f74e203",
+    "gate": {
+      "sha256": "e26a23e02027dfb4c220627d6fe5a471f85f45755c2569bbd766e5200f74e203",
+      "violations": 0,
+      "checkedAt": "2026-09-22T08:21:19.057Z"
+    }
+  },
+  "profile": {
+    "id": "arcane-demo-intl-full",
+    "title": "Arcane Demo Full (intl)",
+    "revision": 2,
+    "modules": [
+      "arcane-spells-2014",
+      "arcane-assets",
+      "midi-qol",
+      "dae",
+      "times-up",
+      "socketlib",
+      "lib-wrapper",
+      "itemacro",
+      "ActiveAuras",
+      "ATL",
+      "auraeffects",
+      "dfreds-convenient-effects",
+      "lib-dfreds-migrations",
+      "lib-dfreds-ui-extender",
+      "foundryvtt-actor-studio",
+      "dice-so-nice",
+      "sequencer",
+      "autoanimations",
+      "JB2A_DnD5e"
+    ]
+  }
+}

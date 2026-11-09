@@ -1,7 +1,7 @@
 {
   "name": "arcane-desktop",
   "productName": "ArcaneDesk",
-  "version": "0.4.3",
+  "version": "0.8.0",
   "private": true,
   "license": "Apache-2.0",
   "description": "Arcane Desk — an agent-native desktop companion for Foundry VTT.",
@@ -27,12 +27,16 @@
     "dist:mac": "node scripts/dist.mjs --mac dmg zip",
     "predist:win": "npm run prepare:dist",
     "dist:win": "node scripts/dist.mjs --win nsis zip",
-    "publish:release": "node scripts/publish-release.mjs"
+    "publish:release": "node scripts/publish-release.mjs",
+    "build:server-image": "node scripts/build-server-image.mjs",
+    "publish:server-image": "node scripts/publish-server-image.mjs"
   },
   "dependencies": {
     "@arcanedesk/foundry-sdk": "0.1.0",
-    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-coding-agent": "1.3.0",
     "@highlightjs/cdn-assets": "^11.12.0",
+    "brace-expansion": "^5.0.12",
+    "electron-updater": "6.8.9",
     "katex": "^0.18.4",
     "marked": "18.0.11",
     "mermaid": "11.17.2",
@@ -67,7 +71,6 @@
       "generated/desktop-release.json",
       "generated/region.json",
       "generated/renderer-assets/**/*",
-      "generated/skills-intl/**/*",
       "generated/system-prompts-intl/**/*",
       "LICENSE",
       "NOTICE",
@@ -78,6 +81,10 @@
       {
         "from": "generated/bundled-node",
         "to": "runtime/node"
+      },
+      {
+        "from": "generated/app-update.yml",
+        "to": "app-update.yml"
       }
     ],
     "mac": {

@@ -1,5 +1,5 @@
 {
-  "comment": "provider 预设 + 模型视觉能力表。exact 是实测/官方文档确认的(2026-08-19 阿里云 Token Plan 用 scripts/probe-vision.mjs 实测;同日 Kimi 编程套餐 4 个短 id(k3/k3-256k/kimi-for-coding/-highspeed,来自 api.kimi.com/coding/v1 端点)与 gemini-3.7-flash 用 scripts/probe-provider-vision.mjs 实测;其余来自各家官方文档);patterns 是兜底启发式,命不中默认 false(保守,用户可在表单里手动改)。coding plan 套餐端点与按量端点是不同地址,别混。注意 kimi 短 id 只有 exact 兜底,patterns 里的 ^kimi-k* 前缀规则匹配不到它们。intern-inkstone(discovery-api.intern-ai.org.cn)的 10 个模型 2026-09-18 纯红 16x16 图实测:qwen3.8-27b/intern-s2/Agents-A1/deepseek-v4-flash-vision 答对颜色,glm-5.3/minimax-m3/Atria-Dawn-Preview/deepseek-v4-pro-0813 不能看图;该网关对 non-vision 模型会把图片替换成 attachment-omitted 文本注释,模型推理里自述看不见,可作下次探测的判据。",
+  "comment": "provider 预设 + 模型视觉能力表。exact 是实测/官方文档确认的(2026-08-19 阿里云 Token Plan 用 scripts/probe-vision.mjs 实测;同日 Kimi 编程套餐 4 个短 id(k3/k3-256k/kimi-for-coding/-highspeed,来自 api.kimi.com/coding/v1 端点)与 gemini-3.7-flash 用 scripts/probe-provider-vision.mjs 实测;其余来自各家官方文档);patterns 是兜底启发式,命不中默认 false(保守,用户可在表单里手动改)。coding plan 套餐端点与按量端点是不同地址,别混。注意 kimi 短 id 只有 exact 兜底,patterns 里的 ^kimi-k* 前缀规则匹配不到它们。intern-inkstone(discovery-api.intern-ai.org.cn)的 10 个模型 2026-09-18 纯红 16x16 图实测:qwen3.8-27b/intern-s2/Agents-A1/deepseek-v4-flash-vision 答对颜色,glm-5.3/minimax-m3/Atria-Dawn-Preview/deepseek-v4-pro-0813 不能看图;该网关对 non-vision 模型会把图片替换成 attachment-omitted 文本注释,模型推理里自述看不见,可作下次探测的判据。2026-10-08 按官方文档刷新:阿里云 Token Plan 帮助页(2026-09-28 版)新增 qwen3.8-flash/deepseek-v4.1-flash(官方标注视觉理解)/deepseek-v4-pro-0813/glm-5.3,注意 deepseek-v4-flash-0731 在 plan 上仍是纯文本;DeepSeek 官方 2026-09-10 发布 V4.1 Flash(原生多模态),API 模型名 deepseek-flash(旧名 deepseek-v4-flash/-vision-exp 已下线,请求由 V4.1 Flash 承接所以也能看图),deepseek-v4-pro(=V4.1 Pro 上线前的过渡,官方标注不支持 vision),deepseek-chat/deepseek-reasoner 已不是当前模型;智谱 GLM Coding Plan 概览(2026-09-23 版)全部套餐只支持 glm-5.3/glm-5.3-flash(glm-5.3-flash 官方文档标注原生多模态,glm-5.2/4.7 请求被自动切换),故预设只列这两个。kimi-coding 与 intern-inkstone 核对无变化。",
   "providers": [
     {
       "id": "alibaba-token-plan",
@@ -7,7 +7,7 @@
       "nameEn": "Alibaba Cloud Token Plan",
       "api": "openai-completions",
       "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-      "models": ["qwen3.7-plus", "qwen3.8-max", "qwen3.7-max", "qwen3.6-flash", "glm-5.2", "deepseek-v4-pro", "deepseek-v4-flash-0731"]
+      "models": ["qwen3.8-max", "qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-flash", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-pro-0813", "deepseek-v4-flash-0731", "glm-5.3", "glm-5.2"]
     },
     {
       "id": "kimi-coding",
@@ -23,7 +23,7 @@
       "nameEn": "Zhipu GLM Coding Plan",
       "api": "openai-completions",
       "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
-      "models": ["glm-5.2", "glm-4.7"]
+      "models": ["glm-5.3", "glm-5.3-flash"]
     },
     {
       "id": "alibaba-dashscope",
@@ -31,7 +31,7 @@
       "nameEn": "Alibaba Cloud DashScope (Bailian)",
       "api": "openai-completions",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "models": ["qwen3.7-plus", "qwen3.8-max", "qwen-vl-max"]
+      "models": ["qwen3.7-plus", "qwen3.8-max", "qwen3.8-flash", "qwen-vl-max"]
     },
     {
       "id": "volcano-ark",
@@ -46,7 +46,7 @@
       "name": "DeepSeek",
       "api": "openai-completions",
       "baseUrl": "https://api.deepseek.com/v1",
-      "models": ["deepseek-chat", "deepseek-reasoner"]
+      "models": ["deepseek-flash", "deepseek-v4-pro"]
     },
     {
       "id": "minimax",
@@ -167,6 +167,7 @@
     "exact": {
       "qwen3.7-plus": true,
       "qwen3.8-max": true,
+      "qwen3.8-flash": true,
       "qwen3.6-flash": true,
       "qwen3.7-max": false,
       "qwen-vl-max": true,
@@ -177,13 +178,17 @@
     "gemini-3.7-flash": true,
       "glm-5.2": false,
       "glm-4.7": false,
+      "glm-5.3": false,
+      "glm-5.3-flash": true,
       "deepseek-v4-pro": false,
       "deepseek-v4-flash-0731": false,
       "deepseek-chat": false,
       "deepseek-reasoner": false,
+      "deepseek-flash": true,
+      "deepseek-v4.1-flash": true,
+      "deepseek-v4-flash": true,
       "deepseek-v4-flash-vision": true,
       "deepseek-v4-pro-0813": false,
-      "glm-5.3": false,
       "intern-s2": true,
       "agents-a1": true,
       "atria-dawn-preview": false,

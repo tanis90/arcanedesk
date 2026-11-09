@@ -141,3 +141,17 @@ test("selection uses submitted UUIDs and play forbids actor-only selectors", asy
   assert.equal((await f.set(conditions, { targets: [{ kind: "selected" }], selectedTokenUuids: ["Scene.s.Token.t"] })).status, "completed");
   assert.equal(f.writes(), 1);
 });
+
+test("loopback origin spellings share one world binding; port, scheme and lookalike hosts still reject", async () => {
+  const f = fixture();
+  f.context.location.origin = "http://localhost:30002";
+  for (const origin of ["http://127.0.0.1:30002", "http://[::1]:30002", "http://localhost:30002"]) {
+    assert.equal((await f.set([{ key: "prone", active: true }], { world: { origin, id: "w" } })).status, "completed", origin);
+    assert.equal((await f.set([{ key: "prone", active: false }], { world: { origin, id: "w" } })).status, "completed", origin);
+  }
+  assert.equal(f.writes(), 6);
+  for (const origin of ["http://127.0.0.1:30003", "https://127.0.0.1:30002", "http://localhost.evil.example:30002"]) {
+    assert.equal((await f.set([{ key: "prone", active: true }], { world: { origin, id: "w" } })).code, "WORLD_CHANGED", origin);
+  }
+  assert.equal(f.writes(), 6);
+});

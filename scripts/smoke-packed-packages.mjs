@@ -108,9 +108,9 @@ const cliPackage = await import("@arcanedesk/fvtt-cli/package.json", { with: { t
 
 assert.equal(typeof root.FoundryRuntimeClient, "function");
 assert.equal(typeof client.FoundryRuntimeClient, "function");
-assert.equal(contracts.ALL_DIRECT_ACTIONS.length, 39);
-assert.equal(contracts.READ_DIRECT_ACTIONS.length, 16);
-assert.equal(contracts.WRITE_DIRECT_ACTIONS.length, 23);
+assert.equal(contracts.ALL_DIRECT_ACTIONS.length, 43);
+assert.equal(contracts.READ_DIRECT_ACTIONS.length, 18);
+assert.equal(contracts.WRITE_DIRECT_ACTIONS.length, 25);
 assert.deepEqual(contracts.SAFE_DIRECT_ACTIONS, ["worldInfo", "battleContext", "turnContext", "executeTurn"]);
 assert.equal(runtime.runtimeHash, ${JSON.stringify(expectedRuntimeHash)});
 assert.equal(createHash("sha256").update(runtime.runtimeFunction).digest("hex"), runtime.runtimeHash);

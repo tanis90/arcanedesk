@@ -3,7 +3,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { runtimeFunction } from "../dist/runtime.js";
 
-function fixture(nativeUse = null) {
+function fixture(nativeUse = null, origin = "https://foundry.test") {
   let writes = 0;
   const item = { id: "spell", name: "Disguise", type: "spell", system: { method: "spell", level: 1, activities: [] } };
   const actor = { id: "a", uuid: "Actor.a", items: new Map([[item.id, item]]), effects: [], statuses: new Set(),
@@ -13,7 +13,7 @@ function fixture(nativeUse = null) {
   const scene = { id: "s", uuid: "Scene.s", tokens: new Map([[token.id, token]]) };
   const game = { ready: true, user: { isGM: true }, world: { id: "w" }, combats: [], combat: null };
   const context = vm.createContext({ game, __testUse: nativeUse, canvas: { scene, tokens: { get: () => null, placeables: [] } },
-    location: { origin: "https://foundry.test" }, performance,
+    location: { origin }, performance,
     document: { createElement: () => ({ textContent: "" }) } });
   const source = nativeUse ? runtimeFunction.replace("async function performUseAction(useArgs = {}) {",
     "async function performUseAction(useArgs = {}) { return await g.__testUse(useArgs);") : runtimeFunction;
@@ -180,4 +180,18 @@ test("native reaction and long-casting activities are not offered or dispatched 
     assert.equal(result.code,"CASTING_TIMING_UNSUPPORTED",timing);
   }
   assert.equal(nativeCalls,0); assert.equal(f.writes(),0); assert.equal(f.actor.system.spells.spell1.value,2);
+});
+
+test("loopback origin spellings share one world binding; port, scheme and lookalike hosts still reject", async () => {
+  const f = fixture(null, "http://localhost:30002");
+  const input = await f.resolve();
+  for (const origin of ["http://127.0.0.1:30002", "http://[::1]:30002", "http://localhost:30002"]) {
+    f.actor.system.spells.spell1.value = 2;
+    assert.equal((await f.call("executeAction", { ...input, world: { origin, id: "w" } })).status, "completed", origin);
+  }
+  assert.equal(f.writes(), 3);
+  for (const origin of ["http://127.0.0.1:30003", "https://127.0.0.1:30002", "http://localhost.evil.example:30002"]) {
+    assert.equal((await f.call("executeAction", { ...input, world: { origin, id: "w" } })).code, "WORLD_CHANGED", origin);
+  }
+  assert.equal(f.writes(), 3);
 });

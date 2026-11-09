@@ -70,14 +70,13 @@ app.whenReady().then(async () => {
   for (const [label, repo] of [["baseline", baseline], ["candidate", candidate]]) {
     const { AgentHost } = await load(repo, "apps/desktop/src/main/agent-host.js");
     const { DirectFoundryRuntime } = await load(repo, "apps/desktop/src/main/direct-foundry-runtime.js");
-    const { ResourceCoordinator } = await load(repo, "apps/desktop/src/main/scheduling/resource-coordinator.js");
     const { ExecutionScheduler } = await load(repo, "apps/desktop/src/main/scheduling/execution-scheduler.js");
     const source = readFileSync(path.join(repo, "packages/foundry-sdk/src/runtime-source.ts"), "utf8");
     const runtimeSource = JSON.parse(source.match(/export const runtimeFunction: string = (.*);/)[1]);
     let allowedActions;
     if (label === "candidate" || option("comparison") === "revision") ({ DESKTOP_FOUNDRY_ACTIONS: allowedActions } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js"));
     const { activeToolNames } = await load(repo, "apps/desktop/src/main/foundry-tool-policy.js");
-    revisions[label] = { AgentHost, DirectFoundryRuntime, ResourceCoordinator, ExecutionScheduler, runtimeSource, allowedActions, prepToolNames: activeToolNames("prep") };
+    revisions[label] = { AgentHost, DirectFoundryRuntime, ExecutionScheduler, runtimeSource, allowedActions, prepToolNames: activeToolNames("prep") };
     const digest = value => require("node:crypto").createHash("sha256").update(value).digest("hex");
     report.revisionInputs ??= {};
     report.revisionInputs[label] = {
@@ -121,7 +120,7 @@ app.whenReady().then(async () => {
       sendToRenderer: event => { if (event.type === "task_state" && event.task?.state === "waiting_user") waiting = event.task; },
       providerStore: store, profile: { mode: "combat", getCwd: () => workDir }, getLocale: () => "zh-CN", log() {},
       operationStorageDir: path.join(workDir, "operations"), taskStorageDir: path.join(workDir, "tasks"),
-      resources: new revision.ResourceCoordinator(), scheduler: new revision.ExecutionScheduler({ capacity: 1 }) });
+      scheduler: new revision.ExecutionScheduler({ capacity: 1 }) });
     mkdirSync(path.join(workDir, "tasks"), { recursive: true });
     await host.start({ fresh: true });
     trial.activeTools = host.session.getActiveToolNames(); trial.thinking = host.session.thinkingLevel;
@@ -141,9 +140,11 @@ app.whenReady().then(async () => {
         }
       });
       const start = performance.now();
-      const timer = setTimeout(() => { host.stop(); }, 180000);
+      const timer = setTimeout(() => { host.abort(); }, 180000);
       try {
-        await host.prompt(`${turn ? "继续，同一个战斗。" : "QA-A 已连接。"}当前行动者 ${fixtureNames.source} 使用 Bite 的攻击动作，普通掷骰，目标 ${fixtureNames.target}。立即执行一次，不推进回合。`);
+        const submitted = host.submitInput(`${turn ? "继续，同一个战斗。" : "QA-A 已连接。"}当前行动者 ${fixtureNames.source} 使用 Bite 的攻击动作，普通掷骰，目标 ${fixtureNames.target}。立即执行一次，不推进回合。`);
+        assert.ok(submitted?.ok, `submit rejected: ${submitted?.code ?? "unknown"}`);
+        await new Promise(resolve => { const poll = setInterval(() => { const s = host.task?.state; if (s && !["running", "stopping", "waiting_user", "queued"].includes(s)) { clearInterval(poll); resolve(); } }, 250); });
       } finally { clearTimeout(timer); subscription(); measure.ms = performance.now() - start; }
       measure.taskState = host.task?.state; measure.waitingForUser = !!waiting;
       measure.hp = await evaluate(`game.actors.get(${JSON.stringify(targetId)}).system.attributes.hp.value`);

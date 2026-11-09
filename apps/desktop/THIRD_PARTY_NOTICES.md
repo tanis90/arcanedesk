@@ -11,6 +11,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | --- | --- | --- |
 | `@earendil-works/pi-coding-agent` | MIT | <https://github.com/earendil-works/pi> |
 | `@highlightjs/cdn-assets` | BSD-3-Clause | <https://highlightjs.org/> |
+| `brace-expansion` | MIT | <https://github.com/isaacs/brace-expansion> |
 | `commander` | MIT | <https://github.com/tj/commander.js> |
 | `katex` | MIT | <https://katex.org/> |
 | `marked` | MIT | <https://marked.js.org/> |
@@ -23,7 +24,7 @@ not a substitute for the complete license texts shipped by each dependency.
 
 | Source | License | Scope |
 | --- | --- | --- |
-| `code-yeongyu/pi-websearch` @ `ddf5f5d` | MIT © 2026 Yeongyu | `src/main/search/adapters/{zai,brave,shared}.js` port the provider wire formats (request building and response field mapping) from its `src/websearch/providers/{z-ai,brave,shared}.ts`; rewritten for Arcane Desk's adapter contract. <https://github.com/code-yeongyu/pi-websearch> |
+| `code-yeongyu/pi-websearch` @ `ddf5f5d` | MIT © 2026 Yeongyu | `src/main/search/adapters/{zai,shared}.js` port the provider wire formats (request building and response field mapping) from its `src/websearch/providers/{z-ai,shared}.ts`; rewritten for Arcane Desk's adapter contract. <https://github.com/code-yeongyu/pi-websearch> |
 
 ## Direct development and build dependencies at the migration baseline
 

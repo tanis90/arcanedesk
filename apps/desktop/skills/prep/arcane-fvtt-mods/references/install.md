@@ -25,13 +25,15 @@ mod-manager inspect --manifest-url <HTTPS module.json URL> --data-dir <数据目
 - 索引给出的体积与 SHA256（没有则明确说“发布方哈希不可用”）；
 - 已有目录将先备份；
 - 正在运行的 Foundry 将在 staging 成功后停服，提交后恢复原世界；
-- 新安装仍需用户在世界里手动启用。
+- 新安装在重启后的 ready GM 世界里默认自动启用（含已解析的 required dependencies），
+  见第 5 节。
 
 计划是执行前告知，不等待批准：用户明确要求安装即授权。唯一要停下来取得确认的情况：主包或
-任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个不在 arcane mirror 选过的
-mod 之内，安装可能产生不可知后果，确认要安装吗？如果你希望 arcane mirror 收录这个 mod，
-可以去官网 https://arcanedesk.bitterbebop.cn/ 反馈我们。”用户确认后继续，后续环节不再
-二次确认。
+任一依赖不在 arcane mirror 索引中——给一次大白话风险提示：“这个 mod 不在 Arcane 镜像的收录
+范围，要从公开网络的原地址直接下载。镜像里的包我们都核对过来源和哈希，公开网络上的没人
+替你挡这一道——确认你信任它的作者和发布页，要继续吗？用着好的话也欢迎到官网
+https://arcanedesk.bitterbebop.cn/ 反馈，我们评估后把它收进镜像。”用户确认后继续，后续环节
+不再二次确认。
 
 ## 3. 下载并验证到 staging
 
@@ -50,6 +52,10 @@ archive 根 `module.json` 的 id/version。归档内的上游 manifest/download 
 - 镜像索引包：bytes 与 SHA256 必须匹配；匹配后按已说明的计划继续。
 - 非索引包：第 2 节的一次风险提示已覆盖本次安装，`requiresSecondConfirmation` 不再触发新的
   用户确认；把计算出的 SHA256 和实际体积写进最终报告，明确它只是本次下载指纹。
+- 网络层失败重试：若失败原因是连不上 GitHub（连接超时、reset、TLS 中断）且目标 host 是
+  github.com 或 *.githubusercontent.com，按 SKILL.md「共同边界」的 GitHub 加速条目搜一个当前
+  可用的加速前缀，给 `inspect` 和 `stage` 加同一个 `--github-mirror-prefix <前缀>` 重跑；
+  expected-* 字段仍按原始 URL 取值，不要换成加速后的地址。
 
 ## 4. 停服并提交
 
@@ -84,6 +90,23 @@ staging 或 backup；先报告 helper 的准确错误。
 })()
 ```
 
-新安装的 mod 即使重启后已被 Foundry 发现，也不要调用内部 API 改启用配置；提醒用户打开世界的
-“管理模块 / Manage Modules”，启用目标与 required dependencies，然后刷新/重启世界。若用户
-完成后要求核对，再回读 `version` 与 `active`。
+新安装的 mod 重启后已被 Foundry 发现但尚未启用。在 ready GM 世界用 `browser_evaluate`
+合并写入启用配置——先读出现有 `moduleConfiguration`，并入目标 mod 与缺失的 required
+dependencies，不动已有条目：
+
+```js
+(async () => {
+  const current = game.settings.get("core", "moduleConfiguration");
+  await game.settings.set("core", "moduleConfiguration", {
+    ...current,
+    "<id>": true, // 及每个缺失的 required dependency
+  });
+  game.reload();
+})()
+```
+
+reload 后等世界重新 ready，再回读每个新启用 mod 的 `version` 与 `active`，全部
+`active === true` 才算完成。够不到 ready GM 会话（世界未运行、无 GM 权限、目标世界不明确）
+时不直写 world 数据库或 settings 文件；回退为提醒用户打开世界的“管理模块 /
+Manage Modules”，启用目标与 required dependencies，然后刷新/重启世界。若用户完成后要求
+核对，再回读 `version` 与 `active`。

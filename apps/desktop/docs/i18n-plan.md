@@ -17,9 +17,14 @@
 以下内容不是 UI，不做翻译：
 
 - `skills/**` 和 `agent-host.js` 中发给 LLM 的提示词、工作目录围栏说明；
-- ASR 默认 prompt / 热词；
 - 会话标题、聊天记录等用户或模型生成的数据；
 - 写入历史、但在渲染前剥离的图片附件契约标记。
+
+ASR 默认 prompt / 热词是一类特例：它是随仓库分发的数据而非 UI 字典，以
+`src/main/voice/preset.js` 的双语预设（zh-CN / en-US）按界面语言播种——
+未自定义时跟随 locale 取对应预设，用户改动后固化为覆盖（voice.json v4，
+null = 跟随；与任一预设逐字节相等视为未自定义）。热词英文名以 5e PHB
+原文为准，对照核对记录见 preset.js 头注。
 
 切换语言不会回译已有的聊天数据，只刷新产品自身的界面和状态标签。
 
@@ -124,6 +129,10 @@ node scripts/verify-package.mjs dist/win-unpacked/resources/app
 
 - Windows NSIS 安装向导可单独限制 `en_US` / `zh_CN`；它与 App 内 locale 是两层
   独立机制，不应互相传状态。
-- 英文 ASR 默认 prompt / 热词需要先验证识别服务效果，再决定是否按 locale 播种。
+- ~~英文 ASR 默认 prompt / 热词需要先验证识别服务效果，再决定是否按 locale 播种。~~
+  已实施（2026-09-21）：`preset.js` 双语预设 + VoiceStore 覆盖语义（null = 跟随
+  locale），`voice:transcribe` 与设置页均按 `resolveLocale()` 解析有效值。英文
+  prompt/热词在 GLM-ASR-2512 上的实测效果仍待人工跑一轮英文口令验证；效果不佳
+  时只调 `voicePresetFor` 的预设内容，不动 schema。
 - 新增第三种语言前，应先引入复数规则和更严格的 locale fallback，而不是继续扩展
   当前的最小插值器。

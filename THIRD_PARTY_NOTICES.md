@@ -11,6 +11,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | --- | --- | --- |
 | `@earendil-works/pi-coding-agent` | MIT | <https://github.com/earendil-works/pi> |
 | `@highlightjs/cdn-assets` | BSD-3-Clause | <https://highlightjs.org/> |
+| `brace-expansion` | MIT | <https://github.com/isaacs/brace-expansion> |
 | `commander` | MIT | <https://github.com/tj/commander.js> |
 | `katex` | MIT | <https://katex.org/> |
 | `marked` | MIT | <https://marked.js.org/> |
@@ -28,6 +29,7 @@ not a substitute for the complete license texts shipped by each dependency.
 | `ali-oss` | MIT | <https://github.com/ali-sdk/ali-oss> |
 | `electron` | MIT | <https://github.com/electron/electron> |
 | `electron-builder` | MIT | <https://github.com/electron-userland/electron-builder> |
+| `electron-updater` | MIT | <https://github.com/electron-userland/electron-builder> |
 | `esbuild` | MIT | <https://github.com/evanw/esbuild> |
 | `typescript` | Apache-2.0 | <https://www.typescriptlang.org/> |
 | `vitest` | MIT | <https://vitest.dev/> |

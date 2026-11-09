@@ -203,11 +203,20 @@ export class TaskCoordinator {
     this.queueing = input;
     // 缺 followUp 能力的 adapter(旧 mock)回退 steer,与 streamingDelivery 的 "steer" 默认值一致。
     const deliver = input.delivery === "followUp" && this.adapter.followUp ? this.adapter.followUp : this.adapter.steer;
+    const deliveredText = input.executionText ?? input.text;
     let pending;
-    try { pending = deliver.call(this.adapter, input.executionText ?? input.text, input.images); }
+    try { pending = deliver.call(this.adapter, deliveredText, input.images); }
     catch { pending = Promise.reject(new Error("Unable to queue input")); }
     this.queueing = null;
-    const write = Promise.resolve(pending).catch(() => {
+    const write = Promise.resolve(pending).then(() => {
+      // pi 0.87 起 queue_update 不再随 steer 同步触发(变成异步事件),不能靠它确认入队:
+      // 投递成功即确认;expandedText 取实际投递文本,供 observe 匹配随后的 message_start。
+      // 若 queue_update 仍同步到达(旧 SDK), observe 已写过 expandedText,这里不覆盖。
+      if (input.state === "accepted") {
+        input.expandedText ??= deliveredText;
+        this.setInputState(input, "queued");
+      }
+    }).catch(() => {
       // The app retains this input and will dispatch it after the current run.
       if (input.state === "queued") this.setInputState(input, "accepted");
     }).finally(() => this.queueWrites.delete(write));

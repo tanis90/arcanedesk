@@ -4,7 +4,7 @@
 //   3) user-facing JS string literals contain no unextracted Chinese
 //   4) renderer files remain compatible with classic <script> loading
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -55,12 +55,15 @@ test("every data-i18n reference in index.html exists", () => {
   }
 });
 
-test("prep guidance offers a deployed FVTT URL immediately after local Foundry", () => {
+test("home suggestion chips read: install → open local → read module → connect remote", () => {
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
+  const installIndex = html.indexOf('data-i18n="welcome.install.label"');
   const localIndex = html.indexOf('data-i18n="welcome.example1.label"');
+  const moduleIndex = html.indexOf('data-i18n="welcome.example3.label"');
   const remoteIndex = html.indexOf('data-i18n="welcome.remote.label"');
-  const nextGuidanceIndex = html.indexOf('data-i18n="welcome.example3.label"');
-  assert.ok(localIndex >= 0 && remoteIndex > localIndex && nextGuidanceIndex > remoteIndex);
+  assert.ok(
+    installIndex >= 0 && localIndex > installIndex && moduleIndex > localIndex && remoteIndex > moduleIndex,
+  );
   assert.match(
     html,
     /data-prompt="打开我已部署好了的 FVTT，网址是 "[^>]+data-i18n-prompt="welcome\.remote\.prompt"/,
@@ -105,11 +108,19 @@ test("voice settings expose one neutral three-state connection control", () => {
   assert.doesNotMatch(html, /Arcane Spark[^<]*(推荐|Recommended)/i);
 });
 
+test("update pill stays hidden without a newer version", () => {
+  const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
+  assert.match(html, /id="update-pill"[^>]*hidden/);
+  // .update-pill sets display: inline-flex, which would override the UA [hidden] rule.
+  assert.match(html, /\.update-pill\[hidden\]\s*\{\s*display:\s*none;/);
+});
+
 test("first launch paints prep mode with a light theme before async startup", () => {
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const themeInit = readFileSync(path.join(appRoot, "src/renderer/theme-init.js"), "utf8");
   const main = readFileSync(path.join(appRoot, "src/main/main.js"), "utf8");
-  assert.match(html, /<body data-mode="prep">/);
+  // 空会话首帧即主页布局:home class 直接烙进 HTML,不必等 chat.js 起步再居中
+  assert.match(html, /<body data-mode="prep" class="home">/);
   assert.match(html, /class="seg active" id="mode-seg-prep"/);
   assert.doesNotMatch(html, /class="seg active" id="mode-seg-combat"/);
   assert.match(themeInit, /theme\s*=\s*"light";/);
@@ -304,4 +315,18 @@ test("agent system prompts carry a reply-language directive for en-US UI", () =>
   const agentHost = readFileSync(path.join(appRoot, "src/main/agent-host.js"), "utf8");
   assert.match(agentHost, /systemPromptOverride: \(\) => \[systemPrompt, languageDirective\]/);
   assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[prepPreamble, languageDirective\]/);
+});
+
+test("intl system prompt source tree passes the CJK leakage gate", () => {
+  // 与 prepare-desktop-release.mjs 的 assertNoCjkLeak 同一规则：intl 包只携带
+  // 英文 prompt 基线。该门禁原本只在 intl 构建时执行，中文别名写进
+  // system-prompts-intl 后要烧掉整轮 release 构建才暴露（2026-09-18 事故），
+  // 故前移到常规 CI。
+  const CJK_PATTERN = /[㐀-䶿一-鿿豈-﫿]/;
+  const intlDir = path.join(appRoot, "system-prompts-intl");
+  for (const name of readdirSync(intlDir)) {
+    const body = readFileSync(path.join(intlDir, name), "utf8");
+    const leak = body.split("\n").findIndex((line) => CJK_PATTERN.test(line));
+    assert.ok(leak === -1, `system-prompts-intl/${name} leaks CJK at line ${leak + 1}`);
+  }
 });

@@ -573,8 +573,8 @@ function renderCodeBlock(container, token) {
       setTimeout(() => {
         copyBtn.textContent = t("md.copy");
       }, 1200);
-    } catch {
-      /* 剪贴板不可用:静默降级 */
+    } catch (error) {
+      console.warn("[markdown] clipboard write failed:", error);
     }
   });
   head.appendChild(copyBtn);

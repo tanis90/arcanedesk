@@ -21,6 +21,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createR2Client, uploadObject, verifyUrl } from "./publish-release.mjs";
+import { scanText } from "./intl-world-policy.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -139,6 +140,168 @@ function validateCuration(value) {
 // ---- 上游实测 ------------------------------------------------------------
 
 const MIRROR_PUBLIC_BASE = "https://dl.arcanedesk.app";
+
+// ---- 世界与环境 profile（intl demo world，声明式接入）---------------------
+// 单一事实来源是 distribution/intl-world-distribution.json：世界工件必须先由
+// publish-intl-world.mjs 上传到 R2 版本化路径（含内容门禁记录），生成器只做
+// 「声明 vs 线上实测」核对 + 闭包校验 + profile 组装，随后随索引一并发布。
+// 声明文件缺失时回退空 worlds/profiles，与历史行为兼容。
+
+function positiveInt(value, label) {
+  const result = Number(value);
+  if (!Number.isSafeInteger(result) || result < 1) throw new Error(`${label} must be a positive integer`);
+  return result;
+}
+
+function sha256Hex64(value, label) {
+  const text = requireString(value, label);
+  if (!/^[a-f0-9]{64}$/.test(text)) throw new Error(`${label} must be a lowercase sha256 hex`);
+  return text;
+}
+
+function validateWorldDistribution(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("world distribution must be an object");
+  }
+  const world = value.world ?? null;
+  const profile = value.profile ?? null;
+  if (!world || !profile) throw new Error("world distribution requires world and profile declarations");
+  const gate = world.gate ?? null;
+  const validatedWorld = {
+    id: safeId(world.id, "world id"),
+    title: requireString(world.title, "world title"),
+    version: String(requireString(world.version, "world version")),
+    system: safeId(world.system, "world system id"),
+    manifestUrl: httpsUrl(world.manifestUrl, "world manifest URL"),
+    downloadUrl: httpsUrl(world.downloadUrl, "world ZIP URL"),
+    manifestBytes: positiveInt(world.manifestBytes, "world manifestBytes"),
+    manifestSha256: sha256Hex64(world.manifestSha256, "world manifestSha256"),
+    bytes: positiveInt(world.bytes, "world bytes"),
+    sha256: sha256Hex64(world.sha256, "world sha256"),
+    gate: {
+      sha256: sha256Hex64(gate?.sha256, "world gate sha256"),
+      violations: gate?.violations,
+      checkedAt: gate?.checkedAt ?? null,
+    },
+  };
+  if (validatedWorld.gate.violations !== 0) {
+    throw new Error("world gate recorded violations; fix content and rerun publish-intl-world");
+  }
+  const modules = Array.isArray(profile.modules) ? profile.modules.map((id) => safeId(id, "profile module id")) : null;
+  if (!modules || !modules.length) throw new Error("world distribution profile.modules must be a non-empty array");
+  if (new Set(modules).size !== modules.length) throw new Error("world distribution profile repeats a module id");
+  return {
+    world: validatedWorld,
+    profile: {
+      id: safeId(profile.id, "profile id"),
+      title: requireString(profile.title, "profile title"),
+      revision: positiveInt(profile.revision, "profile revision"),
+      modules,
+    },
+  };
+}
+
+/** 与 cn prepare-world-profile.mjs 的 profile 文档逐字节同构（LF、2 空格缩进）。 */
+function buildProfileDocument(profile, systemId) {
+  const document = {
+    schemaVersion: 1,
+    kind: "foundry-environment-profile",
+    id: profile.id,
+    title: profile.title,
+    revision: profile.revision,
+    packageChannel: "stable",
+    system: systemId,
+    modules: profile.modules,
+  };
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+/**
+ * 实测线上世界工件并核对声明：manifest 身份五字段、manifest/zip 的 bytes+sha256、
+ * manifest 文本过内容词表、gate 记录与 zip 哈希一致。CI 侧不解包（builtin-only），
+ * 解包级门禁在 publish-intl-world.mjs 本地执行并以 gate 记录留痕。
+ */
+async function measureWorld(world, { fetchImpl = fetch } = {}) {
+  const label = `world ${world.id}@${world.version}`;
+  const manifestDocument = await fetchJsonDocumentWith(fetchImpl, world.manifestUrl, `${label} manifest`);
+  const manifest = manifestDocument.value;
+  for (const [field, expected] of Object.entries({
+    id: world.id,
+    version: String(world.version),
+    system: world.system,
+    manifest: world.manifestUrl,
+    download: world.downloadUrl,
+  })) {
+    if (String(manifest?.[field]) !== String(expected)) {
+      throw new Error(`${label} world manifest ${field} mismatch: ${manifest?.[field]}`);
+    }
+  }
+  const textViolations = scanText(manifestDocument.buffer.toString("utf8"));
+  if (textViolations.length) {
+    throw new Error(`${label} world manifest fails content policy: ${JSON.stringify(textViolations)}`);
+  }
+  if (manifestDocument.bytes !== world.manifestBytes || manifestDocument.sha256 !== world.manifestSha256) {
+    throw new Error(`${label} world manifest bytes/sha256 differ from distribution`);
+  }
+  const archive = await fetchBufferWith(fetchImpl, world.downloadUrl, `${label} ZIP`);
+  if (archive.buffer.length !== world.bytes) throw new Error(`${label} world ZIP length differs from distribution`);
+  const archiveSha256 = sha256(archive.buffer);
+  if (archiveSha256 !== world.sha256) throw new Error(`${label} world ZIP sha256 differs from distribution`);
+  if (world.gate.sha256 !== archiveSha256) {
+    throw new Error(`${label} gate record does not match the published ZIP; rerun publish-intl-world`);
+  }
+  return {
+    id: world.id,
+    title: typeof manifest.title === "string" && manifest.title ? manifest.title : world.title,
+    version: String(world.version),
+    manifestUrl: world.manifestUrl,
+    manifestBytes: manifestDocument.bytes,
+    manifestSha256: manifestDocument.sha256,
+    downloadUrl: world.downloadUrl,
+    bytes: archive.buffer.length,
+    sha256: archiveSha256,
+  };
+}
+
+function worldClosureCheck(distribution, measured) {
+  const byId = new Map(measured.map(({ entry }) => [entry.id, entry]));
+  const missing = [];
+  const systemEntry = byId.get(distribution.world.system);
+  if (!systemEntry || entryKind(systemEntry) !== "system") {
+    missing.push(`world system ${distribution.world.system} (expected a system entry in intl-mod-curation.json)`);
+  }
+  for (const id of distribution.profile.modules) {
+    const entry = byId.get(id);
+    if (!entry || entryKind(entry) !== "module") missing.push(`profile module ${id}`);
+  }
+  if (missing.length) {
+    throw new Error(`world distribution is not dependency-closed; add to intl-mod-curation.json:\n  ${missing.join("\n  ")}`);
+  }
+}
+
+/** 世界/profile 的不可变纪律：同 id 同版本/同 revision 的已发布条目字段必须逐一致。 */
+function worldDriftCheck(previous, worldEntry, profileEntry) {
+  for (const old of previous.worlds ?? []) {
+    if (old.id === worldEntry.id && String(old.version) === String(worldEntry.version)) {
+      for (const field of ["manifestUrl", "manifestBytes", "manifestSha256", "downloadUrl", "bytes", "sha256"]) {
+        if (String(old[field]) !== String(worldEntry[field])) {
+          throw new Error(`published world ${worldEntry.id}@${worldEntry.version} ${field} differs; publish a new world version`);
+        }
+      }
+    }
+  }
+  for (const old of previous.profiles ?? []) {
+    if (old.id === profileEntry.id) {
+      if (Number(old.revision) > profileEntry.revision) {
+        throw new Error(`profile ${profileEntry.id} revision cannot move backwards from ${old.revision}`);
+      }
+      if (Number(old.revision) === profileEntry.revision
+        && (old.profileSha256 !== profileEntry.profileSha256 || old.profileBytes !== profileEntry.profileBytes)) {
+        throw new Error(`published profile ${profileEntry.id}@${profileEntry.revision} differs; publish a new revision`);
+      }
+    }
+  }
+}
 
 // 镜像对象按版本不可变存放：mods/packages/<id>/<version>/<manifest|zip>。
 function mirrorLayout(curated, version) {
@@ -300,6 +463,7 @@ function closureCheck(measured) {
  * @param {string} options.curationFile
  * @param {string} options.outputDir
  * @param {string} [options.previousIndexUrl]
+ * @param {string|null} [options.worldDistributionFile]
  * @param {{ foundry?: string | null, dnd5e?: string | null }} [options.compatibility]
  * @param {typeof fetch} [options.fetchImpl]
  */
@@ -307,6 +471,7 @@ export async function prepareIntlIndex({
   curationFile,
   outputDir,
   previousIndexUrl = INDEX_PUBLIC_URL,
+  worldDistributionFile = null,
   compatibility = {},
   fetchImpl = fetch,
 }) {
@@ -329,6 +494,34 @@ export async function prepareIntlIndex({
   driftCheck(previous.packages, measured);
   closureCheck(measured);
 
+  // 世界与环境 profile：声明文件在场才接入（缺失 = 尚未发布 demo world 的历史行为）。
+  let worlds = [];
+  let profiles = [];
+  let profilePlan = null;
+  let worldSummary = null;
+  if (worldDistributionFile) {
+    const distribution = validateWorldDistribution(
+      JSON.parse(await fsp.readFile(path.resolve(worldDistributionFile), "utf8")),
+    );
+    const worldEntry = await measureWorld(distribution.world, { fetchImpl });
+    worldClosureCheck(distribution, measured);
+    const profileKey = `mods/profiles/${distribution.profile.id}/${distribution.profile.revision}/profile.json`;
+    const profileBody = buildProfileDocument(distribution.profile, distribution.world.system);
+    const profileEntry = {
+      id: distribution.profile.id,
+      title: distribution.profile.title,
+      revision: distribution.profile.revision,
+      profileUrl: `${MIRROR_PUBLIC_BASE}/${profileKey}`,
+      profileBytes: Buffer.byteLength(profileBody),
+      profileSha256: sha256(Buffer.from(profileBody, "utf8")),
+    };
+    worldDriftCheck(previous, worldEntry, profileEntry);
+    worlds = [{ ...worldEntry, defaultProfile: distribution.profile.id }];
+    profiles = [profileEntry];
+    profilePlan = { ...profileEntry, key: profileKey, body: profileBody };
+    worldSummary = { world: worldEntry, profile: profileEntry };
+  }
+
   const index = {
     generated: generatedTimestamp(),
     foundry: compatibility.foundry ?? null,
@@ -337,8 +530,8 @@ export async function prepareIntlIndex({
       ?? measured.find(({ entry }) => entry.id === "dnd5e" && entry.group === "system")?.entry.version
       ?? null,
     packages: measured.map(({ entry }) => entry).sort((a, b) => a.id.localeCompare(b.id)),
-    worlds: [],
-    profiles: [],
+    worlds,
+    profiles,
   };
   const indexBuffer = Buffer.from(serializeIndex(index));
 
@@ -373,13 +566,18 @@ export async function prepareIntlIndex({
     previousIndex: { url: previousIndexUrl, baselineError: previousError },
     packages: measured.map(({ entry, requires }) => ({ ...entry, requires })),
     mirrors: mirrorPlans,
+    world: worldSummary,
+    profile: profilePlan,
     nextIndex: { key: INDEX_KEY, url: INDEX_PUBLIC_URL, bytes: indexBuffer.length, sha256: sha256(indexBuffer) },
   };
   await fsp.writeFile(path.join(resolvedOutput, "publish-plan.json"), Buffer.from(`${JSON.stringify(plan, null, 2)}\n`));
+  if (profilePlan) {
+    await fsp.writeFile(path.join(resolvedOutput, "profile.json"), profilePlan.body, "utf8");
+  }
   return { plan, index, indexBuffer };
 }
 
-async function headContentLength(fetchImpl, url) {
+export async function headContentLength(fetchImpl, url) {
   // 与 verifyUrl 相同的负缓存规避：存在性预检也必须回源——否则预检的 404
   // 会被边缘按 URL 缓存数分钟，既污染紧随其后的上传后校验，也会让周更的
   // 「已存在且一致」幂等跳过读到陈旧 404 而失效（2026-09-11 M3 首发事故）。
@@ -454,10 +652,13 @@ async function main() {
     foundry: distribution.core?.foundry ?? null,
     dnd5e: distribution.systems?.find((system) => system.id === "dnd5e")?.version ?? null,
   };
+  const defaultWorldDistribution = path.join(desktopRoot, "distribution", "intl-world-distribution.json");
+  const hasWorldDistribution = await fsp.stat(defaultWorldDistribution).then(() => true, () => false);
   const { plan, indexBuffer } = await prepareIntlIndex({
     curationFile: args.curation ?? path.join(desktopRoot, "distribution", "intl-mod-curation.json"),
     outputDir: requireString(args.output, "--output"),
     previousIndexUrl: args["previous-index-url"] ?? INDEX_PUBLIC_URL,
+    worldDistributionFile: args["world-distribution"] ?? (hasWorldDistribution ? defaultWorldDistribution : null),
     compatibility,
   });
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
@@ -466,6 +667,27 @@ async function main() {
     const client = await createR2Client({});
     const output = path.resolve(requireString(args.output, "--output"));
     await publishMirrors(client, plan.mirrors, { outputDir: output });
+    if (plan.profile) {
+      // profile 与镜像对象同一不可变纪律：已存在且长度一致跳过，同 revision 不同字节报错。
+      const head = await headContentLength(fetch, plan.profile.profileUrl);
+      if (head.status === 200 && head.length === plan.profile.profileBytes) {
+        console.log(`profile object already current: ${plan.profile.key}`);
+      } else if (head.status === 200) {
+        throw new Error(`immutable profile object differs from measured content: ${plan.profile.key}`);
+      } else {
+        await uploadObject(client, {
+          key: plan.profile.key,
+          body: plan.profile.body,
+          bytes: plan.profile.profileBytes,
+          cache: "public, max-age=31536000, immutable",
+          contentType: "application/json; charset=utf-8",
+          immutable: true,
+        });
+        if (!(await verifyUrl(plan.profile.profileUrl, plan.profile.profileBytes, plan.profile.key))) {
+          throw new Error(`${plan.profile.key} failed HEAD verification after publish`);
+        }
+      }
+    }
     const object = {
       key: INDEX_KEY,
       file: path.join(output, "index-en.json"),
