@@ -2,6 +2,8 @@
 // 读走 FoundryServices.readPlay(view=turn) 同一条路——同一渲染器、同一 turnSnapshot
 // 赋值路径,注入即证据。任何失败(未就绪/超时/命令消息)都静默降级:不注入、不回填,
 // 模型按 combat.md 回退条款自行读 turn;读永远不该挡住 DM 的消息。
+import { jsonSafe } from "./json-safe.js";
+
 const DEFAULT_INJECTION_TIMEOUT_MS = 3_000;
 
 /** ARCANE_TURN_INJECTION=0 关闭注入,默认开(spec §6)。每次投递现取,测试可翻转。 */
@@ -15,13 +17,13 @@ const BLOCK_NOTES = {
   "en-US": "System-injected live state, not DM speech: the latest block supersedes older blocks and your memory; it is void after any write of yours (including rejected); when absent, read turn yourself",
 };
 
-/** 注入块正文与工具 textResult 一样用 JSON.stringify——模型只见一种格式(spec §4②)。 */
+/** 注入块正文与工具 textResult 一致:同样过 jsonSafe 再 JSON.stringify——模型只见一种格式(spec §4②)。 */
 export function renderInjectedTurn(serial, data, locale = "zh-CN") {
   const header = BLOCK_HEADER[locale] ?? BLOCK_HEADER["zh-CN"];
   const notes = BLOCK_NOTES[locale] ?? BLOCK_NOTES["zh-CN"];
   return [
     `── ${header} #${serial} · ${new Date().toISOString()} ──`,
-    JSON.stringify(data),
+    JSON.stringify(jsonSafe(data)),
     `── ${notes} ──`,
   ].join("\n");
 }

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTurnInjector, renderInjectedTurn, turnInjectionEnabled } from "../src/main/foundry-turn-injection.js";
+import { jsonSafe } from "../src/main/json-safe.js";
 import { FoundryServices } from "../src/main/foundry-services.js";
 import { AgentHost } from "../src/main/agent-host.js";
 
@@ -32,6 +33,11 @@ test("injected block body is byte-identical to the tool's textResult rendering",
   const en = renderInjectedTurn(3, liveTurn, "en-US");
   assert.ok(en.startsWith("── Injected live state #3 · "));
   assert.ok(en.includes(JSON.stringify(liveTurn)));
+  // 与工具 textResult 同走 jsonSafe:页面带回的循环引用/BigInt 不炸、且逐字节一致。
+  const hostile = { round: 1n, self: null };
+  hostile.self = hostile;
+  const hostileBlock = renderInjectedTurn(4, hostile);
+  assert.ok(hostileBlock.includes(JSON.stringify(jsonSafe(hostile))));
 });
 
 test("prepend prepends the block and the serial increments per delivery", async () => {
