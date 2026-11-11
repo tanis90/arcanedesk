@@ -1093,6 +1093,10 @@ function summarizeArgs(toolName, args) {
         const q = String(args.query ?? "").trim();
         return q.length > 80 ? `“${q.slice(0, 80)}…”` : `“${q}”`;
       }
+      case "web_fetch": {
+        const url = String(args.url ?? "").trim();
+        return url.length > 100 ? `${url.slice(0, 100)}…` : url;
+      }
       default:
         return "";
     }
@@ -1228,6 +1232,21 @@ function finishToolCard(toolCallId, toolName, event) {
         body.appendChild(el("div", "ss-results-note", `${parsed.meta.backend} · ${note}`));
       }
       body.appendChild(list);
+    } catch {
+      body.appendChild(el("pre", null, shorten(text)));
+    }
+  } else if (toolName === "web_fetch" && !event.isError) {
+    // 抓取结果：标题链接 + 正文（卡片本身默认收起，避免 64KB 正文撑爆时间线）。
+    try {
+      const parsed = JSON.parse(text);
+      const head = el("div", "ss-results");
+      const link = el("a", "ss-result", parsed.title || parsed.url);
+      link.href = parsed.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      head.appendChild(link);
+      const note = [parsed.meta?.backend, parsed.meta?.truncated ? "· truncated" : null].filter(Boolean).join(" ");
+      if (note) body.appendChild(el("div", "ss-results-note", note));
+      body.appendChild(head);
+      body.appendChild(el("pre", null, shorten(parsed.content ?? "")));
     } catch {
       body.appendChild(el("pre", null, shorten(text)));
     }
@@ -2068,11 +2087,22 @@ async function sendSubmission(submission) {
   pruneOutboxes();
 }
 
+/** 新消息发出时清掉仍悬停的失败卡片：重发只是卡片上的一个按钮，用户发了别的消息，旧卡片即过期。 */
+function dismissStaleFailedInputs(sessionId) {
+  if (selectedSessionId !== sessionId) return;
+  for (const element of messages.querySelectorAll('[data-input-state="failed"], [data-input-state="send_failed"], [data-input-state="uncertain"]')) {
+    const node = /** @type {HTMLElement} */ (element);
+    if (node.dataset.commandId) outboxFor(sessionId).delete(node.dataset.commandId);
+    node.remove();
+  }
+}
+
 async function submit() {
   if (composerStopping() || selectedArchived) return;
   const text = input.value.trim();
   const images = pendingImages.map(({ data, mimeType }) => ({ data, mimeType }));
   if ((!text && images.length === 0) || !selectedSessionId) return;
+  dismissStaleFailedInputs(selectedSessionId);
   const context = { ...modeContext(), commandId: crypto.randomUUID() };
   const submission = { context, text: text || t("chat.imagePlaceholder"), images, sending: false };
   // Capture the target before any await; a preflight response cannot steal B's draft.
@@ -3367,18 +3397,32 @@ function renderSearchUi() {
   ssBackendRow.hidden = mode !== "byok";
   ssEndpointRow.hidden = mode !== "custom";
   ssApikeyLabel.textContent = t(mode === "custom" ? "ss.custom.key" : "ss.apikey");
+  // byok/deepseek 且搜索页未存 key 时:占位提示缺省复用模型页的聊天 key。
+  ssApikey.placeholder = t(
+    mode === "byok" && cfg.byokBackend === "deepseek" && !cfg.hasStoredKey && cfg.deepseekHasKey
+      ? "ss.apikeyPlaceholderDeepseekChat"
+      : "ss.apikeyPlaceholder");
   // 探知珠状态行
   let state = "off";
   let text = t("ss.state.off");
   if (mode === "spark") {
-    state = cfg.sparkHasKey ? "ready" : "needs-key";
-    text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.spark");
+    // 优先级:用户自己的 DeepSeek key > Arcane Spark(v1 search PRD §5.2)
+    if (cfg.deepseekHasKey) {
+      state = "ready";
+      text = t("ss.state.ready.deepseek");
+    } else {
+      state = cfg.sparkHasKey ? "ready" : "needs-key";
+      text = t(cfg.sparkHasKey ? "ss.state.ready.spark" : "ss.state.needsKey.sparkOrDeepseek");
+    }
   } else if (ownKey) {
     if (cfg.hasKey) {
       state = "ready";
-      text = mode === "byok"
-        ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
-        : t("ss.state.ready.custom");
+      // keySource=deepseek-chat:缺省复用模型页 key,不是搜索页另配的。
+      text = cfg.keySource === "deepseek-chat"
+        ? t("ss.state.ready.deepseek")
+        : mode === "byok"
+          ? t("ss.state.ready.byok", { provider: t(`ss.backend.${cfg.byokBackend ?? "zai"}`) })
+          : t("ss.state.ready.custom");
     } else {
       state = "needs-key";
       text = t("ss.state.needsKey.own");
@@ -3386,7 +3430,8 @@ function renderSearchUi() {
   }
   ssStateEl.dataset.state = state;
   ssStateText.textContent = text;
-  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey);
+  // 有 DeepSeek key 时无需引导;两者都缺才指向模型页。
+  ssStateAction.hidden = !(mode === "spark" && !cfg.sparkHasKey && !cfg.deepseekHasKey);
 }
 
 async function refreshSearchSettings() {

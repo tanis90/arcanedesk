@@ -1956,7 +1956,7 @@
         <div class="settings-pane" id="pane-search" hidden>
         <section>
           <h3 data-i18n="ss.title">联网搜索（备团）</h3>
-          <p class="settings-note" data-i18n="ss.note">为备团助手提供 web_search 工具；战斗模式不可用。未配置时不产生任何搜索请求。</p>
+          <p class="settings-note" data-i18n="ss.note">为备团助手提供 web_search / web_fetch 工具；战斗模式不可用。未配置时不产生任何搜索请求。</p>
           <div class="ss-state" id="ss-state" data-state="off">
             <span class="ss-orb" aria-hidden="true"></span>
             <span class="ss-state-text" id="ss-state-text" aria-live="polite"></span>
@@ -1965,7 +1965,7 @@
           <div class="ss-modes" id="ss-modes" role="radiogroup" data-i18n-aria-label="ss.mode" aria-label="启用方式">
             <button class="ss-mode-card" type="button" role="radio" data-mode="off" aria-checked="false">
               <span class="ss-mode-name" data-i18n="ss.mode.off">关闭</span>
-              <span class="ss-mode-desc" data-i18n="ss.mode.offDesc">备团助手不注册 web_search 工具</span>
+              <span class="ss-mode-desc" data-i18n="ss.mode.offDesc">备团助手不注册 web_search / web_fetch 工具</span>
             </button>
             <button class="ss-mode-card" type="button" role="radio" data-mode="spark" aria-checked="false">
               <span class="ss-mode-name" data-i18n="ss.mode.spark">Arcane Spark</span>
@@ -1984,7 +1984,7 @@
             <div class="pf-row" id="ss-backend-row"><span data-i18n="ss.byok.backend">搜索服务</span>
               <select id="ss-backend">
                 <option value="zai" data-i18n="ss.byok.zai">智谱</option>
-                <option value="brave" data-i18n="ss.byok.brave">Brave Search</option>
+                <option value="deepseek" data-i18n="ss.byok.deepseek">DeepSeek</option>
               </select>
             </div>
             <label class="pf-row" id="ss-endpoint-row" hidden><span data-i18n="ss.custom.endpoint">端点</span><input id="ss-endpoint" type="url" data-i18n-placeholder="ss.custom.endpointPlaceholder" placeholder="https://…" /></label>

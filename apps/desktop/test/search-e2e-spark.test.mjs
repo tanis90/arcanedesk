@@ -1,7 +1,7 @@
 // search-e2e-spark.test.mjs — Spark 链路端到端(本地真 HTTP + 真 fetch):
 // 桌面 spark adapter ⇄ Arcane /v1/search 契约,fixture 与 arcane-spark-edge
 // transformSearchResponse 的输出逐字段一致(ops services/arcane-spark-edge)。
-// 验证:URL 归一化(/v1 追加)、Bearer 头、请求体形状、响应解析、budget/去重缓存
+// 验证:URL 归一化(/v1 追加)、Bearer 头、请求体形状、响应解析、run 级去重缓存
 // 全链路。不碰网络(spark cred 指向 127.0.0.1,store 不校验 spark 端点)。
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -11,7 +11,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { executeSearch } from "../src/main/search/index.js";
-import { SearchBudget } from "../src/main/search/budget.js";
+import { SearchRunCache } from "../src/main/search/cache.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
 
@@ -45,11 +45,11 @@ test("desktop spark adapter speaks the arcane-spark-edge /v1/search contract end
     const spark = { apiKey: "sk-spark-e2e", baseUrl: `http://127.0.0.1:${port}/v1` };
     store.update({ mode: "spark" }, spark);
 
-    const budget = new SearchBudget();
-    budget.reset("run");
+    const cache = new SearchRunCache();
+    cache.reset("run");
     const first = await executeSearch(
       { query: "foundry v13 dnd5e", count: 5, freshness: "month", domains: ["foundryvtt.com"] },
-      { store, spark, budget, runKey: "run" },
+      { store, spark, cache, runKey: "run" },
     );
     // 真 fetch 走了网络栈:请求形状与 ops worker 期望一致。
     assert.equal(received.length, 1);
@@ -74,7 +74,7 @@ test("desktop spark adapter speaks the arcane-spark-edge /v1/search contract end
     // 同 run 重复 query:命中缓存,不再发请求(计数不变)。
     const second = await executeSearch(
       { query: "foundry v13 dnd5e" },
-      { store, spark, budget, runKey: "run" },
+      { store, spark, cache, runKey: "run" },
     );
     assert.equal(second.usage.cached, true);
     assert.equal(received.length, 1);

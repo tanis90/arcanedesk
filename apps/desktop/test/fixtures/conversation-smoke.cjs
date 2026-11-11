@@ -42,6 +42,7 @@ let mode = "prep";
 let generation = 0;
 const submittedCommands = new Set();
 let submitAttempts = 0;
+let failNextPrompt = false;
 let layoutActivity;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
@@ -57,7 +58,7 @@ for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input)
   if (channel === "chat:prompt") {
     submitAttempts++;
     submittedCommands.add(input.commandId);
-    if (submitAttempts === 1) return { ok: false, uncertain: true };
+    if (submitAttempts === 1 || failNextPrompt) { failNextPrompt = false; return { ok: false, uncertain: true }; }
     return { ok: true, status: "accepted", commandId: input.commandId, inputId: "accepted-input", taskId: "retry-task", sessionId: input.sessionId, duplicate: true };
   }
   if (channel === "sessions:current") return { ...snapshot(mode), generation };
@@ -140,6 +141,16 @@ app.whenReady().then(async () => {
     assert.equal(submitAttempts, 2);
     assert.equal(submittedCommands.size, 1);
     assert.equal(await evaluate('document.querySelector(".retry-input")'), null, "successful receipt clears retry");
+    // 失败卡片悬停时,用户发出新消息应清掉旧卡片(重发只是按钮,不挡消息流)
+    failNextPrompt = true;
+    await evaluate('input.value = "doomed message"; submit()');
+    await until('!!document.querySelector(".retry-input") && messages.textContent.includes("doomed message")');
+    await evaluate('input.value = "replacement message"; submit()');
+    await until('outboxFor("A").size === 0');
+    assert.equal(await evaluate('messages.textContent.includes("doomed message")'), false, "new send dismisses the stale failed card");
+    assert.equal(await evaluate('messages.textContent.includes("replacement message")'), true, "new message still renders");
+    assert.equal(await evaluate('document.querySelector(".retry-input")'), null, "no retry button survives the sweep");
+    const submitAttemptsAfterSendFlow = submitAttempts;
     receiptInput = { commandId: [...submittedCommands][0], messageKey: "entry:user-900", text: "retry me", state: "context" };
     await evaluate('resyncSelected()');
     assert.equal(await evaluate('document.querySelector(".input-state")'), null);
@@ -192,7 +203,7 @@ app.whenReady().then(async () => {
     assert.equal(recoveryDraft, "keep my draft", "interruption does not inject instructions");
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(submitAttempts, 2, "interruption never submits a model request");
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow, "interruption never submits a model request");
     await evaluate('saveWorkspace(); switchMode("combat")');
     await until('selectedSessionId === "B"');
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
@@ -205,7 +216,7 @@ app.whenReady().then(async () => {
     window.reload(); await recoveryReloaded;
     await until('selectedSessionId === "A" && displayedTask?.state === "interrupted" && pendingImages.length === 1');
     assert.equal(await evaluate('input.value'), recoveryDraft);
-    assert.equal(submitAttempts, 2, "reloading recovery does not replay an input");
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow, "reloading recovery does not replay an input");
     taskOverride = { id: "stop-task", state: "running" };
     await evaluate('resyncSelected()');
     await until('selectedTaskId === "stop-task" && busy && !send.disabled');
@@ -215,7 +226,7 @@ app.whenReady().then(async () => {
     await evaluate('sendSubmission({context: {...modeContext(), commandId: "blocked-retry"}, text: "retry", images: []})');
     assert.equal(await evaluate('input.value'), "keep while stopping");
     assert.equal(await evaluate('pendingImages.length'), 1);
-    assert.equal(submitAttempts, 2);
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow);
     assert.equal(abortRequests.length, 1);
     assert.equal(abortRequests[0].input.sessionId, "A");
     assert.equal(abortRequests[0].input.taskId, "stop-task");
@@ -239,7 +250,7 @@ app.whenReady().then(async () => {
     await until('selectedSessionId === "A" && send.disabled && pendingImages.length === 1');
     await evaluate('submit()');
     assert.equal(await evaluate('input.value'), "keep while stopping");
-    assert.equal(submitAttempts, 2);
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow);
     taskOverride.state = "stopped";
     abortRequests[1].resolve({ ok: true, task: taskOverride });
     await evaluate('resyncSelected()');
@@ -299,7 +310,7 @@ app.whenReady().then(async () => {
     await evaluate('resyncSelected()');
     assert.equal(await evaluate('document.querySelector(".error-message")'), null);
     assert.equal(await evaluate('document.querySelector(".recover-task")'), null);
-    assert.equal(submitAttempts, 2, "terminal states leave drafts unchanged without executing work");
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow, "terminal states leave drafts unchanged without executing work");
     assert.equal(await evaluate('syncIndicator.hidden'), true);
     await evaluate('resyncSelected()');
     deferSnapshots = true;
@@ -342,7 +353,7 @@ app.whenReady().then(async () => {
     snapshotRequests[2].resolve({ ok: false, code: "LATE_TIMEOUT_RESULT" });
     await new Promise(resolve => setTimeout(resolve, 60));
     assert.equal(await evaluate('syncIndicator.hidden'), true);
-    assert.equal(submitAttempts, 2, "sync probes never submit model work");
+    assert.equal(submitAttempts, submitAttemptsAfterSendFlow, "sync probes never submit model work");
     console.log("PASS Electron: conversation restore, scoped input, terminal details and bounded synchronization recovery");
     app.exit(0);
   } catch (error) { console.error(error); app.exit(1); }

@@ -132,9 +132,10 @@ Desktop 不打包 Demo world、其版本或依赖清单。清单 `systems` 里�
   world 留在磁盘上不使用。不要改用清单里的 GitHub 条目。
 - **用户点名其他 mod**：先查 mirror 索引。已收录的按索引钉死的 bytes 逐字节核对
   SHA256 后直接装，用户明确要求安装即授权。未收录的给一次大白话风险提示并取得确认：
-  「这个不在 arcane mirror 选过的 mod 之内，安装可能产生不可知后果，确认要安装吗？
-  如果你希望 arcane mirror 收录这个 mod，可以去官网
-  https://arcanedesk.bitterbebop.cn/ 反馈我们。」确认后按 `arcane-fvtt-mods` 的
+  「这个 mod 不在 Arcane 镜像的收录范围，要从公开网络的原地址直接下载。镜像里的包
+  我们都核对过来源和哈希，公开网络上的没人替你挡这一道——确认你信任它的作者和发布页，
+  要继续吗？用着好的话也欢迎到官网 https://arcanedesk.bitterbebop.cn/ 反馈，我们评估后
+  把它收进镜像。」确认后按 `arcane-fvtt-mods` 的
   install 流程安装；SHA256 由 Agent 计算、核对、写进报告，但只是本次下载指纹，
   不再把 hex 串交给用户判断。
 - 单项体积与总量已在计划里展示并经确认门覆盖，不再单独确认；失败时保留原目录，不留半安装

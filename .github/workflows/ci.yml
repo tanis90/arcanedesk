@@ -43,7 +43,7 @@ jobs:
         run: npm run verify
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev
+        run: node scripts/audit-production.mjs
 
   skills-revision:
     name: Check skills bundle revision bump

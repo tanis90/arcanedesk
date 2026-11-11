@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { defineTool as definePiTool } from "@earendil-works/pi-coding-agent";
+import { jsonSafe } from "./json-safe.js";
 
 /** @template {import("typebox").TProperties} P @param {P} properties */
 const exact = properties => Type.Object(properties, { additionalProperties: false });
@@ -11,7 +12,10 @@ const source = Type.Union([
   exact({ kind: Type.Literal("selected") }),
   exact({ kind: Type.Literal("name"), name: ref(), scope: Type.Union([Type.Literal("focus"), Type.Literal("actors")]) }),
 ]);
-const textResult = data => ({ content: [{ type: /** @type {const} */ ("text"), text: JSON.stringify(data) }], details: data });
+const textResult = data => {
+  const safe = jsonSafe(data);
+  return { content: [{ type: /** @type {const} */ ("text"), text: JSON.stringify(safe) }], details: safe };
+};
 
 // Some providers require an object root and reject root-level anyOf even when
 // type=object is present. Keep the exact union as a pre-dispatch validator and

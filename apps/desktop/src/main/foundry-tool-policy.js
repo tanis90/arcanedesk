@@ -13,8 +13,8 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
-    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "request_user_input", "open_document",
-    "web_search"]),
+    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    "web_search", "web_fetch"]),
 });
 
 /**
@@ -29,8 +29,8 @@ const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
-    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "request_user_input", "open_document",
-    "web_search"]),
+    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    "web_search", "web_fetch"]),
 });
 
 export const TOOL_NAMES_BY_PROFILE = Object.freeze({
@@ -91,13 +91,13 @@ export function activeToolNames(mode, platform = process.platform) {
 }
 
 /**
- * 池感知激活表：web_search 在 allowlist 里是静态成员，但只有工具池（已配置
- * 联网搜索）真的构造出它时才激活；session 创建与策略测试共用本判定。
+ * 池感知激活表：web_search / web_fetch 在 allowlist 里是静态成员，但只有工具池
+ * （已配置搜索凭据）真的构造出它们时才激活；session 创建与策略测试共用本判定。
  */
 export function activeToolNamesForPoolInProfile(mode, pool, profileId, platform = process.platform) {
   const names = activeToolNamesForProfile(mode, profileId, platform);
-  const hasWebSearch = (pool ?? []).some((tool) => tool?.name === "web_search");
-  return hasWebSearch ? names : names.filter((name) => name !== "web_search");
+  const present = new Set((pool ?? []).map((tool) => tool?.name).filter(Boolean));
+  return names.filter((name) => (name !== "web_search" && name !== "web_fetch") || present.has(name));
 }
 
 export function activeToolNamesForPool(mode, pool, platform = process.platform) {

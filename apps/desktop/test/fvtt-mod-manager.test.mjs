@@ -17,6 +17,7 @@ import {
   commitWorldStage,
   compareVersions,
   deriveWorldsIndexUrl,
+  inspectModule,
   inspectWorldEnvironment,
   listInstalledModules,
   mirrorCatalog,
@@ -373,6 +374,78 @@ test("an unindexed stage cannot commit without accepting its exact computed hash
   });
   assert.equal(committed.version, "2.0.0");
   assert.equal(committed.backup, null);
+});
+
+test("github mirror prefix only rewrites GitHub hosts and keeps identity checks on original URLs", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "arcane-mod-manager-prefix-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const ghManifestUrl = "https://github.com/demo/mod/releases/latest/download/module.json";
+  const ghDownloadUrl = "https://github.com/demo/mod/releases/download/2.0.0/module.zip";
+  const prefix = "https://gh-proxy.example.test";
+  const remoteManifest = { id: "demo", title: "Demo", version: "2.0.0", download: ghDownloadUrl, manifest: ghManifestUrl };
+  const zipFile = path.join(root, "fixture.zip");
+  await execFileAsync("python", [
+    "-c",
+    "import json,sys,zipfile; m=json.loads(sys.argv[2]); z=zipfile.ZipFile(sys.argv[1],'w'); z.writestr('module.json',json.dumps(m)); z.close()",
+    zipFile,
+    JSON.stringify(remoteManifest),
+  ]);
+  const zip = await readFile(zipFile);
+  const requested = [];
+  const fakeFetch = async (url) => {
+    requested.push(url);
+    if (url === `${prefix}/${ghManifestUrl}`) return jsonResponse(remoteManifest);
+    if (url === `${prefix}/${ghDownloadUrl}`) return binaryResponse(zip);
+    if (url === indexUrl) return jsonResponse({ generated: "now", packages: [] });
+    return new Response("not found", { status: 404 });
+  };
+  const staged = await stageModule({
+    manifestUrl: ghManifestUrl,
+    expectedId: "demo",
+    expectedVersion: "2.0.0",
+    expectedDownloadUrl: ghDownloadUrl,
+    fetchImpl: fakeFetch,
+    indexUrl,
+    tempRoot: root,
+    githubMirrorPrefix: prefix,
+  });
+  assert.equal(staged.requiresSecondConfirmation, true);
+  assert.equal(staged.manifestUrl, ghManifestUrl);
+  assert.equal(staged.downloadUrl, ghDownloadUrl);
+  assert.equal(staged.archiveSha256, sha256(zip));
+  assert.deepEqual(
+    [...requested].sort(),
+    [`${prefix}/${ghManifestUrl}`, `${prefix}/${ghDownloadUrl}`, indexUrl].sort(),
+  );
+});
+
+test("github mirror prefix must be a plain https URL", async () => {
+  const neverFetch = async () => {
+    throw new Error("must not fetch");
+  };
+  await assert.rejects(
+    stageModule({
+      manifestUrl,
+      expectedId: "demo",
+      expectedVersion: "2.0.0",
+      expectedDownloadUrl: downloadUrl,
+      fetchImpl: neverFetch,
+      indexUrl,
+      githubMirrorPrefix: "http://gh-proxy.example.test",
+    }),
+    /github mirror prefix must be an HTTPS URL/,
+  );
+  await assert.rejects(
+    inspectModule({
+      manifestUrl,
+      dataDir: path.join(os.tmpdir(), "arcane-definitely-missing-data-dir"),
+      allowMissingDataDir: true,
+      fetchImpl: neverFetch,
+      indexUrl,
+      githubMirrorPrefix: "gh-proxy.example.test",
+    }),
+    /github mirror prefix must be an absolute URL/,
+  );
 });
 
 test("world profiles resolve current stable packages independently from world artifacts", async (t) => {

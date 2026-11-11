@@ -3,6 +3,7 @@
 // 应用层自己持有这份配置,不去改 ~/.pi/agent/models.json 的格式——
  // 运行时注册(registerProvider)与 Pi 配置文件里的 provider 可以共存。
 import { readFileSync, writeFileSync } from "node:fs";
+import { isPlausibleApiKey } from "./api-key.js";
 import { decodeBoundCredential, encodeBoundCredential } from "./bound-credential.js";
 import { err } from "./i18n-error.mjs";
 import { providerCredentialTarget } from "./provider-endpoint.js";
@@ -261,6 +262,11 @@ export class ProviderStore {
     if (!target.ok) return target;
     const inputApiKey = String(input?.apiKey ?? "").trim();
     const reusesStoredKey = !inputApiKey || inputApiKey.startsWith("••••");
+    // 新输入的 key 只接受可打印 ASCII：粘贴/输入法带入的中文或空格会让
+    // Authorization 头编码失败，且永远认证不过——保存时直接拒收。
+    if (!reusesStoredKey && !isPlausibleApiKey(inputApiKey)) {
+      return { ok: false, error: err("err.provider.keyInvalidChars") };
+    }
     if (
       reusesStoredKey &&
       existing?.apiKey &&
@@ -343,6 +349,33 @@ export class ProviderStore {
     const endpoint = providerCredentialTarget(provider);
     if (!endpoint.ok) return null;
     return { apiKey: provider.apiKey, baseUrl: endpoint.baseUrl };
+  }
+
+  /**
+   * 按端点 host 取凭据：给「用户已有某家聊天 key，工具顺带复用」这类场景用
+   * （如 DeepSeek 聊天 key 与 tools/search 同 origin）。
+   *
+   * 只匹配 host、不匹配路径；仍要求 provider 自身的 credential target 校验通过，
+   * 因此被篡改的 baseUrl 不会漏出 key。找不到返回 null——调用方绝不能回落到
+   * 另一个 provider 的 key。
+   */
+  credentialForHost(host) {
+    const wanted = String(host ?? "").trim().toLowerCase();
+    if (!wanted) return null;
+    for (const provider of this.data.providers) {
+      if (!usableCredential(provider)) continue;
+      const endpoint = providerCredentialTarget(provider);
+      if (!endpoint.ok || !endpoint.origin) continue;
+      let hostname;
+      try {
+        hostname = new URL(endpoint.origin).hostname.toLowerCase();
+      } catch {
+        continue;
+      }
+      if (hostname !== wanted) continue;
+      return { apiKey: provider.apiKey, baseUrl: endpoint.baseUrl, providerId: provider.id };
+    }
+    return null;
   }
 
   /** Return a validated public endpoint without exposing or requiring its credential. */
