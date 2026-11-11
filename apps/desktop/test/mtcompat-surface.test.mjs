@@ -70,7 +70,7 @@ test("withMtcompatSurfaceSegment：追加在基底之后，任一侧缺席原样
   assert.equal(withMtcompatSurfaceSegment(undefined, SEGMENT), undefined);
 });
 
-test("挂载点：mtcompat 档 eval 工具描述带蒸馏段，foundry 档逐字节不变", (t) => {
+test("动态档位：eval 工具描述保持档位无关，支持面段落只按当前档位在 prompt 重建时取", (t) => {
   const file = temporaryArtifact(t, ARTIFACT);
   const foundryDescription = browserEvaluate(prepHost({ getPanelProfileId: () => "foundry", mtcompatSurfaceFile: file })).description;
   const noPanelDescription = browserEvaluate(prepHost({ mtcompatSurfaceFile: file })).description;
@@ -80,17 +80,16 @@ test("挂载点：mtcompat 档 eval 工具描述带蒸馏段，foundry 档逐字
   const host = prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file });
   assert.equal(host.surfaceSegment(), SEGMENT);
   const description = browserEvaluate(host).description;
-  assert.equal(description, `${foundryDescription}\n\n${SEGMENT}`, "蒸馏段追加在 eval 工具描述尾部");
-  assert.ok(description.includes("Scene#activate"), "坑位行随段落进描述");
+  assert.equal(description, foundryDescription, "工具描述不把 attach 时档位写死；段落由动态 prompt 承担");
 });
 
-test("挂载点（A3）：foundry_page_eval 的描述在 mtcompat 档同样带蒸馏段，foundry 档无段", (t) => {
+test("动态档位（A3）：foundry_page_eval 的描述同样与档位无关", (t) => {
   const file = temporaryArtifact(t, ARTIFACT);
   const pageEval = (host) => host.buildTools().find((tool) => tool.name === "foundry_page_eval");
   const foundryDescription = pageEval(prepHost({ getPanelProfileId: () => "foundry", mtcompatSurfaceFile: file })).description;
-  assert.equal(foundryDescription.includes("离线蒸馏"), false);
   const mtcompatDescription = pageEval(prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file })).description;
-  assert.equal(mtcompatDescription, `${foundryDescription}\n\n${SEGMENT}`, "蒸馏段追加在新 eval 工具描述尾部");
+  assert.equal(mtcompatDescription, foundryDescription);
+  assert.equal(foundryDescription.includes("离线蒸馏"), false);
 });
 
 test("挂载点：产物缺席/损坏时挂载降级为无段落，不影响工具构造与会话", (t) => {
@@ -110,7 +109,7 @@ test("战斗模式：mtcompat 档同样解析出段落（prompt 挂载面），�
   const host = new AgentHost({ profile: { mode: "combat" }, log() {}, getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file });
   assert.equal(host.surfaceSegment(), SEGMENT);
   // 工具池构造与激活名单是两件事：池里照旧有 eval 工具，战斗档的激活名单不含它。
-  assert.ok(browserEvaluate(host).description.endsWith(SEGMENT));
+  assert.equal(browserEvaluate(host).description.includes(SEGMENT), false);
   assert.deepEqual(activeToolNamesForProfile("combat", "mtcompat"), activeToolNamesForProfile("combat", "foundry"));
   assert.equal(activeToolNamesForProfile("combat", "mtcompat").includes("browser_evaluate"), false);
 });
@@ -125,22 +124,21 @@ test("生产方↔消费方契约：真蒸馏产物能被运行期读法直接�
   const file = temporaryArtifact(t, artifact);
   assert.equal(mtcompatSurfaceSegment("mtcompat", file), artifact.segment);
   const host = prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file });
-  const description = browserEvaluate(host).description;
-  assert.ok(description.endsWith(artifact.segment));
-  assert.ok(description.includes("离线蒸馏 rev 42"), "revision 钉住后随段落进入工具描述");
-  assert.ok(description.includes("优先用 typed action，eval 是兜底。"));
+  assert.equal(host.surfaceSegment(), artifact.segment);
+  assert.equal(browserEvaluate(host).description.includes(artifact.segment), false, "段落由动态 prompt 挂载，不写进静态工具描述");
 });
 
 test("prompt 挂载点：模式 prompt 组合带上蒸馏段（foundry 档 base 原样）", () => {
   const agentHost = readFileSync(path.join(appRoot, "src/main/agent-host.js"), "utf8");
   // 与 i18n 门的 prompt 组合形状断言同一手法：数组字面量保持原样，段落并进 base。
-  assert.match(agentHost, /const systemPrompt = withMtcompatSurfaceSegment\(loadCombatSystemPrompt\(this\.log\), this\.surfaceSegment\(\)\);/);
-  assert.match(agentHost, /const prepPreamble = withMtcompatSurfaceSegment\(loadPrepPreamble\(this\.log\), this\.surfaceSegment\(\)\);/);
-  assert.match(agentHost, /systemPromptOverride: \(\) => \[systemPrompt, languageDirective\]/);
-  assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[prepPreamble, languageDirective\]/);
-  assert.match(agentHost, /activeToolNamesForPoolInProfile\(this\.profile\.mode, customTools, this\.panelProfileId\(\)\)/);
+  assert.match(agentHost, /const baseSystemPrompt = loadCombatSystemPrompt\(this\.log\);/);
+  assert.match(agentHost, /systemPromptOverride: \(\) => \[withMtcompatSurfaceSegment\(baseSystemPrompt, this\.surfaceSegment\(\)\), languageDirective\]/);
+  assert.match(agentHost, /const basePreamble = loadPrepPreamble\(this\.log\);/);
+  assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[withMtcompatSurfaceSegment\(basePreamble, this\.surfaceSegment\(\)\), languageDirective\]/);
+  assert.match(agentHost, /setActiveToolsByName/);
   const main = readFileSync(path.join(appRoot, "src/main/main.js"), "utf8");
-  assert.equal((main.match(/getPanelProfileId: \(\) => activeProfileId/g) ?? []).length, 2, "两档 host 都要拿到面板档位");
+  assert.equal((main.match(/getPanelProfileId: \(\) => panelProfileState\.current\(\)\.profileId/g) ?? []).length, 2, "两档 host 都要拿到真实面板档位");
+  assert.match(main, /isTrustedLobbyUrl: url => resolvePanelProfile\(url\)\?\.id === PAGE_PROFILES\.mtcompat\.id/, "大厅客户端复用面板 override 判定");
 });
 
 test("产物路径默认落在 generated/（构建产物目录，随包分发）", () => {

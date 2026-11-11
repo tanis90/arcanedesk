@@ -313,8 +313,8 @@ test("agent system prompts carry a reply-language directive for en-US UI", () =>
   assert.ok(hostInits.length >= 2 && localeWiring.length >= hostInits.length,
     "every AgentHost must receive getLocale: resolveLocale");
   const agentHost = readFileSync(path.join(appRoot, "src/main/agent-host.js"), "utf8");
-  assert.match(agentHost, /systemPromptOverride: \(\) => \[systemPrompt, languageDirective\]/);
-  assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[prepPreamble, languageDirective\]/);
+  assert.match(agentHost, /systemPromptOverride: \(\) => \[withMtcompatSurfaceSegment\(baseSystemPrompt, this\.surfaceSegment\(\)\), languageDirective\]/);
+  assert.match(agentHost, /appendSystemPromptOverride: \(\) => \[withMtcompatSurfaceSegment\(basePreamble, this\.surfaceSegment\(\)\), languageDirective\]/);
 });
 
 test("intl system prompt source tree passes the CJK leakage gate", () => {

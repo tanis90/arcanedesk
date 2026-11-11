@@ -6,7 +6,7 @@ import path from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager,
   createReadTool, createWriteTool, createEditTool, createBashTool, createPowerShellTool } from "@earendil-works/pi-coding-agent";
 import { AgentHost } from "../src/main/agent-host.js";
-import { TOOL_NAMES_BY_PROFILE, MTCOMPAT_RUNTIME_ACTIONS, activeToolNames, activeToolNamesForPool, activeToolNamesForPoolInProfile, activeToolNamesForProfile, normalizePolicyProfile, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { TOOL_NAMES_BY_PROFILE, MTCOMPAT_RUNTIME_ACTIONS, LOBBY_TOOL_NAMES, activeToolNames, activeToolNamesForPool, activeToolNamesForPoolInProfile, activeToolNamesForProfile, normalizePolicyProfile, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
 import { PAGE_PROFILES } from "../src/main/page-profiles.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
@@ -114,7 +114,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPoolInProfile("prep", customTools, "mtcompat");
-  assert.equal(expected.length, 28, "mtcompat 备团 30 静态成员 - 未配置的 web_search/web_fetch");
+  assert.equal(expected.length, 35, "mtcompat 备团 37 静态成员 - 未配置的 web_search/web_fetch");
   assert.equal(activeToolNamesForPoolInProfile("prep", customTools, "foundry").includes("foundry_page_eval"), false);
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
@@ -123,6 +123,10 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   verifyActiveTools(session, expected);
   assert.equal(session.getActiveToolNames().includes("foundry_page_eval"), true);
   assert.equal(session.getActiveToolNames().includes("browser_evaluate"), true, "A3 不动 A2 的 eval 面");
+  for (const name of ["foundry_lobby_import_start", "foundry_lobby_import_job", "foundry_lobby_campaigns_list",
+    "foundry_lobby_campaign_packs_get", "foundry_lobby_campaign_packs_update", "foundry_lobby_packs_read", "foundry_lobby_packs_delete"]) {
+    assert.equal(session.getActiveToolNames().includes(name), true, name);
+  }
 });
 
 // ---- A2/A3：写策略的档位维度（mtcompat 档策略面独立，A3 在其上放 pageEval）----
@@ -136,16 +140,17 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   assert.deepEqual(combatMtcompat, combatFoundry);
   assert.deepEqual(combatMtcompat, activeToolNames("combat"));
   assert.equal(combatMtcompat.includes("foundry_page_eval"), false);
-  // A3 分叉（唯一）：mtcompat 备团 = foundry 备团 + foundry_page_eval。
+  // mtcompat 备团 = foundry 备团 + foundry_page_eval + 7 个 lobby tools。
   const prepFoundry = activeToolNamesForProfile("prep", "foundry");
   const prepMtcompat = activeToolNamesForProfile("prep", "mtcompat");
-  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval"].sort());
+  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", ...LOBBY_TOOL_NAMES].sort());
   assert.equal(prepMtcompat.includes("foundry_page_eval"), true);
   assert.equal(prepFoundry.includes("foundry_page_eval"), false);
+  for (const name of LOBBY_TOOL_NAMES) assert.equal(prepFoundry.includes(name), false, name);
   // 旧调用方语义：无档位 = 开放默认档；模式校验照旧。
   assert.equal(activeToolNames("combat").length, 6);
   assert.equal(activeToolNames("prep").length, 29, "静态 allowlist 29 = 27 有效 + web_search/web_fetch 静态成员");
-  assert.equal(prepMtcompat.length, 30, "mtcompat 备团 30 = foundry 备团 29 + foundry_page_eval");
+  assert.equal(prepMtcompat.length, 37, "mtcompat 备团 37 = foundry 备团 29 + foundry_page_eval + 7 lobby tools");
   assert.throws(() => activeToolNamesForProfile("unknown-mode", "mtcompat"), /Unknown tool mode/);
 });
 

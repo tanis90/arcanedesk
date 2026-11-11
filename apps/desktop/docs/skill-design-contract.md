@@ -493,3 +493,14 @@
 - `--create` 恒新建战役，绝不按名字复用既有战役（防重复导入叠数据）；`--campaign <id>` 并入既有战役是纯追加不去重，必须在计划里点名。
 - MT 账号密码经 request_user_input 现收、`MT_PASS` 环境变量单条命令注入，不落盘、不进日志、不复述；写了一半的战役不盲目重试（软删后完整重导）。
 - 导入面只含 T1+T2（文档 + 资产），聊天记录/世界设置/世界自有 compendium packs 不导入（二期）；vendored import-core/migrate/assets 与 mt-foundry-compat/web/ 保持 sha256 逐字节一致，升级随上游验收后同步。
+
+### arcane-world-import / arcane-mt-packs 大厅 typed 工具（2026-11-11，r46）
+
+- r46 起，r45 的 ROPC 与本地迁移脚本流程不再作为主路径或降级通道；世界与合集包统一走 mt compat 大厅的**原生 File + typed lobby tools**。文件只接受 prep cwd 与 Desktop 自有镜像缓存（realpath 围栏、普通文件、size/mtime + 流式 sha256），目录外路径直接拒绝，不做目录外授权。
+- 大厅工具面固定 7 个：`foundry_lobby_import_start`、`foundry_lobby_import_job`、`foundry_lobby_campaigns_list`、`foundry_lobby_campaign_packs_get`、`foundry_lobby_campaign_packs_update`、`foundry_lobby_packs_read`、`foundry_lobby_packs_delete`；不引入 Code Mode、tool_search、裸 REST/eval 或通用文件选择器。
+- `import_start` 是唯一导入写入口：内部完成文件绑定、inspect、计划与审批后启动一个 job，返回 `{jobId, plan}`；`import_job` 只做 status（可等待）与 cancel，轮询只报 phase/progress/currentItem/failureCount，完整报告只在终态返回。取消被接受不等于已停止并清理；导航/刷新/崩溃后 job 只标 indeterminate，不自动重放。
+- 免密码：登录只由用户在面板内完成 Keycloak 流程，agent 不接触账号、密码、验证码或 token。旧版 dnd5e（< 5.3.0）与大厅同门拒绝并指引升级，不做 ROPC/本地脚本降级。
+- 写操作（`import_start`、`campaign_packs_update`、`packs_delete`）沿用 App 现有 `maybeRequestApproval`，不新增权限级别或审批框架；拒批即零底层写。
+- 合集库与战役选包分层：库删除用 `packs_delete`，选包增量用 `campaign_packs_update`。读模型 `revision` 只做 stale 检测（update/delete 前重读，不一致零写入），写后回读；选包更新保留未涉及的 refs、missing、ownerPid 与其它 enabledSources 字段，只 bump 一次 `packsRev` 触发 play 重拉。删除不级联 detach 引用。
+- 世界导入按 `campaignName`（默认世界标题）判定同名：不存在则新建（`new`），同名且 ruleset 一致则复用并追加（`existing`），ruleset 不一致拒绝；没有单独 campaignId/合并参数不等于永远新建，重复导入不盲目叠加。
+- 旧 App 通过 `minAppVersion: 0.9.0` fail-closed 留在 r45；r46 为 `revision: 46`。

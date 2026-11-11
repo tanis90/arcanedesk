@@ -1,81 +1,72 @@
 ---
 name: arcane-world-import
-description: 把用户本地的 Foundry VTT（FVTT）dnd5e 世界一键导入自托管 MythicTable 云端（默认 https://vtt.arcanedesk.bitterbebop.cn:30002）。当用户说"把这个世界传到云端/导入云端/上传到 MythicTable/在云端开这个世界"，或给出 FVTT 世界目录、世界 zip 要求导入云端战役时使用。旧版本 dnd5e 世界（< 5.3.0）自动离线迁移；本地 FVTT 安装运维归 arcane-fvtt-setup/ops，云端 FVTT 服务器部署归 arcane-fvtt-server；本 skill 只管"本地世界 → 云端战役"的搬运。
+description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 的 mt compat 云端战役（奥法地图大厅）。当用户说“把这个世界传到云端/导入云端/上传到奥法地图/在云端开这个世界/帮我在大厅里导入世界”，或给出当前备团目录里的世界 zip 要求导入时使用。世界包必须位于当前备团工作目录（Desktop 镜像缓存由工具内部处理）；导入走大厅 typed 工具，不收账号密码；旧版 dnd5e（<5.3.0）按大厅规则拒绝并指引升级；本地 FVTT 安装与运维归 arcane-fvtt-setup/ops。
 ---
 
-# FVTT 世界 → MythicTable 云端导入
+# FVTT 世界 → mt compat 云端战役
 
-一条命令完成：读取本地世界（目录或 zip）→ 版本探测 → 旧版 dnd5e 自动迁移 → 资产上传 + 图片 URL
-重写 → 文档批量写入云端战役 → 输出结构化 JSON（各集合计数/跳过项/缺失资产/战役链接）。
-工具是 `scripts/import-world.mjs`（同目录 vendored import-core/import-migrate/import-assets，零外部依赖），
-**不要手写 curl 或裸 fetch 去调 MythicTable REST**——鉴权、并发、重试、URL 重写都在脚本里。
+把当前备团目录里的 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。你和用户只面对 `foundry_open` 与 `foundry_lobby_*` 这几个 typed 工具；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 
 ## 用户交互预算
 
-**恒定 2 次**：①导入计划确认（dry-run 报告 + 目标战役，一句话放行）；②MythicTable 账号密码
-（A 类账户边界，request_user_input 收集）。同一世界的相同计划第二次导入不重复问（授权沿用）；
-账号密码每次现收、绝不落盘。
+恒定 2 点：
 
-## 运行时契约
+1. **登录**（A 类账户边界，仅未登录时）：用户在右侧面板的 Keycloak 登录页自己登录。你不收账号密码、不代填、不猜测，也不把登录成功当成计划授权。
+2. **导入计划确认**：`foundry_lobby_import_start` 生成计划后走 App 现有审批（是否弹审批卡、缺省放行完全由 App 决定）。用户拒绝即零写入。
 
-- Node 用 `ARCANE_FVTT_NODE`（Arcane 随包 Node，缺失时停止并建议重启 App，不得改用系统 Node）。
-- 在本 skill 目录下执行；stdout 只有最终结果 JSON，进度日志走 stderr。
+除这两点外不再提问：世界包发现、战役命名、规则版本、失败处理都有默认值，用报告交代。登录后的“继续”和审批的“可以”都不是新交互点。
 
-```bash
-"$ARCANE_FVTT_NODE" scripts/import-world.mjs <世界目录|世界包.zip> --create "<新战役名>" [选项]
-```
+## 文件边界（硬规则）
 
-选项：`--campaign <既有战役id>`（并入既有战役）、`--base <url>`（默认
-https://vtt.arcanedesk.bitterbebop.cn:30002）、`--user <账号>`、`--dnd5e <本机 dnd5e 系统目录>`、
-`--data-dir <FVTT 数据目录>`（自动找 `<目录>/systems/dnd5e` 或 `<目录>/Data/systems/dnd5e`）、
-`--dry-run`、`--report <路径>`（结果 JSON 落盘）。
+- 只处理**当前备团工作目录（agent cwd）内**的 zip，以及 Desktop 已下载并管理的镜像缓存；后者由工具内部识别，你只传工具展示/返回的路径。
+- 用户给出 cwd 之外的路径时，明确拒绝：“工具只能读取当前备团目录和 ArcaneDesk 自己缓存的世界包，目录外的文件读不了。”不要读取它，不要申请目录外授权，也不要让用户把包复制到任意临时目录。用户可以把世界包放进当前备团目录，或使用 Desktop 已缓存的世界包。
+- 只接受普通 `.zip` 文件；目录形态的世界不走这条通道。路径不存在、不是普通文件、读取中被改动都由工具在写前拒绝，照实报告，零重试。
 
-## 流程
+## 工具面
 
-1. **收两个事实**：世界路径（目录或 zip，FVTT 里 Setup 界面的 Edit Folder 可看到位置）；
-   目标战役（默认建议**新建**，让用户起个名；点名既有战役才用 `--campaign <id>`）。
-2. **定位数据目录**（C 类，不问）：从上下文、用户给的路径或 arcane-fvtt-ops 已知信息推断
-   `<数据目录>/Data/systems/dnd5e`。旧版迁移与 dnd5e 内建图标核对都依赖它；找不到且世界
-   < 5.3.0 时脚本会明确报缺，此时再向用户要一次数据目录位置（算入计划确认那次交互）。
-3. **dry-run**（不需要账号）：把计划讲给用户——世界名/版本/是否迁移及统计、各集合文档数、
-   资产上传条数与体积、缺失资产数、目标战役名（既有战役要点名"将并入既有战役，纯追加不去重"）。
-   用户一句"可以/继续"放行。
-4. **收账号密码**：request_user_input 一次收 MythicTable 账号与密码，随后以
-   `MT_PASS='<密码>' "$ARCANE_FVTT_NODE" scripts/import-world.mjs … --user <账号>` 单条命令执行。
-5. **解析结果 JSON 并汇报**：各集合写入数、T3 跳过（聊天记录/世界设置不导入）、迁移统计
-   （applied/unchanged/failed，failed 文档不落库要点名）、missing 资产（icons//modules/未随包
-   携带，仅报告不阻断）、战役 playUrl（`<base>/user-files/compat/play.html?campaign=<id>`）。
-6. 失败按下面的文案表向用户解释并给下一步；**不盲目重试写了一半的战役**（重跑会叠重复文档，
-   先软删该战役再完整重导）。
+- `foundry_open`：打开/复用右侧大厅页。默认 `https://arcanemap.ssskill.cn/user-files/compat/lobby.html`；用户已用 `.com`/`.cn` 或其它受信地址时沿用，不臆造 IP、端口或分支域名。
+- `foundry_lobby_import_start`：唯一的世界导入写入口，入参 `{sourcePath, expectedKind?, campaignName?, ruleset?, failurePolicy?}`。
+- `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
+- `foundry_lobby_campaigns_list`：只读；核对导入后的战役与 `playUrl`。
 
-## 凭据纪律
+`foundry_open` 返回 `profile` 与 `activatedTools`。`profile` 必须是 `mtcompat`；大厅工具还没出现在 `activatedTools` 里时，说明页面档位不对或 App 版本不足——停下来让用户更新/重开 App，不要改用页面脚本、裸 HTTP 或旧脚本。工具激活会在下一次模型请求生效，不需要让用户再发一轮“继续”。
 
-- 账号密码只经 request_user_input 进对话、经 `MT_PASS` 环境变量进脚本；**不写任何文件、
-  不进日志、回复与报告里不复述密码**。脚本输出里也不会带凭据或 token。
-- 登录失败文案由脚本给出（401=账号密码错；"Account is not fully set up"=服务器端账号资料不全，
-  需管理员补 firstName/lastName；网络错=连通性问题）；照读脚本消息，不要自行猜测。
+## 主流程
 
-## 失败处置表
+1. **定位世界包**：在当前备团目录用只读的 `ls`/`find` 找 `.zip`，优先用户点名的文件；多个候选时取用户点名的，没点名就取最近修改的。不要递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
+2. **打开大厅**：`foundry_open` 传入大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。
+3. **启动导入**：调用 `foundry_lobby_import_start`：
+   - `sourcePath` 用 cwd 内路径（相对或绝对均可，但必须在 cwd 内）；
+   - `expectedKind: "world"`（用户已明确是世界包时）；不确定就不传，让工具嗅探并在计划里给出结论；
+   - `campaignName` 用用户起的名字；没起名就不传，沿用世界标题，不追问。这个名字决定计划是新建还是复用同名战役；
+   - `ruleset` 只在用户明确要求 2014/2024 时传；dnd5e 默认按大厅预选（2024），规则创建后不可变；
+   - `failurePolicy` 默认 `"abort"`。只有用户明确说“能导多少导多少”时才用 `"continue"`，并且它必须出现在批准的计划里。
+   工具会先解析、生成真实计划并走 App 现有审批；返回 `{jobId, plan}` 才表示已启动。
+4. **讲清计划**：把 `plan` 翻成一句话——世界名/系统版本、战役名与计划给出的 `new`/`existing` 结论（`new` 新建 / `existing` 复用同名战役）、规则、文档与素材数量、缺失素材、失败策略。审批计划必须明确 new/existing：不存在才新建；同名且 ruleset 一致时复用并追加，ruleset 不一致会被拒绝。不要在审批之外再要一次“开始吗”。
+5. **跟进任务**：用 `foundry_lobby_import_job` 的 `status` 配 `waitMs` 等待。轮询期间只说 `phase`/`progress`/`currentItem`/`failureCount`，不要每轮复述整份报告；完整 failures/report 只在终态或显式错误时读。
+6. **收尾报告**：给出战役名、各集合写入数、素材上传数与缺失清单、失败项、跳过项（聊天记录/世界设置/世界自有 compendium 不导入），以及 `playUrl` 可点击链接。`playUrl` 以工具返回为准，不要自己拼。
+7. **需要取消**：`action:"cancel"`。被接受不等于已停止和清理，继续 `status` 到终态，照实报告残留的战役/批次；不要立刻重导。
 
-| 脚本 error.code | 含义与下一步 |
+## 失败处置
+
+| 工具结果 | 含义与下一步 |
 |---|---|
-| WORLD_REJECTED | NeDB 旧格式（core ≤ 10）：让用户先在 FVTT 里把世界开一次升级到 v11+ 再导出重来 |
-| MIGRATE_ENV_MISSING / MIGRATE_ENV_OLDER | 找不到本机 dnd5e 或本机 dnd5e 比世界还旧：先按 arcane-fvtt-mods 装/升级 systems/dnd5e 再导入 |
-| MIGRATE_BOOT_FAILED / MIGRATE_FAILED | 本机 dnd5e 文件与迁移层不兼容：报告原文，建议重装 dnd5e 5.3.x |
-| UNREACHABLE | 网络不通：检查网络与服务器地址后重试（此时云端零写入） |
-| AUTH_BAD_CREDENTIALS | 账号密码错：向用户重新收集一次（只重收凭据，计划不重问） |
-| AUTH_PROFILE_INCOMPLETE | 服务器端账号资料不全：需要云端管理员补全，不是用户密码问题 |
-| AUTH_EXPIRED | 会话中途过期：战役已部分写入，先软删该战役再带新凭据完整重导 |
-| CAMPAIGN_NOT_FOUND | 既有战役 id 不对或不属于该账号：核对 id 或改 --create |
-| UPLOAD_FAILED / write.failed>0 | 部分失败：报告失败清单；战役不完整，建议软删重导 |
+| `LOGIN_REQUIRED` | 大厅未登录：结束本轮，请用户在右侧面板自己登录；确认后重试 `import_start`，不要用 `foundry_open` 轮询。 |
+| `PROFILE_MISMATCH` / `CAPABILITY_UNAVAILABLE` | 页面不是受信 mt compat 大厅，或 App/页面 runtime 版本不足：重开大厅；仍不行就让用户更新 ArcaneDesk，不要降级到页面脚本或裸 HTTP。 |
+| `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入；修正后重新调用，不沿用旧路径。 |
+| `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后查状态对账。 |
+| `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅查战役与批次状态。 |
+| `INPUT_INVALID` / `ABORTED` | 参数不合法或调用被取消：修正参数/报告取消；不要原样重试。 |
+| `JOB_INDETERMINATE` | 页面导航、刷新或崩溃打断：任务结果未知。重开大厅后先用 `campaigns_list` 查战役状态，批次/库状态以大厅界面和已有结果为准，**不要自动重放**；已生成或半写入的战役请用户在右侧大厅里处理后再决定是否重导。 |
+| 旧版 dnd5e（< 5.3.0）被拒 | 与大厅面板同一门：请用户在 FVTT 里把 dnd5e 系统升级到 5.3.x，打开该世界完成一次系统迁移，再重新导出 zip 后重试。没有旧 CLI/ROPC 降级通道，不要尝试本地脚本。 |
+| 纯素材 zip / 非世界包被拒 | 大厅只把带 `world.json` 的世界包交给世界导入；素材包不是世界，按大厅提示处理，不硬塞。 |
+| `DECLINED`（审批被拒） | 零写入。不要绕过审批重新调用，也不要把拒绝解释成技术失败。 |
+| 终态 `failures` / 部分写入 | 报告失败项；不要盲目重试（会叠数据）。若这次是 `campaign.mode:"new"` 且半写入，可让用户在大厅删除这个半成品战役后重导；若是 `campaign.mode:"existing"`，不要删既有战役，报告已追加的文档与批次，让用户决定是否清理后再重导。 |
 
 ## 边界
 
-- 只有 dnd5e 世界做版本迁移（< 5.3.0 自动走，报告迁移统计）；其它系统世界按 T1 文档照收不迁移，
-  云端兼容层只运行 dnd5e（结果 JSON 会注明）。
-- 不导入：聊天记录（chatmessages）、世界设置（settings）、世界自有 compendium packs（二期）。
-  users 落库时剥离密码字段，只作追溯面。
-- 资产单文件超 30 MiB 跳过并列报告；缺失资产（icons/、modules/、未随包携带）保留原值仅报告。
-- 导入到既有战役是**纯追加**，云端不去重：重复导入同一战役会产生重复文档，默认总是新建战役。
-- 迁移引擎 = 本机 dnd5e 5.3.x 的官方迁移代码（离线直载）；本机 dnd5e 版本与云端基线不一致时
-  脚本会警告，建议先升级本机 dnd5e 再导入。
+- 没有单独的 `campaignId`/合并参数，不等于永远新建：工具按 `campaignName`（默认世界标题）查同名战役；不存在才新建，同名且 ruleset 一致时复用并追加，ruleset 不一致直接拒绝。不要盲目重复导入同一战役，追加会叠文档。
+- 不导入聊天记录、世界设置、世界自有 compendium packs；这些在报告中说明即可。
+- 缺失素材（`icons/`、`modules/`、未随包携带）只报告，不阻断导入；超限文件按工具/服务端政策报错，不另造大小门槛。
+- 非 dnd5e 世界按大厅现有映射导入，不做系统迁移；旧版 dnd5e 不迁移、直接拒绝并指引升级。
+- 客户端只做读取、校验与报告；所有云端写入、替换、清理都在大厅服务里完成，你只按工具返回值汇报。

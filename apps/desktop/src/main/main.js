@@ -8,6 +8,8 @@ import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState, readPageAgentRuntimeSource } from "./foundry-web.js";
 import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
+import { MtLobbyClient } from "./mt-lobby-client.js";
+import { findMirrorStageRoots } from "./lobby-mirror-cache.js";
 import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
@@ -132,6 +134,9 @@ let activeProfileId = /** @type {"foundry" | "mtcompat"} */ (PAGE_PROFILES.found
 // panel_profile;初始为 null 档(面板尚未打开),不取上面 activeProfileId
 // 的 foundry 路由默认值。
 const panelProfileState = createPanelProfileState();
+// 档位变化时刷新所有 resident host 的 active tools；hosts 创建后赋值（启动早期是 no-op）。
+/** @type {(profileId?: string | null) => void} */
+let syncSessionLoadouts = () => {};
 // 最近一次面板导航的目标(纯 URL/path 事实,无时间成分):resolvePanelProfile 的
 // mtcompat 同源粘性数据源 —— Keycloak 登录跳转期间页面 URL 离开站点路径时不掉档。
 let lastPanelNavigation = { target: null, profileId: null };
@@ -251,8 +256,17 @@ function sendToRenderer(event) {
 
 /** 档位变化经事件总线推给渲染层;状态器去重,值未变(返回 null)时不发。 */
 function pushPanelProfile(profileId, url) {
+  const previousProfileId = panelProfileState.current().profileId;
   const payload = panelProfileState.set(profileId, url);
-  if (payload) sendToRenderer(payload);
+  if (payload) {
+    sendToRenderer(payload);
+    // 只有 foundry↔mtcompat（含面板关闭归零）才改变工具声明；lobby↔play/auth 同档
+    // 不触发重新装卸。执行层仍会逐次校验真实页面。
+    if (payload.profileId !== previousProfileId) {
+      try { syncSessionLoadouts(payload.profileId); }
+      catch (error) { console.warn("[agent] tool loadout refresh failed:", error?.message ?? error); }
+    }
+  }
 }
 
 function isTrustedChatIpc(event) {
@@ -1202,6 +1216,16 @@ app.whenReady().then(async () => {
   });
   // "源未变不重建"的基准:启动时是打包拷贝的源,面板就绪后可能换成页面真源。
   mtcompatRuntimeSourceText = mtRuntimeSource?.source ?? null;
+  // mt-compat 大厅通道:与 Foundry SDK/runtime 完全分离；跨 resident session 共享
+  // 串行队列、job 注册与 navigationEpoch。页面 getter 始终取当前 foundryView。
+  const lobbyClient = new MtLobbyClient({
+    getWebContents: () => foundryView()?.webContents ?? null,
+    // 复用面板既有档位判定：显式 ARCANEDESK_PANEL_PROFILE_OVERRIDES 把本地
+    // lobby 判为 mtcompat 时，MtLobbyClient 才接受该 origin；默认三 origin 与
+    // 冒牌 origin 规则保持不变。
+    isTrustedLobbyUrl: url => resolvePanelProfile(url)?.id === PAGE_PROFILES.mtcompat.id,
+    log: message => console.log(message),
+  });
 
   const secretStorage = new SecretStorage(safeStorage);
   const providerStore = new ProviderStore(configPath("providers.json"), console.log, process.env, secretStorage);
@@ -1353,8 +1377,11 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
-      // 面板当前档位(A2):mtcompat 档才挂支持面蒸馏段/走 mtcompat 策略面。
-      getPanelProfileId: () => activeProfileId,
+      // 面板当前档位:open/lobby/play/auth 的受信判定结果；面板关闭时为 null，
+      // 策略层归一为 foundry（不声明 lobby 工具）。
+      getPanelProfileId: () => panelProfileState.current().profileId,
+      lobbyClient,
+      getLobbyMirrorRoots: () => findMirrorStageRoots(),
       profile: {
         getCwd: () => directory ?? combatWorkspace,
       },
@@ -1373,8 +1400,11 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
-      // 面板当前档位(A2):mtcompat 档才挂支持面蒸馏段/走 mtcompat 策略面。
-      getPanelProfileId: () => activeProfileId,
+      // 面板当前档位:open/lobby/play/auth 的受信判定结果；面板关闭时为 null，
+      // 策略层归一为 foundry（不声明 lobby 工具）。
+      getPanelProfileId: () => panelProfileState.current().profileId,
+      lobbyClient,
+      getLobbyMirrorRoots: () => findMirrorStageRoots(),
       profile: {
         mode: "prep",
         getCwd: () => cwd,
@@ -1401,6 +1431,15 @@ app.whenReady().then(async () => {
   });
   // Global provider changes visit resident sessions; task state stays on each host.
   const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
+  // 档位切换只刷新已挂载的 resident session；未开始的会话在 attach 时按当前档位计算。
+  syncSessionLoadouts = (profileId) => {
+    for (const host of allSessionHosts()) {
+      if (!host.session) continue;
+      Promise.resolve(host.refreshToolLoadout(profileId)).catch((error) => {
+        console.warn(`[agent] tool loadout refresh failed for ${host.describeCurrent?.()?.id ?? "?"}:`, error?.message ?? error);
+      });
+    }
+  };
   activityCenter = new ActivityCenter({
     file: configPath("activity.json"),
     foreground: id => Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()
@@ -2281,6 +2320,7 @@ app.whenReady().then(async () => {
     await Promise.allSettled([...stopHosts,
       ...registries.flatMap(registry => [...registry.pending.values(), ...registry.deleting.values()]),
       telemetry?.close()]);
+    try { lobbyClient.dispose(); } catch { /* best effort */ }
   };
   const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
   reclaimTimer.unref();

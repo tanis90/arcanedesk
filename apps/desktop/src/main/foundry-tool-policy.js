@@ -18,18 +18,33 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 });
 
 /**
- * mtcompat 档工具面：独立成表（不是 foundry 表的别名）——A3 的 pageEval 只进这张表，
- * foundry 档不受影响。A3 起与 foundry 面的唯一分叉是备团的 foundry_page_eval：
- * 备团是「typed action 铺不满、eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持
- * 纯 typed 面（与 foundry 档战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径
- * 不可控，需要兜底时先出战斗再补）。
+ * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
+ * 备团的 foundry_page_eval 与 7 个 lobby typed tools；备团是「typed action 铺不满、
+ * eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
+ * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
+ * 战斗再补）。
+ *
+ * mt-compat 大厅的 7 个 typed tool（仅 mtcompat 备团）。实现静态注册在
+ * lobby-tools.js；声明按真实页面档位动态切换，见 AgentHost.refreshToolLoadout。
+ * 这组名字不进入 combat，也不进入普通 Foundry 档。
  */
+export const LOBBY_TOOL_NAMES = Object.freeze([
+  "foundry_lobby_import_start",
+  "foundry_lobby_import_job",
+  "foundry_lobby_campaigns_list",
+  "foundry_lobby_campaign_packs_get",
+  "foundry_lobby_campaign_packs_update",
+  "foundry_lobby_packs_read",
+  "foundry_lobby_packs_delete",
+]);
+
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
   combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
     "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
     "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    ...LOBBY_TOOL_NAMES,
     "web_search", "web_fetch"]),
 });
 
