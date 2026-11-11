@@ -369,7 +369,7 @@ test("panel profile state maps displayName from PAGE_PROFILES", () => {
     type: "panel_profile",
     profileId: "mtcompat",
     url: MT_URL,
-    displayName: "MT Compat",
+    displayName: "奥法地图",
   });
   // 切档(profileId 变、url 也变了)同样产出新 payload。
   assert.deepEqual(state.set("foundry", "http://localhost:30000"), {

@@ -128,7 +128,7 @@ export const PAGE_PROFILES = Object.freeze({
   }),
   mtcompat: Object.freeze({
     id: "mtcompat",
-    displayName: "MT Compat",
+    displayName: "奥法地图",
     // 受信 origin 上的站点页面(play/lobby/auth)才算 mtcompat:host 是安全边界,
     // 同路径的冒牌域落到 Foundry 开放默认档。模式对 URL 的 pathname 匹配
     // (matchPageProfile),查询串/哈希不影响命中。
