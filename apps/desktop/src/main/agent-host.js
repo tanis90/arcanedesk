@@ -1195,14 +1195,19 @@ export class AgentHost {
       label: "Open Foundry",
       description:
         "Open the Foundry panel in this window (chat stays as the left column, Foundry opens on the right). " +
-        "Also opens the ArcaneDesk mt-compat page (any URL whose path is /user-files/compat[...]/play.html: " +
-        "the deployed compat directory or a compat-<slug> branch deploy) the same way; " +
-        "the response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
-        "Idempotent: if the panel is already open on the same server the page is never re-navigated (a logged-in world session is protected). " +
+        "Also opens the ArcaneDesk mt-compat site: on its trusted origins (https://arcanemap.ssskill.cn, " +
+        "https://arcanemap.com, https://arcanemap.cn) the /user-files/compat[...]/lobby.html and play.html pages " +
+        "and the /auth/** Keycloak login flow display in the panel; the same play path on any other host is refused " +
+        "as an untrusted page (other compat deployments need the ARCANEDESK_PANEL_PROFILE_OVERRIDES escape hatch). " +
+        "Only play.html is the game page: lobby/auth pages display but never satisfy game readiness. " +
+        "The response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
+        "Idempotent: repeated opens of the same lobby/play pathname, or any same-origin open while a trusted /auth/** page is showing, " +
+        "only read status and never re-navigate; lobby/play changes and cross-origin opens navigate normally. " +
+        "If a Keycloak login form is showing, end the turn and wait for the user to sign in directly; after their confirmation use world_status, not foundry_open polling. " +
         "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world).",
       parameters: Type.Object({
         url: Type.Optional(
-          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat page URL. Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
+          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat URL (trusted origins only: https://arcanemap.ssskill.cn, https://arcanemap.com, https://arcanemap.cn — lobby.html, play.html or /auth/**). Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
         ),
       }),
       execute: async (_toolCallId, params, signal) => {

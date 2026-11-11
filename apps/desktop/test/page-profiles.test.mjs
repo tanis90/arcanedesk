@@ -1,34 +1,138 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as pageProfiles from "../src/main/page-profiles.js";
 import {
   MT_COMPAT_PATH_SUFFIX,
+  MT_COMPAT_TRUSTED_ORIGINS,
   PAGE_PROFILES,
   clientPageProfile,
   createPanelProfileOverrides,
   createPanelProfileState,
+  isMtCompatAuthUrl,
+  isMtCompatNavigationHold,
+  isMtCompatTrustedOrigin,
   matchPageProfile,
   resolvePageProfile,
 } from "../src/main/page-profiles.js";
 
-const MT_URL = "https://49.7.212.177:30002/user-files/compat/play.html";
+const MT_ORIGIN = "https://arcanemap.ssskill.cn";
+const MT_URL = `${MT_ORIGIN}/user-files/compat/play.html`;
+const MT_LOBBY_URL = `${MT_ORIGIN}/user-files/compat/lobby.html`;
+const MT_AUTH_URL = `${MT_ORIGIN}/auth/realms/arcanevtt/protocol/openid-connect/auth`;
 const MT_ALIAS_URL = "https://vtt.arcanedesk.bitterbebop.cn/user-files/compat/play.html";
-const MT_BRANCH_URL = "https://49.7.212.177:30002/user-files/compat-qa/play.html";
+const MT_BRANCH_URL = `${MT_ORIGIN}/user-files/compat-qa/play.html`;
 
-test("mtcompat URL patterns cover IP, alias, compat-<slug> branch deploys and query strings", () => {
-  assert.equal(matchPageProfile(MT_URL)?.id, "mtcompat");
-  assert.equal(matchPageProfile(MT_ALIAS_URL)?.id, "mtcompat");
-  // 分支部署目录形态 compat-<slug>(PRD A1 的 URL 契约,一次放宽覆盖三形态)。
-  assert.equal(matchPageProfile(MT_BRANCH_URL)?.id, "mtcompat");
-  assert.equal(matchPageProfile("https://49.7.212.177:30002/user-files/compat-feat-agent-api/play.html")?.id, "mtcompat");
-  assert.equal(matchPageProfile(`${MT_URL}?code=abc&state=xyz`)?.id, "mtcompat");
-  assert.equal(matchPageProfile(`${MT_BRANCH_URL}?code=abc#frag`)?.id, "mtcompat");
-  // 锚定在 pathname 末段:相邻目录名与尾随路径都不算命中。
+test("mtcompat site pages are recognized only on the three trusted origins, exact origin match", () => {
+  // 白名单恰好三个 origin,精确匹配(new URL().origin):https/http、www、端口、
+  // 后缀拼贴域都不算。arcanemap.com/.cn 当前 DNS NXDOMAIN,仍按部署决定入表。
+  assert.deepEqual([...MT_COMPAT_TRUSTED_ORIGINS], [
+    "https://arcanemap.ssskill.cn",
+    "https://arcanemap.com",
+    "https://arcanemap.cn",
+  ]);
+  for (const origin of MT_COMPAT_TRUSTED_ORIGINS) {
+    assert.equal(isMtCompatTrustedOrigin(`${origin}/`), true, origin);
+    assert.equal(matchPageProfile(`${origin}/user-files/compat/play.html`)?.id, "mtcompat", origin);
+    assert.equal(matchPageProfile(`${origin}/user-files/compat/lobby.html`)?.id, "mtcompat", origin);
+    assert.equal(matchPageProfile(`${origin}/auth/realms/arcanevtt/protocol/openid-connect/auth`)?.id, "mtcompat", origin);
+    // compat-<slug> 分支部署形态(PRD A1 的路径锚点)仍被同档识别。
+    assert.equal(matchPageProfile(`${origin}/user-files/compat-qa/play.html`)?.id, "mtcompat", origin);
+    assert.equal(matchPageProfile(`${origin}/user-files/compat-feat-agent-api/play.html`)?.id, "mtcompat", origin);
+    // 查询串/哈希不参与(Keycloak 换码 URL 带 ?code=...)。
+    assert.equal(matchPageProfile(`${origin}/user-files/compat/play.html?code=abc&state=xyz`)?.id, "mtcompat", origin);
+    assert.equal(matchPageProfile(`${origin}/user-files/compat-qa/play.html?code=abc#frag`)?.id, "mtcompat", origin);
+  }
+
+  // host 是安全边界:同样的 play.html 路径挂在白名单外的域上就是冒牌页 ——
+  // 不认 mtcompat,落到 Foundry 开放默认档(加载后走 not-Foundry 报错路径)。
+  for (const url of [
+    MT_ALIAS_URL, // 旧别名域
+    "https://49.7.212.177:30002/user-files/compat/play.html", // IP 直连
+    "https://arcanemap.ssskill.cn.evil.test/user-files/compat/play.html", // 后缀拼贴域
+    "https://www.arcanemap.ssskill.cn/user-files/compat/play.html",
+    "http://arcanemap.ssskill.cn/user-files/compat/play.html", // http 不认
+    "https://arcanemap.ssskill.cn:8443/user-files/compat/play.html", // 其他端口不认
+  ]) {
+    assert.equal(matchPageProfile(url), null, url);
+    assert.equal(resolvePageProfile(url).id, "foundry", url);
+  }
+
+  // 受信 origin 内,相邻目录名与尾随路径都不算命中。
   assert.equal(matchPageProfile(MT_URL.replace("play.html", "index.html")), null);
-  assert.equal(matchPageProfile("https://49.7.212.177:30002/user-files/compatfoo/play.html"), null);
-  assert.equal(matchPageProfile("https://49.7.212.177:30002/user-files/compat/play.html/extra"), null);
-  assert.equal(matchPageProfile("https://49.7.212.177:30002/auth/realmt/protocol/openid-connect/auth"), null);
+  assert.equal(matchPageProfile(`${MT_ORIGIN}/user-files/compatfoo/play.html`), null);
+  assert.equal(matchPageProfile(`${MT_ORIGIN}/user-files/compat/play.html/extra`), null);
+  // 非受信 origin 的 /auth/** 同样不认(钓鱼 Keycloak 页按 Foundry 档处理)。
+  assert.equal(matchPageProfile("https://phish.example.test/auth/realms/mt/protocol/openid-connect/auth"), null);
   assert.equal(matchPageProfile("not a url"), null);
+  assert.equal(isMtCompatTrustedOrigin("not a url"), false);
+});
+
+test("lobby/auth pages are mtcompat site pages but never game paths", () => {
+  const mtcompat = PAGE_PROFILES.mtcompat;
+  assert.equal(matchPageProfile(MT_LOBBY_URL)?.id, "mtcompat");
+  assert.equal(matchPageProfile(MT_AUTH_URL)?.id, "mtcompat");
+  // 展示准入 ≠ 游戏准入:isGamePath 仍只允许 play.html。
+  assert.equal(mtcompat.isGamePath("/user-files/compat/lobby.html"), false);
+  assert.equal(mtcompat.isGamePath("/user-files/compat-qa/lobby.html"), false);
+  assert.equal(mtcompat.isGamePath("/auth/realms/arcanevtt/protocol/openid-connect/auth"), false);
+  // lobby/auth 路径不满足就绪判定(游戏就绪仍只看 play.html + ready/world/user/指纹)。
+  assert.equal(
+    mtcompat.isReady({ hasGame: true, ready: true, world: "w", user: "gm", path: "/user-files/compat/lobby.html", hasMtAgentRuntime: true }),
+    false,
+  );
+  assert.equal(
+    mtcompat.isReady({ hasGame: true, ready: true, world: "w", user: "gm", path: "/auth/realms/arcanevtt/protocol/openid-connect/auth", hasMtAgentRuntime: true }),
+    false,
+  );
+});
+
+test("isMtCompatNavigationHold is pure URL/path idempotence: auth and same-pathname hold, lobby→play navigates", () => {
+  const play = MT_URL;
+  const playCampaign = `${play}?campaign=cos`;
+  const lobby = MT_LOBBY_URL;
+  const auth = `${MT_AUTH_URL}?client_id=arcane&redirect_uri=play`;
+
+  // Keycloak 登录页:重复 open 只回登录中状态、不重新导航 —— 无时间成分,无论过多久。
+  assert.equal(isMtCompatNavigationHold(auth, play), true);
+  assert.equal(isMtCompatNavigationHold(auth, lobby), true);
+  assert.equal(isMtCompatNavigationHold(auth, playCampaign), true);
+
+  // 同 pathname(query 可不同,尤其 play?campaign=)且未就绪:不重复加载。
+  assert.equal(isMtCompatNavigationHold(playCampaign, play), true);
+  assert.equal(isMtCompatNavigationHold(play, playCampaign), true);
+  assert.equal(isMtCompatNavigationHold(lobby, lobby), true);
+
+  // 显式从 lobby 打开 play:同 origin 不同 pathname,是显式意图 —— 正常导航。
+  assert.equal(isMtCompatNavigationHold(lobby, play), false);
+  // 打开不同 origin(含另两个受信 origin)仍是显式导航。
+  assert.equal(isMtCompatNavigationHold(play, "https://arcanemap.com/user-files/compat/play.html"), false);
+  assert.equal(isMtCompatNavigationHold("http://localhost:30000/game", play), false);
+
+  // 非受信 origin 的 /auth/** 不触发登录守卫(那是冒牌页,按 Foundry 档报错重试)。
+  assert.equal(isMtCompatNavigationHold("https://phish.example.test/auth/realms/mt/login", play), false);
+  // 非法 URL 一律不守卫。
+  assert.equal(isMtCompatNavigationHold("about:blank", play), false);
+  assert.equal(isMtCompatNavigationHold(play, "::bad::"), false);
+});
+
+test("isMtCompatAuthUrl only trusts the allowlist /auth/**", () => {
+  assert.equal(isMtCompatAuthUrl("https://arcanemap.ssskill.cn/auth/realms/arcanevtt/login"), true);
+  assert.equal(isMtCompatAuthUrl("https://arcanemap.com/auth"), true);
+  assert.equal(isMtCompatAuthUrl("https://arcanemap.cn/auth/"), true);
+  for (const url of [
+    "https://arcanemap.ssskill.cn/authenticate", // /auth 前缀但非路径边界
+    "https://phish.example.test/auth/realms/mt/login",
+    "http://arcanemap.ssskill.cn/auth/realms/arcanevtt/login",
+    "https://www.arcanemap.com/auth/login",
+    "about:blank",
+  ]) {
+    assert.equal(isMtCompatAuthUrl(url), false, url);
+  }
+});
+
+test("the removed 120s login window left no timer constant behind", () => {
+  assert.equal(pageProfiles.MT_COMPAT_LOGIN_WINDOW_MS, undefined);
 });
 
 test("resolvePageProfile falls back to the open foundry default for http(s) targets", () => {

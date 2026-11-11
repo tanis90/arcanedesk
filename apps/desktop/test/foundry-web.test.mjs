@@ -99,7 +99,7 @@ test("foundry page state is decorated with the foundry profile and keeps in-page
 
 test("mtcompat page state resolves by URL and recomputes detection/readiness from raw signals", async () => {
   const mtState = {
-    url: "https://49.7.212.177:30002/user-files/compat/play.html",
+    url: "https://arcanemap.ssskill.cn/user-files/compat/play.html",
     path: "/user-files/compat/play.html",
     detected: false, // Foundry 公式(无 join/setup/标题)对 mtcompat 不适用
     ready: false,
@@ -145,14 +145,14 @@ test("mtcompat page state resolves by URL and recomputes detection/readiness fro
 
 test("a sticky profileId decorates pages whose URL left the profile path (Keycloak hop)", async () => {
   const keycloak = new FakeWebContents(async () => ({
-    url: "https://49.7.212.177:30002/auth/realms/mt/protocol/openid-connect/auth",
+    url: "https://auth.other-host.example.test/auth/realms/mt/protocol/openid-connect/auth",
     path: "/auth/realms/mt/protocol/openid-connect/auth",
     detected: false,
     ready: false,
     hasGame: false,
     runtimeReady: false,
   }));
-  // 不带 profileId:URL 不匹配任何模式 → Foundry 开放默认档,页面内结论保留。
+  // 不带 profileId:非受信 origin(授权端点挂在别的 host 时)不匹配任何模式 → Foundry 开放默认档。
   const byUrl = await readFoundryPageState(keycloak);
   assert.equal(byUrl.state.profile, "foundry");
   assert.equal(byUrl.state.detected, false);
@@ -163,6 +163,43 @@ test("a sticky profileId decorates pages whose URL left the profile path (Keyclo
   assert.equal(sticky.state.runtimeReady, false);
 });
 
+test("trusted lobby/auth pages resolve to the mtcompat profile with detection still signal-based", async () => {
+  // 受信 origin 的 lobby/auth 是 mtcompat 站点页(展示准入),但页面信号没有
+  // window.game → detected 仍 false;是否就绪与游戏路径判定由档位语义裁决。
+  for (const path of [
+    "/user-files/compat/lobby.html",
+    "/auth/realms/arcanevtt/protocol/openid-connect/auth",
+  ]) {
+    const page = new FakeWebContents(async () => ({
+      url: `https://arcanemap.ssskill.cn${path}`,
+      path,
+      detected: false,
+      ready: false,
+      hasGame: false,
+      runtimeReady: false,
+    }));
+    const { state } = await readFoundryPageState(page);
+    assert.equal(state.profile, "mtcompat", path);
+    assert.equal(state.detected, false, path);
+    assert.equal(state.runtimeReady, false, path);
+  }
+});
+
+test("the same play path on an untrusted host never inherits the mtcompat profile", async () => {
+  const impostor = new FakeWebContents(async () => ({
+    url: "https://arcanemap.ssskill.cn.evil.test/user-files/compat/play.html",
+    path: "/user-files/compat/play.html",
+    detected: false,
+    ready: false,
+    hasGame: true, // 冒牌页也装了 window.game:指纹/游戏信号不得越过 origin 白名单
+    hasMtAgentRuntime: true,
+    runtimeReady: false,
+  }));
+  const { state } = await readFoundryPageState(impostor);
+  assert.equal(state.profile, "foundry");
+  assert.equal(state.detected, false); // Foundry 档:页面内结论原样保留
+});
+
 test("the page state expression reports the mtcompat runtime fingerprint from a live-like page", async () => {
   const page = {
     window: {
@@ -171,7 +208,7 @@ test("the page state expression reports the mtcompat runtime fingerprint from a 
       __MT_AGENT_RUNTIME_SOURCE__: "// mt-agent-runtime v0.6.0\n(async function (action) { return action; })",
     },
     document: { title: "MT Compat", querySelector: () => null },
-    location: { href: "https://mt.test/user-files/compat/play.html", pathname: "/user-files/compat/play.html" },
+    location: { href: "https://arcanemap.ssskill.cn/user-files/compat/play.html", pathname: "/user-files/compat/play.html" },
   };
   const webContents = new FakeWebContents(async code => runPageExpression(code, page));
 

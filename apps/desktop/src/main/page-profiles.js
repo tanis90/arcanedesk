@@ -1,6 +1,7 @@
 // Page profiles — 右屏面板可以承载不止一种"VTT 页面"。Foundry 是开放默认档
 // (任意 http(s) 源都可能是 Foundry 服务器);mtcompat 是我们自有的 VTT SPA
-// (/user-files/compat[...]/play.html),页面侧模拟 Foundry API(window.game 等)。
+// (受信 origin 上的 /user-files/compat[...]/play.html),页面侧模拟 Foundry API
+// (window.game 等)。
 // 每档 profile 描述:URL 识别、游戏路径判定、检测/就绪语义、会话 cookie 是否持久化、
 // 登录落点。main.js 的打开流程、foundry-web.js 的页面巡检与 foundry-sdk 的
 // preflight 判定全部以这里为唯一事实源;foundry 档的语义与引入 profile 之前逐字节等价。
@@ -9,12 +10,67 @@
 export const MT_COMPAT_PATH_SUFFIX = "/user-files/compat/play.html";
 
 /**
- * mtcompat 页面路径契约(PRD A1):所有形态的 play.html URL 恒为
- * `/user-files/compat[...]/play.html` —— 生产是 compat,分支部署是 compat-<slug>
- * (如 compat-qa、compat-feat-agent-api)。路径是稳定锚点,host 不设防;
- * 对 pathname 匹配(查询串/哈希不参与),一次放宽后不再随部署形态漂移。
+ * mtcompat 的受信 origin 白名单:默认只认这三个精确 origin(用 new URL().origin
+ * 比较)。host 是安全边界 —— 同样的 play.html 路径挂在别的域上就是冒牌货,
+ * 落到 Foundry 开放默认档(not-Foundry 报错),绝不继承 mtcompat 的 runtime/工具准入。
+ * 不认 www/http/其他端口;其他部署形态(IP、分支域名)走
+ * ARCANEDESK_PANEL_PROFILE_OVERRIDES 显式运维覆盖。
+ */
+export const MT_COMPAT_TRUSTED_ORIGINS = Object.freeze([
+  "https://arcanemap.ssskill.cn",
+  "https://arcanemap.com",
+  "https://arcanemap.cn",
+]);
+
+/** 判定 URL 的 origin 是否在 mtcompat 受信白名单(非法 URL 一律 false)。 */
+export function isMtCompatTrustedOrigin(url) {
+  try {
+    return MT_COMPAT_TRUSTED_ORIGINS.includes(new URL(String(url)).origin);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * mtcompat 站点页面路径契约(PRD A1):受信 origin 内,compat 目录(生产 compat,
+ * 分支部署 compat-<slug>)下的 play.html / lobby.html 以及 /auth/**(Keycloak
+ * 登录流)都算 mtcompat 站点页面,允许在右屏展示;对 pathname 匹配(查询串/哈希
+ * 不参与)。展示准入 ≠ 游戏准入:游戏路径判定(isGamePath)仍只有 play.html。
  */
 export const MT_COMPAT_PATH_PATTERN = /\/user-files\/compat(?:-[\w-]+)?\/play\.html$/;
+export const MT_COMPAT_LOBBY_PATH_PATTERN = /\/user-files\/compat(?:-[\w-]+)?\/lobby\.html$/;
+export const MT_COMPAT_AUTH_PATH_PATTERN = /^\/auth(?:\/|$)/;
+
+/** 受信 origin 的 Keycloak 页面(/auth/**):登录流进行中,reload 会丢授权码。 */
+export function isMtCompatAuthUrl(url) {
+  try {
+    const parsed = new URL(String(url));
+    return isMtCompatTrustedOrigin(parsed) && MT_COMPAT_AUTH_PATH_PATTERN.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * mtcompat 重复打开的纯 URL/path 幂等判定(无任何时间成分):目标与当前页同源,
+ * 且当前页表明登录/引导仍在进行时,foundry_open 不应重新导航,只回状态。
+ * - 当前页是受信 origin 的 /auth/**:Keycloak 登录流进行中;
+ * - 当前页与目标同 pathname(query 可不同,尤其 play?campaign=):SPA 引导中。
+ * 显式从 lobby 打开 play(同 origin 不同 pathname)、打开不同 origin 都是显式
+ * 意图,返回 false(正常导航)。
+ */
+export function isMtCompatNavigationHold(current, target) {
+  let currentUrl, targetUrl;
+  try {
+    currentUrl = new URL(String(current));
+    targetUrl = new URL(String(target));
+  } catch {
+    return false;
+  }
+  if (currentUrl.origin !== targetUrl.origin) return false;
+  if (isMtCompatAuthUrl(currentUrl)) return true;
+  return currentUrl.pathname === targetUrl.pathname;
+}
 
 function foundryIsGamePath(pathname) {
   return String(pathname ?? "").replace(/\/+$/, "") === "/game";
@@ -59,8 +115,10 @@ export const PAGE_PROFILES = Object.freeze({
   foundry: Object.freeze({
     id: "foundry",
     displayName: "Foundry VTT",
-    // 开放默认档:没有 URL 模式,任何 http(s) 地址都按 Foundry 对待(resolvePageProfile 兜底)。
+    // 开放默认档:没有 URL 模式,任何 http(s) 地址都按 Foundry 对待(resolvePageProfile 兜底);
+    // trustedOrigins 为 null = 不做 origin 门禁(仅 mtcompat 有白名单)。
     urlPatterns: Object.freeze([]),
+    trustedOrigins: null,
     // Foundry 的 session cookie 记住/回填/失效清理(main.js remember*/restore*/dropIf*)。
     sessionCookie: Object.freeze({ name: "session" }),
     landingPath: "/game",
@@ -71,9 +129,17 @@ export const PAGE_PROFILES = Object.freeze({
   mtcompat: Object.freeze({
     id: "mtcompat",
     displayName: "MT Compat",
-    // 同时覆盖 IP 直连、域名与 compat-<slug> 分支部署形态;路径契约是唯一锚点,
-    // 模式对 URL 的 pathname 匹配(matchPageProfile),查询串/哈希不影响命中。
-    urlPatterns: Object.freeze([MT_COMPAT_PATH_PATTERN]),
+    // 受信 origin 上的站点页面(play/lobby/auth)才算 mtcompat:host 是安全边界,
+    // 同路径的冒牌域落到 Foundry 开放默认档。模式对 URL 的 pathname 匹配
+    // (matchPageProfile),查询串/哈希不影响命中。
+    urlPatterns: Object.freeze([
+      MT_COMPAT_PATH_PATTERN,
+      MT_COMPAT_LOBBY_PATH_PATTERN,
+      MT_COMPAT_AUTH_PATH_PATTERN,
+    ]),
+    // 只有白名单内的精确 origin 才应用上面的模式;运维逃生舱是
+    // ARCANEDESK_PANEL_PROFILE_OVERRIDES(见 createPanelProfileOverrides)。
+    trustedOrigins: MT_COMPAT_TRUSTED_ORIGINS,
     // 认证在 Keycloak cookie + SPA sessionStorage:没有任何 cookie 需要我们持久化,
     // 打开流程跳过 remember/restore/dropIf;重启后的首次打开是一次静默 SSO 弹跳。
     sessionCookie: null,
@@ -88,6 +154,8 @@ export const PAGE_PROFILES = Object.freeze({
 /**
  * 仅按 URL 模式匹配(mtcompat)。模式对 pathname 匹配 —— 拿 href 匹配时查询串会让
  * `$` 锚定失效(mtcompat 的 Keycloak 换码 URL 带 ?code=...);Foundry 无模式,永不因此命中。
+ * 带 trustedOrigins 的档位(mtcompat)还要求 origin 精确命中白名单:同路径的冒牌
+ * 域不匹配,落回 Foundry 开放默认档。
  */
 export function matchPageProfile(url) {
   let parsed;
@@ -97,6 +165,7 @@ export function matchPageProfile(url) {
     return null;
   }
   for (const profile of Object.values(PAGE_PROFILES)) {
+    if (profile.trustedOrigins && !profile.trustedOrigins.includes(parsed.origin)) continue;
     if (profile.urlPatterns.some(pattern => pattern.test(parsed.pathname))) return profile;
   }
   return null;
