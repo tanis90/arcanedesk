@@ -71,6 +71,7 @@ app.whenReady().then(async () => {
   };
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, async (_event, input, query) => {
+    if (channel === "app:ready") return { ok: true };
     if (channel === "sessions:current") return payload(selected[mode]);
     if (channel === "sessions:snapshot") return payload(hosts.find(host => host.describeCurrent().id === input), query);
     if (channel === "sessions:open") { const host = hosts.find(host => host.describeCurrent().path === input.path); selected[mode] = host; return payload(host); }

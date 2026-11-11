@@ -46,6 +46,7 @@ let failNextPrompt = false;
 let layoutActivity;
 const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
 for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+  if (channel === "app:ready") return { ok: true };
   if (channel === "activity:snapshot" && layoutActivity) return { ok: true, ...layoutActivity.snapshot() };
   if (channel === "chat:abort") return new Promise(resolve => abortRequests.push({ input, resolve }));
   if (channel === "tasks:respond") {

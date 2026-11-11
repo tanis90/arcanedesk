@@ -51,6 +51,7 @@ app.whenReady().then(async () => {
   }
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, (_event, input) => {
+    if (channel === "app:ready") return { ok: true };
     if (channel === "sessions:identities") return { ok: true, sessionIds: [...sessions.keys()] };
     if (channel === "panel:open") { panelNavigations++; return { ok: true }; }
     if (channel === "notifications:get") return { ok: true, ...notificationBroker.status() };

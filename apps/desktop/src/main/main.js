@@ -234,6 +234,8 @@ function requestExit() {
   }).finally(() => { quitAllowed = true; app.quit(); });
 }
 let desktopNotifications = null;
+let resolveMainReady;
+const mainReady = new Promise(resolve => { resolveMainReady = resolve; });
 
 function sendToRenderer(event) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1086,6 +1088,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  ipcMain.handle("app:ready", () => mainReady);
+
   // 原型期一次性配置迁移:userData 根目录的 arcane-*.json → config/(稳定后可删)。
   // 必须最先跑:createWindow 会读 ui.json,ProviderStore 会读 providers.json。
   migrateLegacyConfig(["ui.json", "providers.json", "foundry-sessions.json", "web-permissions.json"]);
@@ -2268,6 +2272,8 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  resolveMainReady({ ok: true });
+
   prepareExit = async () => {
     const registries = Object.values(hosts);
     for (const registry of registries) {
@@ -2305,6 +2311,9 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     restoreMainWindow();
   });
+}).catch(error => {
+  resolveMainReady({ ok: false, error: error?.message ?? String(error) });
+  console.error("[startup] initialization failed:", error);
 });
 
 app.on("window-all-closed", () => {
