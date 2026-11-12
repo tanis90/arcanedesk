@@ -23,7 +23,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 
 ## 工具面
 
-- `foundry_open`：打开/复用大厅。默认 `https://arcanemap.ssskill.cn/user-files/compat/lobby.html`；用户已用 `.com`/`.cn` 或其它受信地址时沿用。`profile` 必须是 `mtcompat`，大厅工具应出现在 `activatedTools` 里。
+- `foundry_open`：打开/复用大厅。默认 `https://arcanemap.ssskill.cn/user-files/compat/lobby.html`；用户已用 `.com`/`.cn` 或其它受信地址时沿用。`profile` 必须是 `mtcompat`，`page.path` 必须命中受信 compat 目录的 `lobby.html`，大厅工具应出现在 `activatedTools` 里；这个名单只表示当前产品档位的工具面，不代表大厅已登录或游戏页已就绪。
 - `foundry_lobby_import_start`：上传/替换内容包的写入口，入参 `{sourcePath, expectedKind?, failurePolicy?}`。
 - `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
 - `foundry_lobby_packs_read`：只读。`{}` 或 `{moduleId}` 读库清单；`{packId, query?, cursor?, limit?}` 分页预览条目。
@@ -32,7 +32,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 - `foundry_lobby_campaign_packs_update`：选包唯一写入口，`{campaignId, expectedRevision, add?, remove?, enabledSourcesPatch?}`。
 - `foundry_lobby_packs_delete`：库删除唯一写入口，`{packIds, expectedRevision}`。
 
-大厅工具不在 `activatedTools` 里、或 `profile` 不是 `mtcompat` 时，停下来让用户更新/重开 ArcaneDesk；不要改用页面脚本、裸 HTTP 或旧脚本。
+大厅工具不在 `activatedTools` 里、`profile` 不是 `mtcompat`，或 `page.path` 不是大厅时，停下来让用户更新/重开 ArcaneDesk；不要改用页面脚本、裸 HTTP 或旧脚本。登录完成后重试原来的大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
 
 ## 先分清四个概念
 

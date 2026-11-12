@@ -1,9 +1,15 @@
 ---
 name: arcane-actor-update
-description: 在 Foundry 世界里新建或修改人物（Actor、角色、NPC）。给人物添加法术、职业能力或专长（优先从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014" 合集包拿）、创建人物、给人物配图、发现 token 拖上地图没有头像、补 token 图或批量修正人物图像时使用。
+description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建或修改人物（Actor、角色、NPC）。给人物添加法术、职业能力或专长（优先从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014" 合集包拿）、创建人物、给人物配图、发现 token 拖上地图没有头像、补 token 图或批量修正人物图像时使用。
 ---
 
 # 人物（Actor）更新
+
+## 页面与工具准入
+
+- 先用 `world_status` 确认当前是 ready 游戏页：Foundry 的 `/game` 且当前用户是 GM，或 mtcompat 的 `play.html` 且 world/user/runtime 已就绪。`profile` 与 `activatedTools` 只表示产品档位和工具面，不能代替这个判断；`lobby.html` 与 `/auth/**` 不做任何 Actor 读写。
+- 全程优先本 skill 的结构化工具。确需裸 JS 的自定义步骤，Foundry 用 `browser_evaluate`；mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing` 注记，不把 `foundry_page_eval` 用于大厅或登录页。
+- `foundry_screenshot` 只在页面已经 detected 后做视觉核对，不在大厅或登录页调用。
 
 ## Actor 类型与派生计算
 

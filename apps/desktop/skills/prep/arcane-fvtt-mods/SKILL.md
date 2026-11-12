@@ -39,6 +39,7 @@ macOS Bash 调用形态：
 
 ## 路由
 
+- 目标是奥法地图大厅而不是本地 Foundry Data 目录时：世界包上传转 `arcane-world-import`，个人内容包与战役选包转 `arcane-mt-packs`；不要走本 skill 的安装、启用或本地 Data 流程，也不要在 `lobby.html` 或 `/auth/**` 调用 `world_status` 或 `foundry_page_eval`。
 - 用户只说 mod 名字（或“帮我装 XX mod”）且没给 URL：走发现流一跳——
   `web_search` 确认是哪个 mod → 原生工具 `foundry_module_prepare`（备团模式可用）→
   按返回状态取货安装（见下节「镜像发现流」）。工具不在（旧版本/战斗模式）时回退到

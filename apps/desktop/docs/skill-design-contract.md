@@ -504,3 +504,10 @@
 - 合集库与战役选包分层：库删除用 `packs_delete`，选包增量用 `campaign_packs_update`。读模型 `revision` 只做 stale 检测（update/delete 前重读，不一致零写入），写后回读；选包更新保留未涉及的 refs、missing、ownerPid 与其它 enabledSources 字段，只 bump 一次 `packsRev` 触发 play 重拉。删除不级联 detach 引用。
 - 世界导入按 `campaignName`（默认世界标题）判定同名：不存在则新建（`new`），同名且 ruleset 一致则复用并追加（`existing`），ruleset 不一致拒绝；没有单独 campaignId/合并参数不等于永远新建，重复导入不盲目叠加。
 - 旧 App 通过 `minAppVersion: 0.9.0` fail-closed 留在 r45；r46 为 `revision: 46`。
+
+### ArcaneMap 页面路由与登录后重试（2026-11-12，r47）
+
+- `profile` 只区分 Foundry 与 mtcompat 产品档位，`activatedTools` 只表示该档位的工具面；实际调用前还要看 `page.path`、登录状态和游戏就绪状态。`lobby.html` 与 `/auth/**` 可展示，但 `world_status`、`foundry_page_eval` 和游戏读写工具只归 ready 游戏页。
+- `LOGIN_REQUIRED` 时结束本轮，由用户在面板里登录；确认后重试原来的大厅操作，不用 `foundry_open` 轮询，也不用 `world_status` 检查大厅。大厅资源查询、导入和选包继续走对应 `foundry_lobby_*` 工具。
+- Actor 与 compendium 工作先确认 ready 游戏页。复杂页面 JS 在 Foundry 用 `browser_evaluate`，在 mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing`；`foundry_screenshot` 只在页面 detected 后使用。
+- 本地 FVTT 安装、运维、模组安装和模组世界建设流程不套用到奥法地图大厅：世界包归 `arcane-world-import`，个人内容包与战役选包归 `arcane-mt-packs`。

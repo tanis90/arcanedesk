@@ -29,12 +29,12 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 - `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
 - `foundry_lobby_campaigns_list`：只读；核对导入后的战役与 `playUrl`。
 
-`foundry_open` 返回 `profile` 与 `activatedTools`。`profile` 必须是 `mtcompat`；大厅工具还没出现在 `activatedTools` 里时，说明页面档位不对或 App 版本不足——停下来让用户更新/重开 App，不要改用页面脚本、裸 HTTP 或旧脚本。工具激活会在下一次模型请求生效，不需要让用户再发一轮“继续”。
+`foundry_open` 返回 `profile`、`page.path` 与 `activatedTools`。`profile` 必须是 `mtcompat`，`page.path` 必须命中受信 compat 目录的 `lobby.html`；`activatedTools` 只表示当前产品档位的工具面，不代表大厅已登录或游戏页已就绪。大厅工具还没出现在 `activatedTools` 里时，说明页面档位不对或 App 版本不足——停下来让用户更新/重开 App，不要改用页面脚本、裸 HTTP 或旧脚本。工具激活会在下一次模型请求生效，不需要让用户再发一轮“继续”。
 
 ## 主流程
 
 1. **定位世界包**：在当前备团目录用只读的 `ls`/`find` 找 `.zip`，优先用户点名的文件；多个候选时取用户点名的，没点名就取最近修改的。不要递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
-2. **打开大厅**：`foundry_open` 传入大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。
+2. **打开大厅**：`foundry_open` 传入大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。确认后从下一步继续或重试原大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
 3. **启动导入**：调用 `foundry_lobby_import_start`：
    - `sourcePath` 用 cwd 内路径（相对或绝对均可，但必须在 cwd 内）；
    - `expectedKind: "world"`（用户已明确是世界包时）；不确定就不传，让工具嗅探并在计划里给出结论；
