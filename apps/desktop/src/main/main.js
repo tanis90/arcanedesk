@@ -775,8 +775,8 @@ function resolveLocale() {
     挪不下来):恒 TITLEBAR_HEIGHT,与天头/标题栏带垂直对齐。 */
 function titleBarOverlayFor(theme) {
   return theme === "light"
-    ? { color: "#eae2cc", symbolColor: "#2b2416", height: TITLEBAR_HEIGHT }
-    : { color: "#10141d", symbolColor: "#e9ecf3", height: TITLEBAR_HEIGHT };
+    ? { color: "#e2dbc6", symbolColor: "#16130f", height: TITLEBAR_HEIGHT }
+    : { color: "#1c1915", symbolColor: "#f2ede1", height: TITLEBAR_HEIGHT };
 }
 
 /** 主题切换后重刷 overlay 配色。 */
@@ -838,7 +838,7 @@ function createWindow() {
     minHeight: 640,
     title: "ArcaneDesk",
     icon: ARCANE_APP_ICON,
-    backgroundColor: theme === "light" ? "#f0e9d6" : "#0c0f16",
+    backgroundColor: theme === "light" ? "#eae3d0" : "#16130f",
     // Win 下摘原生标题栏:天头即标题栏,右上三键用系统 overlay(随主题换色);
     // 面板打开时 Foundry 视图下移 TITLEBAR_HEIGHT,三键落在标题栏带上(见 layoutViews)。
     // renderer 靠 query.frameless 切可拖拽形态;mac 保留原生红绿灯,不动。
@@ -1940,7 +1940,7 @@ app.whenReady().then(async () => {
       /* ignore */
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setBackgroundColor(next === "light" ? "#f0e9d6" : "#0c0f16");
+      mainWindow.setBackgroundColor(next === "light" ? "#eae3d0" : "#16130f");
       syncTitleBarOverlay();
     }
     // 阅读器页不重读文件,只收一条主题广播(spec §7 arcaneReader.onTheme)。

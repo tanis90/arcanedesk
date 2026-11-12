@@ -58,8 +58,8 @@ body.archived-session #composer-wrap { display: none; }
 @media (prefers-reduced-motion: reduce) { .s-state[data-kind="running"] { animation: none; } .nav-chevron { transition: none; } }
 
 /* One consistent full-row target for navigation and actions. */
-:root { --nav-hover: #293344; --nav-selected: #344157; }
-:root[data-theme="light"] { --nav-hover: #d9ceb3; --nav-selected: #cfc1a0; }
+:root { --nav-hover: var(--panel-2); --nav-selected: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); }
+:root[data-theme="light"] { --nav-hover: var(--bg-soft); --nav-selected: color-mix(in srgb, var(--accent) 12%, var(--bg-soft)); }
 .drawer-actions { padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; flex: none; }
 .drawer-action { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 8px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .drawer-action svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
