@@ -19,16 +19,17 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
- * 备团的 foundry_page_eval 与 7 个 lobby typed tools；备团是「typed action 铺不满、
+ * 备团的 foundry_page_eval 与 8 个 lobby typed tools；备团是「typed action 铺不满、
  * eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
  * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
  * 战斗再补）。
  *
- * mt-compat 大厅的 7 个 typed tool（仅 mtcompat 备团）。实现静态注册在
+ * mt-compat 大厅的 8 个 typed tool（仅 mtcompat 备团）。实现静态注册在
  * lobby-tools.js；声明按真实页面档位动态切换，见 AgentHost.refreshToolLoadout。
  * 这组名字不进入 combat，也不进入普通 Foundry 档。
  */
 export const LOBBY_TOOL_NAMES = Object.freeze([
+  "foundry_lobby_rulesets_list",
   "foundry_lobby_import_start",
   "foundry_lobby_import_job",
   "foundry_lobby_campaigns_list",

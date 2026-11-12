@@ -31,6 +31,21 @@ export function isMtCompatTrustedOrigin(url) {
   }
 }
 
+/** 受信站点的引流入口统一落到 compat 大厅，避免重定向前误入 Foundry 开放档。 */
+export function normalizeMtCompatEntryUrl(url) {
+  const raw = String(url);
+  try {
+    const parsed = new URL(raw);
+    if (!isMtCompatTrustedOrigin(parsed) || (parsed.pathname !== "/" && parsed.pathname !== "/lobby.html")) return raw;
+    const normalized = new URL("/user-files/compat/lobby.html", parsed.origin);
+    normalized.search = parsed.search;
+    normalized.hash = parsed.hash;
+    return normalized.href;
+  } catch {
+    return raw;
+  }
+}
+
 /**
  * mtcompat 站点页面路径契约(PRD A1):受信 origin 内,compat 目录(生产 compat,
  * 分支部署 compat-<slug>)下的 play.html / lobby.html 以及 /auth/**(Keycloak

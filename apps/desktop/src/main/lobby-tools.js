@@ -1,4 +1,4 @@
-// mt-compat 大厅的 7 个 typed tool。实现静态注册；声明由 AgentHost 按真实页面档位
+// mt-compat 大厅的 8 个 typed tool。实现静态注册；声明由 AgentHost 按真实页面档位
 // 动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
 import { Type } from "typebox";
 import { Value } from "typebox/value";
@@ -183,25 +183,54 @@ function compactJobStatus(value) {
 
 /** @param {any} host */
 export function createLobbyTools(host) {
+  const rulesetsList = defineTool({
+    name: "foundry_lobby_rulesets_list",
+    label: "mt-compat supported rulesets",
+    description:
+      "List the rulesets supported by the current mt-compat deployment as {id, label, system, supportLevel?}. Read-only. " +
+      "Always call this before asking the user to choose ruleset for a world import; present the returned choices without hardcoding DND editions or other rules.",
+    parameters: exact({}),
+    execute: async (_toolCallId, _params, signal) => {
+      try {
+        const data = await requirePrep(host).call("lobbyRulesetsList", {}, { signal });
+        const rulesets = Array.isArray(data?.rulesets) ? data.rulesets.slice(0, 100).map(ruleset => bounded(ruleset)) : [];
+        return textResult({ rulesets }, { rulesets });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  });
+
   const importStart = defineTool({
     name: "foundry_lobby_import_start",
     label: "Import into mt-compat lobby",
     description:
       "Import one local FVTT world zip or pack-collection zip into the mt-compat lobby. Only available on the trusted mt-compat lobby page after foundry_open; " +
       "the source file must be a regular file inside the current prep directory or an existing Arcane mirror staging directory (mod-manager world/module stage). " +
+      "For a world import (including auto-detection), ruleset is required: call foundry_lobby_rulesets_list, ask the user to choose from the current deployment's supported rules, and never infer the choice from metadata, descriptions, or lobby defaults. Collection imports do not require ruleset. " +
       "The tool binds the real File in the panel, inspects it, asks for approval, then starts ONE import job. " +
       "Returns {jobId, plan}; poll with foundry_lobby_import_job. Never pass credentials, base64, or zip contents. " +
       "On LOGIN_REQUIRED, end the turn and let the user sign in directly in the panel.",
-    parameters: exact({
-      sourcePath: localFile(),
-      expectedKind: Type.Optional(Type.Union([Type.Literal("world"), Type.Literal("collection")])),
-      campaignName: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
-      ruleset: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
-      failurePolicy: Type.Optional(Type.Union([Type.Literal("abort"), Type.Literal("continue")])),
-    }),
+    parameters: Type.Union([
+      exact({
+        sourcePath: localFile(),
+        expectedKind: Type.Optional(Type.Literal("world")),
+        campaignName: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+        ruleset: Type.String({ minLength: 1, maxLength: 100 }),
+        failurePolicy: Type.Optional(Type.Union([Type.Literal("abort"), Type.Literal("continue")])),
+      }),
+      exact({
+        sourcePath: localFile(),
+        expectedKind: Type.Literal("collection"),
+        campaignName: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+        ruleset: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+        failurePolicy: Type.Optional(Type.Union([Type.Literal("abort"), Type.Literal("continue")])),
+      }),
+    ]),
     executionMode: "sequential",
     promptGuidelines: [
       "Use the exact sourcePath the user provided; never invent or search outside the prep directory.",
+      "For world imports, ask the user for ruleset before calling this tool; there is no default and the choice is immutable after campaign creation.",
       "Continue after a failed import only when the user explicitly asks for failurePolicy=continue.",
     ],
     execute: async (_toolCallId, params, signal) => {
@@ -209,6 +238,17 @@ export function createLobbyTools(host) {
       let runDispatched = false;
       try {
         const client = requirePrep(host);
+        if (params.expectedKind !== "collection") {
+          const supported = await client.call("lobbyRulesetsList", {}, { signal });
+          const rulesets = Array.isArray(supported?.rulesets) ? supported.rulesets : [];
+          if (!rulesets.some(ruleset => ruleset?.id === params.ruleset)) {
+            return rejection(
+              "INPUT_INVALID",
+              "The selected ruleset is not supported by the current deployment; call foundry_lobby_rulesets_list and ask the user to choose a returned id",
+              { supportedRulesets: rulesets.map(ruleset => bounded(ruleset)).slice(0, 100), jobStarted: false },
+            );
+          }
+        }
         file = await prepareLobbySourceFile(params.sourcePath, { roots: fileRoots(host), signal });
         const target = client.captureTarget();
         // 外部已发布词汇保持 world|collection；调 runtime 前把 collection 归一到 module。
@@ -489,5 +529,5 @@ export function createLobbyTools(host) {
     },
   });
 
-  return [importStart, importJob, campaignsList, campaignPacksGet, campaignPacksUpdate, packsRead, packsDelete];
+  return [rulesetsList, importStart, importJob, campaignsList, campaignPacksGet, campaignPacksUpdate, packsRead, packsDelete];
 }

@@ -552,6 +552,19 @@ test("prep preamble forces reading the matching skill before install actions", (
   assert.ok(preamble.includes("出错后再回头读 skill"));
 });
 
+test("both modes and locales pin ArcaneMap as the first-party VTT with the main entry", () => {
+  for (const file of [
+    "../system-prompts/prep.md",
+    "../system-prompts/combat.md",
+    "../system-prompts-intl/prep.md",
+    "../system-prompts-intl/combat.md",
+  ]) {
+    const prompt = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.ok(prompt.includes('foundry_open({url:"https://arcanemap.com/"})'), file);
+    assert.match(prompt, /first-party VTT|第一方 VTT/, file);
+  }
+});
+
 test("prep preamble prefers mermaid diagrams rendered in chat", () => {
   const preamble = readFileSync(
     new URL("../system-prompts/prep.md", import.meta.url),

@@ -1319,9 +1319,9 @@ export class AgentHost {
       label: "Open Foundry",
       description:
         "Open the Foundry panel in this window (chat stays as the left column, Foundry opens on the right). " +
-        "Also opens the ArcaneDesk mt-compat site: on its trusted origins (https://arcanemap.ssskill.cn, " +
-        "https://arcanemap.com, https://arcanemap.cn) the /user-files/compat[...]/lobby.html and play.html pages " +
-        "and the /auth/** Keycloak login flow display in the panel; the same play path on any other host is refused " +
+        "Also opens the ArcaneDesk mt-compat site: on its trusted origins (https://arcanemap.com, " +
+        "https://arcanemap.cn, https://arcanemap.ssskill.cn) / and /lobby.html normalize to the compat lobby; " +
+        "the /user-files/compat[...]/lobby.html and play.html pages and the /auth/** Keycloak login flow display in the panel; the same play path on any other host is refused " +
         "as an untrusted page (other compat deployments need the ARCANEDESK_PANEL_PROFILE_OVERRIDES escape hatch). " +
         "Only play.html is the game page: lobby/auth pages display but never satisfy game readiness. " +
         "The response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
@@ -1332,7 +1332,7 @@ export class AgentHost {
         "Opening an mt-compat lobby page in prep mode activates the mt-compat lobby tools; play/login stay in the same profile and do not toggle the tool set.",
       parameters: Type.Object({
         url: Type.Optional(
-          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat URL (trusted origins only: https://arcanemap.ssskill.cn, https://arcanemap.com, https://arcanemap.cn — lobby.html, play.html or /auth/**). Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
+          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat URL (main entry https://arcanemap.com/; trusted origins also include https://arcanemap.cn and https://arcanemap.ssskill.cn — / and /lobby.html normalize to the compat lobby; play.html and /auth/** are also accepted). Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
         ),
       }),
       execute: async (_toolCallId, params, signal) => {

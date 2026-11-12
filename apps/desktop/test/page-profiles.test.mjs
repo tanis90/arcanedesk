@@ -13,6 +13,7 @@ import {
   isMtCompatNavigationHold,
   isMtCompatTrustedOrigin,
   matchPageProfile,
+  normalizeMtCompatEntryUrl,
   resolvePageProfile,
 } from "../src/main/page-profiles.js";
 
@@ -25,7 +26,7 @@ const MT_BRANCH_URL = `${MT_ORIGIN}/user-files/compat-qa/play.html`;
 
 test("mtcompat site pages are recognized only on the three trusted origins, exact origin match", () => {
   // 白名单恰好三个 origin,精确匹配(new URL().origin):https/http、www、端口、
-  // 后缀拼贴域都不算。arcanemap.com/.cn 当前 DNS NXDOMAIN,仍按部署决定入表。
+  // 后缀拼贴域都不算。三个 origin 都是部署白名单，不按 DNS 状态动态增删。
   assert.deepEqual([...MT_COMPAT_TRUSTED_ORIGINS], [
     "https://arcanemap.ssskill.cn",
     "https://arcanemap.com",
@@ -66,6 +67,27 @@ test("mtcompat site pages are recognized only on the three trusted origins, exac
   assert.equal(matchPageProfile("https://phish.example.test/auth/realms/mt/protocol/openid-connect/auth"), null);
   assert.equal(matchPageProfile("not a url"), null);
   assert.equal(isMtCompatTrustedOrigin("not a url"), false);
+});
+
+test("trusted root and lobby shell URLs normalize to the compat lobby before profile selection", () => {
+  for (const origin of MT_COMPAT_TRUSTED_ORIGINS) {
+    assert.equal(normalizeMtCompatEntryUrl(`${origin}/`), `${origin}/user-files/compat/lobby.html`, origin);
+    assert.equal(normalizeMtCompatEntryUrl(`${origin}/lobby.html`), `${origin}/user-files/compat/lobby.html`, origin);
+    assert.equal(
+      normalizeMtCompatEntryUrl(`${origin}/lobby.html?from=agent#top`),
+      `${origin}/user-files/compat/lobby.html?from=agent#top`,
+      origin,
+    );
+    const play = `${origin}/user-files/compat/play.html`;
+    assert.equal(normalizeMtCompatEntryUrl(play), play, origin);
+  }
+  for (const url of [
+    "https://evil.example/",
+    "https://evil.example/lobby.html",
+    "http://arcanemap.com/",
+    "https://www.arcanemap.com/lobby.html",
+    "not a url",
+  ]) assert.equal(normalizeMtCompatEntryUrl(url), url, url);
 });
 
 test("lobby/auth pages are mtcompat site pages but never game paths", () => {

@@ -16,6 +16,7 @@ import { bindLobbyFileInput, LobbyFileError } from "./mt-lobby-file.js";
 /** 契约里的全部页面动作；getFileInput 只供原生文件适配器使用。 */
 export const MT_LOBBY_ACTIONS = Object.freeze([
   "getFileInput",
+  "lobbyRulesetsList",
   "lobbyImportInspect",
   "lobbyImportRun",
   "lobbyImportStatus",
@@ -30,7 +31,8 @@ export const MT_LOBBY_ACTIONS = Object.freeze([
 ]);
 
 const ACTION_SET = new Set(MT_LOBBY_ACTIONS);
-const LOBBY_TOOL_ACTIONS = new Set(MT_LOBBY_ACTIONS.filter(name => name !== "getFileInput"));
+// rulesetsList 由当前部署的 rulesets.mjs 提供，不要求 lobby service 另装同名方法。
+const LOBBY_TOOL_ACTIONS = new Set(MT_LOBBY_ACTIONS.filter(name => name !== "getFileInput" && name !== "lobbyRulesetsList"));
 const WRITE_ACTIONS = new Set(["lobbyImportRun", "lobbyPacksDelete", "lobbyCampaignPacksUpdate"]);
 /** 兼容 compat 的 phase、未来可能的 status/state；succeeded 是 compat 的成功终态。 */
 export const TERMINAL_JOB_STATES = Object.freeze([
@@ -309,8 +311,22 @@ export class MtLobbyClient {
   actionExpression(action, args) {
     return `(async () => {
       try {
-        const service = globalThis.__MT_LOBBY_SERVICE__;
         const name = ${JSON.stringify(action)};
+        const service = globalThis.__MT_LOBBY_SERVICE__;
+        if (name === "lobbyRulesetsList") {
+          if (service && typeof service[name] === "function") {
+            const value = await service[name]({});
+            return { ok: true, value };
+          }
+          const { RULESETS } = await import(new URL("./rulesets.mjs", location.href).href);
+          const rulesets = Object.entries(RULESETS && typeof RULESETS === "object" ? RULESETS : {}).map(([id, definition]) => ({
+            id,
+            label: typeof definition?.label === "string" ? definition.label : id,
+            system: typeof definition?.system === "string" ? definition.system : null,
+            ...(typeof definition?.supportLevel === "string" ? { supportLevel: definition.supportLevel } : {}),
+          }));
+          return { ok: true, value: { rulesets } };
+        }
         if (!service || typeof service[name] !== "function") {
           return { ok: false, code: "CAPABILITY_UNAVAILABLE", message: "lobby service action " + name + " is unavailable" };
         }

@@ -17,7 +17,7 @@
 
 - 不在 Electron/Node 重写世界或合集导入业务，不把 access token 交给 agent 或 Node。
 - 不新增本地 HTTP 服务、一次性 ticket、自定义协议、通用 REST/eval 工具。
-- 不为 7 个固定工具引入 tool_search、Code Mode 或 WebMCP 依赖。
+- 不为 8 个固定工具引入 tool_search、Code Mode 或 WebMCP 依赖。
 - 不承诺页面关闭/刷新后任务继续；中断只支持对账，不自动重放。
 - 新版主路径不收密码。旧版 dnd5e（<5.3.0）与大厅保持一致地拒绝并指引升级；旧 ROPC 脚本已从 skill bundle 删除，没有旧 CLI 降级通道。
 - 第一阶段不变更后端 API/Schema，不触发后端发版。
@@ -48,7 +48,7 @@
 | D2 | 用 Chromium `DOM.setFileInputFiles` 交付本地文件 | 直接产生磁盘 backed `File`，复用现有 Blob 管线；无需 HTTP/CORS/LNA、ticket、base64 或 Electron 业务重写 |
 | D3 | 独立 `MtLobbyClient`，不改 Foundry SDK preflight | lobby 与 play 的鉴权、路径和就绪语义不同；避免污染现有 `mtCompatIsReady` |
 | D4 | LLM 只见 `import_start + import_job`，inspect 藏在 start 内 | 四个 RPC 工具会增加上下文与编排错误；内部仍保留 inspect/run/status/cancel 清晰边界 |
-| D5 | 全集只新增 7 个工具 | 覆盖完整能力且不为列表、预览、战役目录制造重复工具 |
+| D5 | 全集只新增 8 个工具 | 覆盖完整能力且不为列表、预览、战役目录制造重复工具 |
 | D6 | 战役选包只增量 update；合集删除有独立审批和版本指纹 | 防止全量 set 漏项、误取消引用及按旧清单删除 |
 | D7 | 工具实现静态注册，模型声明按真实页面档位动态切换 | 会话启动不知道目标，且同一会话可能切换 VTT；不需要动态加载实现，更不能只靠启动时静态名单 |
 | D8 | 动态声明不是安全边界；每次调用都重新校验目标并绑定页面 epoch | 历史消息、模型误调用、页面切换都可能绕过当前工具名单 |
@@ -62,7 +62,7 @@
 ### 3.1 总体链路
 
 ```text
-LLM：7 个 typed tools
+LLM：8 个 typed tools
   ↓
 Desktop tool policy + 每次调用的目标守卫
   ↓
@@ -156,11 +156,12 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 - Foundry SDK 的 `/game` preflight。
 - 普通 Foundry 的 runtime 与工具名单。
 
-### 3.5 LLM 工具面（最终 7 个）
+### 3.5 LLM 工具面（当前 8 个）
 
 | Tool | 最小入参 | 返回与独立理由 |
 |---|---|---|
-| `foundry_lobby_import_start` | `{sourcePath, expectedKind?, campaignName?, ruleset?, failurePolicy?}` | 内部绑定、inspect、现有审批链并启动，返回 `{jobId, plan}`；唯一导入写入口 |
+| `foundry_lobby_rulesets_list` | `{}` | 当前部署 `rulesets.mjs` 的 `{id,label,system,supportLevel?}`，世界导入前读取并让用户选择；不由 skill 硬编码规则 |
+| `foundry_lobby_import_start` | 世界：`{sourcePath, expectedKind?, campaignName?, ruleset, failurePolicy?}`；合集包：`{sourcePath, expectedKind:"collection", failurePolicy?}` | 内部绑定、inspect、现有审批链并启动，返回 `{jobId, plan}`；唯一导入写入口。世界（含自动识别）的 `ruleset` 由用户明确选择，缺参或不在当前规则列表都拒绝，不走大厅默认值 |
 | `foundry_lobby_import_job` | `{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}` | 长任务状态与生命周期；status 默认精简，终态才给完整报告 |
 | `foundry_lobby_campaigns_list` | `{}` | 战役目录 `{id,name,ruleset,owner,playUrl}`，解决按名称发现目标 |
 | `foundry_lobby_campaign_packs_get` | `{campaignId}` | 当前选包、missing、内建组、SRD 和选包 `revision`，是 update 的读取前置 |
@@ -227,7 +228,7 @@ job 只活在当前大厅文档：
 规则：
 
 - 只有宿主依据受信 URL/runtime 证据切换，不能由用户或模型一句“这是 mt compat”开通。
-- mt compat prep 增加本方案 7 个工具；combat 和普通 Foundry 不增加。
+- mt compat prep 增加本方案 8 个工具；combat 和普通 Foundry 不增加。
 - lobby↔play、auth 跳转保持同一档位，不重复装卸；只在 foundry↔mtcompat 或面板失效时改变。
 - 会话恢复时重新对账，不能盲信历史 system message 中残留的 active tools。
 - 多 resident session 共享一个面板，激活可随当前档位刷新；已开始的调用仍按捕获的目标和页面租约执行，不能因另一会话切换页面而静默改目标。
@@ -237,9 +238,9 @@ job 只活在当前大厅文档：
 
 | 机制 | 业界事实 | 本方案判断 |
 |---|---|---|
-| 小工具集直接声明 | OpenAI 对小集合/高频工具推荐 eager；结构最简单、缓存稳定 | 7 个工具本身不大，但跨档位直接暴露会产生错误能力；可作降级，不作首选 |
+| 小工具集直接声明 | OpenAI 对小集合/高频工具推荐 eager；结构最简单、缓存稳定 | 8 个工具本身不大，但跨档位直接暴露会产生错误能力；可作降级，不作首选 |
 | 宿主 loader 动态激活 | Pi 支持 loader 执行时改变 active tools，并在下一次模型请求前生效；移除/替换使用普通完整工具表，可能损失缓存 | **采用**。能力来源确定、集合小且需要宿主权限判定，不需要模型搜索 |
-| 模型 tool_search / deferred loading | OpenAI/Pi 适合大目录、少量按需工具；增加发现步骤和检索不确定性，已加载工具会影响后续上下文与缓存 | 不采用。7 个固定工具没有目录发现问题，且 tool_search 不能代替执行权限门 |
+| 模型 tool_search / deferred loading | OpenAI/Pi 适合大目录、少量按需工具；增加发现步骤和检索不确定性，已加载工具会影响后续上下文与缓存 | 不采用。8 个固定工具没有目录发现问题，且 tool_search 不能代替执行权限门 |
 | Code Mode / Programmatic Tool Calling | 适合并行、循环、聚合大量只读结果；OpenAI 明确建议写操作/审批敏感动作默认直接调用 | 不作为主路径。未来可用同一 typed 只读工具做批量聚合，写面仍直接调用 |
 | Codex WebMCP site tools | 页面注册预定义工具，访问时发现，导航后可能失效；调用绑定来源页面与注册并经过安全审查 | 借鉴生命周期和来源绑定；当前标准/宿主支持不构成收益，不另加协议适配器 |
 
@@ -267,7 +268,7 @@ job 只活在当前大厅文档：
 ### Stage 2 —— arcanedesk
 
 1. 实现 `MtLobbyClient` 与原生 File 适配器。
-2. 新增 `lobby-tools.js` 的 7 个工具，保持 schema 精确、输出有界、审批 deny 零底层写。
+2. 新增 `lobby-tools.js` 的 8 个工具，保持 schema 精确、输出有界、审批 deny 零底层写。
 3. 扩展 `foundry_open` 为 loader：按真实档位刷新所有相关 host 的 active tools，返回 activatedTools。
 4. 执行层独立目标守卫、资源租约、navigationEpoch 和 indeterminate 对账。
 5. runtime 按真实来源同步 parity，不跨版本盲拷。
@@ -324,8 +325,8 @@ job 只活在当前大厅文档：
 
 至少覆盖：
 
-1. 新会话未知目标时不声明 7 个 lobby 工具。
-2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确 7 个工具，无需额外用户轮次。
+1. 新会话未知目标时不声明 8 个 lobby 工具。
+2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确 8 个工具，无需额外用户轮次。
 3. 首次打开普通 FVTT 不激活；mtcompat→FVTT 后旧调用被移除且执行层仍 fail-closed。
 4. lobby→play→lobby 不改变 active set，不反复重载或清空 job。
 5. 恢复带历史工具声明的会话时按当前真实档位对账。

@@ -53,6 +53,8 @@ Never treat chat cards or the submission response as final damage facts; when th
 
 ## Connection and login
 
+ArcaneMap is ArcaneDesk's first-party VTT. When the user only says "open/connect ArcaneMap" without providing an address, always call `foundry_open({url:"https://arcanemap.com/"})`; do not ask for an address or use a legacy domain. The tool normalizes the main entry to the compat lobby.
+
 When the user has said the world connection is ready, go straight into the workflow above without calling foundry_open or world_status. Only check the connection when it is unknown, still loading, or a tool reports a connection problem.
 
 If foundry_open lands on /join, only ask the user to pick an account and log in on the right panel, then end the turn and wait. Do not call other tools to poll, fill forms or handle credentials; connecting to a world never needs the admin/setup password. After the user confirms login, call world_status.

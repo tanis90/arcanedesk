@@ -114,7 +114,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPoolInProfile("prep", customTools, "mtcompat");
-  assert.equal(expected.length, 35, "mtcompat 备团 37 静态成员 - 未配置的 web_search/web_fetch");
+  assert.equal(expected.length, 36, "mtcompat 备团 38 静态成员 - 未配置的 web_search/web_fetch");
   assert.equal(activeToolNamesForPoolInProfile("prep", customTools, "foundry").includes("foundry_page_eval"), false);
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
@@ -123,7 +123,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   verifyActiveTools(session, expected);
   assert.equal(session.getActiveToolNames().includes("foundry_page_eval"), true);
   assert.equal(session.getActiveToolNames().includes("browser_evaluate"), true, "A3 不动 A2 的 eval 面");
-  for (const name of ["foundry_lobby_import_start", "foundry_lobby_import_job", "foundry_lobby_campaigns_list",
+  for (const name of ["foundry_lobby_rulesets_list", "foundry_lobby_import_start", "foundry_lobby_import_job", "foundry_lobby_campaigns_list",
     "foundry_lobby_campaign_packs_get", "foundry_lobby_campaign_packs_update", "foundry_lobby_packs_read", "foundry_lobby_packs_delete"]) {
     assert.equal(session.getActiveToolNames().includes(name), true, name);
   }
@@ -140,7 +140,7 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   assert.deepEqual(combatMtcompat, combatFoundry);
   assert.deepEqual(combatMtcompat, activeToolNames("combat"));
   assert.equal(combatMtcompat.includes("foundry_page_eval"), false);
-  // mtcompat 备团 = foundry 备团 + foundry_page_eval + 7 个 lobby tools。
+  // mtcompat 备团 = foundry 备团 + foundry_page_eval + 8 个 lobby tools。
   const prepFoundry = activeToolNamesForProfile("prep", "foundry");
   const prepMtcompat = activeToolNamesForProfile("prep", "mtcompat");
   assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", ...LOBBY_TOOL_NAMES].sort());
@@ -150,7 +150,7 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   // 旧调用方语义：无档位 = 开放默认档；模式校验照旧。
   assert.equal(activeToolNames("combat").length, 6);
   assert.equal(activeToolNames("prep").length, 29, "静态 allowlist 29 = 27 有效 + web_search/web_fetch 静态成员");
-  assert.equal(prepMtcompat.length, 37, "mtcompat 备团 37 = foundry 备团 29 + foundry_page_eval + 7 lobby tools");
+  assert.equal(prepMtcompat.length, 38, "mtcompat 备团 38 = foundry 备团 29 + foundry_page_eval + 8 lobby tools");
   assert.throws(() => activeToolNamesForProfile("unknown-mode", "mtcompat"), /Unknown tool mode/);
 });
 

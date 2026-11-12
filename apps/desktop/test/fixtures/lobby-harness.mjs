@@ -7,6 +7,13 @@ import vm from "node:vm";
 
 export const LOBBY_URL = "https://arcanemap.com/user-files/compat/lobby.html";
 
+const FIXTURE_RULESETS = {
+  2014: { label: "DND5E · 2014 版", system: "dnd5e" },
+  2024: { label: "DND5E · 2024 版", system: "dnd5e" },
+  octopus: { label: "章鱼料理研究会", system: "brp" },
+  coc7: { label: "COC · 7 版（实验）", system: "brp", supportLevel: "experimental" },
+};
+
 export function createLobbyState() {
   return {
     boundFile: null,
@@ -74,6 +81,11 @@ export function createLobbyService(state = createLobbyState(), overrides = {}) {
     async lobbyImportCancel({ jobId }) {
       state.cancelCalls.push({ jobId });
       return { jobId, phase: "cancelling", terminal: false };
+    },
+    async lobbyRulesetsList() {
+      return {
+        rulesets: Object.entries(FIXTURE_RULESETS).map(([id, definition]) => ({ id, ...definition })),
+      };
     },
     async lobbyCampaignsList() {
       state.listCalls += 1;

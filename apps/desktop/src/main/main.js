@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { DirectFoundryRuntime, PageProfileRoutedRuntime, adoptMtcompatRuntimeFromPage, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState, readPageAgentRuntimeSource } from "./foundry-web.js";
-import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, resolvePageProfile } from "./page-profiles.js";
+import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, normalizeMtCompatEntryUrl, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
 import { MtLobbyClient } from "./mt-lobby-client.js";
 import { findMirrorStageRoots } from "./lobby-mirror-cache.js";
@@ -130,7 +130,7 @@ let foundryTargetUrl = null;
 // 是 runtime 路由(PageProfileRoutedRuntime)与会话语义(cookie 记忆/回填)的依据。
 // 不跟着页面当前 URL 抖 —— Keycloak 登录跳转期间 URL 离开 play.html,档位不变。
 let activeProfileId = /** @type {"foundry" | "mtcompat"} */ (PAGE_PROFILES.foundry.id);
-// 渲染层档位指示器的状态源:随打开/导航/关闭更新并去重,经事件总线推
+// 渲染层面板档位的状态源:随打开/导航/关闭更新并去重,经事件总线推
 // panel_profile;初始为 null 档(面板尚未打开),不取上面 activeProfileId
 // 的 foundry 路由默认值。
 const panelProfileState = createPanelProfileState();
@@ -707,7 +707,8 @@ async function openFoundryView(rawUrl) {
       summary: `ERROR: invalid URL: ${rawUrl}`,
     };
   }
-  const target = explicit ?? resolvedFoundryTarget();
+  const requestedTarget = explicit ?? resolvedFoundryTarget();
+  const target = requestedTarget ? normalizeMtCompatEntryUrl(requestedTarget) : null;
   if (!target) {
     return {
       ok: false,
@@ -2248,8 +2249,8 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
-  // 档位指示器的启动种子:panel_profile 事件只推变化,晚加载/重载的
-  // 渲染层从这里拉当前档;返回与事件同形的对象。
+  // 面板档位快照:panel_profile 事件只推变化,晚加载/重载的
+  // 渲染层可从这拉当前档;返回与事件同形的对象。
   ipcMain.handle("panel:get-profile", event => {
     if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
     return panelProfileState.current();

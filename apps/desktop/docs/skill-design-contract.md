@@ -511,3 +511,11 @@
 - `LOGIN_REQUIRED` 时结束本轮，由用户在面板里登录；确认后重试原来的大厅操作，不用 `foundry_open` 轮询，也不用 `world_status` 检查大厅。大厅资源查询、导入和选包继续走对应 `foundry_lobby_*` 工具。
 - Actor 与 compendium 工作先确认 ready 游戏页。复杂页面 JS 在 Foundry 用 `browser_evaluate`，在 mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing`；`foundry_screenshot` 只在页面 detected 后使用。
 - 本地 FVTT 安装、运维、模组安装和模组世界建设流程不套用到奥法地图大厅：世界包归 `arcane-world-import`，个人内容包与战役选包归 `arcane-mt-packs`。
+
+### 世界导入规则显式选择（2026-11-12，r48）
+
+- 世界包与简介不能替用户决定规则，skill 也不写死 2014/2024 或 COC。新增只读 `foundry_lobby_rulesets_list` / 页面动作 `lobbyRulesetsList`，从当前部署的 `rulesets.mjs` 注册表返回 `{id,label,system,supportLevel?}`；每次世界导入先把当前实际支持项交给用户选择，战役创建后不可变，计划审批不能代替这项选择。
+- `foundry_lobby_import_start` 对 `expectedKind:"world"` 与省略 `expectedKind` 的自动识别一律要求 `ruleset`，缺参在任何文件读取或大厅写入之前报 `INPUT_INVALID`，不再落入大厅默认值；传入值还必须命中当前规则列表，否则同样零写入拒绝。合集包不创建战役，保持不需要 `ruleset`。
+- 世界导入交互预算由 2 点改为 3 点：本次规则选择、按需登录、导入计划确认；大厅 typed 工具由 7 个增至 8 个，r48 为 `revision: 48`。
+- 奥法地图主入口为 `https://arcanemap.com/`。三个受信 origin 的 `/` 与 `/lobby.html` 在 `foundry_open` 导航前统一归一到 `/user-files/compat/lobby.html`，不得先按 Foundry 开放档加载再等待重定向；其它 origin 不做这项归一。
+- “打开/连接奥法地图”的默认域名由 prep/combat 系统提示词直接约束，不单独维护路由 skill；世界导入和内容包仍分别使用 `arcane-world-import`、`arcane-mt-packs`。

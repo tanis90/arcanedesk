@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld("arcane", {
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
   openPanel: () => invoke("panel:open"),
   closePanel: () => invoke("panel:close"),
-  /** 档位指示器启动种子:{ type, profileId, url, displayName };后续变化经 onEvent 的 panel_profile 推送。 */
+  /** 当前面板档位快照:{ type, profileId, url, displayName };后续变化经 onEvent 的 panel_profile 推送。 */
   panelProfile: () => invoke("panel:get-profile"),
   /** F5: reload the right-pane surface (Foundry page, or re-read the open note). */
   reloadPanel: () => invoke("panel:reload"),

@@ -173,6 +173,14 @@ async function main() {
       if (request.url?.startsWith("/user-files/compat/lobby.html")) {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         response.end(PAGE_HTML);
+      } else if (request.url?.startsWith("/user-files/compat/rulesets.mjs")) {
+        response.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+        response.end(`export const RULESETS = {
+          "2014": { label: "DND5E · 2014 版", system: "dnd5e" },
+          "2024": { label: "DND5E · 2024 版", system: "dnd5e" },
+          octopus: { label: "章鱼料理研究会", system: "brp" },
+          coc7: { label: "COC · 7 版（实验）", system: "brp", supportLevel: "experimental" },
+        };`);
       } else {
         response.writeHead(404);
         response.end("not found");
@@ -256,6 +264,8 @@ async function main() {
   };
 
   try {
+    const rulesets = await invoke("foundry_lobby_rulesets_list", {});
+    report.checks.rulesetsListed = rulesets.details?.rulesets?.some(ruleset => ruleset.id === "coc7" && ruleset.supportLevel === "experimental") === true;
     const campaigns = await invoke("foundry_lobby_campaigns_list", {});
     const library = await invoke("foundry_lobby_packs_read", {});
     if (realUrl) {
@@ -270,7 +280,7 @@ async function main() {
     }
 
     if (mutate) {
-      const start = await invoke("foundry_lobby_import_start", { sourcePath: sourceFile, expectedKind: "world" });
+      const start = await invoke("foundry_lobby_import_start", { sourcePath: sourceFile, expectedKind: "world", ruleset: "2024" });
       report.checks.importStarted = Boolean(start.details?.jobId);
       const job = await invoke("foundry_lobby_import_job", { jobId: start.details.jobId, action: "status", waitMs: 3_000 });
       report.checks.importCompleted = job.details?.status === "succeeded";
@@ -291,9 +301,9 @@ async function main() {
       const deleted = await invoke("foundry_lobby_packs_delete", { packIds: ["pack-b"], expectedRevision: library.details.revision });
       report.checks.packDeleted = deleted.details?.revision === 6;
 
-      const fence = await invoke("foundry_lobby_import_start", { sourcePath: outsideFile });
+      const fence = await invoke("foundry_lobby_import_start", { sourcePath: outsideFile, ruleset: "2024" });
       report.checks.outsideFenceRejected = fence.details?.code === "FILE_OUTSIDE_FENCE";
-      const mirror = await invoke("foundry_lobby_import_start", { sourcePath: mirrorFile });
+      const mirror = await invoke("foundry_lobby_import_start", { sourcePath: mirrorFile, ruleset: "2024" });
       report.checks.mirrorCacheAllowed = Boolean(mirror.details?.jobId);
 
       deny = true;

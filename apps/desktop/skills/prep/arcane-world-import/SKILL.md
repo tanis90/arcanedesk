@@ -9,12 +9,13 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 ## 用户交互预算
 
-恒定 2 点：
+恒定 3 点：
 
-1. **登录**（A 类账户边界，仅未登录时）：用户在右侧面板的 Keycloak 登录页自己登录。你不收账号密码、不代填、不猜测，也不把登录成功当成计划授权。
-2. **导入计划确认**：`foundry_lobby_import_start` 生成计划后走 App 现有审批（是否弹审批卡、缺省放行完全由 App 决定）。用户拒绝即零写入。
+1. **规则选择**（每次世界导入必需）：先用 `foundry_lobby_rulesets_list` 获取当前 VTT 实际支持的规则，把返回的 `label`（必要时附 `supportLevel`）交给用户选择。用户尚未明确选择时，必须针对这个世界追问；战役的规则创建后不可变，不能替用户决定，也不能沿用另一个世界或上一次导入的选择。
+2. **登录**（A 类账户边界，仅未登录时）：用户在右侧面板的 Keycloak 登录页自己登录。你不收账号密码、不代填、不猜测，也不把登录成功当成计划授权。
+3. **导入计划确认**：`foundry_lobby_import_start` 生成计划后走 App 现有审批（是否弹审批卡、缺省放行完全由 App 决定）。用户拒绝即零写入。
 
-除这两点外不再提问：世界包发现、战役命名、规则版本、失败处理都有默认值，用报告交代。登录后的“继续”和审批的“可以”都不是新交互点。
+除这三点外不再提问：世界包发现、战役命名、失败处理都有默认值，用报告交代。登录后的“继续”和审批的“可以”都不是新交互点，也不能代替规则版本选择。
 
 ## 文件边界（硬规则）
 
@@ -24,8 +25,9 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 ## 工具面
 
-- `foundry_open`：打开/复用右侧大厅页。默认 `https://arcanemap.ssskill.cn/user-files/compat/lobby.html`；用户已用 `.com`/`.cn` 或其它受信地址时沿用，不臆造 IP、端口或分支域名。
-- `foundry_lobby_import_start`：唯一的世界导入写入口，入参 `{sourcePath, expectedKind?, campaignName?, ruleset?, failurePolicy?}`。
+- `foundry_open`：打开/复用右侧大厅页。默认主入口 `https://arcanemap.com/`（工具归一到 compat 大厅）；用户已用其它受信地址时沿用，不臆造 IP、端口或分支域名。
+- `foundry_lobby_rulesets_list`：只读；获取当前 VTT 支持的 `{id,label,system,supportLevel?}`，每次世界导入前都要调用，不凭记忆列规则。
+- `foundry_lobby_import_start`：唯一的世界导入写入口，入参 `{sourcePath, expectedKind?, campaignName?, ruleset, failurePolicy?}`；世界导入（含不指定 `expectedKind` 的自动识别）必须传 `ruleset`，合集包导入不需要。
 - `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
 - `foundry_lobby_campaigns_list`：只读；核对导入后的战役与 `playUrl`。
 
@@ -35,17 +37,18 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 1. **定位世界包**：在当前备团目录用只读的 `ls`/`find` 找 `.zip`，优先用户点名的文件；多个候选时取用户点名的，没点名就取最近修改的。不要递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
 2. **打开大厅**：`foundry_open` 传入大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。确认后从下一步继续或重试原大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
-3. **启动导入**：调用 `foundry_lobby_import_start`：
+3. **确认本次规则**：调用 `foundry_lobby_rulesets_list`，把当前返回的 `label` 和支持级别展示给用户，针对《世界名》询问希望使用哪一项，并说明战役创建后不可改。用户已经明确选择时核对其 `id` 在返回列表中即可，不重复追问；不在列表中时不能导入，照实给出当前支持项。`world.json`、镜像简介、模组宣传、系统版本和大厅预选都不能代替用户选择，skill 自身也不预设只有 DND 2014/2024。
+4. **启动导入**：调用 `foundry_lobby_import_start`：
    - `sourcePath` 用 cwd 内路径（相对或绝对均可，但必须在 cwd 内）；
    - `expectedKind: "world"`（用户已明确是世界包时）；不确定就不传，让工具嗅探并在计划里给出结论；
    - `campaignName` 用用户起的名字；没起名就不传，沿用世界标题，不追问。这个名字决定计划是新建还是复用同名战役；
-   - `ruleset` 只在用户明确要求 2014/2024 时传；dnd5e 默认按大厅预选（2024），规则创建后不可变；
+   - `ruleset` 必须传用户本次从当前规则列表中明确选择的 `id`；工具没有默认值，省略或传列表外的值都会被拒绝，不能落入大厅预选；
    - `failurePolicy` 默认 `"abort"`。只有用户明确说“能导多少导多少”时才用 `"continue"`，并且它必须出现在批准的计划里。
    工具会先解析、生成真实计划并走 App 现有审批；返回 `{jobId, plan}` 才表示已启动。
-4. **讲清计划**：把 `plan` 翻成一句话——世界名/系统版本、战役名与计划给出的 `new`/`existing` 结论（`new` 新建 / `existing` 复用同名战役）、规则、文档与素材数量、缺失素材、失败策略。审批计划必须明确 new/existing：不存在才新建；同名且 ruleset 一致时复用并追加，ruleset 不一致会被拒绝。不要在审批之外再要一次“开始吗”。
-5. **跟进任务**：用 `foundry_lobby_import_job` 的 `status` 配 `waitMs` 等待。轮询期间只说 `phase`/`progress`/`currentItem`/`failureCount`，不要每轮复述整份报告；完整 failures/report 只在终态或显式错误时读。
-6. **收尾报告**：给出战役名、各集合写入数、素材上传数与缺失清单、失败项、跳过项（聊天记录/世界设置/世界自有 compendium 不导入），以及 `playUrl` 可点击链接。`playUrl` 以工具返回为准，不要自己拼。
-7. **需要取消**：`action:"cancel"`。被接受不等于已停止和清理，继续 `status` 到终态，照实报告残留的战役/批次；不要立刻重导。
+5. **讲清计划**：把 `plan` 翻成一句话——世界名/系统版本、战役名与计划给出的 `new`/`existing` 结论（`new` 新建 / `existing` 复用同名战役）、用户选定的规则、文档与素材数量、缺失素材、失败策略。审批计划必须明确 new/existing：不存在才新建；同名且 ruleset 一致时复用并追加，ruleset 不一致会被拒绝。不要在审批之外再要一次“开始吗”。
+6. **跟进任务**：用 `foundry_lobby_import_job` 的 `status` 配 `waitMs` 等待。轮询期间只说 `phase`/`progress`/`currentItem`/`failureCount`，不要每轮复述整份报告；完整 failures/report 只在终态或显式错误时读。
+7. **收尾报告**：给出战役名、各集合写入数、素材上传数与缺失清单、失败项、跳过项（聊天记录/世界设置/世界自有 compendium 不导入），以及 `playUrl` 可点击链接。`playUrl` 以工具返回为准，不要自己拼。
+8. **需要取消**：`action:"cancel"`。被接受不等于已停止和清理，继续 `status` 到终态，照实报告残留的战役/批次；不要立刻重导。
 
 ## 失败处置
 
@@ -56,7 +59,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 | `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入；修正后重新调用，不沿用旧路径。 |
 | `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后查状态对账。 |
 | `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅查战役与批次状态。 |
-| `INPUT_INVALID` / `ABORTED` | 参数不合法或调用被取消：修正参数/报告取消；不要原样重试。 |
+| `INPUT_INVALID` / `ABORTED` | 参数不合法或调用被取消：修正参数/报告取消；缺少 `ruleset` 或值不在当前支持列表时，先重新读取规则列表并让用户明确选择，不要原样重试或用默认值补齐。 |
 | `JOB_INDETERMINATE` | 页面导航、刷新或崩溃打断：任务结果未知。重开大厅后先用 `campaigns_list` 查战役状态，批次/库状态以大厅界面和已有结果为准，**不要自动重放**；已生成或半写入的战役请用户在右侧大厅里处理后再决定是否重导。 |
 | 旧版 dnd5e（< 5.3.0）被拒 | 与大厅面板同一门：请用户在 FVTT 里把 dnd5e 系统升级到 5.3.x，打开该世界完成一次系统迁移，再重新导出 zip 后重试。没有旧 CLI/ROPC 降级通道，不要尝试本地脚本。 |
 | 纯素材 zip / 非世界包被拒 | 大厅只把带 `world.json` 的世界包交给世界导入；素材包不是世界，按大厅提示处理，不硬塞。 |
