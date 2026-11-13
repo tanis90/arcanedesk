@@ -189,7 +189,7 @@ test("native file binding uses only fixed CDP commands and the hidden service in
     "Runtime.releaseObjectGroup",
   ]);
   assert.equal(page.commands[0].params.expression, "globalThis.__MT_LOBBY_SERVICE__.getFileInput()");
-  assert.deepEqual(page.commands[2].params.files, [realpathSync(source.file)]);
+  assert.deepEqual(page.commands[2].params.files, [realpathSync.native(source.file)]);
   assert.equal(page.commands[2].params.objectId, "fixture-input-object");
   assert.equal(page.webContents.debugger.isAttached(), false, "the adapter detaches a debugger it attached");
   assert.equal(page.commands.some(command => command.method === "Page.setInterceptFileChooserDialog"), false);
