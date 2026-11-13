@@ -137,7 +137,33 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
  */
 
 function stripExportDefault(text) {
-  return String(text).replace(/^\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/|\s)*export\s+default\s+/, "");
+  const source = String(text);
+  const whitespace = /\s+/y;
+  const exportPrefix = /export\s+default\s+/y;
+  let offset = 0;
+  while (offset < source.length) {
+    whitespace.lastIndex = offset;
+    const match = whitespace.exec(source);
+    if (match) {
+      offset = whitespace.lastIndex;
+      continue;
+    }
+    if (source.startsWith("//", offset)) {
+      const end = source.indexOf("\n", offset + 2);
+      if (end < 0) return source;
+      offset = end + 1;
+      continue;
+    }
+    if (source.startsWith("/*", offset)) {
+      const end = source.indexOf("*/", offset + 2);
+      if (end < 0) return source;
+      offset = end + 2;
+      continue;
+    }
+    break;
+  }
+  exportPrefix.lastIndex = offset;
+  return exportPrefix.test(source) ? source.slice(exportPrefix.lastIndex) : source;
 }
 
 function isFunctionExpression(source) {

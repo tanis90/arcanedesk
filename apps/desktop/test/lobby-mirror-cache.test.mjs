@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -56,7 +56,7 @@ test("world/module stage dirs are accepted only when their mirror metadata and Z
   }));
 
   const roots = findMirrorStageRoots({ tmpdir }).sort();
-  assert.deepEqual(roots, [path.resolve(world), path.resolve(moduleStage)].sort());
+  assert.deepEqual(roots, [realpathSync(world), realpathSync(moduleStage)].sort());
 
   const archive = path.join(world, "artifacts", "000-world-demo", "package.zip");
   const prepared = await prepareLobbySourceFile(archive, { roots });

@@ -509,6 +509,24 @@ test("resolveMtAgentRuntimeSource prefers the user file, then the bundled defaul
   assert.ok(logs.some(message => /not a usable function expression/.test(message)));
 });
 
+test("runtime export-prefix scanning preserves comments and avoids exponential backtracking", () => {
+  const bundledFile = "/app/runtime/mt-agent-runtime.js";
+  const load = files => resolveMtAgentRuntimeSource({
+    userFile: "/userData/config/mt-agent-runtime.js",
+    bundledFile,
+    readFile: fakeReadFile(files),
+    log: () => {},
+  });
+  const commented = load({
+    [bundledFile]: ` \n// leading comment\n/* block comment */\nexport default ${MT_RUNTIME_FUNCTION};\n`,
+  });
+  assert.ok(commented.source.startsWith("async function"));
+
+  const startedAt = Date.now();
+  assert.equal(load({ [bundledFile]: `/*${"*//*".repeat(20_000)}` }), null);
+  assert.ok(Date.now() - startedAt < 1_000, "hostile comment prefixes must not stall runtime-source loading");
+});
+
 test("PageProfileRoutedRuntime routes by the active page profile and keeps telemetry scope", async () => {
   const routed = [];
   const foundry = createRuntime({
