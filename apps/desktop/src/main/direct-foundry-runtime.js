@@ -57,7 +57,9 @@ export class WebContentsFoundryTransport {
  * action，不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里——只有 mtcompat client 的白
  * 名单带它，foundry 档 client 逐字不变。SDK 客户端对 action 只做字符串白名单检查
  * （Set.has），并入后即走既有队列/序列化/preflight/中断语义。
- * @typedef {"pageEval"} MtcompatRuntimeAction
+ * navigateToLobby（方案 B）同样只是 mtcompat 档的扩展名：play 页与会话队列共用，
+ * 只由 foundry_lobby_return 调用。
+ * @typedef {"pageEval" | "navigateToLobby"} MtcompatRuntimeAction
  */
 
 /**

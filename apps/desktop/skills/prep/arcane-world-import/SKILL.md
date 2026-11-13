@@ -26,6 +26,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 ## 工具面
 
 - `foundry_open`：打开/复用右侧大厅页。默认主入口 `https://arcanemap.com/`（工具归一到 compat 大厅）；用户已用其它受信地址时沿用，不臆造 IP、端口或分支域名。
+- `foundry_lobby_return`：无参数，把当前游戏页送回大厅；回执给出真实 `returnPlayUrl`，导入结束后用它回原战役（见下节）。
 - `foundry_lobby_rulesets_list`：只读；获取当前 VTT 支持的 `{id,label,system,supportLevel?}`，每次世界导入前都要调用，不凭记忆列规则。
 - `foundry_lobby_import_start`：唯一的世界导入写入口，入参 `{sourcePath, expectedKind?, campaignName?, ruleset, failurePolicy?}`；世界导入（含不指定 `expectedKind` 的自动识别）必须传 `ruleset`，合集包导入不需要。
 - `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
@@ -33,10 +34,21 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 `foundry_open` 返回 `profile`、`page.path` 与 `activatedTools`。`profile` 必须是 `mtcompat`，`page.path` 必须命中受信 compat 目录的 `lobby.html`；`activatedTools` 只表示当前产品档位的工具面，不代表大厅已登录或游戏页已就绪。大厅工具还没出现在 `activatedTools` 里时，说明页面档位不对或 App 版本不足——停下来让用户更新/重开 App，不要改用页面脚本、裸 HTTP 或旧脚本。工具激活会在下一次模型请求生效，不需要让用户再发一轮“继续”。
 
+## 当前在游戏页时（play → lobby → play）
+
+用户可能已经在你打开的某个战役游戏页（`play.html`）里，而导入必须在大厅完成。这时：
+
+1. 先一句话说明“要暂时离开当前游戏、回大厅处理，完成后再回到这个战役”，然后调用无参数 `foundry_lobby_return({})`。
+2. 成功回执 `status:"completed"`，带 `from`、`to` 和真实 `returnPlayUrl`；`alreadyInLobby:true` 表示本来就在大厅，直接继续。把 `returnPlayUrl` 原样留住，不要自己拼。
+3. 内部导航可能以 `NAVIGATED` 结束，这不是失败：Desktop 会接着确认大厅已就绪。不要重放，也不要在确认前再调一次或改走页面脚本。
+4. 导入结束（成功、失败或取消）后，用 `foundry_open({url:returnPlayUrl})` 回到原战役；回执显示 `mtcompat` 的 `play.html` 后再继续游戏内操作。
+
+只有这个工具能把游戏页安全送回大厅：不要用 `foundry_page_eval` 执行 `location.assign`、`ui.nav` 或任何跳转，也不要指望 `foundry_open` 放宽幂等去帮你回大厅。它只在 mtcompat 备团模式提供，跑团/战斗模式没有大厅能力；用户在战斗里要开世界时，请他先切到备团模式。
+
 ## 主流程
 
 1. **定位世界包**：在当前备团目录用只读的 `ls`/`find` 找 `.zip`，优先用户点名的文件；多个候选时取用户点名的，没点名就取最近修改的。不要递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
-2. **打开大厅**：`foundry_open` 传入大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。确认后从下一步继续或重试原大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
+2. **打开大厅**：`foundry_open` 传入大厅地址。当前已经开着某个战役的游戏页时，先用上节的 `foundry_lobby_return({})` 回大厅，不要直接 `foundry_open` 大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。确认后从下一步继续或重试原大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
 3. **确认本次规则**：调用 `foundry_lobby_rulesets_list`，把当前返回的 `label` 和支持级别展示给用户，针对《世界名》询问希望使用哪一项，并说明战役创建后不可改。用户已经明确选择时核对其 `id` 在返回列表中即可，不重复追问；不在列表中时不能导入，照实给出当前支持项。`world.json`、镜像简介、模组宣传、系统版本和大厅预选都不能代替用户选择，skill 自身也不预设只有 DND 2014/2024。
 4. **启动导入**：调用 `foundry_lobby_import_start`：
    - `sourcePath` 用 cwd 内路径（相对或绝对均可，但必须在 cwd 内）；
@@ -58,6 +70,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 | `PROFILE_MISMATCH` / `CAPABILITY_UNAVAILABLE` | 页面不是受信 mt compat 大厅，或 App/页面 runtime 版本不足：重开大厅；仍不行就让用户更新 ArcaneDesk，不要降级到页面脚本或裸 HTTP。 |
 | `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入；修正后重新调用，不沿用旧路径。 |
 | `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后查状态对账。 |
+| `foundry_lobby_return` 报错 | `CAPABILITY_UNAVAILABLE` = 页面/runtime 版本不足：重开大厅或让用户更新 App；`PROFILE_MISMATCH` = 当前不是 ready 的 mtcompat 游戏页（或 URL 缺 `?campaign=`），从大厅重新打开该战役；`TARGET_CHANGED` = 面板没有落到预期大厅：不重放，先 `foundry_open` 确认当前页面再按实际情况重来；`LOGIN_REQUIRED` = 结束本轮让用户登录；`JOB_INDETERMINATE` = 结果无法确认，不要自动重放。 |
 | `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅查战役与批次状态。 |
 | `INPUT_INVALID` / `ABORTED` | 参数不合法或调用被取消：修正参数/报告取消；缺少 `ruleset` 或值不在当前支持列表时，先重新读取规则列表并让用户明确选择，不要原样重试或用默认值补齐。 |
 | `JOB_INDETERMINATE` | 页面导航、刷新或崩溃打断：任务结果未知。重开大厅后先用 `campaigns_list` 查战役状态，批次/库状态以大厅界面和已有结果为准，**不要自动重放**；已生成或半写入的战役请用户在右侧大厅里处理后再决定是否重导。 |

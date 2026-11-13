@@ -19,6 +19,7 @@
     "pretest": "npm run verify:source",
     "test": "node --test test/*.test.mjs",
     "test:e2e:lobby": "node test/e2e-lobby-actions.mjs",
+    "test:e2e:lobby-return": "node test/e2e-lobby-return.mjs",
     "pretypecheck": "npm run verify:source",
     "typecheck": "tsc --noEmit",
     "verify:package": "node scripts/verify-package.mjs",

@@ -85,7 +85,7 @@ test("foundry_open loads the mtcompat lobby tools for the next request and repor
   assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "foundry_page_eval"]));
   assert.equal(h.session.calls.length, beforeCalls + 1);
   for (const name of LOBBY) assert.equal(h.session.active.includes(name), true, name);
-  assert.match(result.content[0].text, /Activated for the next model request \(9\)/);
+  assert.match(result.content[0].text, /Activated for the next model request \(10\)/);
 });
 
 test("opening plain Foundry first activates no lobby tools", async () => {
@@ -144,7 +144,7 @@ test("restoring a session computes the loadout from the current real profile, no
 });
 
 test("combat and plain Foundry policy tables never contain lobby tools", () => {
-  assert.equal(LOBBY_TOOL_NAMES.length, 8);
+  assert.equal(LOBBY_TOOL_NAMES.length, 9);
   assert.equal(TOOL_NAMES_BY_PROFILE.foundry.combat.includes("foundry_lobby_import_start"), false);
   assert.equal(TOOL_NAMES_BY_PROFILE.mtcompat.combat.includes("foundry_lobby_import_start"), false);
   assert.equal(TOOL_NAMES_BY_PROFILE.foundry.prep.some(name => LOBBY.has(name)), false);

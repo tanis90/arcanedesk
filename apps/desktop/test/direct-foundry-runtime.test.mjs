@@ -12,6 +12,7 @@ import {
   adoptMtcompatRuntimeFromPage,
   resolveMtAgentRuntimeSource,
 } from "../src/main/direct-foundry-runtime.js";
+import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "../src/main/foundry-tool-policy.js";
 import { PAGE_PROFILES, clientPageProfile } from "../src/main/page-profiles.js";
 
 const TEST_RUNTIME_SOURCE = `async function (action, args, options) {
@@ -51,6 +52,7 @@ function createRuntime({
   }),
   readyPollMs = 1,
   runtimeSource = TEST_RUNTIME_SOURCE,
+  allowedActions = null,
   onCallResult = null,
 } = {}) {
   return new DirectFoundryRuntime({
@@ -59,6 +61,7 @@ function createRuntime({
     evaluate,
     readyPollMs,
     runtimeSource,
+    ...(allowedActions ? { allowedActions } : {}),
     onCallResult,
   });
 }
@@ -115,6 +118,51 @@ test("unsupported actions are rejected before page inspection or evaluation", as
   await rejectsWithCode(runtime.call("debugEval", {}), "FOUNDRY_SDK_ACTION_UNSUPPORTED");
   assert.equal(inspections, 0);
   assert.equal(evaluations, 0);
+});
+
+test("navigateToLobby is mtcompat-only and keeps SDK NAVIGATED/interruption semantics", async () => {
+  const runtime = createRuntime({ allowedActions: MTCOMPAT_RUNTIME_ACTIONS });
+  assert.deepEqual(
+    await runtime.call("navigateToLobby", {}, { executionTimeoutMs: 321 }),
+    { action: "navigateToLobby", args: {}, options: { requireGM: true, timeoutMs: 321 } },
+  );
+
+  // foundry 档白名单逐字不变：navigateToLobby 在 SDK 客户端就被拒，进不了页面。
+  await rejectsWithCode(
+    createRuntime({ allowedActions: DESKTOP_FOUNDRY_ACTIONS }).call("navigateToLobby", {}),
+    "FOUNDRY_SDK_ACTION_UNSUPPORTED",
+  );
+
+  // 普通 tools 的导航中断语义不动：SDK 仍抛 NAVIGATED，只有 foundry_lobby_return 把它当预期。
+  await rejectsWithCode(
+    createRuntime({
+      allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+      evaluate: async () => ({ status: "navigated", url: "https://arcanemap.com/user-files/compat/lobby.html" }),
+    }).call("navigateToLobby", {}),
+    "FOUNDRY_SDK_NAVIGATED",
+  );
+
+  // navigateToLobby 与其它 typed action 共用同一串行队列。
+  let active = 0;
+  let maxActive = 0;
+  const queued = createRuntime({
+    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+    evaluate: async (_webContents, expression) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const value = await Function(`"use strict"; return (${expression});`)();
+      active -= 1;
+      return { status: "completed", value };
+    },
+  });
+  const [navigated, world] = await Promise.all([
+    queued.call("navigateToLobby", {}),
+    queued.call("worldInfo", {}),
+  ]);
+  assert.equal(navigated.action, "navigateToLobby");
+  assert.equal(world.action, "worldInfo");
+  assert.equal(maxActive, 1);
 });
 
 test("arguments remain JSON data and U+2028/U+2029 cannot inject JavaScript", async () => {

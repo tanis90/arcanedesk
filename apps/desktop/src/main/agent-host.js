@@ -436,6 +436,21 @@ export class AgentHost {
     return this.lobbyClientInstance;
   }
 
+  /**
+   * 页面 runtime 调用的唯一出口：会话遥测（AsyncLocalStorage 跟随调用方）与模式随调用
+   * 走，串行队列/超时/中断语义全部由 SDK 客户端持有。typed 工具与大厅工具共用，绝不
+   * 另建队列或绕到 pageEval。
+   */
+  callFoundryRuntime(action, args, options) {
+    const runtime = this.foundryRuntime;
+    if (!runtime || (typeof runtime.call !== "function" && typeof runtime.callForSession !== "function")) {
+      throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
+    }
+    return typeof runtime.callForSession === "function"
+      ? runtime.callForSession(this.telemetry, this.profile.mode, action, args, options)
+      : runtime.call(action, args, options);
+  }
+
   /** 本地文件通道的允许根：当前 prep cwd + 已有镜像暂存缓存（main.js 注入）。 */
   lobbyFileRoots() {
     const roots = [];
@@ -1497,14 +1512,7 @@ export class AgentHost {
       },
     });
 
-    const runtimeCall = async (action, args, options) => {
-      if (!host.foundryRuntime?.call) {
-        throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
-      }
-      return host.foundryRuntime.callForSession
-        ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
-        : host.foundryRuntime.call(action, args, options);
-    };
+    const runtimeCall = async (action, args, options) => host.callFoundryRuntime(action, args, options);
 
     // A3：mtcompat 档的 pageEval 工具（PRD §2.5 三层消费的 Tier 1/2 入口）。只进
     // mtcompat 备团策略表（foundry-tool-policy.js 的 MTCOMPAT_TOOL_NAMES_BY_MODE），

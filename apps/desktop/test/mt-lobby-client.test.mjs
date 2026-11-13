@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { MtLobbyClient, MtLobbyError, isTerminalJob, jobPhaseOf } from "../src/main/mt-lobby-client.js";
+import { evaluateNavigationSafe } from "../src/main/foundry-web.js";
 import { prepareLobbySourceFile } from "../src/main/mt-lobby-file.js";
 import { createPanelProfileOverrides } from "../src/main/page-profiles.js";
 import { LOBBY_URL, createLobbyFixture, createLobbyState } from "./fixtures/lobby-harness.mjs";
@@ -294,4 +295,187 @@ test("status reads a compat phase=succeeded job without degrading to unknown", a
 test("MtLobbyError is the stable error type used by the client", async () => {
   const { client } = fixture();
   await assert.rejects(client.call("notAnAction", {}), MtLobbyError);
+});
+
+// ---- 方案 B：play → lobby 的 URL 分类与有界就绪等待 ----
+
+const PLAY_URL = "https://arcanemap.com/user-files/compat/play.html?campaign=campaign-1";
+const AUTH_URL = "https://arcanemap.com/auth/realms/arcane/protocol/openid-connect/auth?client_id=compat";
+
+test("classifyPanelUrl reads the campaign from the play URL and fails closed everywhere else", () => {
+  const play = createLobbyFixture({ url: PLAY_URL });
+  const playClient = new MtLobbyClient({ getWebContents: () => play.webContents });
+  assert.deepEqual(playClient.classifyPanelUrl(), {
+    kind: "play",
+    url: PLAY_URL,
+    path: "/user-files/compat/play.html",
+    origin: "https://arcanemap.com",
+    campaignId: "campaign-1",
+  });
+
+  const lobby = createLobbyFixture();
+  assert.equal(new MtLobbyClient({ getWebContents: () => lobby.webContents }).classifyPanelUrl().kind, "lobby");
+
+  const auth = createLobbyFixture({ url: AUTH_URL });
+  assert.equal(new MtLobbyClient({ getWebContents: () => auth.webContents }).classifyPanelUrl().kind, "auth");
+
+  const noCampaign = createLobbyFixture({ url: "https://arcanemap.com/user-files/compat/play.html" });
+  assert.throws(
+    () => new MtLobbyClient({ getWebContents: () => noCampaign.webContents }).classifyPanelUrl(),
+    error => error.code === "PROFILE_MISMATCH",
+  );
+
+  const foundry = createLobbyFixture({ url: "https://foundry.example/game" });
+  assert.throws(
+    () => new MtLobbyClient({ getWebContents: () => foundry.webContents }).classifyPanelUrl(),
+    error => error.code === "PROFILE_MISMATCH",
+  );
+
+  const evilPlay = createLobbyFixture({ url: "https://evil.example/user-files/compat/play.html?campaign=c1" });
+  assert.throws(
+    () => new MtLobbyClient({ getWebContents: () => evilPlay.webContents }).classifyPanelUrl(),
+    error => error.code === "PROFILE_MISMATCH",
+  );
+
+  assert.throws(
+    () => new MtLobbyClient({ getWebContents: () => null }).classifyPanelUrl(),
+    error => error.code === "TARGET_UNAVAILABLE",
+  );
+});
+
+test("waitForLobbyReady re-captures the target after navigation instead of failing on the old epoch", async () => {
+  const page = createLobbyFixture({ url: PLAY_URL });
+  let navigated = false;
+  const client = new MtLobbyClient({
+    getWebContents: () => page.webContents,
+    readyTimeoutMs: 1_000,
+    readyPollMs: 10,
+    evaluate: async (webContents, expression, options) => {
+      if (!navigated) {
+        navigated = true;
+        page.webContents.navigate(`${LOBBY_URL}?campaign=campaign-1`);
+      }
+      return evaluateNavigationSafe(webContents, expression, options);
+    },
+  });
+  page.webContents.navigate(LOBBY_URL);
+  const ready = await client.waitForLobbyReady({ expectedOrigin: "https://arcanemap.com" });
+  assert.equal(ready.path, "/user-files/compat/lobby.html");
+  assert.equal(ready.origin, "https://arcanemap.com");
+  assert.equal(navigated, true, "the first preflight must have raced a navigation");
+});
+
+test("waitForLobbyReady waits for a delayed service and then reports the trusted lobby", async () => {
+  const page = createLobbyFixture({ url: PLAY_URL });
+  const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 2_000, readyPollMs: 10 });
+  const service = page.service;
+  page.webContents.navigate(LOBBY_URL);
+  page.setService(null);
+  const timer = setTimeout(() => page.setService(service), 80);
+  try {
+    const ready = await client.waitForLobbyReady();
+    assert.equal(ready.path, "/user-files/compat/lobby.html");
+    assert.equal(ready.protocolVersion, 1);
+  } finally {
+    clearTimeout(timer);
+  }
+});
+
+test("waitForLobbyReady maps wrong destinations, auth, and deadlines to stable codes", async (t) => {
+  await t.test("wrong path", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 300, readyPollMs: 10 });
+    page.webContents.navigate("https://arcanemap.com/game");
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "TARGET_CHANGED");
+  });
+
+  await t.test("untrusted origin", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 300, readyPollMs: 10 });
+    page.webContents.navigate("https://evil.example/user-files/compat/lobby.html");
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "TARGET_CHANGED");
+  });
+
+  await t.test("different origin than the saved play URL", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 300, readyPollMs: 10 });
+    page.webContents.navigate("https://arcanemap.cn/user-files/compat/lobby.html");
+    await assert.rejects(
+      client.waitForLobbyReady({ expectedOrigin: "https://arcanemap.com" }),
+      error => error.code === "TARGET_CHANGED",
+    );
+  });
+
+  await t.test("login flow", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 300, readyPollMs: 10 });
+    page.webContents.navigate(AUTH_URL);
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "LOGIN_REQUIRED");
+  });
+
+  await t.test("stays on play", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 120, readyPollMs: 10 });
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "TARGET_CHANGED");
+  });
+
+  await t.test("lobby service never becomes ready", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 150, readyPollMs: 10 });
+    page.webContents.navigate(LOBBY_URL);
+    page.setService(null);
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "CAPABILITY_UNAVAILABLE");
+  });
+
+  await t.test("lobby page has no signed-in session", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 150, readyPollMs: 10 });
+    page.webContents.navigate(LOBBY_URL);
+    page.setAuth(false);
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "LOGIN_REQUIRED");
+  });
+
+  await t.test("panel destroyed", async () => {
+    const page = createLobbyFixture({ url: PLAY_URL });
+    const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 150, readyPollMs: 10 });
+    page.webContents.close();
+    await assert.rejects(client.waitForLobbyReady(), error => error.code === "TARGET_UNAVAILABLE");
+  });
+});
+
+test("a navigation after preflight returns is confirmed with the new document's evidence", async () => {
+  const page = createLobbyFixture();
+  const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 1_000, readyPollMs: 10 });
+  const originalPreflight = client.preflight.bind(client);
+  let navigated = false;
+  client.preflight = async (action, target, options) => {
+    const result = await originalPreflight(action, target, options);
+    if (!navigated) {
+      navigated = true;
+      // 新文档的 service 协议不同：最终回执若来自旧证据会停在 1。
+      page.service.protocolVersion = 2;
+      page.webContents.navigate(`${LOBBY_URL}?reload=1`);
+    }
+    return result;
+  };
+
+  const ready = await client.waitForLobbyReady({ expectedOrigin: "https://arcanemap.com" });
+  assert.equal(navigated, true);
+  assert.equal(ready.protocolVersion, 2, "confirmation must come from the new document, not the old preflight");
+});
+
+test("uncertain lobby evidence survives a fallback to play until the deadline", async () => {
+  const page = createLobbyFixture();
+  const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 150, readyPollMs: 10 });
+  let first = true;
+  client.preflight = async () => {
+    if (first) {
+      first = false;
+      page.webContents.navigate(PLAY_URL);
+      throw new MtLobbyError("TARGET_TIMEOUT", "lobby preflight timed out");
+    }
+    throw new Error("should not be called after the page left the lobby");
+  };
+
+  await assert.rejects(client.waitForLobbyReady(), error => error.code === "JOB_INDETERMINATE");
 });

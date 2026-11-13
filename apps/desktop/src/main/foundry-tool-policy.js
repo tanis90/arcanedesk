@@ -3,7 +3,8 @@
 // 档位维度（A2 起）：档案词汇与页面档位同一份事实源（page-profiles.js 的
 // PAGE_PROFILES），机制语义是「页面档位决定策略面」——foundry 档（开放默认档）
 // 行为必须与引入档位维度之前逐字节一致；mtcompat 档的策略面独立成表，A3 在其上
-// 放 pageEval（foundry_page_eval，只进 mtcompat 备团档）。归一规则：词汇表外的 id
+// 放 pageEval（foundry_page_eval），方案 B 再放 navigateToLobby（仅由
+// foundry_lobby_return 使用），两者都只进 mtcompat 备团档。归一规则：词汇表外的 id
 // （含 undefined/null）落开放默认档。
 import { PAGE_PROFILES } from "./page-profiles.js";
 
@@ -19,14 +20,14 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
- * 备团的 foundry_page_eval 与 8 个 lobby typed tools；备团是「typed action 铺不满、
+ * 备团的 foundry_page_eval 与 9 个 lobby typed tools；备团是「typed action 铺不满、
  * eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
  * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
  * 战斗再补）。
  *
- * mt-compat 大厅的 8 个 typed tool（仅 mtcompat 备团）。实现静态注册在
- * lobby-tools.js；声明按真实页面档位动态切换，见 AgentHost.refreshToolLoadout。
- * 这组名字不进入 combat，也不进入普通 Foundry 档。
+ * mt-compat 大厅的 9 个 typed tool（仅 mtcompat 备团），含 play → lobby 的
+ * foundry_lobby_return。实现静态注册在 lobby-tools.js；声明按真实页面档位动态切换，
+ * 见 AgentHost.refreshToolLoadout。这组名字不进入 combat，也不进入普通 Foundry 档。
  */
 export const LOBBY_TOOL_NAMES = Object.freeze([
   "foundry_lobby_rulesets_list",
@@ -37,6 +38,7 @@ export const LOBBY_TOOL_NAMES = Object.freeze([
   "foundry_lobby_campaign_packs_update",
   "foundry_lobby_packs_read",
   "foundry_lobby_packs_delete",
+  "foundry_lobby_return",
 ]);
 
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
@@ -75,12 +77,13 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
 ]);
 
 /**
- * mtcompat 档 client 的 runtime 动作白名单（A3）：foundry 面 + pageEval。
- * pageEval 是 arcaneVTT 侧 runtime 的兜底 eval action（PRD §3.1），不在 SDK 的 foundry
+ * mtcompat 档 client 的 runtime 动作白名单（A3 + 方案 B）：foundry 面 + pageEval +
+ * navigateToLobby。后两者是 arcaneVTT 侧 runtime 的扩展 action，不在 SDK 的 foundry
  * 契约（ALL_DIRECT_ACTIONS）里——只随 mtcompat client 装配，foundry 档 client 的白名单
  * 与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK 既有路径。
+ * navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅 foundry_lobby_return 调用。
  */
-export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "pageEval"]);
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "pageEval", "navigateToLobby"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio

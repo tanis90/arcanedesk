@@ -24,6 +24,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 ## 工具面
 
 - `foundry_open`：打开/复用大厅。默认主入口 `https://arcanemap.com/`（工具归一到 compat 大厅）；用户已用其它受信地址时沿用。`profile` 必须是 `mtcompat`，`page.path` 必须命中受信 compat 目录的 `lobby.html`，大厅工具应出现在 `activatedTools` 里；这个名单只表示当前产品档位的工具面，不代表大厅已登录或游戏页已就绪。
+- `foundry_lobby_return`：无参数，把当前游戏页送回大厅；回执给出真实 `returnPlayUrl`，大厅动作结束后用它回原战役（见下节）。
 - `foundry_lobby_import_start`：上传/替换内容包的写入口，入参 `{sourcePath, expectedKind?, failurePolicy?}`。
 - `foundry_lobby_import_job`：`{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}`。
 - `foundry_lobby_packs_read`：只读。`{}` 或 `{moduleId}` 读库清单；`{packId, query?, cursor?, limit?}` 分页预览条目。
@@ -34,6 +35,17 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 
 大厅工具不在 `activatedTools` 里、`profile` 不是 `mtcompat`，或 `page.path` 不是大厅时，停下来让用户更新/重开 ArcaneDesk；不要改用页面脚本、裸 HTTP 或旧脚本。登录完成后重试原来的大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
 
+## 当前在游戏页时（play → lobby → play）
+
+用户可能正停在某个战役的游戏页（`play.html`）里，而内容包、选包或删除必须在大厅完成。这时：
+
+1. 先一句话说明“要暂时离开当前游戏、回大厅处理，完成后再回到这个战役”，然后调用无参数 `foundry_lobby_return({})`。
+2. 成功回执 `status:"completed"`，带 `from`、`to` 和真实 `returnPlayUrl`；`alreadyInLobby:true` 表示本来就在大厅，直接继续。把 `returnPlayUrl` 原样留住，不要自己拼。
+3. 内部导航可能以 `NAVIGATED` 结束，这不是失败：Desktop 会接着确认大厅已就绪。不要重放，也不要在确认前再调一次或改走页面脚本。
+4. 大厅动作结束（成功、失败或取消）后，用 `foundry_open({url:returnPlayUrl})` 回到原战役；回执显示 `mtcompat` 的 `play.html` 后再继续游戏内操作。
+
+只有这个工具能把游戏页安全送回大厅：不要用 `foundry_page_eval` 执行 `location.assign`、`ui.nav` 或任何跳转，也不要指望 `foundry_open` 放宽幂等去帮你回大厅。它只在 mtcompat 备团模式提供，跑团/战斗模式没有大厅能力；用户在战斗里要改选包时，请他先切到备团模式。
+
 ## 先分清四个概念
 
 - **`revision`**：读取时的状态指纹。删除和改选包都要把刚读到的 `revision` 原样作为 `expectedRevision` 传回；工具会重新读取并比较，不一致就零写入拒绝。它只在本客户端内发现“读完到写前状态变了”，不是服务端的硬并发锁。
@@ -43,7 +55,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 
 ## 上传 / 替换内容包
 
-1. 在大厅页用 `foundry_open` 打开；未登录就请用户自己登录（见交互预算）。
+1. 在大厅页用 `foundry_open` 打开；当前已经开着某个战役的游戏页时，先用上节的 `foundry_lobby_return({})` 回大厅，不要直接 `foundry_open` 大厅地址。未登录就请用户自己登录（见交互预算）。
 2. 在 cwd 内找到用户点名的 module zip（含 `module.json` 与 `packs/`）。纯 `world.json` 世界包不是内容包，转 `arcane-world-import`。
 3. 调用 `foundry_lobby_import_start({sourcePath, expectedKind:"collection"})`。不要传 `campaignName`/`ruleset`；内容包不创建战役。
 4. 工具解析后会给出 module id、版本、包数量、条目数、素材体积与“同 moduleId 将替换旧包”的判断（以返回的 `plan` 为准）。走 App 现有审批；拒绝则零写入。
@@ -91,6 +103,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 | `PROFILE_MISMATCH` / `CAPABILITY_UNAVAILABLE` | 页面不是受信大厅或 App/runtime 版本不足：重开大厅；仍不行让用户更新 ArcaneDesk。 |
 | `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入。 |
 | `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后对账。 |
+| `foundry_lobby_return` 报错 | `CAPABILITY_UNAVAILABLE` = 页面/runtime 版本不足：重开大厅或让用户更新 App；`PROFILE_MISMATCH` = 当前不是 ready 的 mtcompat 游戏页（或 URL 缺 `?campaign=`），从大厅重新打开该战役；`TARGET_CHANGED` = 面板没有落到预期大厅：不重放，先 `foundry_open` 确认当前页面再按实际情况重来；`LOGIN_REQUIRED` = 结束本轮让用户登录；`JOB_INDETERMINATE` = 结果无法确认，不要自动重放。 |
 | `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅用库清单/战役状态对账。 |
 | `INPUT_INVALID` / `ABORTED` | 参数不合法或调用被取消：修正参数/报告取消；不要原样重试。 |
 | `REVISION_MISMATCH` | 读后状态已变（当前 revision 已变）：零写入，重新读取并把新状态重新展示、重新审批。 |

@@ -1,11 +1,13 @@
-// mt-compat 大厅的 8 个 typed tool。实现静态注册；声明由 AgentHost 按真实页面档位
+// mt-compat 大厅的 9 个 typed tool。实现静态注册；声明由 AgentHost 按真实页面档位
 // 动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { defineTool as definePiTool } from "@earendil-works/pi-coding-agent";
+import { FOUNDRY_SDK_ERROR_CODES } from "@arcanedesk/foundry-sdk/contracts";
 import { jsonSafe } from "./json-safe.js";
 import { MtLobbyError, isTerminalJob, jobPhaseOf } from "./mt-lobby-client.js";
 import { prepareLobbySourceFile } from "./mt-lobby-file.js";
+import { PAGE_PROFILES } from "./page-profiles.js";
 
 const exact = properties => Type.Object(properties, { additionalProperties: false });
 const ref = () => Type.String({ minLength: 1, maxLength: 256 });
@@ -81,6 +83,8 @@ function errorResult(error, extra = {}) {
     guidance = " Open the mt-compat lobby page with foundry_open; play, login, and plain Foundry pages do not expose lobby actions.";
   } else if (code === "CAPABILITY_UNAVAILABLE") {
     guidance = " The lobby service/runtime on this page is missing or too old; do not fall back to raw REST or page eval.";
+  } else if (code === "TARGET_CHANGED") {
+    guidance = " The panel did not confirm the expected mt-compat destination and the action was not replayed. Re-open the intended page with foundry_open; never substitute page eval or a bare navigation.";
   } else if (code === "JOB_INDETERMINATE") {
     guidance = " The job was not replayed. Re-open the lobby and verify campaigns, packs, and import batches before deciding whether to rerun.";
   } else if (code === "FILE_OUTSIDE_FENCE") {
@@ -181,8 +185,148 @@ function compactJobStatus(value) {
   return result;
 }
 
+/**
+ * 大厅 runtime 调用的唯一出口：复用 AgentHost 的 runtime（callForSession 保留会话遥测与
+ * 模式）及其串行队列，绝不另建队列或走 pageEval。测试/适配宿主可只提供
+ * callFoundryRuntime，或只提供 foundryRuntime。
+ */
+function callPageRuntime(host, action, args, options) {
+  if (typeof host.callFoundryRuntime === "function") return host.callFoundryRuntime(action, args, options);
+  const runtime = host.foundryRuntime;
+  if (!runtime || (typeof runtime.call !== "function" && typeof runtime.callForSession !== "function")) {
+    throw new MtLobbyError(
+      "CAPABILITY_UNAVAILABLE",
+      "The mt-compat page runtime is not installed; call foundry_open on the play page first",
+    );
+  }
+  return typeof runtime.callForSession === "function"
+    ? runtime.callForSession(host.telemetry ?? null, host.profile?.mode ?? "prep", action, args, options)
+    : runtime.call(action, args, options);
+}
+
+const LOGIN_RUNTIME_CODES = new Set(["LOGIN_REQUIRED", "UNAUTHORIZED", "AUTH_REQUIRED", "SESSION_EXPIRED"]);
+const CAPABILITY_RUNTIME_CODES = new Set(["CAPABILITY_UNAVAILABLE", "ACTION_UNKNOWN"]);
+
+/**
+ * navigateToLobby 的失败归一。返回 null 表示预期的 NAVIGATED（导航已发起，进入确认阶段）；
+ * 其余返回稳定的 MtLobbyError，绝不自动重放。SDK 会把页面 runtime 的抛错包成
+ * FOUNDRY_SDK_EVALUATION_FAILED，所以既认直接 error.code，也保留 message 兼容。
+ */
+function navigateToLobbyFailure(error) {
+  const code = typeof error?.code === "string" ? error.code : "";
+  const message = String(error?.message ?? error ?? "").slice(0, 1600);
+  if (code === FOUNDRY_SDK_ERROR_CODES.NAVIGATED) return null;
+  if (code === FOUNDRY_SDK_ERROR_CODES.ABORTED || code === "ABORTED") {
+    return new MtLobbyError("ABORTED", message || "Cancelled");
+  }
+  if (LOGIN_RUNTIME_CODES.has(code) || /LOGIN_REQUIRED|AUTH_REQUIRED|SESSION_EXPIRED|UNAUTHORIZED/.test(message)) {
+    return new MtLobbyError("LOGIN_REQUIRED", message || "The mt-compat session is not signed in");
+  }
+  if (
+    CAPABILITY_RUNTIME_CODES.has(code)
+    || code === FOUNDRY_SDK_ERROR_CODES.ACTION_UNSUPPORTED
+    || code === FOUNDRY_SDK_ERROR_CODES.TRANSPORT_UNAVAILABLE
+    || /ACTION_UNKNOWN|CAPABILITY_UNAVAILABLE|play exit surface is not installed/.test(message)
+  ) {
+    return new MtLobbyError("CAPABILITY_UNAVAILABLE", message || "The page runtime has no navigateToLobby action");
+  }
+  if (
+    code === FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GAME
+    || code === FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_DETECTED
+    || code === FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GM
+  ) {
+    return new MtLobbyError("PROFILE_MISMATCH", message || "The panel is not on the ready mt-compat play page");
+  }
+  // 超时/求值失败/not-ready：派发边界之后结果无法确认，不重放、不降级 eval。
+  return new MtLobbyError("JOB_INDETERMINATE", message || "navigateToLobby did not return a result");
+}
+
 /** @param {any} host */
 export function createLobbyTools(host) {
+  const lobbyReturn = defineTool({
+    name: "foundry_lobby_return",
+    label: "Return to mt-compat lobby",
+    description:
+      "Leave the current mt-compat play page and return to its trusted campaign lobby. No parameters. " +
+      "Only available in prep mode on a trusted mt-compat play page after foundry_open. " +
+      "It saves the current play URL (?campaign= is the campaign identity), calls the page runtime's typed navigateToLobby action " +
+      "(the same implementation as the native 'return to campaign lobby' control — never page eval, ui.nav, or a bare location assign), " +
+      "then waits until the trusted lobby page and its auth/runtime/lobby service are ready before reporting success. " +
+      "Returns {status:'completed', from:{path, campaignId}, to:{path}, returnPlayUrl}; use foundry_open({url: returnPlayUrl}) to return to the same campaign. " +
+      "Already in the lobby returns {status:'completed', alreadyInLobby:true}. " +
+      "CAPABILITY_UNAVAILABLE means the deployed runtime/lobby service is too old; LOGIN_REQUIRED means the user must sign in directly; " +
+      "TARGET_CHANGED means the panel did not land on the expected lobby; JOB_INDETERMINATE means the result could not be confirmed. " +
+      "No failure is ever replayed automatically and none may be replaced with page eval.",
+    parameters: exact({}),
+    executionMode: "sequential",
+    promptGuidelines: [
+      "Call this before lobby actions while the panel is on a play page; explain to the user that the panel will briefly leave the game.",
+      "After it succeeds, use the returned returnPlayUrl with foundry_open to go back to the same campaign.",
+      "Never retry a failed return with page eval, browser_evaluate, ui.nav, or a bare navigation.",
+    ],
+    execute: async (_toolCallId, _params, signal) => {
+      try {
+        const client = requirePrep(host);
+        const panelProfile = typeof host.panelProfileId === "function" ? host.panelProfileId() : null;
+        if (panelProfile !== null && panelProfile !== undefined && panelProfile !== PAGE_PROFILES.mtcompat.id) {
+          throw new MtLobbyError("PROFILE_MISMATCH", "foundry_lobby_return is only available on the mt-compat page profile");
+        }
+        const current = client.classifyPanelUrl();
+        if (current.kind === "lobby") {
+          // 已在大厅不是豁免：任何 completed 都必须先确认 auth/runtime/service 就绪，
+          // 否则紧接着的第一次 campaigns_list 可能落在尚未启动的 SPA 上。
+          await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
+          const details = { status: "completed", alreadyInLobby: true };
+          return textResult(details, details);
+        }
+        if (current.kind === "auth") {
+          throw new MtLobbyError("LOGIN_REQUIRED", "The panel is in the Keycloak login flow; ask the user to sign in directly");
+        }
+        const runtime = host.foundryRuntime;
+        const hasRuntime = typeof host.callFoundryRuntime === "function"
+          || (Boolean(runtime) && (typeof runtime.call === "function" || typeof runtime.callForSession === "function"));
+        if (!hasRuntime) {
+          throw new MtLobbyError("CAPABILITY_UNAVAILABLE", "The mt-compat page runtime is not installed; call foundry_open on the play page first");
+        }
+
+        // 回程身份只认当前 URL；不读 game.world.id，也不复用旧的 returnPlayUrl 记忆。
+        const returnPlayUrl = current.url;
+        const from = { path: current.path, campaignId: current.campaignId };
+        // completed 回执与 catch 到的预期 NAVIGATED 必须分开：正常返回不允许缺回执。
+        let expectedNavigation = false;
+        let receipt;
+        try {
+          receipt = await callPageRuntime(host, "navigateToLobby", {}, { signal, executionTimeoutMs: 15_000 });
+        } catch (error) {
+          const failure = navigateToLobbyFailure(error);
+          // null = 预期的 NAVIGATED：导航已发起，只进入确认阶段。
+          if (failure) throw failure;
+          expectedNavigation = true;
+        }
+        if (!expectedNavigation
+          && (receipt === null || typeof receipt !== "object" || receipt.status !== "completed")) {
+          throw new MtLobbyError("JOB_INDETERMINATE", "navigateToLobby did not return a completed receipt; the navigation result was not confirmed and was not replayed");
+        }
+
+        const ready = await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
+        const details = {
+          status: "completed",
+          from,
+          to: { path: ready.path },
+          returnPlayUrl,
+        };
+        return textResult(
+          `Returned to the mt-compat lobby from ${from.path} (campaign ${from.campaignId}). ` +
+            `Lobby service is ready; lobby tools can be used now. ` +
+            `To resume this campaign, call foundry_open({url: ${JSON.stringify(returnPlayUrl)}}).`,
+          details,
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  });
+
   const rulesetsList = defineTool({
     name: "foundry_lobby_rulesets_list",
     label: "mt-compat supported rulesets",
@@ -529,5 +673,5 @@ export function createLobbyTools(host) {
     },
   });
 
-  return [rulesetsList, importStart, importJob, campaignsList, campaignPacksGet, campaignPacksUpdate, packsRead, packsDelete];
+  return [lobbyReturn, rulesetsList, importStart, importJob, campaignsList, campaignPacksGet, campaignPacksUpdate, packsRead, packsDelete];
 }

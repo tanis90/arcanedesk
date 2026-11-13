@@ -519,3 +519,10 @@
 - 世界导入交互预算由 2 点改为 3 点：本次规则选择、按需登录、导入计划确认；大厅 typed 工具由 7 个增至 8 个，r48 为 `revision: 48`。
 - 奥法地图主入口为 `https://arcanemap.com/`。三个受信 origin 的 `/` 与 `/lobby.html` 在 `foundry_open` 导航前统一归一到 `/user-files/compat/lobby.html`，不得先按 Foundry 开放档加载再等待重定向；其它 origin 不做这项归一。
 - “打开/连接奥法地图”的默认域名由 prep/combat 系统提示词直接约束，不单独维护路由 skill；世界导入和内容包仍分别使用 `arcane-world-import`、`arcane-mt-packs`。
+
+### play → lobby → play 往返（2026-11-13，r49）
+
+- 当前在 mtcompat play 页而任务需要大厅时，先一句话说明“会暂时离开当前游戏”，再调用无参数 `foundry_lobby_return({})`；这是说明不是提问，不新增交互点。离开游戏后要做的仍是大厅原有动作，交互预算不变（世界导入 3 点、内容包按原预算）。
+- 回大厅只能走这个 typed action：不用 `foundry_page_eval`、`location.assign`、`ui.nav` 自造跳转，也不放宽 `foundry_open` 的同源/同 pathname 幂等（方案 A 已否决）。成功回执保留真实 `returnPlayUrl`（campaign 来自 play URL 的 `?campaign=`，不用 `game.world.id` 猜），大厅动作完成后 `foundry_open({url:returnPlayUrl})` 回原战役；已在大厅时 `alreadyInLobby:true`，直接继续。
+- `completed` 与预期 `NAVIGATED` 都只表示导航已发起：Desktop 随后确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪，agent 不把导航中断当可重放失败，不自动重放、不降级 eval。其余失败 `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 照实报告并停止。
+- 该工具仅 mtcompat prep：combat 与普通 Foundry 不声明，combat prompt 不改；世界导入与内容包继续沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。大厅 typed 工具由 8 个增至 9 个，r49 为 `revision: 49`。

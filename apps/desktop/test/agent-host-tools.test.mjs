@@ -442,6 +442,37 @@ test("structured tools fail closed when the page runtime is unavailable", async 
   await assert.rejects(tools.get("foundry_play_context").execute("turn", {}), /Foundry runtime unavailable/);
 });
 
+// ---- 方案 B：foundry_lobby_return 的宿主接线 ----
+
+test("foundry_lobby_return is registered with an empty-object schema", () => {
+  const { tools } = buildHarness();
+  const tool = tools.get("foundry_lobby_return");
+  assert.ok(tool, "工具池含 foundry_lobby_return");
+  assert.equal(tool.parameters.type, "object");
+  assert.deepEqual(tool.parameters.properties, {});
+  assert.deepEqual(tool.parameters.required ?? [], []);
+});
+
+test("callFoundryRuntime keeps telemetry/mode scope and fails closed without a runtime", async () => {
+  const calls = [];
+  const { host } = buildHarness({ call: async (...args) => { calls.push(args); return { ok: true }; } });
+  host.telemetry = { marker: "shared-runtime" };
+  assert.deepEqual(await host.callFoundryRuntime("battleContext", { a: 1 }, { executionTimeoutMs: 1 }), { ok: true });
+  assert.deepEqual(calls[0], ["battleContext", { a: 1 }, { executionTimeoutMs: 1 }]);
+
+  host.foundryRuntime = {
+    callForSession(telemetry, mode, action, args, options) {
+      calls.push([telemetry, mode, action, args, options]);
+      return Promise.resolve("scoped");
+    },
+  };
+  assert.equal(await host.callFoundryRuntime("navigateToLobby", {}, { executionTimeoutMs: 15_000 }), "scoped");
+  assert.deepEqual(calls[1], [host.telemetry, host.profile.mode, "navigateToLobby", {}, { executionTimeoutMs: 15_000 }]);
+
+  host.foundryRuntime = null;
+  assert.throws(() => host.callFoundryRuntime("worldInfo", {}), /Foundry page runtime is unavailable/);
+});
+
 // ---- A3：foundry_page_eval（mtcompat 档的兜底 eval，touched/missing 当场返回）----
 
 function pageEvalHarness({ receipt, failure } = {}) {

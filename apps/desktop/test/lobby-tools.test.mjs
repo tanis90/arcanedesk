@@ -4,9 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Value } from "typebox/value";
+import { FOUNDRY_SDK_ERROR_CODES, FoundrySdkError } from "@arcanedesk/foundry-sdk/contracts";
 import { createLobbyTools } from "../src/main/lobby-tools.js";
 import { MtLobbyClient } from "../src/main/mt-lobby-client.js";
-import { createLobbyFixture } from "./fixtures/lobby-harness.mjs";
+import { LOBBY_URL, createLobbyFixture } from "./fixtures/lobby-harness.mjs";
+
+const PLAY_URL = "https://arcanemap.com/user-files/compat/play.html?campaign=campaign-1";
+const AUTH_URL = "https://arcanemap.com/auth/realms/arcane/protocol/openid-connect/auth?client_id=compat";
 
 function harness(t, { approved = true } = {}) {
   const page = createLobbyFixture();
@@ -31,9 +35,52 @@ function harness(t, { approved = true } = {}) {
   return { page, directory, source, client, approvals, host, tools };
 }
 
-test("the tool pool registers exactly the eight lobby tools with exact schemas", () => {
+function returnHarness(t, {
+  url = PLAY_URL,
+  panelProfile = "mtcompat",
+  behavior = null,
+  withRuntime = true,
+  readyTimeoutMs = 500,
+  readyPollMs = 10,
+} = {}) {
+  const page = createLobbyFixture({ url });
+  const client = new MtLobbyClient({
+    getWebContents: () => page.webContents,
+    readyTimeoutMs,
+    readyPollMs,
+  });
+  const calls = [];
+  const foundryRuntime = withRuntime ? {
+    lastWorldInfo: null,
+    callForSession: async (_telemetry, _mode, action, args, options) => {
+      calls.push({ action, args, options });
+      const receipt = behavior
+        ? await behavior({ page, client, calls })
+        : (page.webContents.navigate(LOBBY_URL), {
+          status: "completed",
+          from: { path: "/user-files/compat/play.html", campaignId: "campaign-1" },
+          to: { path: "/user-files/compat/lobby.html" },
+          returnPlayUrl: PLAY_URL,
+        });
+      return receipt;
+    },
+  } : null;
+  const host = {
+    profile: { mode: "prep" },
+    telemetry: { marker: "lobby-return" },
+    log: () => {},
+    lobbyClient: () => client,
+    panelProfileId: () => panelProfile,
+    ...(foundryRuntime ? { foundryRuntime } : {}),
+  };
+  const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
+  return { page, client, calls, host, tools, tool: tools.get("foundry_lobby_return") };
+}
+
+test("the tool pool registers exactly the nine lobby tools with exact schemas", () => {
   const tools = new Map(createLobbyTools({ profile: { mode: "prep" } }).map(tool => [tool.name, tool]));
   assert.deepEqual([...tools.keys()], [
+    "foundry_lobby_return",
     "foundry_lobby_rulesets_list",
     "foundry_lobby_import_start",
     "foundry_lobby_import_job",
@@ -43,6 +90,9 @@ test("the tool pool registers exactly the eight lobby tools with exact schemas",
     "foundry_lobby_packs_read",
     "foundry_lobby_packs_delete",
   ]);
+  const lobbyReturn = tools.get("foundry_lobby_return");
+  assert.equal(Value.Check(lobbyReturn.parameters, {}), true);
+  assert.equal(Value.Check(lobbyReturn.parameters, { unexpected: true }), false);
   const start = tools.get("foundry_lobby_import_start");
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", ruleset: "2024" }), true);
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "world", ruleset: "2014" }), true);
@@ -373,4 +423,285 @@ test("login-required runtime errors are surfaced as stable codes", async (t) => 
   assert.equal(result.details.code, "LOGIN_REQUIRED");
   assert.match(result.content[0].text, /sign in directly/);
   assert.equal(h.page.state.runCalls.length, 0);
+});
+
+// ---- 方案 B：foundry_lobby_return（play → 受信 lobby，typed action + 就绪确认）----
+
+test("foundry_lobby_return saves the trusted play URL, dispatches navigateToLobby, then confirms the lobby", async (t) => {
+  const h = returnHarness(t);
+  const result = await h.tool.execute("return-1", {});
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.details, {
+    status: "completed",
+    from: { path: "/user-files/compat/play.html", campaignId: "campaign-1" },
+    to: { path: "/user-files/compat/lobby.html" },
+    returnPlayUrl: PLAY_URL,
+  });
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].action, "navigateToLobby");
+  assert.deepEqual(h.calls[0].args, {});
+  assert.equal(h.calls[0].options.executionTimeoutMs, 15_000);
+  assert.equal(h.page.webContents.getURL(), LOBBY_URL);
+  assert.match(result.content[0].text, /foundry_open/);
+  assert.match(result.content[0].text, /campaign-1/);
+
+  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns", {});
+  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+});
+
+test("an expected NAVIGATED from navigateToLobby also enters the confirmation stage", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async ({ page }) => {
+      page.webContents.navigate(LOBBY_URL);
+      throw new FoundrySdkError(FOUNDRY_SDK_ERROR_CODES.NAVIGATED, "Foundry navigated while the runtime read was in progress");
+    },
+  });
+  const result = await h.tool.execute("return-navigated", {});
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "completed");
+  assert.equal(result.details.from.campaignId, "campaign-1");
+  assert.equal(result.details.returnPlayUrl, PLAY_URL);
+  assert.equal(h.calls.length, 1);
+});
+
+test("already in the lobby returns completed/alreadyInLobby without dispatching or navigating", async (t) => {
+  const h = returnHarness(t, { url: LOBBY_URL });
+  const result = await h.tool.execute("return-already", {});
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.details, { status: "completed", alreadyInLobby: true });
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.page.webContents.getURL(), LOBBY_URL);
+});
+
+test("already in the lobby still waits for auth/runtime/service, then the first campaigns_list succeeds", async (t) => {
+  const h = returnHarness(t, { url: LOBBY_URL, readyTimeoutMs: 2_000 });
+  const service = h.page.service;
+  h.page.setService(null);
+  const timer = setTimeout(() => h.page.setService(service), 100);
+  t.after(() => clearTimeout(timer));
+
+  const result = await h.tool.execute("return-already-delayed", {});
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.details, { status: "completed", alreadyInLobby: true });
+  assert.equal(h.calls.length, 0, "already-in-lobby must not dispatch navigateToLobby");
+  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns-first", {});
+  assert.equal(campaigns.isError, undefined);
+  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+  assert.equal(h.page.state.listCalls, 1);
+});
+
+test("a delayed lobby service is waited for, then the first campaigns_list succeeds", async (t) => {
+  const h = returnHarness(t, { readyTimeoutMs: 2_000 });
+  const service = h.page.service;
+  h.page.setService(null);
+  const timer = setTimeout(() => h.page.setService(service), 100);
+  t.after(() => clearTimeout(timer));
+
+  const result = await h.tool.execute("return-delayed-service", {});
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "completed");
+  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns-first", {});
+  assert.equal(campaigns.isError, undefined);
+  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+  assert.equal(h.page.state.listCalls, 1);
+});
+
+test("a wrong destination is TARGET_CHANGED: no fake success and no replay", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async ({ page }) => {
+      page.webContents.navigate("https://arcanemap.com/game");
+      return { status: "completed" };
+    },
+  });
+  const result = await h.tool.execute("return-wrong", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "TARGET_CHANGED");
+  assert.match(result.content[0].text, /not replayed/);
+  assert.match(result.content[0].text, /foundry_open/);
+  assert.doesNotMatch(result.content[0].text, /world_status/);
+  assert.equal(h.calls.length, 1);
+});
+
+test("an untrusted-origin lobby is TARGET_CHANGED, never success", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async ({ page }) => {
+      page.webContents.navigate("https://evil.example/user-files/compat/lobby.html");
+      return { status: "completed" };
+    },
+  });
+  const result = await h.tool.execute("return-evil", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "TARGET_CHANGED");
+  assert.equal(h.calls.length, 1);
+});
+
+test("a typed timeout is JOB_INDETERMINATE and is not replayed", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async () => {
+      throw new FoundrySdkError(FOUNDRY_SDK_ERROR_CODES.TIMEOUT, "navigateToLobby timed out after dispatch");
+    },
+  });
+  const result = await h.tool.execute("return-timeout", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.page.webContents.getURL(), PLAY_URL, "a failed typed call must not fake a navigation");
+});
+
+test("never reaching the lobby within the bounded wait is TARGET_CHANGED", async (t) => {
+  const h = returnHarness(t, {
+    readyTimeoutMs: 150,
+    behavior: async () => ({ status: "completed" }),
+  });
+  const result = await h.tool.execute("return-never-navigated", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "TARGET_CHANGED");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.page.webContents.getURL(), PLAY_URL);
+});
+
+test("a missing page runtime is CAPABILITY_UNAVAILABLE before any dispatch", async (t) => {
+  const h = returnHarness(t, { withRuntime: false });
+  const result = await h.tool.execute("return-no-runtime", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "CAPABILITY_UNAVAILABLE");
+  assert.equal(h.calls.length, 0);
+});
+
+test("an old frontend without navigateToLobby is CAPABILITY_UNAVAILABLE", async (t) => {
+  for (const failure of [
+    Object.assign(new Error("Foundry runtime read failed: ACTION_UNKNOWN: navigateToLobby"), {
+      code: FOUNDRY_SDK_ERROR_CODES.EVALUATION_FAILED,
+    }),
+    new FoundrySdkError(FOUNDRY_SDK_ERROR_CODES.ACTION_UNSUPPORTED, "Unsupported Foundry runtime action: navigateToLobby"),
+    Object.assign(new Error("CAPABILITY_UNAVAILABLE: play exit surface is not installed"), {
+      code: FOUNDRY_SDK_ERROR_CODES.EVALUATION_FAILED,
+    }),
+  ]) {
+    const h = returnHarness(t, { behavior: async () => { throw failure; } });
+    const result = await h.tool.execute("return-old", {});
+    assert.equal(result.isError, true, failure.message);
+    assert.equal(result.details.code, "CAPABILITY_UNAVAILABLE", failure.message);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.page.webContents.getURL(), PLAY_URL);
+  }
+});
+
+test("an expired login during the return is LOGIN_REQUIRED", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async ({ page }) => {
+      page.webContents.navigate(AUTH_URL);
+      return { status: "completed" };
+    },
+  });
+  const result = await h.tool.execute("return-login", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "LOGIN_REQUIRED");
+  assert.match(result.content[0].text, /sign in directly/);
+  assert.equal(h.calls.length, 1);
+});
+
+test("the campaign identity comes from the play URL, never from the typed receipt", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async ({ page }) => {
+      page.webContents.navigate(LOBBY_URL);
+      return {
+        status: "completed",
+        from: { path: "/user-files/compat/play.html", campaignId: "campaign-other" },
+        to: { path: "/user-files/compat/lobby.html" },
+        returnPlayUrl: "https://arcanemap.com/user-files/compat/play.html?campaign=campaign-other",
+      };
+    },
+  });
+  const result = await h.tool.execute("return-campaign", {});
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.from.campaignId, "campaign-1");
+  assert.equal(result.details.returnPlayUrl, PLAY_URL);
+  assert.equal(JSON.stringify(result).includes("campaign-other"), false);
+});
+
+test("an unknown typed result is JOB_INDETERMINATE with zero replays and no eval fallback", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async () => { throw new Error("renderer exploded"); },
+  });
+  const result = await h.tool.execute("return-unknown", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].action, "navigateToLobby", "the failure must not be retried or replaced with another action");
+  assert.equal(h.page.webContents.getURL(), PLAY_URL);
+});
+
+test("an unrecognized completed receipt is JOB_INDETERMINATE, not success", async (t) => {
+  const h = returnHarness(t, {
+    behavior: async () => ({ status: "rejected", code: "SOMETHING_ELSE" }),
+  });
+  const result = await h.tool.execute("return-bad-receipt", {});
+  assert.equal(result.isError, true);
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(h.calls.length, 1);
+});
+
+test("empty or missing typed receipts are JOB_INDETERMINATE, never success", async (t) => {
+  for (const [label, receipt] of [["empty", {}], ["undefined", undefined]]) {
+    const h = returnHarness(t, { behavior: async () => receipt });
+    const result = await h.tool.execute(`return-${label}-receipt`, {});
+    assert.equal(result.isError, true, label);
+    assert.equal(result.details.code, "JOB_INDETERMINATE", label);
+    assert.equal(h.calls.length, 1, label);
+    assert.equal(h.page.webContents.getURL(), PLAY_URL, label);
+  }
+});
+
+test("direct runtime error codes map to stable lobby codes", async (t) => {
+  for (const [code, expected] of [
+    ["LOGIN_REQUIRED", "LOGIN_REQUIRED"],
+    ["UNAUTHORIZED", "LOGIN_REQUIRED"],
+    ["AUTH_REQUIRED", "LOGIN_REQUIRED"],
+    ["SESSION_EXPIRED", "LOGIN_REQUIRED"],
+    ["CAPABILITY_UNAVAILABLE", "CAPABILITY_UNAVAILABLE"],
+    ["ACTION_UNKNOWN", "CAPABILITY_UNAVAILABLE"],
+  ]) {
+    const h = returnHarness(t, {
+      behavior: async () => { throw Object.assign(new Error("opaque failure"), { code }); },
+    });
+    const result = await h.tool.execute(`return-code-${code}`, {});
+    assert.equal(result.isError, true, code);
+    assert.equal(result.details.code, expected, code);
+    assert.equal(h.calls.length, 1, code);
+  }
+});
+
+test("a host exposing only callFoundryRuntime (no foundryRuntime) is accepted", async (t) => {
+  const h = returnHarness(t, { withRuntime: false });
+  const calls = [];
+  h.host.callFoundryRuntime = async (action, args, options) => {
+    calls.push({ action, args, options });
+    h.page.webContents.navigate(LOBBY_URL);
+    return { status: "completed" };
+  };
+  const result = await h.tool.execute("return-host-call", {});
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "completed");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "navigateToLobby");
+});
+
+test("profile and campaign preconditions fail closed before the typed call", async (t) => {
+  const wrongProfile = returnHarness(t, { panelProfile: "foundry" });
+  const profileResult = await wrongProfile.tool.execute("return-profile", {});
+  assert.equal(profileResult.details.code, "PROFILE_MISMATCH");
+  assert.equal(wrongProfile.calls.length, 0);
+
+  const noCampaign = returnHarness(t, { url: "https://arcanemap.com/user-files/compat/play.html" });
+  const campaignResult = await noCampaign.tool.execute("return-no-campaign", {});
+  assert.equal(campaignResult.details.code, "PROFILE_MISMATCH");
+  assert.match(campaignResult.content[0].text, /campaign/);
+  assert.equal(noCampaign.calls.length, 0);
+
+  const combat = returnHarness(t);
+  combat.host.profile.mode = "combat";
+  const combatResult = await combat.tool.execute("return-combat", {});
+  assert.equal(combatResult.details.code, "PROFILE_MISMATCH");
+  assert.equal(combat.calls.length, 0);
 });

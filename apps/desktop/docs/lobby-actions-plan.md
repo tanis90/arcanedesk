@@ -1,8 +1,9 @@
 # 大厅能力下发（原生 File + typed tools）——ArcaneDesk 驱动 mt compat 大厅
 
 > 状态：技术方案 v2 已实现；真实本地后端 + Electron/CDP 验收通过
-> 涉及仓：mt-foundry-compat（业务真源）→ arcanedesk（桌面端 0.9.0）→ skills r46
+> 涉及仓：mt-foundry-compat（业务真源）→ arcanedesk（桌面端 0.9.0）→ skills r49
 > 日期：2026-11-11（设计）/ 2026-11-12（实现与验收）
+> 追加：play → lobby → play 往返（方案 B）见 [foundry-open-lobby-return-plan.md](foundry-open-lobby-return-plan.md)；大厅 typed 工具随之由 8 个增至 9 个。
 
 ## 0. 目标与边界
 
@@ -12,12 +13,13 @@
 2. 上传合集包：写入用户个人库、`userpack-assets` 与导入批次；同 moduleId 重传即替换。
 3. 管理合集库：合集/单包清单、条目只读预览、按合集或单包删除。
 4. 管理战役选包：读取已选引用，增量勾选/取消，维护 SRD 两旗并 bump `packsRev`。
+5. 往返游戏页：Agent 当前在某个战役的 play 页而任务需要大厅时，用 `foundry_lobby_return` 回大厅，完成后再用真实 `returnPlayUrl` 回到原战役。
 
 明确不做：
 
 - 不在 Electron/Node 重写世界或合集导入业务，不把 access token 交给 agent 或 Node。
 - 不新增本地 HTTP 服务、一次性 ticket、自定义协议、通用 REST/eval 工具。
-- 不为 8 个固定工具引入 tool_search、Code Mode 或 WebMCP 依赖。
+- 不为 9 个固定工具引入 tool_search、Code Mode 或 WebMCP 依赖。
 - 不承诺页面关闭/刷新后任务继续；中断只支持对账，不自动重放。
 - 新版主路径不收密码。旧版 dnd5e（<5.3.0）与大厅保持一致地拒绝并指引升级；旧 ROPC 脚本已从 skill bundle 删除，没有旧 CLI 降级通道。
 - 第一阶段不变更后端 API/Schema，不触发后端发版。
@@ -48,7 +50,7 @@
 | D2 | 用 Chromium `DOM.setFileInputFiles` 交付本地文件 | 直接产生磁盘 backed `File`，复用现有 Blob 管线；无需 HTTP/CORS/LNA、ticket、base64 或 Electron 业务重写 |
 | D3 | 独立 `MtLobbyClient`，不改 Foundry SDK preflight | lobby 与 play 的鉴权、路径和就绪语义不同；避免污染现有 `mtCompatIsReady` |
 | D4 | LLM 只见 `import_start + import_job`，inspect 藏在 start 内 | 四个 RPC 工具会增加上下文与编排错误；内部仍保留 inspect/run/status/cancel 清晰边界 |
-| D5 | 全集只新增 8 个工具 | 覆盖完整能力且不为列表、预览、战役目录制造重复工具 |
+| D5 | 初始全集新增 8 个大厅业务工具 | 覆盖完整能力且不为列表、预览、战役目录制造重复工具 |
 | D6 | 战役选包只增量 update；合集删除有独立审批和版本指纹 | 防止全量 set 漏项、误取消引用及按旧清单删除 |
 | D7 | 工具实现静态注册，模型声明按真实页面档位动态切换 | 会话启动不知道目标，且同一会话可能切换 VTT；不需要动态加载实现，更不能只靠启动时静态名单 |
 | D8 | 动态声明不是安全边界；每次调用都重新校验目标并绑定页面 epoch | 历史消息、模型误调用、页面切换都可能绕过当前工具名单 |
@@ -56,13 +58,14 @@
 | D10 | 复用现有镜像流程产生的真实暂存产物，再走同一原生 File 通道 | Desktop 只识别带可信标记、hash 与真实 ZIP 的 `world-stage`/`stage` 目录；不新增下载器或 `sourceUrl` 输入，不开放桶 CORS |
 | D11 | CDP 验收分“大厅 runtime”与“真实 Desktop tool”两层 | 直接调 runtime 会绕过路径围栏、审批、tool policy 和 job 管理，不能冒充端到端 |
 | D12 | Code Mode 只留作未来只读批量聚合选项；WebMCP 只借鉴生命周期 | 官方也建议审批敏感写操作走直接调用；当前不需要新协议或脚本执行面 |
+| D13 | 追加第 9 个工具 `foundry_lobby_return`，不改 `foundry_open` 幂等 | 同源/同 pathname 幂等是 `foundry_open` 的正确语义，为回大厅放宽会让所有导航调用失去重放保护；独立无参 typed action 与 play 原生“返回战役大厅”共用退出实现，失败语义可枚举 |
 
 ## 3. 技术设计
 
 ### 3.1 总体链路
 
 ```text
-LLM：8 个 typed tools
+LLM：9 个 typed tools
   ↓
 Desktop tool policy + 每次调用的目标守卫
   ↓
@@ -156,7 +159,7 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 - Foundry SDK 的 `/game` preflight。
 - 普通 Foundry 的 runtime 与工具名单。
 
-### 3.5 LLM 工具面（当前 8 个）
+### 3.5 LLM 工具面（当前 9 个）
 
 | Tool | 最小入参 | 返回与独立理由 |
 |---|---|---|
@@ -168,6 +171,7 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 | `foundry_lobby_campaign_packs_update` | `{campaignId, expectedRevision, add?, remove?, enabledSourcesPatch?}` | 唯一选包写入口；增量合并、现有审批链、回读、packsRev |
 | `foundry_lobby_packs_read` | `{}`、`{moduleId?}` 或 `{packId, query?, cursor?, limit?}` | 合集库清单与条目预览两个只读形态；清单给库 `revision`，条目强制分页 |
 | `foundry_lobby_packs_delete` | `{packIds, expectedRevision}` | 唯一合集库删除入口；影响预览、现有审批链、purge 与清理结果 |
+| `foundry_lobby_return` | `{}` | 仅 mtcompat 备团：把当前 play 页送回大厅，回执 `{status,from,to,returnPlayUrl}`（已在大厅为 `alreadyInLobby:true`）；回游戏用 `foundry_open({url:returnPlayUrl})`，不改 `foundry_open` 幂等 |
 
 明确不提供：
 
@@ -189,6 +193,18 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 - `enabledSourcesPatch` 只接受非空 `{srd2014?:boolean,srd2024?:boolean}`；refs 或 sources 有实际变化才恰好 bump 一次 `packsRev`，sources-only 也 bump，no-op 不写不 bump。
 - 删除预览包含 `affectedCampaigns`、关联素材去重数与条目/批次统计；公共删除不暴露 `keepAssetIds`，不自动 detach，世界快照保持不变。
 - 工具结果隐藏本地完整路径，但保留完整的 HTTP/HTTPS 业务 URL（包括含 `/var/` 段的 URL）；`preparationId`、文件字节和凭证不进入模型结果。
+
+#### play → lobby → play 往返（方案 B）
+
+```text
+play → foundry_lobby_return({}) → lobby 动作 → foundry_open({url:returnPlayUrl}) → play
+```
+
+- 只在 mtcompat prep 注入；combat 与普通 Foundry 不声明，combat prompt 不改。与 play 原生“返回战役大厅”共用退出实现，清理 live client/socket/订阅一次，保留 Keycloak 会话。
+- `completed` 与预期 `NAVIGATED` 都只进入确认阶段：Desktop 再确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪后才报成功；Agent 不把导航中断当可重放失败。
+- `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`PROFILE_MISMATCH`（不在 ready play 页或缺 `?campaign=`）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 均不自动重放，也不降级 `foundry_page_eval`。
+- 回程 URL 由 play URL 的 `?campaign=` 决定，不用 `game.world.id` 猜；不串战役。
+- 引导落在现有 skill：世界导入与内容包分别沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。完整契约见 [foundry-open-lobby-return-plan.md](foundry-open-lobby-return-plan.md)。
 
 ### 3.6 版本指纹与中断语义
 
@@ -228,7 +244,7 @@ job 只活在当前大厅文档：
 规则：
 
 - 只有宿主依据受信 URL/runtime 证据切换，不能由用户或模型一句“这是 mt compat”开通。
-- mt compat prep 增加本方案 8 个工具；combat 和普通 Foundry 不增加。
+- mt compat prep 增加本方案 9 个工具；combat 和普通 Foundry 不增加。
 - lobby↔play、auth 跳转保持同一档位，不重复装卸；只在 foundry↔mtcompat 或面板失效时改变。
 - 会话恢复时重新对账，不能盲信历史 system message 中残留的 active tools。
 - 多 resident session 共享一个面板，激活可随当前档位刷新；已开始的调用仍按捕获的目标和页面租约执行，不能因另一会话切换页面而静默改目标。
@@ -238,9 +254,9 @@ job 只活在当前大厅文档：
 
 | 机制 | 业界事实 | 本方案判断 |
 |---|---|---|
-| 小工具集直接声明 | OpenAI 对小集合/高频工具推荐 eager；结构最简单、缓存稳定 | 8 个工具本身不大，但跨档位直接暴露会产生错误能力；可作降级，不作首选 |
+| 小工具集直接声明 | OpenAI 对小集合/高频工具推荐 eager；结构最简单、缓存稳定 | 9 个工具本身不大，但跨档位直接暴露会产生错误能力；可作降级，不作首选 |
 | 宿主 loader 动态激活 | Pi 支持 loader 执行时改变 active tools，并在下一次模型请求前生效；移除/替换使用普通完整工具表，可能损失缓存 | **采用**。能力来源确定、集合小且需要宿主权限判定，不需要模型搜索 |
-| 模型 tool_search / deferred loading | OpenAI/Pi 适合大目录、少量按需工具；增加发现步骤和检索不确定性，已加载工具会影响后续上下文与缓存 | 不采用。8 个固定工具没有目录发现问题，且 tool_search 不能代替执行权限门 |
+| 模型 tool_search / deferred loading | OpenAI/Pi 适合大目录、少量按需工具；增加发现步骤和检索不确定性，已加载工具会影响后续上下文与缓存 | 不采用。9 个固定工具没有目录发现问题，且 tool_search 不能代替执行权限门 |
 | Code Mode / Programmatic Tool Calling | 适合并行、循环、聚合大量只读结果；OpenAI 明确建议写操作/审批敏感动作默认直接调用 | 不作为主路径。未来可用同一 typed 只读工具做批量聚合，写面仍直接调用 |
 | Codex WebMCP site tools | 页面注册预定义工具，访问时发现，导航后可能失效；调用绑定来源页面与注册并经过安全审查 | 借鉴生命周期和来源绑定；当前标准/宿主支持不构成收益，不另加协议适配器 |
 
@@ -268,7 +284,7 @@ job 只活在当前大厅文档：
 ### Stage 2 —— arcanedesk
 
 1. 实现 `MtLobbyClient` 与原生 File 适配器。
-2. 新增 `lobby-tools.js` 的 8 个工具，保持 schema 精确、输出有界、审批 deny 零底层写。
+2. 新增 `lobby-tools.js` 的 9 个工具，保持 schema 精确、输出有界、审批 deny 零底层写；`foundry_lobby_return` 走 runtime `navigateToLobby` 与大厅就绪确认，不碰 `foundry_open` 幂等。
 3. 扩展 `foundry_open` 为 loader：按真实档位刷新所有相关 host 的 active tools，返回 activatedTools。
 4. 执行层独立目标守卫、资源租约、navigationEpoch 和 indeterminate 对账。
 5. runtime 按真实来源同步 parity，不跨版本盲拷。
@@ -325,8 +341,8 @@ job 只活在当前大厅文档：
 
 至少覆盖：
 
-1. 新会话未知目标时不声明 8 个 lobby 工具。
-2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确 8 个工具，无需额外用户轮次。
+1. 新会话未知目标时不声明 9 个 lobby 工具。
+2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确 9 个工具，无需额外用户轮次。
 3. 首次打开普通 FVTT 不激活；mtcompat→FVTT 后旧调用被移除且执行层仍 fail-closed。
 4. lobby→play→lobby 不改变 active set，不反复重载或清空 job。
 5. 恢复带历史工具声明的会话时按当前真实档位对账。
@@ -342,11 +358,20 @@ job 只活在当前大厅文档：
 - journal、tool 输出和模型上下文不含 token、zip 字节或完整本地路径。
 - 默认打本地栈与专用测试账号；唯一战役/包前缀，teardown 软删战役并 purge 测试包。线上仅用户明确要求时另跑。
 
+### 5.6 play → lobby → play 往返（方案 B）
+
+- prep play → `foundry_lobby_return({})`，回执 `from`/`to`/`returnPlayUrl` 正确，campaign 来自 play URL 的 `?campaign=`。
+- 返回大厅后第一次 `foundry_lobby_campaigns_list` 立即成功（auth/runtime/`__MT_LOBBY_SERVICE__` 就绪确认生效）。
+- 用 `returnPlayUrl` 回到原战役，runtime 恢复，不串世界。
+- `completed` 与预期 `NAVIGATED` 都经确认阶段才报成功；错误目的地、超时、runtime 缺席不报假成功。
+- 已在大厅时 `alreadyInLobby:true` 幂等；重复调用不重复清理。
+- combat 工具列表无 `foundry_lobby_return`；连续三次往返无重复 socket/监听，认证不丢，GM 重进无锁。
+
 ## 6. 发布与回滚
 
 1. 本期交付范围是两个仓库的 `feat/mtcompat-lobby-actions` 分支；不自动创建 PR、合并、部署生产或发布 skills 到 OSS。
 2. 后续生产发布仍需分别走 compat 与 ArcaneDesk 的评审/发布流程；安装包 smoke 是发布前检查，不能用源码 Electron 验收替代。
-3. skills r46 的 `minAppVersion:"0.9.0"` 让旧 App fail-closed；只有包含本功能的 Desktop 发布后才推进 skill bundle。
+3. skills r46 起（当前 r49）的 `minAppVersion:"0.9.0"` 让旧 App fail-closed；只有包含本功能的 Desktop 发布后才推进 skill bundle。
 4. 回滚可分别撤掉 lobby runtime 装配、Desktop 版本或 skills latest 指针；业务数据不做逆向迁移。
 
 ## 7. 残余风险

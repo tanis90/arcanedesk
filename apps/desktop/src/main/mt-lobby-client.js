@@ -5,10 +5,14 @@
 // 固定 action 白名单、串行队列、导航安全 evaluate，以及 job 与
 // webContents.id + navigationEpoch 的绑定。页面导航/刷新/崩溃后旧 job 只会被判为
 // indeterminate，绝不自动重放。
+// 方案 B：waitForLobbyReady 用有界只读轮询复用 preflight，等 play → lobby 的 auth/
+// runtime/service 全部就绪；每轮重新捕获 target，导航造成的旧 epoch 不会被误报成
+// TARGET_CHANGED。它从不派发页面动作。
 import { evaluateNavigationSafe } from "./foundry-web.js";
 import {
   MT_COMPAT_AUTH_PATH_PATTERN,
   MT_COMPAT_LOBBY_PATH_PATTERN,
+  MT_COMPAT_PATH_PATTERN,
   MT_COMPAT_TRUSTED_ORIGINS,
 } from "./page-profiles.js";
 import { bindLobbyFileInput, LobbyFileError } from "./mt-lobby-file.js";
@@ -42,7 +46,12 @@ const TERMINAL_JOB_STATE_SET = new Set(TERMINAL_JOB_STATES);
 const MAX_JOB_WAIT_MS = 25_000;
 const STATUS_POLL_MS = 500;
 const MAX_JOBS = 64;
+const DEFAULT_LOBBY_READY_TIMEOUT_MS = 15_000;
+const MAX_LOBBY_READY_TIMEOUT_MS = 30_000;
+const DEFAULT_LOBBY_READY_POLL_MS = 250;
 const SENSITIVE_RUNTIME_CODES = new Set(["UNAUTHORIZED", "AUTH_REQUIRED", "LOGIN_REQUIRED", "SESSION_EXPIRED"]);
+/** 到达 lobby 后仍未定论的观察：页面随后回到 play/空白也不能当“从未到达”抹掉。 */
+const UNCERTAIN_LOBBY_EVIDENCE = new Set(["TARGET_CHANGED", "PROFILE_MISMATCH", "TARGET_TIMEOUT"]);
 
 export class MtLobbyError extends Error {
   /** @param {string} code @param {string} message */
@@ -94,6 +103,18 @@ function boundedWait(waitMs) {
   return Math.min(Math.floor(value), MAX_JOB_WAIT_MS);
 }
 
+function boundedReadyTimeout(timeoutMs) {
+  const value = Number(timeoutMs);
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_LOBBY_READY_TIMEOUT_MS;
+  return Math.min(Math.floor(value), MAX_LOBBY_READY_TIMEOUT_MS);
+}
+
+function boundedReadyPoll(pollMs) {
+  const value = Number(pollMs);
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_LOBBY_READY_POLL_MS;
+  return Math.min(Math.max(1, Math.floor(value)), 2_000);
+}
+
 function safeRuntimeCode(code) {
   return typeof code === "string" && /^[A-Z0-9_]{1,64}$/.test(code) ? code : "LOBBY_ACTION_FAILED";
 }
@@ -106,6 +127,8 @@ function safeRuntimeCode(code) {
  *   lobbyPathPattern?: RegExp,
  *   isTrustedLobbyUrl?: (url: string) => boolean,
  *   protocolVersion?: number,
+ *   readyTimeoutMs?: number,
+ *   readyPollMs?: number,
  *   log?: (message: string) => void,
  * }} options
  */
@@ -117,6 +140,8 @@ export class MtLobbyClient {
     lobbyPathPattern = MT_COMPAT_LOBBY_PATH_PATTERN,
     isTrustedLobbyUrl = null,
     protocolVersion = 1,
+    readyTimeoutMs = DEFAULT_LOBBY_READY_TIMEOUT_MS,
+    readyPollMs = DEFAULT_LOBBY_READY_POLL_MS,
     log = () => {},
   } = /** @type {any} */ ({})) {
     if (typeof getWebContents !== "function") throw new TypeError("getWebContents must be a function");
@@ -129,6 +154,8 @@ export class MtLobbyClient {
     // 只有显式运维 override 判为 mtcompat 的 URL 才能越过三 origin 白名单。
     this.isTrustedLobbyUrl = typeof isTrustedLobbyUrl === "function" ? isTrustedLobbyUrl : null;
     this.protocolVersion = protocolVersion;
+    this.readyTimeoutMs = boundedReadyTimeout(readyTimeoutMs);
+    this.readyPollMs = boundedReadyPoll(readyPollMs);
     this.log = log;
     this.queue = Promise.resolve();
     this.targets = new WeakMap();
@@ -171,6 +198,85 @@ export class MtLobbyClient {
       throw new MtLobbyError("LOGIN_REQUIRED", "The panel is still in the Keycloak login flow; ask the user to sign in directly");
     }
     throw new MtLobbyError("PROFILE_MISMATCH", "Open the mt-compat lobby page (lobby.html) in the panel first");
+  }
+
+  /** 受信 origin：三 origin 白名单，或 main 注入的显式 mtcompat 覆盖。 */
+  isTrustedOrigin(parsed) {
+    if (this.trustedOrigins.includes(parsed.origin)) return true;
+    try {
+      return this.isTrustedLobbyUrl?.(parsed.href) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 当前面板 URL；面板缺席/销毁 fail-closed。 */
+  currentUrl() {
+    const webContents = this.getWebContents?.();
+    if (!webContents || webContents.isDestroyed?.()) {
+      throw new MtLobbyError("TARGET_UNAVAILABLE", "The mt-compat panel is not open");
+    }
+    return String(webContents.getURL?.() ?? "");
+  }
+
+  /**
+   * 当前页面档位判定（play/lobby/auth）——foundry_lobby_return 的入口校验。
+   * 受信 origin + play.html 必须有非空 ?campaign=（战役身份只认 URL，不读 game.world.id）。
+   * 非受信 origin、非 compat 路径、play 缺 campaign 一律 PROFILE_MISMATCH（fail-closed）。
+   * @param {string} [rawUrl]
+   * @returns {{ kind: "play", url: string, path: string, origin: string, campaignId: string }
+   *   | { kind: "lobby", url: string, path: string, origin: string }
+   *   | { kind: "auth", url: string, path: string, origin: string }}
+   */
+  classifyPanelUrl(rawUrl = this.currentUrl()) {
+    let parsed;
+    try {
+      parsed = new URL(String(rawUrl));
+    } catch {
+      throw new MtLobbyError("PROFILE_MISMATCH", "The panel is not on a valid mt-compat URL");
+    }
+    if (!this.isTrustedOrigin(parsed)) {
+      throw new MtLobbyError("PROFILE_MISMATCH", "The panel is not on a trusted mt-compat origin");
+    }
+    const base = { url: parsed.href, path: parsed.pathname, origin: parsed.origin };
+    if (MT_COMPAT_AUTH_PATH_PATTERN.test(parsed.pathname)) return { kind: "auth", ...base };
+    if (this.lobbyPathPattern.test(parsed.pathname)) return { kind: "lobby", ...base };
+    if (MT_COMPAT_PATH_PATTERN.test(parsed.pathname)) {
+      const campaignId = String(parsed.searchParams.get("campaign") ?? "").trim();
+      if (!campaignId) {
+        throw new MtLobbyError(
+          "PROFILE_MISMATCH",
+          "The mt-compat play page does not carry a ?campaign= identity; open the campaign from the lobby again",
+        );
+      }
+      return { kind: "play", ...base, campaignId };
+    }
+    throw new MtLobbyError("PROFILE_MISMATCH", "Open the mt-compat play page (play.html?campaign=…) first");
+  }
+
+  /**
+   * 导航确认期的 URL 分类：只做形状判断，不抛错。
+   * - lobby/auth：受信 origin 上的对应路径；
+   * - play：受信 origin 上的 play.html（导航尚未完成/从未发生）；
+   * - wrong：受信 origin 的其他路径，或未受信 origin；
+   * - blank：非 http(s) 或不可解析（导航进行中的过渡态）。
+   * @param {string} rawUrl
+   * @returns {{ kind: "lobby" | "play" | "auth" | "wrong" | "blank", url?: string, path?: string, origin?: string }}
+   */
+  classifyNavigationUrl(rawUrl) {
+    let parsed;
+    try {
+      parsed = new URL(String(rawUrl));
+    } catch {
+      return { kind: "blank" };
+    }
+    if (!/^https?:$/.test(parsed.protocol)) return { kind: "blank" };
+    const base = { url: parsed.href, path: parsed.pathname, origin: parsed.origin };
+    if (!this.isTrustedOrigin(parsed)) return { kind: "wrong", ...base };
+    if (MT_COMPAT_AUTH_PATH_PATTERN.test(parsed.pathname)) return { kind: "auth", ...base };
+    if (this.lobbyPathPattern.test(parsed.pathname)) return { kind: "lobby", ...base };
+    if (MT_COMPAT_PATH_PATTERN.test(parsed.pathname)) return { kind: "play", ...base };
+    return { kind: "wrong", ...base };
   }
 
   /** 导航/刷新/崩溃/页内路由变化都推高 epoch，并把旧 job 标为 indeterminate。 */
@@ -229,7 +335,12 @@ export class MtLobbyClient {
     return result;
   }
 
-  async preflight(action, target) {
+  /**
+   * @param {string} action
+   * @param {any} target
+   * @param {{ signal?: AbortSignal, timeoutMs?: number }} [options]
+   */
+  async preflight(action, target, { signal, timeoutMs = 5_000 } = {}) {
     if (!ACTION_SET.has(action)) {
       throw new MtLobbyError("ACTION_UNKNOWN", `Unknown mt-compat lobby action: ${String(action).slice(0, 64)}`);
     }
@@ -237,7 +348,8 @@ export class MtLobbyClient {
     this.assertLobbyUrl(target.url);
 
     const outcome = await this.evaluate(target.webContents, this.preflightExpression(), {
-      timeoutMs: 5_000,
+      timeoutMs,
+      ...(signal ? { signal } : {}),
     });
     if (outcome.status === "navigated") {
       throw new MtLobbyError("TARGET_CHANGED", "The lobby page navigated during preflight; no automatic replay");
@@ -278,6 +390,99 @@ export class MtLobbyClient {
     }
     this.assertTarget(target);
     return { url: target.url, protocolVersion: state.protocolVersion ?? null };
+  }
+
+  /**
+   * foundry_lobby_return 的确认阶段：有界只读等待，复用 preflight 等 auth、runtime 与
+   * __MT_LOBBY_SERVICE__ 全部就绪。每次轮询都重新读取当前 webContents 并重新捕获
+   * target —— 导航会推高旧 target 的 epoch，绝不能拿旧 target 假报 TARGET_CHANGED。
+   * 不派发任何页面动作，只读 preflight；超时不重放。
+   *
+   * 返回受信 lobby 的 {url, path, origin, protocolVersion}。失败语义：
+   * - 受信 origin 但落到 /auth：LOGIN_REQUIRED（立即）；
+   * - 未受信 origin 或其他路径：TARGET_CHANGED（立即）；
+   * - 到达 lobby 但 auth/service/runtime 始终不就绪：保留最后一次确定的错误码
+   *   （LOGIN_REQUIRED / CAPABILITY_UNAVAILABLE）；
+   * - 到达 lobby 后 preflight 超时或页面反复导航（churn），即使随后回到 play/空白，
+   *   不确定证据保留到截止：JOB_INDETERMINATE；
+   * - 始终没有离开 play（或停在空白过渡页）：TARGET_CHANGED。
+   *
+   * @param {{ signal?: AbortSignal, timeoutMs?: number, pollMs?: number, expectedOrigin?: string | null, action?: string }} [options]
+   */
+  async waitForLobbyReady({
+    signal,
+    timeoutMs = this.readyTimeoutMs,
+    pollMs = this.readyPollMs,
+    expectedOrigin = null,
+    action = "lobbyCampaignsList",
+  } = {}) {
+    const budget = boundedReadyTimeout(timeoutMs);
+    const interval = boundedReadyPoll(pollMs);
+    const deadline = Date.now() + budget;
+    return this.runExclusive(async () => {
+      let lastError = null;
+      for (;;) {
+        if (signal?.aborted) throw new MtLobbyError("ABORTED", "Cancelled");
+        const webContents = this.getWebContents?.();
+        if (!webContents || webContents.isDestroyed?.()) {
+          throw new MtLobbyError("TARGET_UNAVAILABLE", "The mt-compat panel was closed while returning to the lobby");
+        }
+        const page = this.classifyNavigationUrl(String(webContents.getURL?.() ?? ""));
+        if (page.kind === "auth") {
+          throw new MtLobbyError("LOGIN_REQUIRED", "The panel entered the Keycloak login flow; ask the user to sign in directly");
+        }
+        if (page.kind === "wrong") {
+          throw new MtLobbyError("TARGET_CHANGED", "The panel navigated to an unexpected destination; no automatic replay");
+        }
+        if (page.kind === "lobby") {
+          if (expectedOrigin && page.origin !== expectedOrigin) {
+            throw new MtLobbyError("TARGET_CHANGED", "The lobby page opened on a different origin than the play page; no automatic replay");
+          }
+          const remaining = deadline - Date.now();
+          try {
+            const target = this.captureTarget();
+            const ready = await this.preflight(action, target, {
+              signal,
+              timeoutMs: Math.max(1, Math.min(5_000, remaining)),
+            });
+            // preflight 成功后再次读取：页面可能在确认瞬间又导航，绝不拿旧证据报成功。
+            const after = this.classifyNavigationUrl(this.currentUrl());
+            if (after.kind === "lobby" && (!expectedOrigin || after.origin === expectedOrigin)) {
+              // 最后一道证据闸：preflight 之后、return 之前的导航必须让 epoch 变化进入下一轮，
+              // 否则旧文档的 auth/runtime/service 证据会被用来确认新文档。
+              this.assertTarget(target);
+              return { url: after.url, path: after.path, origin: after.origin, protocolVersion: ready.protocolVersion };
+            }
+            lastError = new MtLobbyError("TARGET_CHANGED", "The lobby page navigated away while it was being confirmed");
+          } catch (error) {
+            const code = typeof error?.code === "string" ? error.code : "";
+            if (code === "ABORTED" || code === "TARGET_UNAVAILABLE") throw error;
+            if (code === "TARGET_CHANGED" || code === "PROFILE_MISMATCH") {
+              // 页面在 preflight 期间又导航：下一轮重新读 URL/捕获 target，绝不用旧 epoch 判死。
+              lastError = error;
+            } else if (code === "LOGIN_REQUIRED" || code === "CAPABILITY_UNAVAILABLE" || code === "TARGET_TIMEOUT") {
+              lastError = error;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          // play 或空白过渡页：导航仍在进行，或从未发起。曾到达 lobby 但证据未定论的
+          // 观察（churn/超时）保留到截止，最终按“无法确认”而非“从未到达”收口。
+          if (!(lastError && UNCERTAIN_LOBBY_EVIDENCE.has(lastError.code))) lastError = null;
+        }
+        if (Date.now() >= deadline) {
+          if (lastError) {
+            if (UNCERTAIN_LOBBY_EVIDENCE.has(lastError.code)) {
+              throw new MtLobbyError("JOB_INDETERMINATE", "The lobby destination could not be confirmed within the time budget; no automatic replay");
+            }
+            throw lastError;
+          }
+          throw new MtLobbyError("TARGET_CHANGED", "The panel never reached the trusted mt-compat lobby page; no automatic replay");
+        }
+        await delay(Math.max(1, Math.min(interval, deadline - Date.now())), signal);
+      }
+    });
   }
 
   preflightExpression() {
