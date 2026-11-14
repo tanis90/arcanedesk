@@ -89,6 +89,13 @@ test("packaged app verifier requires the mod-management skill and helper", () =>
   assert.equal(exactDirectories.get("skills/prep").includes("arcane-fvtt-mods"), true);
 });
 
+test("packaged app verifier requires the lobby pack and world-import skills", () => {
+  assert.equal(requiredFiles.includes("skills/prep/arcane-mt-packs/SKILL.md"), true);
+  assert.equal(requiredFiles.includes("skills/prep/arcane-world-import/SKILL.md"), true);
+  assert.equal(exactDirectories.get("skills/prep").includes("arcane-mt-packs"), true);
+  assert.equal(exactDirectories.get("skills/prep").includes("arcane-world-import"), true);
+});
+
 test("old Pi content fails even when all expected files exist", () => {
   const input = fixture();
   input.directPackages.find(({ name }) => name === "@earendil-works/pi-coding-agent").package.version = "0.84.1";
