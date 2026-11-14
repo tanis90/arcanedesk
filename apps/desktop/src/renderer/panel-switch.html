@@ -96,7 +96,7 @@
 <body data-surface="foundry">
   <div class="seg-switch" role="group" id="surface-switch">
     <i class="seg-thumb" aria-hidden="true"></i>
-    <button class="seg active" id="seg-foundry" type="button">FVTT</button>
+    <button class="seg active" id="seg-foundry" type="button">VTT</button>
     <button class="seg" id="seg-reader" type="button">文档</button>
   </div>
   <script>
@@ -128,7 +128,7 @@
       function deny(target) {
         var seg = segs[target];
         if (!seg) return;
-        var original = target === "reader" ? t.doc : "FVTT";
+        var original = target === "reader" ? t.doc : "VTT";
         var hint = target === "reader" ? t.doc : t.denyFoundry; /* reader 不会报空:无文档时落兜底页 */
         clearTimeout(flashTimer);
         seg.textContent = hint;
