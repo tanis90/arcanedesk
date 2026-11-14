@@ -2,7 +2,7 @@
 // prepare-mtcompat-surface — A2 离线蒸馏管线（PRD agent-api §2.4/§2.5 的 Tier 0 背诵级）。
 //
 // 输入：GET api-surface.json（VTT 侧 M3 产物：域 + 条目 + 状态的静态声明面）。
-//   默认取云端正典形态 https://vtt.arcanedesk.bitterbebop.cn:30002/user-files/compat/api-surface.json；
+//   默认取云端正典形态 https://arcanemap.com/user-files/compat/api-surface.json；
 //   本地栈 / compat-<slug> 分支部署 / 离线联调用 --url 或 ARCANE_API_SURFACE_URL 覆盖
 //   （本地 serve 是自签证书：--insecure 或 ARCANE_API_SURFACE_INSECURE=1 关本进程校验）。
 // 过程：**钉住 revision** 蒸馏出 mtcompat 档的声明段——Top-N 坑位（按状态严重度排序）
@@ -26,7 +26,7 @@ const OUTPUT_FILE = path.join(desktopRoot, "generated", "mtcompat-surface.json")
 
 /** 云端正典地址形态（PRD §2.4；暂未部署时用 --url/env 指到本地栈或分支部署）。 */
 export const DEFAULT_SURFACE_URL =
-  "https://vtt.arcanedesk.bitterbebop.cn:30002/user-files/compat/api-surface.json";
+  "https://arcanemap.com/user-files/compat/api-surface.json";
 export const SURFACE_URL_ENV = "ARCANE_API_SURFACE_URL";
 export const SURFACE_TOP_ENV = "ARCANE_API_SURFACE_TOP";
 export const SURFACE_INSECURE_ENV = "ARCANE_API_SURFACE_INSECURE";
