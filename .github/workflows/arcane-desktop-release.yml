@@ -47,13 +47,13 @@ jobs:
       matrix:
         include:
           - platform: macos-arm64
-            os: macos-14
+            os: macos-15
             arch: arm64
             node_platform: darwin-arm64
             builder: dist:mac
             region: cn
           - platform: macos-arm64
-            os: macos-14
+            os: macos-15
             arch: arm64
             node_platform: darwin-arm64
             builder: dist:mac
