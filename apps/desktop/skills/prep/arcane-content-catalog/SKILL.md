@@ -1,12 +1,16 @@
 ---
 name: arcane-content-catalog
-description: 在 Foundry 中需要查找职业、子职、种族、法术、特性、装备或来源 UUID 时使用内容发现工具。
+description: 在 Foundry 或奥法地图（mtcompat play）游戏页中需要查找职业、子职、种族、法术、特性、装备或来源 UUID 时使用内容发现工具。
 ---
 
 # Foundry 内容发现
 
 本 skill 只负责发现来源与数量预算，不负责写入 Actor。发现完成后，把来源 UUID 交给
 `arcane-actor-update` 执行写入。
+
+## 页面准入
+
+先用 `world_status` 确认当前是 ready 游戏页：Foundry 的 `/game` 且当前用户是 GM，或 mtcompat 的 `play.html` 且 world/user/runtime 已就绪。`lobby.html` 与 `/auth/**` 不调用本 skill 的发现工具；在大厅查询个人内容包或战役选包时，转 `arcane-mt-packs` 的 `foundry_lobby_*` 工具，不用这里的游戏合集工具替代。`activatedTools` 只表示产品档位的工具面，不代表页面已就绪。
 
 ## 分工（写死，不要互换）
 

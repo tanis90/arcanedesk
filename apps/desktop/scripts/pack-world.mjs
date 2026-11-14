@@ -22,7 +22,10 @@
 // 用法:
 //   node scripts/pack-world.mjs <世界目录> --out <输出目录> --id <world-id> \
 //     --title <标题> --version <x.y.z> [--clear-messages] [--set-empty-password] \
-//     [--allow-messages] [--base-url <url>] [--core-version <v>] [--system-version <v>]
+//     [--allow-messages] [--base-url <url>] [--core-version <v>] [--system <id>] [--system-version <v>]
+//
+//   --system 默认 dnd5e；打其他系统的世界（如 CoC7）时必须同时显式给
+//   --system-version（默认值 5.3.3 只对 dnd5e 有效）。
 //
 // 输出:输出目录下的 world.json + <id>-<version>.zip,stdout 打印两者的
 // bytes/SHA256(与 pack_world.py 的输出契约一致,供 distribution 登记)。
@@ -40,6 +43,7 @@ import { auditWorldDirectory } from "./world-content-audit.mjs";
 
 const DEFAULT_BASE_URL = "https://arcane-package.oss-cn-beijing.aliyuncs.com";
 const DEFAULT_CORE_VERSION = "13.351";
+const DEFAULT_SYSTEM_ID = "dnd5e";
 const DEFAULT_SYSTEM_VERSION = "5.3.3";
 const EXCLUDE_NAMES = new Set([".DS_Store", "Thumbs.db", "LOCK", "LOG", "LOG.old"]);
 const FIXED_MTIME = "1980-01-02T00:00:00Z";
@@ -85,18 +89,18 @@ async function collectSourceFiles(source) {
   return files.sort((left, right) => left.archivePath.localeCompare(right.archivePath));
 }
 
-async function readSourceManifest(source) {
+async function readSourceManifest(source, systemId = DEFAULT_SYSTEM_ID) {
   const manifestPath = path.join(source, "world.json");
   const stat = await fsp.stat(manifestPath).catch(() => null);
   if (!stat?.isFile()) throw new Error(`source world has no world.json: ${source}`);
   const manifest = JSON.parse((await fsp.readFile(manifestPath, "utf8")).replace(/^﻿/, ""));
-  if (manifest?.system !== "dnd5e") {
-    throw new Error(`source world system must be dnd5e, got ${manifest?.system}`);
+  if (manifest?.system !== systemId) {
+    throw new Error(`source world system must be ${systemId}, got ${manifest?.system}`);
   }
   return manifest;
 }
 
-function releaseManifest(sourceManifest, { worldId, title, version, baseUrl, coreVersion, systemVersion }) {
+function releaseManifest(sourceManifest, { worldId, title, version, baseUrl, coreVersion, systemId, systemVersion }) {
   const base = baseUrl.replace(/\/+$/, "");
   const manifest = { ...sourceManifest };
   delete manifest.lastPlayed;
@@ -106,7 +110,7 @@ function releaseManifest(sourceManifest, { worldId, title, version, baseUrl, cor
     id: worldId,
     title,
     version,
-    system: "dnd5e",
+    system: systemId,
     coreVersion,
     systemVersion,
     compatibility: { minimum: "13", verified: coreVersion },
@@ -170,6 +174,7 @@ export async function buildWorldRelease({
   version,
   baseUrl = DEFAULT_BASE_URL,
   coreVersion = DEFAULT_CORE_VERSION,
+  systemId = DEFAULT_SYSTEM_ID,
   systemVersion = DEFAULT_SYSTEM_VERSION,
   clearMessages = false,
   setEmptyPassword = false,
@@ -185,9 +190,9 @@ export async function buildWorldRelease({
   const zipPath = path.join(output, zipName);
   if (!path.relative(source, zipPath)) throw new Error("archive output must be outside the world directory");
 
-  const sourceManifest = await readSourceManifest(source);
+  const sourceManifest = await readSourceManifest(source, systemId);
   const sourceFiles = await collectSourceFiles(source);
-  const manifest = releaseManifest(sourceManifest, { worldId, title, version, baseUrl, coreVersion, systemVersion });
+  const manifest = releaseManifest(sourceManifest, { worldId, title, version, baseUrl, coreVersion, systemId, systemVersion });
   const manifestBuffer = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   // staging 副本:脱敏、world.json 改写、内容审计都只动副本,源目录保持只读。
@@ -265,8 +270,11 @@ function requireString(value, label) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.positionals.length !== 1) {
-    throw new Error("usage: node scripts/pack-world.mjs <world-dir> --out <dir> --id <id> --title <title> --version <x.y.z> [--clear-messages] [--set-empty-password] [--allow-messages]");
+    throw new Error("usage: node scripts/pack-world.mjs <world-dir> --out <dir> --id <id> --title <title> --version <x.y.z> [--clear-messages] [--set-empty-password] [--allow-messages] [--system <id>] [--system-version <v>]");
   }
+  const systemId = args.system ?? DEFAULT_SYSTEM_ID;
+  const systemVersion = args["system-version"] ?? (systemId === DEFAULT_SYSTEM_ID ? DEFAULT_SYSTEM_VERSION : null);
+  if (!systemVersion) throw new Error("--system-version is required when --system is not dnd5e");
   const receipt = await buildWorldRelease({
     sourceDir: args.positionals[0],
     outputDir: requireString(args.out, "--out"),
@@ -275,7 +283,8 @@ async function main() {
     version: requireString(args.version, "--version"),
     baseUrl: args["base-url"] ?? DEFAULT_BASE_URL,
     coreVersion: args["core-version"] ?? DEFAULT_CORE_VERSION,
-    systemVersion: args["system-version"] ?? DEFAULT_SYSTEM_VERSION,
+    systemId,
+    systemVersion,
     clearMessages: args.booleans.has("clear-messages"),
     setEmptyPassword: args.booleans.has("set-empty-password"),
     allowMessages: args.booleans.has("allow-messages"),

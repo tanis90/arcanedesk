@@ -144,7 +144,6 @@ const send = document.getElementById("send");
 const stop = document.getElementById("stop");
 const composerWrap = document.getElementById("composer-wrap");
 const panelDot = document.getElementById("panel-dot");
-const worldChip = document.getElementById("world-chip");
 const modeSegs = {
   prep: document.getElementById("mode-seg-prep"),
   combat: document.getElementById("mode-seg-combat"),
@@ -1072,7 +1071,8 @@ function summarizeArgs(toolName, args) {
     switch (toolName) {
       case "foundry_open":
         return args.url ?? t("chat.card.defaultUrl");
-      case "browser_evaluate": {
+      case "browser_evaluate":
+      case "foundry_page_eval": {
         const first = String(args.code ?? "").split("\n")[0].trim();
         return first.length > 90 ? first.slice(0, 90) + "…" : first;
       }
@@ -1594,15 +1594,6 @@ function onEvent(event) {
       updateModelLabels(event.label ?? "default");
       if (typeof event.supportsImages === "boolean") modelSupportsImages = event.supportsImages;
       break;
-    case "world_info": {
-      const title = event.data?.world?.title ?? event.data?.world?.id;
-      if (title) {
-        worldChip.textContent = title;
-        worldChip.title = `world: ${event.data?.world?.id ?? title}`;
-        worldChip.style.display = "";
-      }
-      break;
-    }
     case "permission_request":
       receivePermissionRequest(event);
       break;
@@ -2382,8 +2373,6 @@ async function pullCurrentSession() {
     const payload = await window.arcane.currentSession();
     if (requestId !== currentSessionRequest || navigation !== navigationRequest || !acceptModeSnapshot(payload)) return;
     if (payload.mode) requestedMode = payload.mode;
-    const title = payload.worldInfo?.world?.title ?? payload.worldInfo?.world?.id;
-    if (title) { worldChip.textContent = title; worldChip.style.display = ""; }
     await installSnapshot(payload, "latest", captured);
   });
 }

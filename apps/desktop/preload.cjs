@@ -1,9 +1,16 @@
 // Preload — typed IPC boundary between the chat renderer and the main host.
 const { contextBridge, ipcRenderer } = require("electron");
 
+const mainReady = ipcRenderer.invoke("app:ready");
+async function invoke(channel, ...args) {
+  const readiness = await mainReady;
+  if (!readiness?.ok) throw new Error(readiness?.error || "Main process initialization failed");
+  return ipcRenderer.invoke(channel, ...args);
+}
+
 contextBridge.exposeInMainWorld("arcane", {
   /** Send a user message to the agent session. images: [{ data: base64, mimeType }]. */
-  prompt: (text, images, context) => ipcRenderer.invoke("chat:prompt", {
+  prompt: (text, images, context) => invoke("chat:prompt", {
     text,
     replacesInputId: context?.replacesInputId,
     images,
@@ -14,11 +21,11 @@ contextBridge.exposeInMainWorld("arcane", {
     commandId: context?.commandId,
   }),
   /** Slash 候选:app 命令 + 当前会话的 skills / prompt 模板(按活动模式路由)。 */
-  listSlash: (context) => ipcRenderer.invoke("slash:list", context),
+  listSlash: (context) => invoke("slash:list", context),
   /** Abort the currently running agent turn. */
-  abort: (context) => ipcRenderer.invoke("chat:abort", context),
+  abort: (context) => invoke("chat:abort", context),
   /** 排队输入操作(备团):action = "cancel"(删除/编辑召回) | "steer"(立即发送)。 */
-  updateQueuedInput: (context, inputId, action) => ipcRenderer.invoke("chat:queued-input", {
+  updateQueuedInput: (context, inputId, action) => invoke("chat:queued-input", {
     inputId,
     action,
     mode: context?.mode,
@@ -27,73 +34,75 @@ contextBridge.exposeInMainWorld("arcane", {
     taskId: context?.taskId,
   }),
   /** Manually open/close the Foundry panel (same path as the agent's foundry_open). */
-  openPanel: () => ipcRenderer.invoke("panel:open"),
-  closePanel: () => ipcRenderer.invoke("panel:close"),
+  openPanel: () => invoke("panel:open"),
+  closePanel: () => invoke("panel:close"),
+  /** 当前面板档位快照:{ type, profileId, url, displayName };后续变化经 onEvent 的 panel_profile 推送。 */
+  panelProfile: () => invoke("panel:get-profile"),
   /** F5: reload the right-pane surface (Foundry page, or re-read the open note). */
-  reloadPanel: () => ipcRenderer.invoke("panel:reload"),
+  reloadPanel: () => invoke("panel:reload"),
   /** Switch the right pane between the existing Foundry page and the open note. */
-  switchPanelSurface: (target) => ipcRenderer.invoke("panel:switch", target),
+  switchPanelSurface: (target) => invoke("panel:switch", target),
   /** Open a Markdown note in the right-pane reader. Path validation happens in main. */
-  openMdReader: (path) => ipcRenderer.invoke("md-reader:open", path),
-  sessionIdentities: () => ipcRenderer.invoke("sessions:identities"),
+  openMdReader: (path) => invoke("md-reader:open", path),
+  sessionIdentities: () => invoke("sessions:identities"),
   /** Sync the chat column width during splitter drags (throttled by renderer). */
-  setChatWidth: (px) => ipcRenderer.invoke("panel:set-chat-width", px),
+  setChatWidth: (px) => invoke("panel:set-chat-width", px),
   /** While dragging the splitter, let mouse events pass through the Foundry view. */
-  panelDragStart: () => ipcRenderer.invoke("panel:drag-start"),
-  panelDragEnd: () => ipcRenderer.invoke("panel:drag-end"),
+  panelDragStart: () => invoke("panel:drag-start"),
+  panelDragEnd: () => invoke("panel:drag-end"),
   /** Persist the UI theme (月之暗面 dark / 月之亮面 light) for the next launch. */
-  setTheme: (theme) => ipcRenderer.invoke("ui:theme", theme),
+  setTheme: (theme) => invoke("ui:theme", theme),
   /** 界面语言:pref = "auto" | "zh-CN" | "en-US";auto = 每次启动跟随系统。 */
-  setLocale: (pref) => ipcRenderer.invoke("ui:locale", pref),
-  getLocalePref: () => ipcRenderer.invoke("ui:get-locale"),
+  setLocale: (pref) => invoke("ui:locale", pref),
+  getLocalePref: () => invoke("ui:get-locale"),
   /** Mode switch: combat (战斗) / prep (备团); both agent hosts stay resident. */
-  getMode: () => ipcRenderer.invoke("mode:get"),
-  setMode: (mode) => ipcRenderer.invoke("mode:set", mode),
+  getMode: () => invoke("mode:get"),
+  setMode: (mode) => invoke("mode:set", mode),
   /** Prep mode working directory (cwd anchor: tools, skills scan, session bucket). */
-  prepGetDir: () => ipcRenderer.invoke("prep:get-dir"),
+  prepGetDir: () => invoke("prep:get-dir"),
   /** Pick a prep directory via OS dialog; switching dir starts a NEW prep session. */
-  prepChooseDir: (context) => ipcRenderer.invoke("prep:choose-dir", context),
+  prepChooseDir: (context) => invoke("prep:choose-dir", context),
   /** Switch to a recent prep directory picked from the in-app dropdown (no OS dialog); also starts a NEW prep session. */
-  prepSetDir: (context, path) => ipcRenderer.invoke("prep:set-dir", { ...context, path }),
+  prepSetDir: (context, path) => invoke("prep:set-dir", { ...context, path }),
   /** Session management (Pi SessionManager JSONL sessions). */
-  listSessions: (context) => ipcRenderer.invoke("sessions:list", context),
-  sessionNavigation: () => ipcRenderer.invoke("sessions:navigation"),
-  setSessionPinned: (sessionId, pinned) => ipcRenderer.invoke("sessions:setPinned", { sessionId, pinned }),
-  renameSession: (sessionId, title) => ipcRenderer.invoke("sessions:rename", { sessionId, title }),
-  archiveSession: sessionId => ipcRenderer.invoke("sessions:archive", { sessionId }),
-  restoreSession: sessionId => ipcRenderer.invoke("sessions:restore", { sessionId }),
-  deleteArchivedSession: sessionId => ipcRenderer.invoke("sessions:deleteArchived", { sessionId }),
-  forkSession: (sessionId, title) => ipcRenderer.invoke("sessions:fork", { sessionId, title }),
-  currentSession: () => ipcRenderer.invoke("sessions:current"),
-  sessionSnapshot: (sessionId, historyQuery) => ipcRenderer.invoke("sessions:snapshot", sessionId, historyQuery),
-  activitySnapshot: () => ipcRenderer.invoke("activity:snapshot"),
-  getDesktopNotifications: () => ipcRenderer.invoke("notifications:get"),
-  setDesktopNotifications: (enabled) => ipcRenderer.invoke("notifications:set", enabled),
-  takeNotificationTarget: () => ipcRenderer.invoke("notifications:take-target"),
-  activityOpened: (sessionId) => ipcRenderer.invoke("activity:opened", sessionId),
-  respondToTask: (request) => ipcRenderer.invoke("tasks:respond", request),
-  newSession: (context) => ipcRenderer.invoke("sessions:new", context),
-  openSession: (path, context) => ipcRenderer.invoke("sessions:open", {
+  listSessions: (context) => invoke("sessions:list", context),
+  sessionNavigation: () => invoke("sessions:navigation"),
+  setSessionPinned: (sessionId, pinned) => invoke("sessions:setPinned", { sessionId, pinned }),
+  renameSession: (sessionId, title) => invoke("sessions:rename", { sessionId, title }),
+  archiveSession: sessionId => invoke("sessions:archive", { sessionId }),
+  restoreSession: sessionId => invoke("sessions:restore", { sessionId }),
+  deleteArchivedSession: sessionId => invoke("sessions:deleteArchived", { sessionId }),
+  forkSession: (sessionId, title) => invoke("sessions:fork", { sessionId, title }),
+  currentSession: () => invoke("sessions:current"),
+  sessionSnapshot: (sessionId, historyQuery) => invoke("sessions:snapshot", sessionId, historyQuery),
+  activitySnapshot: () => invoke("activity:snapshot"),
+  getDesktopNotifications: () => invoke("notifications:get"),
+  setDesktopNotifications: (enabled) => invoke("notifications:set", enabled),
+  takeNotificationTarget: () => invoke("notifications:take-target"),
+  activityOpened: (sessionId) => invoke("activity:opened", sessionId),
+  respondToTask: (request) => invoke("tasks:respond", request),
+  newSession: (context) => invoke("sessions:new", context),
+  openSession: (path, context) => invoke("sessions:open", {
     path,
     mode: context?.mode,
     generation: context?.generation,
     sessionId: context?.sessionId,
   }),
-  deleteSession: (path, context) => ipcRenderer.invoke("sessions:delete", {
+  deleteSession: (path, context) => invoke("sessions:delete", {
     path,
     mode: context?.mode,
     generation: context?.generation,
     sessionId: context?.sessionId,
   }),
   /** Settings: provider management + default model. */
-  getSettings: () => ipcRenderer.invoke("settings:get"),
-  getModelAccess: (context) => ipcRenderer.invoke("settings:model-access", context),
-  saveProvider: (provider) => ipcRenderer.invoke("settings:save-provider", provider),
-  deleteProvider: (id) => ipcRenderer.invoke("settings:delete-provider", id),
+  getSettings: () => invoke("settings:get"),
+  getModelAccess: (context) => invoke("settings:model-access", context),
+  saveProvider: (provider) => invoke("settings:save-provider", provider),
+  deleteProvider: (id) => invoke("settings:delete-provider", id),
   setDefaultModel: (providerId, modelId) =>
-    ipcRenderer.invoke("settings:default-model", { providerId, modelId }),
+    invoke("settings:default-model", { providerId, modelId }),
   /** 会话内切换当前会话的模型(输入框旁的选择器);只影响当前模式的当前会话。 */
-  setChatModel: (context, providerId, modelId) => ipcRenderer.invoke("chat:set-model", {
+  setChatModel: (context, providerId, modelId) => invoke("chat:set-model", {
     mode: context?.mode,
     generation: context?.generation,
     sessionId: context?.sessionId,
@@ -101,28 +110,28 @@ contextBridge.exposeInMainWorld("arcane", {
     modelId,
   }),
   /** Privacy: inspect and explicitly change packaged-build telemetry consent. */
-  getTelemetryConsent: () => ipcRenderer.invoke("telemetry:consent-get"),
-  setTelemetryConsent: (enabled) => ipcRenderer.invoke("telemetry:consent-set", enabled),
+  getTelemetryConsent: () => invoke("telemetry:consent-get"),
+  setTelemetryConsent: (enabled) => invoke("telemetry:consent-set", enabled),
   /** Foundry website permission prompts and persisted exact-origin decisions. */
   respondPermission: (requestId, decision) =>
-    ipcRenderer.invoke("permissions:respond", { requestId, decision }),
-  listWebPermissions: () => ipcRenderer.invoke("permissions:list"),
-  revokeWebPermission: (origin, key) => ipcRenderer.invoke("permissions:revoke", { origin, key }),
-  clearWebPermissions: (origin) => ipcRenderer.invoke("permissions:clear", origin),
+    invoke("permissions:respond", { requestId, decision }),
+  listWebPermissions: () => invoke("permissions:list"),
+  revokeWebPermission: (origin, key) => invoke("permissions:revoke", { origin, key }),
+  clearWebPermissions: (origin) => invoke("permissions:clear", origin),
   /** Complete or cancel an explicit getDisplayMedia source chooser. */
   respondDisplaySource: (requestId, sourceId, includeAudio) =>
-    ipcRenderer.invoke("display-source:respond", { requestId, sourceId, includeAudio }),
+    invoke("display-source:respond", { requestId, sourceId, includeAudio }),
   /** Provider 预设目录(内置供应商+模型视觉表)。 */
-  getProviderCatalog: () => ipcRenderer.invoke("providers:catalog"),
+  getProviderCatalog: () => invoke("providers:catalog"),
   /** 用 baseUrl+apiKey 拉端点的 GET /models;key 留空/打码时仅可对原 credential target 复用。 */
-  fetchProviderModels: (input) => ipcRenderer.invoke("providers:fetch-models", input),
+  fetchProviderModels: (input) => invoke("providers:fetch-models", input),
   /** Open the Arcane Desk website in the user's default browser. */
-  openArcaneWebsite: () => ipcRenderer.invoke("app:open-arcane-website"),
+  openArcaneWebsite: () => invoke("app:open-arcane-website"),
   /** 应用内更新（auto-update-design §5.3）：药丸/浮层的全部动作与状态订阅。 */
-  checkUpdates: () => ipcRenderer.invoke("update:check"),
-  downloadUpdate: () => ipcRenderer.invoke("update:download"),
-  installUpdate: () => ipcRenderer.invoke("update:install"),
-  updateState: () => ipcRenderer.invoke("update:state"),
+  checkUpdates: () => invoke("update:check"),
+  downloadUpdate: () => invoke("update:download"),
+  installUpdate: () => invoke("update:install"),
+  updateState: () => invoke("update:state"),
   onUpdateState: (callback) => {
     const listener = (_event, payload) => {
       if (payload?.type === "update_state") callback(payload.state);
@@ -131,22 +140,22 @@ contextBridge.exposeInMainWorld("arcane", {
     return () => ipcRenderer.removeListener("arcane:event", listener);
   },
   /** Region 派生的对外链接:{ region, websiteUrl, supportLinks }（D1，renderer 不硬编码域名）。 */
-  getAppLinks: () => ipcRenderer.invoke("app:links"),
+  getAppLinks: () => invoke("app:links"),
   /** Packaged app version shown in Settings → General. */
-  getAppVersion: () => ipcRenderer.invoke("app:get-version"),
+  getAppVersion: () => invoke("app:get-version"),
   /** Voice input: ASR config + transcription (智谱 GLM-ASR-2512). */
-  getVoiceConfig: () => ipcRenderer.invoke("voice:get-config"),
-  saveVoiceConfig: (cfg) => ipcRenderer.invoke("voice:save-config", cfg),
+  getVoiceConfig: () => invoke("voice:get-config"),
+  saveVoiceConfig: (cfg) => invoke("voice:save-config", cfg),
   /** Prep web search: masked config view (mode/backend/key state). */
-  getSearchConfig: () => ipcRenderer.invoke("search:get-config"),
-  saveSearchConfig: (cfg) => ipcRenderer.invoke("search:save-config", cfg),
+  getSearchConfig: () => invoke("search:get-config"),
+  saveSearchConfig: (cfg) => invoke("search:save-config", cfg),
   /** wav: ArrayBuffer(16kHz mono PCM WAV)→ { ok, text?, latency?, error? } */
-  transcribeAudio: (wav) => ipcRenderer.invoke("voice:transcribe", wav),
+  transcribeAudio: (wav) => invoke("voice:transcribe", wav),
   /** macOS 首次录音前申请麦克风系统权限;其他平台恒 { ok: true }。 */
-  ensureMicAccess: () => ipcRenderer.invoke("voice:ensure-mic"),
+  ensureMicAccess: () => invoke("voice:ensure-mic"),
   /** Respond to a pending write-approval card. */
   respondApproval: (approvalId, approved) =>
-    ipcRenderer.invoke("approval:respond", { approvalId, approved }),
+    invoke("approval:respond", { approvalId, approved }),
   /** Subscribe to agent and panel events; returns an unsubscribe fn. */
   onEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);

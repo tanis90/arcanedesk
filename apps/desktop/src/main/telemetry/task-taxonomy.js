@@ -8,6 +8,7 @@ export function toolFamily(toolName) {
     case "foundry_open":
       return "foundry.open";
     case "browser_evaluate":
+    case "foundry_page_eval":
       return "foundry.diagnose";
     case "foundry_screenshot":
       return "foundry.visual_inspect";

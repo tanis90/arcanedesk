@@ -1,12 +1,15 @@
-import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
+import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectFoundryRuntime } from "./direct-foundry-runtime.js";
+import { DirectFoundryRuntime, PageProfileRoutedRuntime, adoptMtcompatRuntimeFromPage, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
-import { readFoundryPageState } from "./foundry-web.js";
+import { readFoundryPageState, readPageAgentRuntimeSource } from "./foundry-web.js";
+import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, normalizeMtCompatEntryUrl, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
+import { MtLobbyClient } from "./mt-lobby-client.js";
+import { findMirrorStageRoots } from "./lobby-mirror-cache.js";
 import { DEFAULT_NEW_API_BASE_URL, ProviderStore } from "./providers.js";
 import { listPresets, fetchModels } from "./provider-catalog.js";
 import { PrepStore } from "./prep-store.js";
@@ -28,7 +31,7 @@ import { WebPermissionStore } from "./permissions/web-permission-store.js";
 import { WebPermissionPolicy } from "./permissions/web-permission-policy.js";
 import { DisplayMediaController, installDevicePermissionDenials } from "./permissions/display-media.js";
 import { err, errorToIpc } from "./i18n-error.mjs";
-import { bootstrapFvttOpsRuntime } from "./fvtt-ops-runtime.mjs";
+import { bootstrapFvttOpsRuntime, bootstrapFvttOpsRuntimeOrEnvOverride } from "./fvtt-ops-runtime.mjs";
 import { SkillsUpdater, bundleRevision } from "./skills-updater.mjs";
 import { AppUpdater, buildFeedUrl, readReleaseChannel } from "./app-updater.mjs";
 import { applyArcaneSubprocessEnvironment } from "./subprocess-env.mjs";
@@ -123,6 +126,40 @@ if (app.isPackaged || devUserDataOverride) {
 let mainWindow = null;
 let foundryTargetUrl = null;
 
+// 面板当前承载的页面档位(PAGE_PROFILES):随最近一次打开/加载的目标而定,
+// 是 runtime 路由(PageProfileRoutedRuntime)与会话语义(cookie 记忆/回填)的依据。
+// 不跟着页面当前 URL 抖 —— Keycloak 登录跳转期间 URL 离开 play.html,档位不变。
+let activeProfileId = /** @type {"foundry" | "mtcompat"} */ (PAGE_PROFILES.foundry.id);
+// 渲染层面板档位的状态源:随打开/导航/关闭更新并去重,经事件总线推
+// panel_profile;初始为 null 档(面板尚未打开),不取上面 activeProfileId
+// 的 foundry 路由默认值。
+const panelProfileState = createPanelProfileState();
+// 档位变化时刷新所有 resident host 的 active tools；hosts 创建后赋值（启动早期是 no-op）。
+/** @type {(profileId?: string | null) => void} */
+let syncSessionLoadouts = () => {};
+// 最近一次面板导航的目标(纯 URL/path 事实,无时间成分):resolvePanelProfile 的
+// mtcompat 同源粘性数据源 —— Keycloak 登录跳转期间页面 URL 离开站点路径时不掉档。
+let lastPanelNavigation = { target: null, profileId: null };
+
+// 隐藏 per-URL 档位覆盖(PRD A1 运维逃生舱,不做 UI):环境变量 JSON
+// { "<URL 或前缀>": "<profileId>" }。配错不影响打开流程(静态忽略 + 警告日志);
+// 命中先于 URL 契约判定 —— 页面 URL 契约失灵时的最后手段。
+const panelProfileOverrides = createPanelProfileOverrides(
+  process.env[PANEL_PROFILE_OVERRIDE_ENV],
+  message => console.warn(message),
+);
+if (panelProfileOverrides.entries.length > 0) {
+  console.log(
+    `[panel-profile] ${panelProfileOverrides.entries.length} URL override(s) from ${PANEL_PROFILE_OVERRIDE_ENV}: `
+    + panelProfileOverrides.entries.map(entry => `${entry.prefix} -> ${entry.profileId}`).join(", "),
+  );
+}
+
+/** 显式目标的档位:env 覆盖优先(逃生舱),再按 URL 契约判定;不含面板同源粘性(见 resolvePanelProfile)。 */
+function resolveExplicitProfile(url) {
+  return panelProfileOverrides.resolve(url) ?? resolvePageProfile(url) ?? PAGE_PROFILES.foundry;
+}
+
 // 上次打开地址的持久化(启动时读,成功打开时写)。文件损坏按"没有记忆"处理,
 // 不抛错——首次打开的面板行为等价于全新安装。
 function panelTargetFile() {
@@ -156,6 +193,9 @@ let panelSwitchView = null;
 let panelSwitchStatus = { open: false, surface: null }; // 最近一次 panel_status 的快照
 const PANEL_SWITCH_SIZE = { width: 156, height: 30 };
 let foundryRuntime = null; // app 生命周期内唯一实例；始终通过 getter 访问当前 Foundry view
+// 当前 mtcompat client 的 runtime 源(normalize 后):启动时是打包拷贝的源,面板就绪后
+// 若采用页面真源则替换。用于"源未变就不重建"的去重(A1)。
+let mtcompatRuntimeSourceText = null;
 let telemetry = null; // 遥测总入口;授权默认关闭,开发版本地记录(§3.1)
 let chatWidthPx = null; // 用户可拖;null = 按比例初始化
 let foundryPermissionOrigin = null; // 仅在确认目标确为 Foundry 后设为 exact origin
@@ -198,6 +238,8 @@ function requestExit() {
   }).finally(() => { quitAllowed = true; app.quit(); });
 }
 let desktopNotifications = null;
+let resolveMainReady;
+const mainReady = new Promise(resolve => { resolveMainReady = resolve; });
 
 function sendToRenderer(event) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -210,6 +252,21 @@ function sendToRenderer(event) {
   }
   if (event.type === "activity_update") desktopNotifications?.reconcile(event.summary.sessionId);
   if (event.type === "activity_removed") desktopNotifications?.reconcile(event.sessionId);
+}
+
+/** 档位变化经事件总线推给渲染层;状态器去重,值未变(返回 null)时不发。 */
+function pushPanelProfile(profileId, url) {
+  const previousProfileId = panelProfileState.current().profileId;
+  const payload = panelProfileState.set(profileId, url);
+  if (payload) {
+    sendToRenderer(payload);
+    // 只有 foundry↔mtcompat（含面板关闭归零）才改变工具声明；lobby↔play/auth 同档
+    // 不触发重新装卸。执行层仍会逐次校验真实页面。
+    if (payload.profileId !== previousProfileId) {
+      try { syncSessionLoadouts(payload.profileId); }
+      catch (error) { console.warn("[agent] tool loadout refresh failed:", error?.message ?? error); }
+    }
+  }
 }
 
 function isTrustedChatIpc(event) {
@@ -594,9 +651,51 @@ async function showFoundryEmptyState() {
 }
 
 /**
+ * mtcompat client 的完整构造参数:除 runtimeSource 外整份固定。A1 采用页面真源
+ * (__MT_AGENT_RUNTIME_SOURCE__)时按新源重建实例,动作白名单/preflight 覆盖/巡检/
+ * 遥测逐字不变。动作白名单是 mtcompat 档专用表(A3):foundry 面 + pageEval 扩展名。
+ */
+function createMtcompatRuntime(runtimeSource) {
+  return new DirectFoundryRuntime({
+    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+    runtimeSource,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
+    inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
+    getWebContents: () => foundryView()?.webContents ?? null,
+    onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+  });
+}
+
+/**
+ * A1 runtime 源页面优先:面板巡检通过后,mtcompat 页面自持的
+ * __MT_AGENT_RUNTIME_SOURCE__ 是真源,打包拷贝只是离线兜底。指纹在位才多读一次页面
+ * (源串只在这里跨 IPC,约几百 KB);采用成功即换入新 client —— typed 工具与后续
+ * eval 走页面真源,不再等应用更新同步拷贝。源缺席/读取失败/重建失败都保持既有
+ * client,失败详情由 adoptMtcompatRuntimeFromPage 落日志,这里绝不拆既有连接。
+ */
+async function maybeAdoptPageMtRuntimeSource(profile, state) {
+  if (profile.id !== PAGE_PROFILES.mtcompat.id) return;
+  if (!state?.hasMtAgentRuntime) return;
+  if (!foundryRuntime) return; // 启动竞态兜底:runtime 尚未装配时保持现状。
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed: foundryRuntime,
+    currentSource: mtcompatRuntimeSourceText,
+    readPageSource: () => readPageAgentRuntimeSource(foundryView()?.webContents, { timeoutMs: 3_000 }),
+    createRuntime: createMtcompatRuntime,
+    log: (level, message) => (level === "warn" ? console.warn(message) : console.log(message)),
+  });
+  if (outcome.adopted) mtcompatRuntimeSourceText = outcome.source;
+}
+
+/**
  * foundry_open 的宿主实现。
  * 幂等:面板已开且与目标同源时绝不导航(保护已登录的 world 会话)。
  * 只有跨源或当前页面失效时才导航。
+ * mtcompat 档走同一状态机,但三点不同:目标 URL 原样加载(没有 /game 落点)、
+ * 不碰 Foundry session cookie(认证在 Keycloak + sessionStorage)、登录/引导中的
+ * 重复 open 按纯 URL/path 幂等(isMtCompatNavigationHold)不强制导航,改报
+ * login-in-progress。
  * 这也是状态机的 ④(spec §3.2):归位由控制器执行,阅读器若在场则隐藏保活。
  */
 async function openFoundryView(rawUrl) {
@@ -608,15 +707,16 @@ async function openFoundryView(rawUrl) {
       summary: `ERROR: invalid URL: ${rawUrl}`,
     };
   }
-  const target = explicit ?? resolvedFoundryTarget();
+  const requestedTarget = explicit ?? resolvedFoundryTarget();
+  const target = requestedTarget ? normalizeMtCompatEntryUrl(requestedTarget) : null;
   if (!target) {
     return {
       ok: false,
       error: err("err.panel.noTarget"),
       summary:
         "ERROR: no Foundry address to open yet — pass a url to foundry_open "
-        + "(e.g. http://localhost:30000 for the local server, or the deployed server URL); "
-        + "the panel has no implicit default",
+        + "(e.g. http://localhost:30000 for the local server, the deployed server URL, "
+        + "or the ArcaneDesk mt-compat page); the panel has no implicit default",
     };
   }
   let origin;
@@ -630,47 +730,132 @@ async function openFoundryView(rawUrl) {
     };
   }
 
+  // 显式目标过 env 覆盖(逃生舱)再按 URL 契约判定;面板粘性只作用于 resolvePanelProfile。
+  const profile = resolveExplicitProfile(target);
+  activeProfileId = profile.id;
+  pushPanelProfile(profile.id, target);
   foundryTargetUrl = target;
   rememberFoundryTarget(target);
 
   // ④ 归位:控制器保证 foundryView 存在(renderer 崩溃则重建)、两个 view 最多一个可见、
-  // panel_status / panel_layout 各发一次。下面只管 Foundry 专属的 cookie 与页面加载。
+  // panel_status / panel_layout 各发一次。下面只管页面档位专属的 cookie 与页面加载。
   const before = foundryView();
   panelSurfaces.showFoundry();
   const view = foundryView();
 
   if (before !== view) {
-    // 全新 view(首次打开或刚重建):有记住的登录态就先回填 cookie,直接进 /game,跳过 /join
-    const restored = await restoreSessionCookie(view, origin);
-    const initialUrl = restored ? new URL("/game", origin).href : target;
+    // 全新 view(首次打开或刚重建)。Foundry 档:有记住的登录态就先回填 cookie,
+    // 直接进 /game,跳过 /join;mtcompat 档:无 cookie 可管,目标 URL 原样加载。
+    let restored = false;
+    let initialUrl = target;
+    if (profile.sessionCookie) {
+      restored = await restoreSessionCookie(view, origin);
+      if (restored) initialUrl = new URL(profile.landingPath, origin).href;
+    }
     const loaded = await loadFoundryPage(initialUrl);
     if (!loaded.ok) return loaded;
-    dropIfSessionRejected(view, origin, restored);
-    void rememberSessionCookie(view, origin);
-    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+    if (profile.sessionCookie) {
+      dropIfSessionRejected(view, origin, restored);
+      void rememberSessionCookie(view, origin);
+    }
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
 
   const current = view.webContents.getURL();
-  if (sameOrigin(current, target)) {
-    // Same-origin idempotence only protects a real Foundry page. Chromium keeps
-    // the failed URL after ERR_CONNECTION_RESET, so origin equality alone can
-    // otherwise turn a blank/error page into a false-success tool result.
-    const inspected = await readFoundryPageState(view.webContents);
-    if (inspected.ok && inspected.state?.detected) {
-      trustFoundryPermissionOrigin(current);
-      return { ok: true, page: inspected.state, summary: await describePanel(current, inspected.state) };
+  if (profile.id === PAGE_PROFILES.mtcompat.id) {
+    // mtcompat 的"已在目标页"按站点页判定:受信 origin 的 lobby/play/auth 都算
+    // 站点内。但同源不构成目标证据(Keycloak 就挂在同 origin 的 /auth 上)——
+    // 能不能留下,由 isMtCompatNavigationHold 按 URL/path 裁决:
+    // 登录中(/auth/**)或同 pathname 引导中(query 可不同,尤其 play?campaign=)
+    // 只回状态不重复加载;lobby→play 等跨 pathname、跨 origin 仍是显式导航。
+    const onSitePage = matchPageProfile(current)?.id === profile.id;
+    if (onSitePage) {
+      const inspected = await readFoundryPageState(view.webContents, { profileId: profile.id });
+      if (inspected.ok && inspected.state?.detected) {
+        trustFoundryPermissionOrigin(current);
+        // 面板已在站点页且检测到 window.game。登录完成后 SPA 自己跳回 play.html,
+        // 这一步不经过 load 流程 —— A1 的页面真源采用点在这里补一次(指纹在位且源未变时不做重建)。
+        await maybeAdoptPageMtRuntimeSource(profile, inspected.state);
+        return { ok: true, profile: profile.id, page: inspected.state, summary: await describePanel(current, inspected.state) };
+      }
+      // 未 detected:Keycloak 登录页没有 window.game,lobby/play 也可能尚在引导。
+      if (isMtCompatNavigationHold(current, target)) return loginInProgressResult(target, inspected);
+      const loaded = await loadFoundryPage(target);
+      if (!loaded.ok) return loaded;
+      return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
     }
     const loaded = await loadFoundryPage(target);
     if (!loaded.ok) return loaded;
-    return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
   }
-  const restored = await restoreSessionCookie(view, origin);
-  const navUrl = restored ? new URL("/game", origin).href : target;
+  // Foundry 档:"已在目标页" = 同源。Same-origin idempotence only protects a real
+  // Foundry page. Chromium keeps the failed URL after ERR_CONNECTION_RESET, so origin
+  // equality alone can otherwise turn a blank/error page into a false-success tool result.
+  const onTargetPage = sameOrigin(current, target);
+  if (onTargetPage) {
+    const inspected = await readFoundryPageState(view.webContents, { profileId: profile.id });
+    if (inspected.ok && inspected.state?.detected) {
+      trustFoundryPermissionOrigin(current);
+      return { ok: true, profile: profile.id, page: inspected.state, summary: await describePanel(current, inspected.state) };
+    }
+    const loaded = await loadFoundryPage(target);
+    if (!loaded.ok) return loaded;
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
+  }
+  // 跨目标(跨源):按档位决定是否回填 cookie / 改写落点。
+  let navUrl = target;
+  if (profile.sessionCookie) {
+    const restored = await restoreSessionCookie(view, origin);
+    if (restored) navUrl = new URL(profile.landingPath, origin).href;
+    const loaded = await loadFoundryPage(navUrl);
+    if (!loaded.ok) return loaded;
+    dropIfSessionRejected(view, origin, restored);
+    void rememberSessionCookie(view, origin);
+    return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
+  }
   const loaded = await loadFoundryPage(navUrl);
   if (!loaded.ok) return loaded;
-  dropIfSessionRejected(view, origin, restored);
-  void rememberSessionCookie(view, origin);
-  return { ok: true, page: loaded.page, summary: await describePanel(target, loaded.page) };
+  return { ok: true, profile: profile.id, page: loaded.page, summary: await describePanel(target, loaded.page) };
+}
+
+/**
+ * URL → 面板档位,带 mtcompat 部署粘性:Keycloak 登录跳转期间页面 URL 可能
+ * 离开站点路径(授权端点挂在别的 host 时),仅按 URL 会掉回 Foundry 开放默认档;
+ * 同 origin 的 /auth/** 已被模式直接识别,不靠粘性。
+ * 判定序:env 隐藏覆盖(逃生舱)> URL 契约 > 同源 mtcompat 粘性 > 开放默认档。
+ * 打开流程的显式目标(openFoundryView)走 resolveExplicitProfile(覆盖 + URL),不沾粘性。
+ */
+function resolvePanelProfile(url) {
+  const override = panelProfileOverrides.resolve(url);
+  if (override) return override;
+  const matched = matchPageProfile(url);
+  if (matched) return matched;
+  if (lastPanelNavigation.profileId === PAGE_PROFILES.mtcompat.id
+    && sameOrigin(lastPanelNavigation.target ?? "", url)) {
+    return PAGE_PROFILES.mtcompat;
+  }
+  return resolvePageProfile(url) ?? PAGE_PROFILES.foundry;
+}
+
+/**
+ * 幂等守卫生效时的 foundry_open 结果:不动页面,把等待状态如实报给 agent/用户。
+ * 引导策略:Keycloak 登录是用户在面板里的手动操作 —— 让 agent 结束本轮等待用户,
+ * 确认登录后再用 world_status(只读)检查 play 页就绪;不鼓励 foundry_open 轮询。
+ */
+function loginInProgressResult(target, inspected) {
+  const pageState = inspected?.ok ? JSON.stringify(inspected.state) : "(page state unavailable)";
+  return {
+    ok: true,
+    status: "login-in-progress",
+    profile: PAGE_PROFILES.mtcompat.id,
+    page: inspected?.ok ? inspected.state : null,
+    summary:
+      `panel is already waiting on ${target} (profile mtcompat) and the Keycloak login/world bootstrap has not finished; `
+      + `no navigation was forced. page=${pageState}. If a Keycloak login form is showing, ask the user to sign in directly `
+      + `in the panel (never handle credentials through model tools) and end the turn to wait for them. Once the user `
+      + `confirms they signed in, check the play page readiness with world_status (read-only); during automatic world `
+      + `bootstrap world_status may be used to wait read-only. Do not poll with foundry_open and do not navigate away.`,
+  };
 }
 
 async function loadFoundryPage(url) {
@@ -686,6 +871,9 @@ async function loadFoundryPage(url) {
     };
   }
   foundryTargetUrl = url;
+  const profile = resolvePanelProfile(url);
+  activeProfileId = profile.id;
+  pushPanelProfile(profile.id, url);
   const failedPage = async () => {
     if (contents.isDestroyed() || foundryView()?.webContents !== contents) return;
     await contents.loadFile(path.join(__dirname, "../renderer/foundry-unavailable.html"), {
@@ -702,7 +890,9 @@ async function loadFoundryPage(url) {
       summary: `ERROR: failed to load ${url}: ${error.message}`,
     };
   }
-  const inspected = await readFoundryPageState(contents);
+  // 记录最近一次导航目标(resolvePanelProfile 的 mtcompat 同源粘性数据源)。
+  lastPanelNavigation = { target: url, profileId: profile.id };
+  const inspected = await readFoundryPageState(contents, { profileId: profile.id });
   if (!inspected.ok) {
     await failedPage();
     return {
@@ -711,7 +901,16 @@ async function loadFoundryPage(url) {
       summary: `ERROR: ${url} loaded but the page could not be inspected (${inspected.error ?? inspected.status})`,
     };
   }
+  // A1 页面真源优先:巡检通过后采用页面自持的 runtime 源(指纹缺席/读取失败/重建
+  // 失败都保持现状,不阻塞下面的加载结论)。
+  await maybeAdoptPageMtRuntimeSource(profile, inspected.state);
   if (!inspected.state?.detected) {
+    if (!profile.sessionCookie) {
+      // mtcompat:未认证的访问会被 SPA 重定向到 Keycloak,登录页上没有 window.game,
+      // 但这不是"开错页面"—— 面板保持现状,把未就绪状态如实报回去;后续 open
+      // 由 isMtCompatNavigationHold 的纯 URL/path 幂等挡住登录中途的强制导航。
+      return { ok: true, page: inspected.state };
+    }
     await failedPage();
     return {
       ok: false,
@@ -727,8 +926,11 @@ async function loadFoundryPage(url) {
 async function describePanel(url, knownState) {
   const inspected = knownState ? { ok: true, state: knownState } : await readFoundryPageState(foundryView()?.webContents);
   const pageState = inspected.ok ? JSON.stringify(inspected.state) : `(page not ready: ${inspected.error ?? inspected.status})`;
-  return `panel at ${url}; page=${pageState}. ` +
-    `runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.`;
+  const profileId = inspected.ok && inspected.state?.profile ? inspected.state.profile : activeProfileId;
+  const guidance = profileId === PAGE_PROFILES.mtcompat.id
+    ? "profile mtcompat authenticates through Keycloak inside the panel: while detected is false a login/redirection is still in progress — never submit or inspect credentials through model tools. If a login form is showing, end the turn and let the user sign in directly; once they confirm, verify readiness with world_status (read-only) instead of re-navigating. After sign-in the page exchanges the authorization code and bootstraps the world (game.ready), which can take seconds; world_status may be used to wait read-only during that automatic bootstrap."
+    : "runtimeReady is true only after a GM has entered a ready /game world. If path is /join, ask the user to select their GM account and enter any world password directly in the Foundry panel; never request or handle that password through a model tool.";
+  return `panel at ${url}; page=${pageState}. ${guidance}`;
 }
 
 function readUiState() {
@@ -895,6 +1097,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  ipcMain.handle("app:ready", () => mainReady);
+
   // 原型期一次性配置迁移:userData 根目录的 arcane-*.json → config/(稳定后可删)。
   // 必须最先跑:createWindow 会读 ui.json,ProviderStore 会读 providers.json。
   migrateLegacyConfig(["ui.json", "providers.json", "foundry-sessions.json", "web-permissions.json"]);
@@ -961,9 +1165,8 @@ app.whenReady().then(async () => {
       // (isDestroyed 仍是 false)漏进 loadFoundryPage,撞上 "view is gone" 守卫,
       // F5 就成了没有回音的死路。重建后的空 view 回落到 foundryTargetUrl。
       const view = panelSurfaces.ensureFoundryView();
-      const target = /^https?:/.test(view.webContents.getURL())
-        ? view.webContents.getURL()
-        : resolvedFoundryTarget();
+      const current = view.webContents.getURL();
+      const target = /^https?:/.test(current) ? current : resolvedFoundryTarget();
       // 空态页上的 F5:没有地址可刷,重落空态(顺带吃上最新主题/语言),不算错误。
       if (!target) return showFoundryEmptyState();
       return loadFoundryPage(target);
@@ -985,10 +1188,44 @@ app.whenReady().then(async () => {
     telemetry = null;
     console.log("[telemetry] initialization failed; continuing without telemetry:", error?.message ?? error);
   }
-  foundryRuntime = new DirectFoundryRuntime({
-    allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+  // 页面档位感知的 runtime:Foundry 档用 SDK 出厂 runtime 源与 preflight 语义
+  // (行为与单实例时代完全一致);mtcompat 档注入自定义 runtime 源与 profile 覆盖,
+  // 按最近打开目标的档位路由(activeProfileId)。这里的打包拷贝只是离线兜底 ——
+  // 面板就绪后页面自持的 __MT_AGENT_RUNTIME_SOURCE__ 优先(maybeAdoptPageMtRuntimeSource)。
+  const mtRuntimeUserFile = configPath("mt-agent-runtime.js");
+  const mtRuntimeBundledFile = path.join(__dirname, "..", "..", "runtime", "mt-agent-runtime.js");
+  const mtRuntimeSource = resolveMtAgentRuntimeSource({
+    userFile: mtRuntimeUserFile,
+    bundledFile: mtRuntimeBundledFile,
+    log: message => console.log(message),
+  });
+  if (mtRuntimeSource) {
+    console.log(`[mt-runtime] using ${mtRuntimeSource.origin} runtime source: ${mtRuntimeSource.file}`);
+  }
+  foundryRuntime = new PageProfileRoutedRuntime({
+    foundry: new DirectFoundryRuntime({
+      allowedActions: DESKTOP_FOUNDRY_ACTIONS,
+      getWebContents: () => foundryView()?.webContents ?? null,
+      onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+    }),
+    mtcompat: mtRuntimeSource ? createMtcompatRuntime(mtRuntimeSource.source) : null,
+    getActiveProfileId: () => activeProfileId,
+    mtUnavailableMessage:
+      `The mt-compat page runtime is not installed: neither ${mtRuntimeUserFile} nor the bundled `
+      + `${mtRuntimeBundledFile} is present. Foundry pages keep working; mt-compat actions are unavailable until the runtime file is delivered.`,
+    log: message => console.log(message),
+  });
+  // "源未变不重建"的基准:启动时是打包拷贝的源,面板就绪后可能换成页面真源。
+  mtcompatRuntimeSourceText = mtRuntimeSource?.source ?? null;
+  // mt-compat 大厅通道:与 Foundry SDK/runtime 完全分离；跨 resident session 共享
+  // 串行队列、job 注册与 navigationEpoch。页面 getter 始终取当前 foundryView。
+  const lobbyClient = new MtLobbyClient({
     getWebContents: () => foundryView()?.webContents ?? null,
-    onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
+    // 复用面板既有档位判定：显式 ARCANEDESK_PANEL_PROFILE_OVERRIDES 把本地
+    // lobby 判为 mtcompat 时，MtLobbyClient 才接受该 origin；默认三 origin 与
+    // 冒牌 origin 规则保持不变。
+    isTrustedLobbyUrl: url => resolvePanelProfile(url)?.id === PAGE_PROFILES.mtcompat.id,
+    log: message => console.log(message),
   });
 
   const secretStorage = new SecretStorage(safeStorage);
@@ -1069,17 +1306,23 @@ app.whenReady().then(async () => {
   const bundledNodeRoot = app.isPackaged
     ? path.join(process.resourcesPath, "runtime", "node")
     : path.join(__dirname, "..", "..", "generated", "bundled-node");
-  const fvttOpsRuntimeReady = bootstrapFvttOpsRuntime({
+  const fvttOpsRuntimeReady = bootstrapFvttOpsRuntimeOrEnvOverride({
     runtimeRoot,
     distributionFile,
     bundledNodeRoot,
   }).then((runtime) => {
+    if (!runtime) {
+      console.error(`[fvtt-ops] packaged Node bootstrap unavailable; falling back to ARCANE_FVTT_NODE=${process.env.ARCANE_FVTT_NODE}`);
+      return null;
+    }
     console.log(`[fvtt-ops] Node ${runtime.version} ready at ${runtime.nodeBinary} (${runtime.reused ? "reused" : runtime.source})`);
     return runtime;
   });
   // Keep startup usable for settings/recovery, but retain the rejected promise
   // as the Agent gate. AgentHost awaits the same promise and therefore never
-  // falls back to a system Node when the packaged bootstrap failed.
+  // falls back to a system Node when the packaged bootstrap failed — unless the
+  // operator pinned ARCANE_FVTT_NODE, in which case the promise resolves null
+  // and AgentHost uses that binary (see bootstrapFvttOpsRuntimeOrEnvOverride).
   fvttOpsRuntimeReady.catch((error) => {
     console.error("[fvtt-ops] packaged Node bootstrap failed; Agent sessions are disabled", error);
   });
@@ -1135,6 +1378,11 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
+      // 面板当前档位:open/lobby/play/auth 的受信判定结果；面板关闭时为 null，
+      // 策略层归一为 foundry（不声明 lobby 工具）。
+      getPanelProfileId: () => panelProfileState.current().profileId,
+      lobbyClient,
+      getLobbyMirrorRoots: () => findMirrorStageRoots(),
       profile: {
         getCwd: () => directory ?? combatWorkspace,
       },
@@ -1153,6 +1401,11 @@ app.whenReady().then(async () => {
       taskStorageDir: configPath("tasks"),
       operationStorageDir: configPath("foundry-operations"),
       getLocale: resolveLocale,
+      // 面板当前档位:open/lobby/play/auth 的受信判定结果；面板关闭时为 null，
+      // 策略层归一为 foundry（不声明 lobby 工具）。
+      getPanelProfileId: () => panelProfileState.current().profileId,
+      lobbyClient,
+      getLobbyMirrorRoots: () => findMirrorStageRoots(),
       profile: {
         mode: "prep",
         getCwd: () => cwd,
@@ -1179,6 +1432,15 @@ app.whenReady().then(async () => {
   });
   // Global provider changes visit resident sessions; task state stays on each host.
   const allSessionHosts = () => Object.values(hosts).flatMap(registry => registry.allHosts());
+  // 档位切换只刷新已挂载的 resident session；未开始的会话在 attach 时按当前档位计算。
+  syncSessionLoadouts = (profileId) => {
+    for (const host of allSessionHosts()) {
+      if (!host.session) continue;
+      Promise.resolve(host.refreshToolLoadout(profileId)).catch((error) => {
+        console.warn(`[agent] tool loadout refresh failed for ${host.describeCurrent?.()?.id ?? "?"}:`, error?.message ?? error);
+      });
+    }
+  };
   activityCenter = new ActivityCenter({
     file: configPath("activity.json"),
     foreground: id => Boolean(mainWindow?.isFocused() && mainWindow?.isVisible()
@@ -1969,7 +2231,13 @@ app.whenReady().then(async () => {
   // 它同时管 foundry 与 reader 两个 surface,重开时按 lastContent 恢复关闭前的内容(§3.4 CLOSED 行)。
   const panelOperations = {
     open: () => panelSurfaces.openPanel(),
-    close: () => panelSurfaces.closePanel(),
+    // 关闭后档位归零:右屏不再承载任何 VTT 页面(控制器只管 view 生命周期,
+    // 档位推送留在 main.js,状态器对重复 close 天然去重)。
+    close: () => {
+      const result = panelSurfaces.closePanel();
+      pushPanelProfile(null, null);
+      return result;
+    },
     // F5 改为 surface 感知(spec §4.3):foundry → 等导航与巡检完成再报;reader → 重读当前文件。
     // 于是 READER_C 下的 F5 不再静默哑掉(design-rules R5)。
     reload: () => panelSurfaces.reloadSurface(),
@@ -1981,6 +2249,12 @@ app.whenReady().then(async () => {
       catch (error) { return { ok: false, error: error.message }; }
     });
   }
+  // 面板档位快照:panel_profile 事件只推变化,晚加载/重载的
+  // 渲染层可从这拉当前档;返回与事件同形的对象。
+  ipcMain.handle("panel:get-profile", event => {
+    if (!isTrustedChatIpc(event)) return { ok: false, code: "UNTRUSTED_CALLER" };
+    return panelProfileState.current();
+  });
   // 顶栏 FVTT/文档切换:只切已存在的内容。foundry 从未打开时返回 empty(提示在切换丸上
   // 闪烁);reader 从未打开时不再报空,控制器直接切去阅读器的空态兜底页。
   ipcMain.handle("panel:switch", (event, target) => {
@@ -2028,6 +2302,8 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
 
+  resolveMainReady({ ok: true });
+
   prepareExit = async () => {
     const registries = Object.values(hosts);
     for (const registry of registries) {
@@ -2045,6 +2321,7 @@ app.whenReady().then(async () => {
     await Promise.allSettled([...stopHosts,
       ...registries.flatMap(registry => [...registry.pending.values(), ...registry.deleting.values()]),
       telemetry?.close()]);
+    try { lobbyClient.dispose(); } catch { /* best effort */ }
   };
   const reclaimTimer = setInterval(() => { for (const registry of Object.values(hosts)) registry.prune(); }, 60_000);
   reclaimTimer.unref();
@@ -2065,6 +2342,9 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     restoreMainWindow();
   });
+}).catch(error => {
+  resolveMainReady({ ok: false, error: error?.message ?? String(error) });
+  console.error("[startup] initialization failed:", error);
 });
 
 app.on("window-all-closed", () => {

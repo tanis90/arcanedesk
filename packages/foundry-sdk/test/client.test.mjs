@@ -486,3 +486,103 @@ test("worldInfo cache is explicit and invalidatable", async () => {
   runtime.invalidate();
   assert.equal(runtime.lastWorldInfo, null);
 });
+
+test("a page profile overrides the preflight game-path and readiness predicates", async t => {
+  const playState = overrides => readyState({
+    url: "https://mt.example.test/user-files/compat/play.html",
+    path: "/user-files/compat/play.html",
+    gm: false,
+    world: "cos",
+    hasGame: true,
+    ...overrides,
+  });
+  const mtProfile = {
+    id: "mtcompat",
+    isGamePath: state => String(state.path ?? "").endsWith("/user-files/compat/play.html"),
+    isReady: state => Boolean(state.hasGame && state.ready && state.world && state.user),
+  };
+
+  await t.test("accepts a bootstrapped play.html without a GM flag", async () => {
+    const runtime = new FoundryRuntimeClient({
+      transport: {
+        acquire: () => ({}),
+        inspect: async () => ({ ok: true, state: playState({ ready: true }) }),
+        evaluate: async () => ({ status: "completed", value: { marker: true } }),
+      },
+      readyPollMs: 1,
+      runtimeSource: TEST_RUNTIME_SOURCE,
+      pageProfile: mtProfile,
+    });
+    assert.deepEqual(await runtime.call("worldInfo", {}), { marker: true });
+  });
+
+  await t.test("rejects an off-path page with FOUNDRY_NOT_GAME naming the profile", async () => {
+    let evaluations = 0;
+    const runtime = new FoundryRuntimeClient({
+      transport: {
+        acquire: () => ({}),
+        inspect: async () => ({ ok: true, state: playState({ path: "/auth/login", hasGame: false }) }),
+        evaluate: async () => {
+          evaluations += 1;
+          return { status: "completed", value: null };
+        },
+      },
+      readyPollMs: 1,
+      runtimeSource: TEST_RUNTIME_SOURCE,
+      pageProfile: mtProfile,
+    });
+    await rejectsWithCode(
+      runtime.call("worldInfo", {}, { readyTimeoutMs: 0 }),
+      FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_GAME,
+    );
+    assert.equal(evaluations, 0);
+  });
+
+  await t.test("polls until the profile's own readiness is satisfied", async () => {
+    let inspections = 0;
+    const runtime = new FoundryRuntimeClient({
+      transport: {
+        acquire: () => ({}),
+        inspect: async () => {
+          inspections += 1;
+          return { ok: true, state: playState({ ready: inspections >= 2 }) };
+        },
+        evaluate: async () => ({ status: "completed", value: { ready: true } }),
+      },
+      readyPollMs: 1,
+      runtimeSource: TEST_RUNTIME_SOURCE,
+      pageProfile: mtProfile,
+    });
+    const result = await runtime.call("worldInfo", {}, { readyTimeoutMs: 100 });
+    assert.equal(result.ready, true);
+    assert.equal(inspections, 2);
+  });
+
+  await t.test("an unready page times out with FOUNDRY_NOT_READY carrying the profile", async () => {
+    await rejectsWithCode(
+      new FoundryRuntimeClient({
+        transport: {
+          acquire: () => ({}),
+          inspect: async () => ({ ok: true, state: playState({ ready: false, detected: true }) }),
+          evaluate: async () => ({ status: "completed", value: null }),
+        },
+        readyPollMs: 1,
+        runtimeSource: TEST_RUNTIME_SOURCE,
+        pageProfile: mtProfile,
+      }).call("worldInfo", {}, { readyTimeoutMs: 0 }),
+      FOUNDRY_SDK_ERROR_CODES.FOUNDRY_NOT_READY,
+    );
+  });
+});
+
+test("pageProfile options are validated at construction", () => {
+  const transport = { acquire: () => ({}), inspect: async () => ({}), evaluate: async () => ({}) };
+  assert.throws(
+    () => new FoundryRuntimeClient({ transport, pageProfile: { isGamePath: "nope" } }),
+    /pageProfile/,
+  );
+  assert.throws(
+    () => new FoundryRuntimeClient({ transport, pageProfile: { isReady: 42 } }),
+    /pageProfile/,
+  );
+});

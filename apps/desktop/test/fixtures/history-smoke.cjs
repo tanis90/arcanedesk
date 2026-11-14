@@ -31,6 +31,7 @@ app.whenReady().then(async () => {
   const payload = (host, query) => ({ ok: true, mode: host.profile.mode, generation, ...host.currentPayload(query) });
   const channels = [...readFileSync(path.join(desktop, "preload.cjs"), "utf8").matchAll(/invoke\("([^"]+)"/g)].map(match => match[1]);
   for (const channel of new Set(channels)) ipcMain.handle(channel, async (_event, input, query) => {
+    if (channel === "app:ready") return { ok: true };
     if (channel === "sessions:current") return payload(hosts[mode]);
     if (channel === "mode:set") { mode = input; generation++; return payload(hosts[mode]); }
     if (channel === "sessions:snapshot") {

@@ -485,3 +485,44 @@
 - 已准备 module bundle 的本地构建是用户明确请求的新产物生成，独立于安装计划。最多一次提供文件交互；输出临时路径和工具选择属 C 类，不增加构建确认。安装仍按既有本地包规则处理，不能用构建授权替代安装授权。
 - bundle-inspect 只读身份与哈希，不宣称完整内容通过验证；bundle-build 锁定输入哈希并复用共享构建器，完整校验后生成新 ZIP。构建阶段不下载、执行内容脚本或更改既有 Foundry。
 - 构建器源自锁定公开提交，依赖由仓库根 lockfile 固定并作为生成副本随 skill 携带。CI 与发布前比较文件哈希，禁止手工修补副本；原始游戏内容不随工具发布。
+
+### arcane-world-import 世界导入云端（2026-10-03）
+
+- 本地 FVTT 世界（目录/zip）→ MythicTable 云端战役的搬运是写操作，确认门走 dry-run 计划（世界/版本/迁移统计/各集合计数/资产与缺失/目标战役），用户一句放行；交互预算恒定 2 点（计划确认 + MT 账号密码），相同世界的相同计划授权沿用。
+- 迁移引擎走 Path B：裸 Node 最小 stub 直载用户本机 `systems/dnd5e/dnd5e.mjs`（官方迁移代码离线执行），不在 skill 包内嵌 jsdom 全量点火；与 Path A 的逐文档深比 parity（1781+102+102 文档 0 差异）作为门槛存档。本机 dnd5e 缺失或比世界旧则明确拒绝并指路 arcane-fvtt-mods，不静默降级。
+- `--create` 恒新建战役，绝不按名字复用既有战役（防重复导入叠数据）；`--campaign <id>` 并入既有战役是纯追加不去重，必须在计划里点名。
+- MT 账号密码经 request_user_input 现收、`MT_PASS` 环境变量单条命令注入，不落盘、不进日志、不复述；写了一半的战役不盲目重试（软删后完整重导）。
+- 导入面只含 T1+T2（文档 + 资产），聊天记录/世界设置/世界自有 compendium packs 不导入（二期）；vendored import-core/migrate/assets 与 mt-foundry-compat/web/ 保持 sha256 逐字节一致，升级随上游验收后同步。
+
+### arcane-world-import / arcane-mt-packs 大厅 typed 工具（2026-11-11，r46）
+
+- r46 起，r45 的 ROPC 与本地迁移脚本流程不再作为主路径或降级通道；世界与合集包统一走 mt compat 大厅的**原生 File + typed lobby tools**。文件只接受 prep cwd 与 Desktop 自有镜像缓存（realpath 围栏、普通文件、size/mtime + 流式 sha256），目录外路径直接拒绝，不做目录外授权。
+- 大厅工具面固定 7 个：`foundry_lobby_import_start`、`foundry_lobby_import_job`、`foundry_lobby_campaigns_list`、`foundry_lobby_campaign_packs_get`、`foundry_lobby_campaign_packs_update`、`foundry_lobby_packs_read`、`foundry_lobby_packs_delete`；不引入 Code Mode、tool_search、裸 REST/eval 或通用文件选择器。
+- `import_start` 是唯一导入写入口：内部完成文件绑定、inspect、计划与审批后启动一个 job，返回 `{jobId, plan}`；`import_job` 只做 status（可等待）与 cancel，轮询只报 phase/progress/currentItem/failureCount，完整报告只在终态返回。取消被接受不等于已停止并清理；导航/刷新/崩溃后 job 只标 indeterminate，不自动重放。
+- 免密码：登录只由用户在面板内完成 Keycloak 流程，agent 不接触账号、密码、验证码或 token。旧版 dnd5e（< 5.3.0）与大厅同门拒绝并指引升级，不做 ROPC/本地脚本降级。
+- 写操作（`import_start`、`campaign_packs_update`、`packs_delete`）沿用 App 现有 `maybeRequestApproval`，不新增权限级别或审批框架；拒批即零底层写。
+- 合集库与战役选包分层：库删除用 `packs_delete`，选包增量用 `campaign_packs_update`。读模型 `revision` 只做 stale 检测（update/delete 前重读，不一致零写入），写后回读；选包更新保留未涉及的 refs、missing、ownerPid 与其它 enabledSources 字段，只 bump 一次 `packsRev` 触发 play 重拉。删除不级联 detach 引用。
+- 世界导入按 `campaignName`（默认世界标题）判定同名：不存在则新建（`new`），同名且 ruleset 一致则复用并追加（`existing`），ruleset 不一致拒绝；没有单独 campaignId/合并参数不等于永远新建，重复导入不盲目叠加。
+- 旧 App 通过 `minAppVersion: 0.9.0` fail-closed 留在 r45；r46 为 `revision: 46`。
+
+### ArcaneMap 页面路由与登录后重试（2026-11-12，r47）
+
+- `profile` 只区分 Foundry 与 mtcompat 产品档位，`activatedTools` 只表示该档位的工具面；实际调用前还要看 `page.path`、登录状态和游戏就绪状态。`lobby.html` 与 `/auth/**` 可展示，但 `world_status`、`foundry_page_eval` 和游戏读写工具只归 ready 游戏页。
+- `LOGIN_REQUIRED` 时结束本轮，由用户在面板里登录；确认后重试原来的大厅操作，不用 `foundry_open` 轮询，也不用 `world_status` 检查大厅。大厅资源查询、导入和选包继续走对应 `foundry_lobby_*` 工具。
+- Actor 与 compendium 工作先确认 ready 游戏页。复杂页面 JS 在 Foundry 用 `browser_evaluate`，在 mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing`；`foundry_screenshot` 只在页面 detected 后使用。
+- 本地 FVTT 安装、运维、模组安装和模组世界建设流程不套用到奥法地图大厅：世界包归 `arcane-world-import`，个人内容包与战役选包归 `arcane-mt-packs`。
+
+### 世界导入规则显式选择（2026-11-12，r48）
+
+- 世界包与简介不能替用户决定规则，skill 也不写死 2014/2024 或 COC。新增只读 `foundry_lobby_rulesets_list` / 页面动作 `lobbyRulesetsList`，从当前部署的 `rulesets.mjs` 注册表返回 `{id,label,system,supportLevel?}`；每次世界导入先把当前实际支持项交给用户选择，战役创建后不可变，计划审批不能代替这项选择。
+- `foundry_lobby_import_start` 对 `expectedKind:"world"` 与省略 `expectedKind` 的自动识别一律要求 `ruleset`，缺参在任何文件读取或大厅写入之前报 `INPUT_INVALID`，不再落入大厅默认值；传入值还必须命中当前规则列表，否则同样零写入拒绝。合集包不创建战役，保持不需要 `ruleset`。
+- 世界导入交互预算由 2 点改为 3 点：本次规则选择、按需登录、导入计划确认；大厅 typed 工具由 7 个增至 8 个，r48 为 `revision: 48`。
+- 奥法地图主入口为 `https://arcanemap.com/`。三个受信 origin 的 `/` 与 `/lobby.html` 在 `foundry_open` 导航前统一归一到 `/user-files/compat/lobby.html`，不得先按 Foundry 开放档加载再等待重定向；其它 origin 不做这项归一。
+- “打开/连接奥法地图”的默认域名由 prep/combat 系统提示词直接约束，不单独维护路由 skill；世界导入和内容包仍分别使用 `arcane-world-import`、`arcane-mt-packs`。
+
+### play → lobby → play 往返（2026-11-13，r49）
+
+- 当前在 mtcompat play 页而任务需要大厅时，先一句话说明“会暂时离开当前游戏”，再调用无参数 `foundry_lobby_return({})`；这是说明不是提问，不新增交互点。离开游戏后要做的仍是大厅原有动作，交互预算不变（世界导入 3 点、内容包按原预算）。
+- 回大厅只能走这个 typed action：不用 `foundry_page_eval`、`location.assign`、`ui.nav` 自造跳转，也不放宽 `foundry_open` 的同源/同 pathname 幂等（方案 A 已否决）。成功回执保留真实 `returnPlayUrl`（campaign 来自 play URL 的 `?campaign=`，不用 `game.world.id` 猜），大厅动作完成后 `foundry_open({url:returnPlayUrl})` 回原战役；已在大厅时 `alreadyInLobby:true`，直接继续。
+- `completed` 与预期 `NAVIGATED` 都只表示导航已发起：Desktop 随后确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪，agent 不把导航中断当可重放失败，不自动重放、不降级 eval。其余失败 `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 照实报告并停止。
+- 该工具仅 mtcompat prep：combat 与普通 Foundry 不声明，combat prompt 不改；世界导入与内容包继续沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。大厅 typed 工具由 8 个增至 9 个，r49 为 `revision: 49`。

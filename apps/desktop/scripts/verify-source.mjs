@@ -54,6 +54,7 @@ const exactDirectories = new Map([
     "prepare-bundled-node.mjs",
     "prepare-desktop-release.mjs",
     "prepare-intl-index.mjs",
+    "prepare-mtcompat-surface.mjs",
     "prepare-renderer-assets.mjs",
     "prepare-world-profile.mjs",
     "publish-intl-world.mjs",

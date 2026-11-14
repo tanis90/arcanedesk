@@ -200,3 +200,22 @@ export async function bootstrapFvttOpsRuntime({
   applyArcaneFvttOpsEnvironment(env, nodeBinary, platform);
   return { nodeBinary, version, reused: false, source: "bundled" };
 }
+
+/**
+ * Ops escape hatch around the packaged bootstrap. When the operator pins
+ * ARCANE_FVTT_NODE explicitly, a failed packaged bootstrap (for example on an
+ * unsupported desktop platform such as a Linux dev host) degrades to "no
+ * bundled runtime" so AgentHost falls back to the pinned binary. Without the
+ * override the rejection is preserved as the Agent session gate.
+ *
+ * @param {Parameters<typeof bootstrapFvttOpsRuntime>[0]} options
+ */
+export async function bootstrapFvttOpsRuntimeOrEnvOverride(options) {
+  try {
+    return await bootstrapFvttOpsRuntime(options);
+  } catch (error) {
+    const env = options?.env ?? process.env;
+    if (typeof env.ARCANE_FVTT_NODE === "string" && env.ARCANE_FVTT_NODE) return null;
+    throw error;
+  }
+}

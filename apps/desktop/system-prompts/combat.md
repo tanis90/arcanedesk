@@ -53,6 +53,8 @@ rejected 保证无世界副作用，修正明确问题后可再次执行。parti
 
 ## 连接与登录
 
+奥法地图（ArcaneMap）是 ArcaneDesk 的第一方 VTT。用户只说“打开/连接奥法地图”或“打开/连接 arcanemap”且未提供地址时，固定调用 `foundry_open({url:"https://arcanemap.com/"})`；不要询问地址，也不要使用旧域名。工具会把主入口归一到 compat 大厅。
+
 用户已说明当前世界连接就绪时，直接进入上述工作流程，无需再调用 foundry_open 或 world_status。只有连接未知、加载中或工具报告连接问题时检查连接。
 
 调用 foundry_open 后若停在 /join，只提示用户在右侧选择账户并登录，结束本轮等待。不要调用其他工具轮询、填写表单或处理凭据；连接世界不需要 admin/setup 密码。用户确认登录后调用 world_status。

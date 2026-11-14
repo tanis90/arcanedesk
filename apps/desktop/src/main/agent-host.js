@@ -3,6 +3,8 @@
 //   界面层:foundry_open;browser_evaluate 仅备团
 //   运维视觉层:foundry_screenshot(仅备团/运维模式,返回当前 Foundry viewport)
 //   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
+//   兜底 eval:foundry_page_eval(A3,仅 mtcompat 档备团;pageEval 回执带 touched/missing 注记)
+//   大厅层:foundry_lobby_*(仅 mtcompat 档备团;实现静态注册,声明随真实页面档位动态激活)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
@@ -26,8 +28,11 @@ import { TaskCoordinator } from "./tasks/task-coordinator.js";
 import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
 import { createFoundryTools } from "./foundry-tools.js";
+import { createLobbyTools } from "./lobby-tools.js";
+import { MtLobbyClient } from "./mt-lobby-client.js";
 import { createModMirrorTools } from "./mod-mirror-tools.js";
-import { activeToolNamesForPool, verifyActiveTools } from "./foundry-tool-policy.js";
+import { activeToolNamesForPoolInProfile, normalizePolicyProfile, verifyActiveTools } from "./foundry-tool-policy.js";
+import { mtcompatSurfaceSegment, withMtcompatSurfaceSegment } from "./mtcompat-surface.mjs";
 import { PendingInputs } from "./tasks/pending-inputs.js";
 import { replaceFile } from "./atomic-file.js";
 import { regionConfig } from "./region.mjs";
@@ -231,6 +236,57 @@ function safeJson(value) {
   }
 }
 
+// ---- A3：pageEval 结果呈现（PRD §2.5 规则 3 的落点）----
+// touched/missing 是页面在「你踩了桩」的当场告知，模型必须一眼看到：注记恒附在正文
+// 尾部（空增量不附），紧凑成 `- path [status] note` / `- feature ×count` 两行形状。
+
+/** pageEval 回执的注记行；空增量返回空数组（调用侧据此不附尾）。 */
+function pageEvalAnnotationLines(receipt) {
+  const lines = [];
+  for (const item of Array.isArray(receipt?.touched) ? receipt.touched : []) {
+    const note = typeof item?.note === "string" && item.note ? ` ${item.note}` : "";
+    lines.push(`- ${item?.path ?? "?"} [${item?.status ?? "?"}]${note}`);
+  }
+  for (const item of Array.isArray(receipt?.missing) ? receipt.missing : []) {
+    lines.push(`- ${item?.feature ?? "?"} ×${item?.count ?? "?"}`);
+  }
+  return lines;
+}
+
+/** 注记尾巴（含抬头一行）；空增量返回空串。 */
+function pageEvalAnnotationBlock(receipt) {
+  const lines = pageEvalAnnotationLines(receipt);
+  if (lines.length === 0) return "";
+  return `\n\ntouched/missing（必须读；报了踩桩就按 note 绕开重写）:\n${lines.join("\n")}`;
+}
+
+/** pageEval 四态回执 → 模型可读文本（completed / rejected 自捕获；其余形状照实回显）。 */
+function pageEvalResultText(receipt) {
+  if (receipt?.status === "completed") {
+    const body = receipt.value === undefined ? "completed (the code returned no value)" : safeJson(receipt.value);
+    return `${body}${pageEvalAnnotationBlock(receipt)}`;
+  }
+  if (receipt?.status === "rejected") {
+    const code = typeof receipt.code === "string" && receipt.code ? receipt.code : "REJECTED";
+    const message = typeof receipt.message === "string" && receipt.message ? receipt.message : "pageEval was rejected";
+    return `REJECTED [${code}]: ${message}${pageEvalAnnotationBlock(receipt)}`;
+  }
+  return `pageEval returned an unrecognized receipt; raw value:\n${safeJson(receipt)}`;
+}
+
+/**
+ * pageEval 未拿到回执（SDK 层抛错）→ 照实呈现。旧 runtime 源（打包兜底 v0.5.0）
+ * 没有这个 action，页面自答 ACTION_UNKNOWN——这不是调用方代码错，工具层明确降级指路。
+ */
+function pageEvalFailureText(error) {
+  const message = String(error?.message ?? error);
+  const label = error?.code ? `${error.code}: ${message}` : message;
+  if (/ACTION_UNKNOWN/.test(message)) {
+    return `pageEval unavailable — ${label}. The page runtime does not implement the pageEval action: this mt-compat page runs an older runtime source (the bundled fallback copy is v0.5.0). Use typed actions for this page, or have the current compat build deployed — the page's own __MT_AGENT_RUNTIME_SOURCE__ is adopted automatically once it carries pageEval. Do not retry this call as-is.`;
+  }
+  return `pageEval failed without a receipt — ${label}. The code did not complete; if it may have started a write, verify page state before retrying.`;
+}
+
 function extractText(message) {
   const content = message?.content;
   if (typeof content === "string") return content;
@@ -264,13 +320,17 @@ export class AgentHost {
    *   log?: (...data: any[]) => void,
    *   profile?: Record<string, any>,
    *   getLocale?: () => string,
+   *   getPanelProfileId?: () => string | null,
+   *   mtcompatSurfaceFile?: string,
+   *   lobbyClient?: import("./mt-lobby-client.js").MtLobbyClient,
+   *   getLobbyMirrorRoots?: () => string[],
    *   taskStorageDir?: string,
    *   operationStorageDir?: string,
    *   scheduler?: any,
    *   search?: { store: import("./search/store.js").SearchStore, spark: () => any, ownChatKeys?: () => any, fetchImpl?: any } | null,
    * }} [deps]
    */
-  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, taskStorageDir, operationStorageDir, scheduler, search } = {}) {
+  constructor({ foundryRuntime, getFoundryView, openFoundry, openMdReader, sendToRenderer, providerStore, telemetry, runtimeReady, log = console.log, profile, getLocale, getPanelProfileId, mtcompatSurfaceFile, lobbyClient, getLobbyMirrorRoots, taskStorageDir, operationStorageDir, scheduler, search } = {}) {
     this.scheduler = scheduler;
     this.closing = false;
     this.lastUsedAt = Date.now(); this.retired = false; this.operations = 0;
@@ -288,6 +348,20 @@ export class AgentHost {
     this.telemetry = telemetry ?? null;
     this.runtimeReady = runtimeReady ?? Promise.resolve(null);
     this.getLocale = getLocale ?? null;
+    // 面板当前档位（main.js 的 activeProfileId）：mtcompat 档才挂支持面蒸馏段，
+    // 缺席（测试/无面板）按 foundry 开放默认档处理，工具与 prompt 逐字节不变。
+    this.getPanelProfileId = getPanelProfileId ?? null;
+    // 蒸馏产物路径注入点（测试/联调指到 fixture）；缺省走 generated/ 的构建产物。
+    this.mtcompatSurfaceFile = mtcompatSurfaceFile ?? null;
+    // 大厅通道跨 resident session 共享（main.js 注入唯一实例）；测试可注入 fake。
+    this.lobbyClientInstance = lobbyClient ?? null;
+    this.ownsLobbyClient = !lobbyClient;
+    this.getLobbyMirrorRoots = getLobbyMirrorRoots ?? null;
+    this._toolPool = [];
+    this._activeToolNames = [];
+    this._activeToolProfileId = null;
+    this._resourceLoader = null;
+    this._loadoutQueue = Promise.resolve();
     this.fvttOpsNode = null;
     this.modelRuntime = null;
     // 用户当前选择的模型。缺 key 时它可以先于 AgentSession.model 生效，
@@ -325,6 +399,128 @@ export class AgentHost {
   /** Pi 原生模式存储目录；不依赖 cwd 编码，也不需要外部 path -> mode 索引。 */
   sessionDir() {
     return sessionDirForMode(getAgentDir(), this.profile.mode);
+  }
+
+  /**
+   * 面板当前档位 id（main.js 注入的 getter，值即 activeProfileId）。无注入（测试/无面板）
+   * 返回 null——策略层与蒸馏段一律按 foundry 开放默认档处理。
+   */
+  panelProfileId() {
+    return this.getPanelProfileId?.() ?? null;
+  }
+
+  /**
+   * mtcompat 档的支持面蒸馏段（A2，Tier 0 背诵级）：面板当前档位决定，foundry 档/无产物
+   * 返回 null。段落挂在模式 prompt 与 eval 工具描述上，两处共用同一份文本。
+   * 产物损坏只记日志并降级为"无段落"——包内数据把会话建不起来，代价与收益不成比例；
+   * 构建期由 prepare 链保证 schema，损坏会被日志直接指出。
+   */
+  surfaceSegment() {
+    try {
+      return mtcompatSurfaceSegment(this.panelProfileId(), this.mtcompatSurfaceFile ?? undefined);
+    } catch (error) {
+      this.log(`[agent:${this.profile.mode}] mtcompat surface segment unavailable: ${error.message}`);
+      return null;
+    }
+  }
+
+  /** 共享大厅通道；未注入时按宿主页面懒建（测试/无面板路径）。 */
+  lobbyClient() {
+    if (!this.lobbyClientInstance) {
+      this.lobbyClientInstance = new MtLobbyClient({
+        getWebContents: () => this.getFoundryView?.()?.webContents ?? null,
+        log: message => this.log(`[agent:${this.profile.mode}] ${message}`),
+      });
+      this.ownsLobbyClient = true;
+    }
+    return this.lobbyClientInstance;
+  }
+
+  /**
+   * 页面 runtime 调用的唯一出口：会话遥测（AsyncLocalStorage 跟随调用方）与模式随调用
+   * 走，串行队列/超时/中断语义全部由 SDK 客户端持有。typed 工具与大厅工具共用，绝不
+   * 另建队列或绕到 pageEval。
+   */
+  callFoundryRuntime(action, args, options) {
+    const runtime = this.foundryRuntime;
+    if (!runtime || (typeof runtime.call !== "function" && typeof runtime.callForSession !== "function")) {
+      throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
+    }
+    return typeof runtime.callForSession === "function"
+      ? runtime.callForSession(this.telemetry, this.profile.mode, action, args, options)
+      : runtime.call(action, args, options);
+  }
+
+  /** 本地文件通道的允许根：当前 prep cwd + 已有镜像暂存缓存（main.js 注入）。 */
+  lobbyFileRoots() {
+    const roots = [];
+    try {
+      const cwd = this.cwd();
+      if (cwd) roots.push(cwd);
+    } catch { /* 会话尚未绑定工作目录时只允许镜像缓存 */ }
+    for (const root of this.getLobbyMirrorRoots?.() ?? []) {
+      if (typeof root === "string" && root.trim() !== "") roots.push(root);
+    }
+    return roots;
+  }
+
+  /** 当前档位 × 模式的完整声明名单（loadout 的唯一计算入口；恢复会话也走这里）。 */
+  toolLoadout(profileId = this.panelProfileId()) {
+    return activeToolNamesForPoolInProfile(this.profile.mode, this._toolPool, normalizePolicyProfile(profileId));
+  }
+
+  getActiveToolNames() {
+    const actual = this.session?.getActiveToolNames?.();
+    return Array.isArray(actual) ? [...actual] : [...this._activeToolNames];
+  }
+
+  /**
+   * 真实档位变化时刷新当前 Pi session 的 active tools。setActiveToolsByName 会重建
+   * system prompt（动态序言在同一回调里按当前档位重算），下一次模型请求生效。
+   * 同档位且名单不变时不重复调用，避免无谓的 prompt/cache 抖动；lobby↔play 不改变档位。
+   * @param {string | null} [profileId]
+   */
+  async refreshToolLoadout(profileId = this.panelProfileId()) {
+    // 串行化：main 的 resident-host 刷新与当前 host 的 foundry_open 刷新可能同时到达。
+    const expectedSession = this.session;
+    const run = this._loadoutQueue.then(async () => {
+      if (!expectedSession || this.session !== expectedSession) {
+        return { profileId: normalizePolicyProfile(profileId), changed: false, activeTools: [], activatedTools: [], removedTools: [] };
+      }
+      const normalized = normalizePolicyProfile(profileId);
+      const previous = expectedSession.getActiveToolNames();
+      const next = this.toolLoadout(normalized);
+      const profileChanged = this._activeToolProfileId !== normalized;
+      const sameSet = previous.length === next.length && previous.every(name => next.includes(name));
+      if (!profileChanged && sameSet) {
+        return { profileId: normalized, changed: false, activeTools: previous, activatedTools: [], removedTools: [] };
+      }
+      // DefaultResourceLoader 在 attach 时把 override 结果缓存进 appendSystemPrompt；
+      // 只调 setActiveToolsByName 不会重跑 override。先 reload 让档位序言按当前 panel
+      // profile 重算，再重建 tool loadout，下一次模型请求前生效。
+      if (this._resourceLoader?.reload) await this._resourceLoader.reload();
+      if (this.session !== expectedSession) {
+        return { profileId: normalized, changed: false, activeTools: [], activatedTools: [], removedTools: [] };
+      }
+      expectedSession.setActiveToolsByName?.(next);
+      const actual = expectedSession.getActiveToolNames();
+      this._activeToolNames = actual;
+      this._activeToolProfileId = normalized;
+      const activatedTools = next.filter(name => !previous.includes(name));
+      const removedTools = previous.filter(name => !next.includes(name));
+      if (activatedTools.length || removedTools.length) {
+        this.log(`[agent:${this.profile.mode}] tool loadout -> ${normalized} (+${activatedTools.length}/-${removedTools.length})`);
+      }
+      return {
+        profileId: normalized,
+        changed: !sameSet || profileChanged,
+        activeTools: actual,
+        activatedTools,
+        removedTools,
+      };
+    });
+    this._loadoutQueue = run.then(() => undefined, () => undefined);
+    return run;
   }
 
   createSessionManager() {
@@ -452,15 +648,22 @@ export class AgentHost {
       // native shell behavior/rendering while enforcing our spawn environment.
       customTools.push(...[arcaneShellTool(cwd, this.fvttOpsNode), createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd)]);
     }
-    const options = {
+    const options = /** @type {import("@earendil-works/pi-coding-agent").CreateAgentSessionOptions} */ ({
       cwd,
       customTools,
       sessionManager,
       modelRuntime: this.modelRuntime ?? undefined,
       agentDir: getAgentDir(),
-    };
+      // 只注册、不默认声明：初始声明在 createAgentSession 之后用 setActiveToolsByName
+      // 精确落盘。noTools="builtin" 同时阻止 Pi 在 reload/恢复时自动加回默认内置工具。
+      noTools: "builtin",
+    });
     // web_search 只在工具池里存在(已配置搜索)时才激活;allowlist 静态包含它。
-    options.tools = activeToolNamesForPool(this.profile.mode, customTools);
+    // 初始声明按「面板档位 × 模式」取；Pi 的 tools 选项同时是 allowlist，动态激活
+    // 需要让所有 custom tools 先注册，因此这里不把它当 allowlist 传，创建后立刻
+    // setActiveToolsByName 精确落初始名单。
+    this._toolPool = customTools;
+    const promptProfileId = normalizePolicyProfile(this.panelProfileId());
     // 模型按会话生效:已有会话恢复自己的模型,新会话才吃全局默认(见
     // initialModelRefForAttach)。传 model 对象是为了绕过 pi settings.json
     // 的默认,而不是覆盖会话选择。
@@ -473,28 +676,30 @@ export class AgentHost {
       // 战斗纪律系统提示:全量替换 SDK 默认的 coding-agent prompt
       // (默认 prompt 讲文件/代码工具,对无 shell 的战斗 agent 是误导)。
       // appendSystemPromptOverride 必须显式置空,挡掉 ~/.pi 的 APPEND_SYSTEM.md。
-      const systemPrompt = loadCombatSystemPrompt(this.log);
-      if (systemPrompt) {
+      // mtcompat 蒸馏段按当前档位在每次 prompt 重建时重算，不把 attach 时档位写死。
+      const baseSystemPrompt = loadCombatSystemPrompt(this.log);
+      if (baseSystemPrompt) {
         const languageDirective = languageDirectiveForLocale(this.getLocale?.());
         const loader = new DefaultResourceLoader({
           cwd,
           agentDir: getAgentDir(),
-          systemPromptOverride: () => [systemPrompt, languageDirective].filter(Boolean).join("\n\n"),
+          systemPromptOverride: () => [withMtcompatSurfaceSegment(baseSystemPrompt, this.surfaceSegment()), languageDirective].filter(Boolean).join("\n\n"),
           appendSystemPromptOverride: () => [],
         });
         await loader.reload();
+        this._resourceLoader = loader;
         options.resourceLoader = loader;
       }
     } else {
       // 备团:保留 pi 默认 coding prompt(它准确描述了内置工具),追加模式序言;
       // skills 走原生渐进披露(<available_skills> 清单,read 按需加载);
-      // fence 挂 cwd 围栏 extension。
-      const prepPreamble = loadPrepPreamble(this.log);
+      // fence 挂 cwd 围栏 extension。mtcompat 蒸馏段同样在 prompt 重建时按当前档位重算。
+      const basePreamble = loadPrepPreamble(this.log);
       const languageDirective = languageDirectiveForLocale(this.getLocale?.());
       const loader = new DefaultResourceLoader({
         cwd,
         agentDir: getAgentDir(),
-        appendSystemPromptOverride: () => [prepPreamble, languageDirective].filter(Boolean),
+        appendSystemPromptOverride: () => [withMtcompatSurfaceSegment(basePreamble, this.surfaceSegment()), languageDirective].filter(Boolean),
         // skillPaths 每次建 session 现取:SkillsUpdater 刷新成功后,新 session
         // 立即落到 userData 激活副本,老 session 保持建会话时的快照。
         additionalSkillPaths: this.profile.getSkillPaths ? this.profile.getSkillPaths() : this.profile.skillPaths,
@@ -503,12 +708,22 @@ export class AgentHost {
           : [],
       });
       await loader.reload();
+      this._resourceLoader = loader;
       options.resourceLoader = loader;
     }
     const { session } = await createAgentSession(options);
-    try { verifyActiveTools(session, options.tools); }
+    // 会话创建期间面板可能已经切换档位；以当前真实档位落初始 loadout（恢复会话时
+    // 也不盲信历史里残留的工具声明）。
+    this._activeToolProfileId = normalizePolicyProfile(this.panelProfileId());
+    // prompt loader 在 createAgentSession 之前求值；若创建期间档位变化，先按当前
+    // 档位重算序言，再落 tool loadout，避免 attach 残留旧档位说明。
+    if (this._resourceLoader && promptProfileId !== this._activeToolProfileId) await this._resourceLoader.reload();
+    const initialTools = activeToolNamesForPoolInProfile(this.profile.mode, customTools, this._activeToolProfileId);
+    session.setActiveToolsByName(initialTools);
+    try { verifyActiveTools(session, initialTools); }
     catch (error) { session.dispose(); throw error; }
     this.session = session;
+    this._activeToolNames = session.getActiveToolNames();
     this.sessionManager = sessionManager;
     this._foundryServices = null;
     this.projection = new SessionProjection({ sessionId: sessionManager.getSessionId() });
@@ -542,6 +757,11 @@ export class AgentHost {
     this.session?.dispose();
     this.session = null;
     this.sessionManager = null;
+    this._activeToolNames = [];
+    this._toolPool = [];
+    this._activeToolProfileId = null;
+    this._resourceLoader = null;
+    this._loadoutQueue = Promise.resolve();
     this._currentModelRef = null;
   }
 
@@ -881,6 +1101,10 @@ export class AgentHost {
   dispose() {
     this.retired = true;
     this.deleting = true;
+    if (this.ownsLobbyClient) {
+      try { this.lobbyClientInstance?.dispose?.(); } catch { /* best effort */ }
+      this.lobbyClientInstance = null;
+    }
     const unsubscribe = this.unsubscribe, session = this.session;
     this.unsubscribe = null;
     this.session = null;
@@ -1110,17 +1334,44 @@ export class AgentHost {
       label: "Open Foundry",
       description:
         "Open the Foundry panel in this window (chat stays as the left column, Foundry opens on the right). " +
-        "Idempotent: if the panel is already open on the same server the page is never re-navigated (a logged-in world session is protected). " +
-        "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world).",
+        "Also opens the ArcaneDesk mt-compat site: on its trusted origins (https://arcanemap.com, " +
+        "https://arcanemap.cn, https://arcanemap.ssskill.cn) / and /lobby.html normalize to the compat lobby; " +
+        "the /user-files/compat[...]/lobby.html and play.html pages and the /auth/** Keycloak login flow display in the panel; the same play path on any other host is refused " +
+        "as an untrusted page (other compat deployments need the ARCANEDESK_PANEL_PROFILE_OVERRIDES escape hatch). " +
+        "Only play.html is the game page: lobby/auth pages display but never satisfy game readiness. " +
+        "The response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
+        "Idempotent: repeated opens of the same lobby/play pathname, or any same-origin open while a trusted /auth/** page is showing, " +
+        "only read status and never re-navigate; lobby/play changes and cross-origin opens navigate normally. " +
+        "If a Keycloak login form is showing, end the turn and wait for the user to sign in directly; after their confirmation use world_status, not foundry_open polling. " +
+        "Returns the panel URL plus page and fixed-runtime readiness (path / ready / gm / world), the detected profile, and activatedTools — the profile-specific tools that become available on the next model request. " +
+        "Opening an mt-compat lobby page in prep mode activates the mt-compat lobby tools; play/login stay in the same profile and do not toggle the tool set.",
       parameters: Type.Object({
         url: Type.Optional(
-          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000. Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
+          Type.String({ description: "Foundry VTT URL, e.g. http://localhost:30000 or the deployed server http://<ip>:30000; or the ArcaneDesk mt-compat URL (main entry https://arcanemap.com/; trusted origins also include https://arcanemap.cn and https://arcanemap.ssskill.cn — / and /lobby.html normalize to the compat lobby; play.html and /auth/** are also accepted). Omit to reuse the last opened address (remembered across restarts); there is no implicit default." })
         ),
       }),
       execute: async (_toolCallId, params, signal) => {
+        const before = host.getActiveToolNames();
         const outcome = await host.openFoundry(params?.url);
         if (!outcome?.ok) throw new Error(outcome?.summary ?? outcome?.error ?? "Foundry panel failed to open");
-        return textResult(outcome.summary, outcome);
+        let refreshed = null;
+        try {
+          refreshed = await host.refreshToolLoadout(outcome.profile ?? host.panelProfileId());
+        } catch (error) {
+          host.log(`[agent] tool loadout refresh after foundry_open failed: ${error?.message ?? error}`);
+        }
+        const active = host.getActiveToolNames();
+        const activatedTools = active.filter(name => !before.includes(name));
+        const profile = outcome.profile ?? refreshed?.profileId ?? host.panelProfileId() ?? "foundry";
+        const activation = activatedTools.length > 0
+          ? `\nActivated for the next model request (${activatedTools.length}): ${activatedTools.join(", ")}.`
+          : "";
+        return textResult(`${outcome.summary}${activation}`, {
+          ...outcome,
+          profile,
+          activatedTools,
+          activeTools: active,
+        });
       },
     });
 
@@ -1198,21 +1449,25 @@ export class AgentHost {
       },
     });
 
+    // mtcompat 档:蒸馏段挂在 eval 工具描述尾部(A2,Tier 0/1/2 三层纪律的入口文本);
+    // foundry 档段为 null,描述逐字节不变。
+    const browserEvaluateDescription = prepWorldEdit
+      ? "Run JavaScript inside the controlled Foundry page and return the JSON-serialized result. " +
+        "In prep mode this tool MAY read or change the current world when the DM explicitly asks for content synchronization. " +
+        "Use public Foundry Document APIs (for example Actor.create/document.update/createEmbeddedDocuments), await writes, and return a compact verification value. " +
+        "Call foundry_open first; require a ready GM /game page. Never submit /join or handle credentials. " +
+        "Do not perform live combat actions. Provide ONE expression or an async IIFE that returns a value."
+      : "Run JavaScript inside the Foundry page and return the JSON-serialized result. " +
+        "Use it only for bounded diagnostics of page/game initialization. " +
+        "Do not use it to submit the /join form or handle credentials; the user logs in directly in the Foundry panel. " +
+        "Do not use it to bypass world_status or the structured combat tools for reads or writes. " +
+        "Provide ONE expression or an async IIFE that returns a value. " +
+        "For structured combat data always use world_status/combat_*.";
+
     const browserEvaluate = defineTool({
       name: "browser_evaluate",
       label: "Browser Evaluate",
-      description: prepWorldEdit
-        ? "Run JavaScript inside the controlled Foundry page and return the JSON-serialized result. " +
-          "In prep mode this tool MAY read or change the current world when the DM explicitly asks for content synchronization. " +
-          "Use public Foundry Document APIs (for example Actor.create/document.update/createEmbeddedDocuments), await writes, and return a compact verification value. " +
-          "Call foundry_open first; require a ready GM /game page. Never submit /join or handle credentials. " +
-          "Do not perform live combat actions. Provide ONE expression or an async IIFE that returns a value."
-        : "Run JavaScript inside the Foundry page and return the JSON-serialized result. " +
-          "Use it only for bounded diagnostics of page/game initialization. " +
-          "Do not use it to submit the /join form or handle credentials; the user logs in directly in the Foundry panel. " +
-          "Do not use it to bypass world_status or the structured combat tools for reads or writes. " +
-          "Provide ONE expression or an async IIFE that returns a value. " +
-          "For structured combat data always use world_status/combat_*.",
+      description: browserEvaluateDescription,
       parameters: Type.Object({
         code: Type.String({ description: "JS expression or async IIFE returning a value" }),
       }),
@@ -1257,14 +1512,55 @@ export class AgentHost {
       },
     });
 
-    const runtimeCall = async (action, args, options) => {
-      if (!host.foundryRuntime?.call) {
-        throw new Error("Foundry page runtime is unavailable. Open the Foundry panel and wait for the world to finish loading.");
-      }
-      return host.foundryRuntime.callForSession
-        ? host.foundryRuntime.callForSession(host.telemetry, host.profile.mode, action, args, options)
-        : host.foundryRuntime.call(action, args, options);
-    };
+    const runtimeCall = async (action, args, options) => host.callFoundryRuntime(action, args, options);
+
+    // A3：mtcompat 档的 pageEval 工具（PRD §2.5 三层消费的 Tier 1/2 入口）。只进
+    // mtcompat 备团策略表（foundry-tool-policy.js 的 MTCOMPAT_TOOL_NAMES_BY_MODE），
+    // foundry 档不注册、不激活。审批与 browser_evaluate 同级——任意代码执行，不降档；
+    // 通道与 typed action 同链（mtcompat client 的 pageEval，GM 门沿用宿主 requireGM）。
+    const foundryPageEval = defineTool({
+      name: "foundry_page_eval",
+      label: "Page Eval (mt-compat)",
+      description:
+        "Run JavaScript in the controlled mt-compat page as an async function body (top-level await works) and return its JSON value. " +
+          "This is the mt-compat profile's one annotated eval fallback: unlike browser_evaluate its receipt also carries " +
+          "`touched` (stubs/missing surfaces this call stepped on, each with the workaround in its note) and `missing` (engine error features). " +
+          "Profile rules: (1) prefer typed actions, eval is the fallback; " +
+          "(2) before an eval touches an unfamiliar domain, read the declaration first — call `__MT_AGENT_RUNTIME__(\"apiSurface\", {prefix:\"<domain>\"})` " +
+          "inside this tool's code (returns {revision, defaultPolicy, entries[]}; a face the manifest never mentions is treated as absent); " +
+          "(3) always read the `touched`/`missing` annotations in the result — when they report a stub you stepped on, rewrite the call per the note instead of retrying. " +
+          "On the mt-compat page prefer this tool over browser_evaluate: only this receipt carries the annotations. " +
+          "Await every write: this receipt only covers what settled before it returned. " +
+          "Requires a ready GM page (call foundry_open first); never submit /join or handle credentials; keep the code bounded and disclose what it changed.",
+      parameters: Type.Object({
+        code: Type.String({ description: "Non-empty JS function body; top-level await works. Return the value to inspect." }),
+        requestId: Type.Optional(Type.String({ description: "Optional id echoed by the receipt; pageEval has no dedupe/replay semantics." })),
+      }),
+      executionMode: "sequential",
+      promptGuidelines: [
+        "Prefer typed actions; use pageEval only for surfaces no typed action covers.",
+        "Query the declaration before touching an unfamiliar domain: __MT_AGENT_RUNTIME__(\"apiSurface\", {prefix:\"<domain>\"}).",
+        "Read the touched/missing annotations in every receipt; a reported stub means rewrite per its note.",
+      ],
+      execute: async (_toolCallId, params, signal) => {
+        const approved = await host.maybeRequestApproval({
+          tool: "foundry_page_eval",
+          summary: params.code?.slice(0, 200),
+          args: params,
+        });
+        if (!approved) return textResult("DM declined this code; do not retry it.");
+        let receipt;
+        try {
+          receipt = await runtimeCall("pageEval", {
+            code: params.code,
+            ...(params.requestId ? { requestId: params.requestId } : {}),
+          }, { signal, executionTimeoutMs: 60_000 });
+        } catch (error) {
+          return { ...textResult(pageEvalFailureText(error), { error: error?.code ?? "PAGE_EVAL_FAILED" }), isError: true };
+        }
+        return textResult(pageEvalResultText(receipt), receipt);
+      },
+    });
 
     const worldStatus = defineTool({
       name: "world_status",
@@ -1391,7 +1687,7 @@ export class AgentHost {
     }) : null;
 
     // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
-    return [foundryOpen, foundryScreenshot, browserEvaluate, worldStatus, ...createFoundryTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
+    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
       ...(webSearch ? [webSearch] : []),
       ...(webFetch ? [webFetch] : [])];
   }

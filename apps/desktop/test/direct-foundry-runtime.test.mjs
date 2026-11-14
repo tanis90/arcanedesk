@@ -6,7 +6,14 @@ import {
   runtimeFunction as sdkRuntimeFunction,
   runtimeHash,
 } from "@arcanedesk/foundry-sdk/runtime";
-import { DirectFoundryRuntime } from "../src/main/direct-foundry-runtime.js";
+import {
+  DirectFoundryRuntime,
+  PageProfileRoutedRuntime,
+  adoptMtcompatRuntimeFromPage,
+  resolveMtAgentRuntimeSource,
+} from "../src/main/direct-foundry-runtime.js";
+import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { PAGE_PROFILES, clientPageProfile } from "../src/main/page-profiles.js";
 
 const TEST_RUNTIME_SOURCE = `async function (action, args, options) {
   return action === "executeTurn"
@@ -45,6 +52,7 @@ function createRuntime({
   }),
   readyPollMs = 1,
   runtimeSource = TEST_RUNTIME_SOURCE,
+  allowedActions = null,
   onCallResult = null,
 } = {}) {
   return new DirectFoundryRuntime({
@@ -53,6 +61,7 @@ function createRuntime({
     evaluate,
     readyPollMs,
     runtimeSource,
+    ...(allowedActions ? { allowedActions } : {}),
     onCallResult,
   });
 }
@@ -109,6 +118,51 @@ test("unsupported actions are rejected before page inspection or evaluation", as
   await rejectsWithCode(runtime.call("debugEval", {}), "FOUNDRY_SDK_ACTION_UNSUPPORTED");
   assert.equal(inspections, 0);
   assert.equal(evaluations, 0);
+});
+
+test("navigateToLobby is mtcompat-only and keeps SDK NAVIGATED/interruption semantics", async () => {
+  const runtime = createRuntime({ allowedActions: MTCOMPAT_RUNTIME_ACTIONS });
+  assert.deepEqual(
+    await runtime.call("navigateToLobby", {}, { executionTimeoutMs: 321 }),
+    { action: "navigateToLobby", args: {}, options: { requireGM: true, timeoutMs: 321 } },
+  );
+
+  // foundry 档白名单逐字不变：navigateToLobby 在 SDK 客户端就被拒，进不了页面。
+  await rejectsWithCode(
+    createRuntime({ allowedActions: DESKTOP_FOUNDRY_ACTIONS }).call("navigateToLobby", {}),
+    "FOUNDRY_SDK_ACTION_UNSUPPORTED",
+  );
+
+  // 普通 tools 的导航中断语义不动：SDK 仍抛 NAVIGATED，只有 foundry_lobby_return 把它当预期。
+  await rejectsWithCode(
+    createRuntime({
+      allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+      evaluate: async () => ({ status: "navigated", url: "https://arcanemap.com/user-files/compat/lobby.html" }),
+    }).call("navigateToLobby", {}),
+    "FOUNDRY_SDK_NAVIGATED",
+  );
+
+  // navigateToLobby 与其它 typed action 共用同一串行队列。
+  let active = 0;
+  let maxActive = 0;
+  const queued = createRuntime({
+    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+    evaluate: async (_webContents, expression) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const value = await Function(`"use strict"; return (${expression});`)();
+      active -= 1;
+      return { status: "completed", value };
+    },
+  });
+  const [navigated, world] = await Promise.all([
+    queued.call("navigateToLobby", {}),
+    queued.call("worldInfo", {}),
+  ]);
+  assert.equal(navigated.action, "navigateToLobby");
+  assert.equal(world.action, "worldInfo");
+  assert.equal(maxActive, 1);
 });
 
 test("arguments remain JSON data and U+2028/U+2029 cannot inject JavaScript", async () => {
@@ -406,4 +460,352 @@ test("SDK runtime hash matches its exact contents", () => {
     runtimeHash,
     createHash("sha256").update(sdkRuntimeFunction, "utf8").digest("hex")
   );
+});
+
+// ---------- mtcompat:runtime 源加载 + 档位路由 ----------
+
+const MT_RUNTIME_FUNCTION = `async function (action, args, options) {
+  if (action === "worldInfo") {
+    return { world: { id: "cos", title: "Curse of Strahd" }, runtime: { name: "mt-agent-runtime", protocolVersion: 2 } };
+  }
+  return { action, args, options };
+}`;
+
+function fakeReadFile(files) {
+  return file => {
+    if (!(file in files)) {
+      const error = new Error(`ENOENT: ${file}`);
+      error.code = "ENOENT";
+      throw error;
+    }
+    return files[file];
+  };
+}
+
+test("resolveMtAgentRuntimeSource prefers the user file, then the bundled default, and rejects unusable files", () => {
+  const userFile = "/userData/config/mt-agent-runtime.js";
+  const bundledFile = "/app/runtime/mt-agent-runtime.js";
+  const logs = [];
+  const load = files => resolveMtAgentRuntimeSource({
+    userFile, bundledFile, readFile: fakeReadFile(files), log: message => logs.push(message),
+  });
+
+  const user = load({ [userFile]: MT_RUNTIME_FUNCTION, [bundledFile]: "// bundled\n" + MT_RUNTIME_FUNCTION });
+  assert.deepEqual({ origin: user.origin, file: user.file }, { origin: "user", file: userFile });
+
+  const bundled = load({ [bundledFile]: MT_RUNTIME_FUNCTION });
+  assert.deepEqual({ origin: bundled.origin, file: bundled.file }, { origin: "bundled", file: bundledFile });
+
+  // export default 前缀被剥掉,文件保持合法 ES module 形态。
+  const exported = load({ [bundledFile]: `export default ${MT_RUNTIME_FUNCTION};\n` });
+  assert.equal(exported.origin, "bundled");
+  assert.ok(exported.source.startsWith("async function"));
+
+  assert.equal(load({}), null); // 两处都没有 → null(调用侧走 TRANSPORT_UNAVAILABLE)
+  assert.equal(load({ [userFile]: "   \n" }), null); // 空文件按缺失处理
+  assert.equal(load({ [userFile]: "this is not a function expression" }), null); // 语法不成立
+  assert.equal(load({ [userFile]: "({nope" }), null); // 不是函数表达式
+  assert.ok(logs.some(message => /empty/.test(message)));
+  assert.ok(logs.some(message => /not a usable function expression/.test(message)));
+});
+
+test("runtime export-prefix scanning preserves comments and avoids exponential backtracking", () => {
+  const bundledFile = "/app/runtime/mt-agent-runtime.js";
+  const load = files => resolveMtAgentRuntimeSource({
+    userFile: "/userData/config/mt-agent-runtime.js",
+    bundledFile,
+    readFile: fakeReadFile(files),
+    log: () => {},
+  });
+  const commented = load({
+    [bundledFile]: ` \n// leading comment\n/* block comment */\nexport default ${MT_RUNTIME_FUNCTION};\n`,
+  });
+  assert.ok(commented.source.startsWith("async function"));
+
+  const startedAt = Date.now();
+  assert.equal(load({ [bundledFile]: `/*${"*//*".repeat(20_000)}` }), null);
+  assert.ok(Date.now() - startedAt < 1_000, "hostile comment prefixes must not stall runtime-source loading");
+});
+
+test("PageProfileRoutedRuntime routes by the active page profile and keeps telemetry scope", async () => {
+  const routed = [];
+  const foundry = createRuntime({
+    onCallResult: record => routed.push({ profile: "foundry", record }),
+    evaluate: async () => ({ status: "completed", value: { action: "foundry-value" } }),
+  });
+  const mtcompat = new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource: MT_RUNTIME_FUNCTION,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    getWebContents: () => fakeWebContents(),
+    inspectPage: async () => ({
+      ok: true,
+      state: {
+        url: "https://mt.example.test/user-files/compat/play.html",
+        path: "/user-files/compat/play.html",
+        profile: "mtcompat",
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
+      },
+    }),
+    evaluate: async () => ({
+      status: "completed",
+      value: { action: "mtcompat-value", world: { id: "cos" }, runtime: { name: "mt-agent-runtime", protocolVersion: 2 } },
+    }),
+    onCallResult: record => routed.push({ profile: "mtcompat", record }),
+  });
+  let activeProfileId = "foundry";
+  const runtime = new PageProfileRoutedRuntime({ foundry, mtcompat, getActiveProfileId: () => activeProfileId });
+
+  assert.equal((await runtime.call("battleContext", {})).action, "foundry-value");
+  activeProfileId = "mtcompat";
+  assert.equal((await runtime.call("battleContext", {})).action, "mtcompat-value");
+
+  // callForSession 保留调用方遥测上下文(两个实例各自持有 AsyncLocalStorage;
+  // 带 telemetry 的调用走会话遥测,不再进全局 onCallResult)。
+  const scoped = [];
+  await runtime.callForSession(
+    { foundryRuntimeResult: (record, mode) => scoped.push({ record, mode }) },
+    "prep",
+    "worldInfo",
+    {},
+  );
+  assert.equal(scoped.length, 1);
+  assert.equal(scoped[0].mode, "prep");
+  assert.equal(scoped[0].record.action, "worldInfo");
+  assert.deepEqual(routed.map(entry => entry.profile), ["foundry", "mtcompat"]);
+
+  // worldInfo 缓存跟随活动档位;invalidate 清两档。
+  assert.equal(runtime.lastWorldInfo.world.id, "cos");
+  activeProfileId = "foundry";
+  assert.equal(runtime.lastWorldInfo, null);
+  runtime.invalidate();
+});
+
+test("PageProfileRoutedRuntime fails mtcompat calls with a clear coded error when no runtime source is installed", async () => {
+  const foundry = createRuntime({
+    evaluate: async () => ({ status: "completed", value: { action: "foundry-value" } }),
+  });
+  const runtime = new PageProfileRoutedRuntime({
+    foundry,
+    mtcompat: null,
+    getActiveProfileId: () => "mtcompat",
+    mtUnavailableMessage: "mt-agent-runtime.js is not installed",
+  });
+  await assert.rejects(runtime.call("worldInfo", {}), error => {
+    assert.equal(error.code, "FOUNDRY_SDK_TRANSPORT_UNAVAILABLE");
+    assert.match(error.message, /mt-agent-runtime\.js is not installed/);
+    return true;
+  });
+  await assert.rejects(
+    runtime.callForSession(null, "combat", "worldInfo", {}),
+    error => error.code === "FOUNDRY_SDK_TRANSPORT_UNAVAILABLE",
+  );
+  // Foundry 档不受影响。
+  const intact = new PageProfileRoutedRuntime({ foundry, mtcompat: null, getActiveProfileId: () => "foundry" });
+  assert.equal((await intact.call("battleContext", {})).action, "foundry-value");
+  assert.equal(intact.lastWorldInfo, null);
+  intact.invalidate();
+});
+
+test("PageProfileRoutedRuntime logs the worldInfo runtime handshake once per signature", async () => {
+  const logs = [];
+  const foundry = createRuntime();
+  const mtcompat = new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource: MT_RUNTIME_FUNCTION,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    getWebContents: () => fakeWebContents(),
+    inspectPage: async () => ({
+      ok: true,
+      state: { path: "/user-files/compat/play.html", profile: "mtcompat", detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true },
+    }),
+    evaluate: async () => ({
+      status: "completed",
+      value: { world: { id: "cos" }, runtime: { name: "mt-agent-runtime", protocolVersion: 2 } },
+    }),
+  });
+  const runtime = new PageProfileRoutedRuntime({
+    foundry, mtcompat, getActiveProfileId: () => "mtcompat", log: message => logs.push(message),
+  });
+  await runtime.call("worldInfo", {});
+  await runtime.call("worldInfo", {});
+  await runtime.call("battleContext", {});
+  assert.deepEqual(logs, ["[foundry-runtime] page runtime handshake: mt-agent-runtime@2"]);
+});
+
+test("mtcompat preflight accepts a bootstrapped play.html without the GM flag", async () => {
+  const runtime = new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource: MT_RUNTIME_FUNCTION,
+    getWebContents: () => fakeWebContents(),
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    inspectPage: async () => ({
+      ok: true,
+      state: {
+        url: "https://mt.example.test/user-files/compat/play.html",
+        path: "/user-files/compat/play.html",
+        profile: "mtcompat",
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
+      },
+    }),
+    evaluate: async (_webContents, expression) => ({
+      status: "completed",
+      value: await Function(`"use strict"; return (${expression});`)(),
+    }),
+  });
+  const result = await runtime.call("worldInfo", {});
+  assert.equal(result.runtime.protocolVersion, 2);
+});
+
+test("mtcompat preflight rejects off-path pages before evaluation", async () => {
+  let evaluations = 0;
+  const runtime = new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource: MT_RUNTIME_FUNCTION,
+    getWebContents: () => fakeWebContents(),
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    inspectPage: async () => ({
+      ok: true,
+      state: { url: "https://mt.example.test/auth/login", path: "/auth/login", detected: false, hasGame: false },
+    }),
+    evaluate: async () => {
+      evaluations += 1;
+      return { status: "completed", value: null };
+    },
+  });
+  await assert.rejects(runtime.call("worldInfo", {}, { readyTimeoutMs: 0 }), error => {
+    assert.equal(error.code, "FOUNDRY_SDK_FOUNDRY_NOT_GAME");
+    assert.equal(error.details.profile, "mtcompat");
+    return true;
+  });
+  assert.equal(evaluations, 0);
+});
+
+// ---------- A1:runtime 源页面优先(页面真源采用) ----------
+
+const PAGE_RUNTIME_FUNCTION = `// mt-agent-runtime v9.9.9
+(async function (action, args, options) {
+  return { action, args, options, runtime: { name: "mt-agent-runtime", protocolVersion: 9 } };
+})`;
+
+function createMtcompatRuntime({ runtimeSource = MT_RUNTIME_FUNCTION } = {}) {
+  return new DirectFoundryRuntime({
+    readyPollMs: 1,
+    runtimeSource,
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    getWebContents: () => fakeWebContents(),
+    inspectPage: async () => ({
+      ok: true,
+      state: {
+        url: "https://mt.example.test/user-files/compat/play.html",
+        path: "/user-files/compat/play.html",
+        profile: "mtcompat",
+        detected: true, ready: true, gm: false, user: "gm", world: "cos", hasGame: true, hasMtAgentRuntime: true,
+      },
+    }),
+    evaluate: async (_webContents, expression) => ({
+      status: "completed",
+      value: await Function(`"use strict"; return (${expression});`)(),
+    }),
+  });
+}
+
+test("adoptMtcompatRuntimeFromPage rebuilds the mtcompat client from the page source", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: createMtcompatRuntime(),
+    getActiveProfileId: () => "mtcompat",
+  });
+  // 采用前:走打包拷贝的源(v2 桩)。
+  assert.equal((await routed.call("worldInfo", {})).runtime.protocolVersion, 2);
+
+  const logs = [];
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed,
+    currentSource: MT_RUNTIME_FUNCTION,
+    readPageSource: async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }),
+    createRuntime: source => createMtcompatRuntime({ runtimeSource: source }),
+    log: (level, message) => logs.push(`${level}: ${message}`),
+  });
+  assert.equal(outcome.adopted, true);
+  assert.equal(outcome.reason, "adopted");
+  // 页面源原样归一:首行协议注释保留(函数表达式体检通过),尾部无分号。
+  assert.equal(outcome.source, PAGE_RUNTIME_FUNCTION);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /^info: .*adopted the page runtime source/);
+
+  // 换入后 typed 调用走页面真源(v2 桩不再应答)。
+  const value = await routed.call("battleContext", {});
+  assert.equal(value.runtime.protocolVersion, 9);
+  assert.equal(value.action, "battleContext");
+});
+
+test("adoptMtcompatRuntimeFromPage can install the runtime when no file source was delivered", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: null,
+    getActiveProfileId: () => "mtcompat",
+    mtUnavailableMessage: "not installed",
+  });
+  await assert.rejects(routed.call("worldInfo", {}), error => error.code === "FOUNDRY_SDK_TRANSPORT_UNAVAILABLE");
+
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed,
+    readPageSource: async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }),
+    createRuntime: source => createMtcompatRuntime({ runtimeSource: source }),
+    log: () => {},
+  });
+  assert.equal(outcome.adopted, true);
+  assert.equal((await routed.call("battleContext", {})).runtime.protocolVersion, 9);
+});
+
+test("page runtime adoption keeps the installed runtime on every failure path", async () => {
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: createMtcompatRuntime(),
+    getActiveProfileId: () => "mtcompat",
+  });
+  const logs = [];
+  const adopt = (readPageSource, createRuntime = source => createMtcompatRuntime({ runtimeSource: source })) =>
+    adoptMtcompatRuntimeFromPage({
+      routed,
+      currentSource: MT_RUNTIME_FUNCTION,
+      readPageSource,
+      createRuntime,
+      log: (level, message) => logs.push(`${level}: ${message}`),
+    });
+
+  // 源缺席:正常路径,静默保持现状(不落日志、不重建)。
+  assert.deepEqual(await adopt(async () => ({ ok: false, reason: "absent" })), { adopted: false, reason: "absent" });
+  assert.deepEqual(logs, []);
+  // 页面不可读(navigated/timeout/读取抛错):警告 + 保持现状。
+  assert.deepEqual(await adopt(async () => ({ ok: false, reason: "timeout" })), { adopted: false, reason: "read-failed" });
+  assert.deepEqual(await adopt(async () => { throw new Error("panel is gone"); }), { adopted: false, reason: "read-failed" });
+  // 源不是可用函数表达式(垃圾串/空白):警告 + 保持现状。
+  assert.deepEqual(await adopt(async () => ({ ok: true, source: "not a function expression" })), { adopted: false, reason: "invalid" });
+  assert.deepEqual(await adopt(async () => ({ ok: true, source: "   " })), { adopted: false, reason: "invalid" });
+  // 与当前源相同:不重建也不落日志(F5 重复巡检的常态)。
+  const logsBeforeUnchanged = logs.length;
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: MT_RUNTIME_FUNCTION })),
+    { adopted: false, reason: "unchanged" },
+  );
+  assert.equal(logs.length, logsBeforeUnchanged);
+  // 重建抛错 / 工厂返回空:警告 + 保持现状。
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }), () => { throw new Error("constructor exploded"); }),
+    { adopted: false, reason: "rebuild-failed" },
+  );
+  assert.deepEqual(
+    await adopt(async () => ({ ok: true, source: PAGE_RUNTIME_FUNCTION }), () => null),
+    { adopted: false, reason: "rebuild-failed" },
+  );
+  assert.ok(logs.some(message => /^warn: .*could not be read|^warn: .*cannot read/.test(message)));
+  assert.ok(logs.some(message => /^warn: .*is invalid;/.test(message)));
+  assert.ok(logs.some(message => /is empty; keeping the installed runtime/.test(message)));
+  assert.ok(logs.some(message => /rebuilding the mtcompat runtime from the page source failed/.test(message)));
+  assert.ok(logs.some(message => /returned nothing; keeping the installed runtime/.test(message)));
+
+  // 全程既有 client 未动:调用照常走打包拷贝的源(v2)。
+  assert.equal((await routed.call("worldInfo", {})).runtime.protocolVersion, 2);
 });
