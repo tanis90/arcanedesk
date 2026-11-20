@@ -20,8 +20,9 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
- * 备团的 foundry_page_eval 与 9 个 lobby typed tools；备团是「typed action 铺不满、
- * eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
+ * 备团的 foundry_page_eval、foundry_scene_import（整场景 JSON 走页面原生 sceneImport，
+ * 桌面只传备团目录内路径，字节不进模型）与 9 个 lobby typed tools；备团是「typed action
+ * 铺不满、eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
  * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
  * 战斗再补）。
  *
@@ -46,7 +47,7 @@ const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
-    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
     ...LOBBY_TOOL_NAMES,
     "web_search", "web_fetch"]),
 });
@@ -77,13 +78,15 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
 ]);
 
 /**
- * mtcompat 档 client 的 runtime 动作白名单（A3 + 方案 B）：foundry 面 + pageEval +
- * navigateToLobby。后两者是 arcaneVTT 侧 runtime 的扩展 action，不在 SDK 的 foundry
- * 契约（ALL_DIRECT_ACTIONS）里——只随 mtcompat client 装配，foundry 档 client 的白名单
- * 与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK 既有路径。
- * navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅 foundry_lobby_return 调用。
+ * mtcompat 档 client 的 runtime 动作白名单（A3 + 方案 B + sceneImport）：foundry 面 +
+ * pageEval + navigateToLobby + sceneImport。pageEval/navigateToLobby 是 arcaneVTT 侧
+ * runtime 的扩展 action；sceneImport（整场景 JSON 导入）同样只随 mtcompat client 装配
+ * ——四者都不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里，只进本表，foundry 档
+ * client 的白名单与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK
+ * 既有路径。navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅
+ * foundry_lobby_return 调用；sceneImport 只由 foundry_scene_import 调用。
  */
-export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "pageEval", "navigateToLobby"]);
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio

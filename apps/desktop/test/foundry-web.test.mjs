@@ -236,15 +236,17 @@ test("the page state expression reports the mtcompat runtime fingerprint from a 
 test("the page runtime source reads the page string and reports absent/terminal outcomes", async () => {
   const present = new FakeWebContents(async code => {
     assert.match(code, /__MT_AGENT_RUNTIME_SOURCE__/);
-    return "// mt-agent-runtime v0.6.0\n(async function (action) { return action; })";
+    assert.match(code, /__MT_AGENT_RUNTIME__/);
+    return { source: "// mt-agent-runtime v0.6.0\n(async function (action) { return action; })", handle: true };
   });
   const read = await readPageAgentRuntimeSource(present);
   assert.equal(read.ok, true);
+  assert.equal(read.handle, true);
   assert.match(read.source, /mt-agent-runtime v0\.6\.0/);
 
   const absent = new FakeWebContents(async () => null);
   assert.deepEqual(await readPageAgentRuntimeSource(absent), { ok: false, reason: "absent" });
-  const blank = new FakeWebContents(async () => "   ");
+  const blank = new FakeWebContents(async () => ({ source: "   ", handle: false }));
   assert.deepEqual(await readPageAgentRuntimeSource(blank), { ok: false, reason: "absent" });
 
   // 页面不可读:导航/超时都按失败收口,调用方据此保持现状(不重建、不悬挂)。

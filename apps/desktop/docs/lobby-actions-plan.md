@@ -310,6 +310,14 @@ job 只活在当前大厅文档：
 
 未执行生产部署、生产账号验收、安装包 smoke 或 OSS skills 发布。compat 全仓 `npm test` 仍有既存文档契约漂移、`profile-access-verify` 两项基线失败（已在干净 `origin/main` 同现）及 Windows symlink/硬编码 shell 限制；这些不作为本功能通过项，也不以跳过测试的方式掩盖。后端 `go vet ./...` 通过，Go 全量测试有 `internal/feedback` 的 Windows 文件权限位断言差异（666 vs 600），与本次零后端改动无关。
 
+### 5.0.1 真实本地栈验收（2026-11-19，修复 mtcompat 镜像工作树）
+
+- 入口仍是 `apps/desktop/test/e2e-lobby-actions.mjs`（真实 Electron + 真实 `createLobbyTools` + `MtLobbyClient`），fixture 模式 19 项全过（新增报告泄密扫描 `noSecretsInReport`）。
+- 新增真实栈合同：`node test/e2e-lobby-actions.mjs --url=https://mtlocal.internal:30002/user-files/compat-fix-agent-runtime-integration/lobby.html --mutate --insecure-tls --compat-root=<compat 工作树>`，**56/56** 项通过。身份只从 `MT_ACCEPT_USER` / `MT_ACCEPT_PASSWORD` 环境变量读取，token 仅注入 `sessionStorage["mt.session"]` 并 reload；结束时清 session 并调用 Keycloak logout（204），报告经脱敏（无密码/token）。缺凭据时在开窗之前以 `needs-credentials` 退出。
+- 覆盖：真实 rulesets（2014/2024/coc7）；REST 隔离战役（ruleset=2024）→ `campaigns_list` 命中；`packs_read` 基线；compat `moduleZip()` 夹具经 `DOM.setFileInputFiles` 原生 File 通道 `import_start` → `import_job` 终态 succeeded；`packs_read`/条目分页；`campaign_packs_get` → 带 `expectedRevision` 的 `campaign_packs_update`（`add` 真实导入 pack + `enabledSourcesPatch.srd2024`）读回对账；stale revision 与审批拒绝均零写入；`packs_delete` preview/delete 后库 revision 回到基线、既有 30 pack 未动。真实 `worldZip()` 同样走原生 File 通道导入，建出 ruleset=2024 的战役并写入 1 条文档，`campaigns_list` 与 `campaign_packs_get` 对账；play 页 `PROFILE_MISMATCH` 拒绝保留；真实 play（`game.ready`）→ `foundry_lobby_return` 经生产 `DirectFoundryRuntime` 调页内 `navigateToLobby` 回大厅并 ready。清理只删本次创建的 pack 与两个战役。
+- `test/lobby-e2e-harness.test.mjs` 静态守门：凭据不进 argv、报告泄密扫描、TLS 绕过与 origin 覆盖仅限 harness（生产 `MT_COMPAT_TRUSTED_ORIGINS` 未加本地测试域）、真实合同检查项与清理边界在位。
+- 全量 `node --test test/*.test.mjs`：995 通过 / 11 失败，11 项全部是 `spawn python ENOENT`（本机只有 `python3`，无 `python`），分布在 `archive`/`fvtt-local-module`/`fvtt-mod-manager`/`subprocess-env`，与大厅改动无关且未修改。
+
 ### 5.1 分层门
 
 | 层 | 驱动 | 证明什么 |

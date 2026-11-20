@@ -114,7 +114,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPoolInProfile("prep", customTools, "mtcompat");
-  assert.equal(expected.length, 37, "mtcompat 备团 39 静态成员 - 未配置的 web_search/web_fetch");
+  assert.equal(expected.length, 38, "mtcompat 备团 40 静态成员 - 未配置的 web_search/web_fetch");
   assert.equal(activeToolNamesForPoolInProfile("prep", customTools, "foundry").includes("foundry_page_eval"), false);
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
@@ -122,6 +122,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   t.after(() => session.dispose());
   verifyActiveTools(session, expected);
   assert.equal(session.getActiveToolNames().includes("foundry_page_eval"), true);
+  assert.equal(session.getActiveToolNames().includes("foundry_scene_import"), true, "scene JSON 导入只进 mtcompat 备团");
   assert.equal(session.getActiveToolNames().includes("browser_evaluate"), true, "A3 不动 A2 的 eval 面");
   for (const name of ["foundry_lobby_rulesets_list", "foundry_lobby_import_start", "foundry_lobby_import_job", "foundry_lobby_campaigns_list",
     "foundry_lobby_campaign_packs_get", "foundry_lobby_campaign_packs_update", "foundry_lobby_packs_read", "foundry_lobby_packs_delete",
@@ -141,24 +142,27 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   assert.deepEqual(combatMtcompat, combatFoundry);
   assert.deepEqual(combatMtcompat, activeToolNames("combat"));
   assert.equal(combatMtcompat.includes("foundry_page_eval"), false);
-  // mtcompat 备团 = foundry 备团 + foundry_page_eval + 9 个 lobby tools。
+  // mtcompat 备团 = foundry 备团 + foundry_page_eval + foundry_scene_import + 9 个 lobby tools。
   const prepFoundry = activeToolNamesForProfile("prep", "foundry");
   const prepMtcompat = activeToolNamesForProfile("prep", "mtcompat");
-  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", ...LOBBY_TOOL_NAMES].sort());
+  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", "foundry_scene_import", ...LOBBY_TOOL_NAMES].sort());
   assert.equal(prepMtcompat.includes("foundry_page_eval"), true);
+  assert.equal(prepMtcompat.includes("foundry_scene_import"), true);
   assert.equal(prepFoundry.includes("foundry_page_eval"), false);
+  assert.equal(prepFoundry.includes("foundry_scene_import"), false);
   for (const name of LOBBY_TOOL_NAMES) assert.equal(prepFoundry.includes(name), false, name);
   // 旧调用方语义：无档位 = 开放默认档；模式校验照旧。
   assert.equal(activeToolNames("combat").length, 6);
   assert.equal(activeToolNames("prep").length, 29, "静态 allowlist 29 = 27 有效 + web_search/web_fetch 静态成员");
-  assert.equal(prepMtcompat.length, 39, "mtcompat 备团 39 = foundry 备团 29 + foundry_page_eval + 9 lobby tools");
+  assert.equal(prepMtcompat.length, 40, "mtcompat 备团 40 = foundry 备团 29 + foundry_page_eval + foundry_scene_import + 9 lobby tools");
   assert.throws(() => activeToolNamesForProfile("unknown-mode", "mtcompat"), /Unknown tool mode/);
 });
 
-test("A3 runtime 白名单：pageEval 与 navigateToLobby 只随 mtcompat client 装配，foundry 档白名单逐字不变", () => {
-  assert.deepEqual([...MTCOMPAT_RUNTIME_ACTIONS], [...DESKTOP_FOUNDRY_ACTIONS, "pageEval", "navigateToLobby"]);
+test("A3 runtime 白名单：pageEval/navigateToLobby/sceneImport 只随 mtcompat client 装配，foundry 档白名单逐字不变", () => {
+  assert.deepEqual([...MTCOMPAT_RUNTIME_ACTIONS], [...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby"]);
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("pageEval"), false);
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("navigateToLobby"), false);
+  assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("sceneImport"), false);
   // 既有消费方断言（SDK 出厂默认档不受影响）照旧成立。
   assert.ok(DESKTOP_FOUNDRY_ACTIONS.includes("conditionsSet"));
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("actorImport"), false);

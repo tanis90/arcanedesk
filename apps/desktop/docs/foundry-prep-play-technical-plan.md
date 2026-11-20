@@ -372,7 +372,21 @@ actorLink 缺省继承 actor prototypeToken，不强制设 false。坐标/尺寸
 → 必要回读 → 若 active=true，最后激活。顺序固定、逐组记结果，不循环单 Token API。
 删除是 destructive 操作，审批摘要明确数量；第一版不删除 Actor/Scene。
 create Scene 与 Token 都记录请求来源，导航不确定时可查已创建对象，不盲目重建。
-不写 walls/lights/tiles/notes/sounds；后续在同一工具加可选段，不增加 CRUD 工具矩阵。
+sceneApply 不写 walls/lights/tiles/notes/sounds；这些随完整场景 JSON 由下面的 sceneImport 处理。
+
+### 5.8a foundry_scene_import（仅 mtcompat）
+
+输入 `operation`、`sourcePath`，update 另需 `sceneUuid/readRef`；可选 `backgroundSourcePath`。
+sourcePath 是备团目录内完整场景 JSON（最大 10 MiB），背景图也直接从该目录读取，不要求模型
+先上传或手写墙灯。Desktop 负责有界读取、图片解码与操作幂等，runtime 使用真实 SceneDirectory
+实例的 `_importSceneJsonFile(sceneDoc, file, { rethrow: true })`，由页面原生管线导入全部集合。
+
+创建保留 `flags.arcanedesk.requestId`，JSON 不能覆盖它。成功必须有原生导入回执并核对尺寸、
+网格、背景和传入集合（含显式空集合）；UI 的失败 toast 不再被当成成功，原始错误交给 agent。
+update 的 readRef 同时保存 Scene 导入内容指纹，读取后墙灯等原生导入会修改的内容发生变化时，
+以 `READ_REF_STALE` 拒绝，避免旧快照整份覆盖新修改。`thumb/active/_stats/folder/sort/navigation`
+是原生导入不会读取的派生或目录字段，不参与该指纹，后台缩略图更新不会误报冲突。
+partial/indeterminate 不自动重放。
 
 ### 5.8 foundry_image：独立图片与本地资源
 
@@ -385,9 +399,9 @@ create Scene 与 Token 都记录请求来源，导航不确定时可查已创建
 
 本地 sourcePath 最大 4096 字符；Desktop realpath 校验在用户 prep cwd 内，拒绝目录
 穿越、符号链接越界。首版 png/jpeg/webp，单文件至多 10 MiB；校验真实格式与大小。
-模型不读取/传 Base64。SDK 内部有界上传到 Data 的 `arcanedesk/assets/<hash>.<ext>`，
-默认不覆盖不同内容；成功后保存稳定 Data 相对路径，不写系统绝对路径。
-dataPath 同样只接受有效 Data 相对路径，拒绝外部 URL、绝对路径与 `..`。
+模型不读取/传 Base64。SDK 内部有界上传以 `arcanedesk/assets/<hash>.<ext>` 为请求目标。
+原生 Foundry 默认不覆盖不同内容并保存稳定 Data 相对路径；mtcompat 以 FilePicker 返回的服务端 URL 为准。
+dataPath 接受有效 Data 相对路径；mtcompat 额外接受无凭据、查询参数和片段的 HTTPS 图片 URL，其它绝对路径、短期签名 URL 与 `..` 仍拒绝。
 无法上传/文件不在围栏时返回原因，不用 shell 越界搬运。工具输出不包含二进制内容。
 
 ## 6. 共享世界、现场与状态

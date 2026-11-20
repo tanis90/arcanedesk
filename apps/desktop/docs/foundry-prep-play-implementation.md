@@ -212,7 +212,7 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
 
 - 新增 foundry-assets.js：本地文件 realpath 围栏、目录 junction 越界拒绝、10 MiB 有界读取、
   读取前后文件变化检查、PNG/JPEG/WebP 字节识别、强制解码结果校验和 SHA-256 稳定 Data 路径。
-- Data 图片路径单独校验，拒绝绝对路径、URL、编码绕过与父目录片段；图片 bytes 仅供内部上传使用。
+- Data 图片路径单独校验，拒绝绝对路径、编码绕过与父目录片段；mtcompat 另接受无凭据、查询参数和片段的 HTTPS 图片 URL；图片 bytes 仅供内部上传使用。
 - 4 项定向测试通过，覆盖路径与 junction、大小上限、伪格式、解码失败和按内容生成路径；
   Desktop typecheck 与 source boundary 通过。解码测试当前使用注入接口，尚未验证真实 Chromium 解码器。
 - 本地图片现已接入宿主一次申请的 cwd/page 资源租约，并通过固定 Chromium 解码读取支持三种格式。
@@ -302,3 +302,47 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
 - 首次全量回归发现旧停止测试把新增身份读取当作慢写；已区分 fixture 的固定读取与实际写入，
   并补充停止期间身份读取的回归测试。修复后 Desktop 全套 424 项通过；typecheck、source boundary、
   Markdown 链接和 diff 空白检查通过。仍未完成模型工具激活与真实世界验收。
+
+## mtcompat 真实本地栈合同验收增量
+
+- 新增 `test/e2e-mtcompat-contract.mjs`（`npm run test:e2e:mtcompat-contract`，不在
+  `npm test` 的 `test/*.test.mjs` 内）：在真实本地栈面上跑真实 `AgentHost` 工具池、
+  `FoundryServices`、`DirectFoundryRuntime` 与真实 `WebContents` 传输（
+  `evaluateNavigationSafe`/`readFoundryPageState` 经 Playwright 页面适配），页面 runtime
+  取自 compat 工作树 `web/agent-runtime.js` 并经 `adoptMtcompatRuntimeFromPage` 的页面句柄
+  委托分支采用。该脚本不驱动 Electron 窗口/面板 UI，也不构成用户点击验收。
+- 实测覆盖 `world_status`、`foundry_page_eval`、`foundry_static_context`/`foundry_play_context`、
+  `foundry_compendium_browse`、`foundry_content_search`、`foundry_actor_create/get/update`
+  （含 Folder 归属、改回根目录、未知 Folder 拒绝）、`foundry_conditions_set` 置位/清除、
+  `foundry_image` 本地 PNG 上传与 Actor/Item/JournalEntryPage 图片应用、`foundry_scene_import`
+  的 create/update（本地 JSON 与背景图一次调用）、JSON 内裸 HTTPS 背景、备团目录围栏、
+  同 toolCall 幂等回放与同 ID 不同输入冲突、重载后场景持久化。update 的 readRef 带 Scene
+  导入内容指纹，读取后墙灯等内容发生并发变化时以 `READ_REF_STALE` 拒绝导入，不覆盖新修改；
+  原生导入不修改的 thumb/active 等派生和目录字段变化不会误报过期。
+- 第二批实测补齐 typed 工具面：`foundry_actor_advance` 走真实 compendium 的 Fighter/Human，
+  `foundry_advancement_plan` 的 `choiceRequirements` 逐槽填值到 1 级（HP/职业/种族/熟练技能
+  与 `Actors` 回读对账，未知槽在写前拒绝）；`foundry_actor_grant_items` 授 Shortsword 与
+  Prestidigitation/Fog Cloud（真实来源 UUID 与 browse 原文 `expectedName`），重复授予归入
+  `skippedExisting`，名称漂移在写前 `SOURCE_MISMATCH`；`foundry_scene_apply` 建场景+放 Token、
+  Token 坐标/隐藏更新、场景激活、Token 删除、本地 JPEG 背景直传；`foundry_image` 新增真实
+  JPEG/WebP（页面 canvas 编码生成，Chromium 解码校验）与 `syncPlacedTokens` 跨两场景同步
+  （逐一核对 texture、actor.img、prototype 与 name/坐标/hidden 不变，非 Actor 目标显式拒绝）；
+  `foundry_execute_action` 在无战斗叙事路径执行 0 环戏法（零消耗）与 1 环法术（真实
+  `spell1` 2→1，聊天消息数不变，无掷骰）。另以确定性合成 JPEG（**4,787,292 字节、6150×6450**）
+  和 65 墙（6 门）/26 灯场景验证本地读取、Chromium 解码、整场景导入、上传字节 GET=200 及真实画布；
+  画布采样 742 色。该素材不是用户的教堂原图。最终测试 **174 通过**（含大图专项），无环境跳过。
+- 第二批验收抓到一个回执回归并已修：`actorAdvance` 的 `verification` 是**对象**（等级/HP/
+  属性/法术位），首版规范化把它当数组替换成占位项，模型看不到推进终态。现在数组与对象两种
+  形状都原样保形，只断开对象身份；新增回归测试钉住对象形状。
+- 后端已修正静态文件落点与 Roll 更新边界：上传 URL 的 GET=200，普通 Roll 更新不再触发
+  `ENTITLEMENT_REQUIRED`。这两项保留为硬断言，回归直接失败，不再记作可忽略的环境问题。
+- 适配修复：`createMtcompatRuntimeClient` 收敛 mtcompat client 的唯一构造点（main.js 与验收
+  共用同一份白名单/档位/巡检）；写回执在规范化时为 `steps`/`verification` 各留独立副本，
+  共享子对象不再被 `jsonSafe` 标成 `[Circular]`；备团目录内文件缺失改报
+  `IMAGE_NOT_FOUND`/`SCENE_NOT_FOUND`，不再把 `ENOENT` 原样交给模型。
+- 定向单测（`foundry-assets`/`foundry-write-receipt`/`direct-foundry-runtime`）与 Desktop
+  typecheck、source boundary、仓库和 Markdown 链接检查通过。最终使用真实 Python 3 补齐
+  测试环境的 `python` 命令后，Desktop 全量 **1007 通过 / 0 失败 / 1 跳过**；
+  先前仅因命令不存在产生的 11 项环境失败已消除，未修改测试或产品行为。
+- 仍未验：Electron 窗口/面板 UI 与用户点击、战斗与自动（midi/掷骰）执行、启用 Ring 的 Token
+  图片同步、取消/超时中断 typed 写入（单测覆盖）、lobby 工具（另有专用 harness）。

@@ -1,6 +1,6 @@
 import { FoundryOperationStore } from "./foundry-operation-store.js";
 import { randomUUID } from "node:crypto";
-import { readFoundryImage, validateDataImagePath } from "./foundry-assets.js";
+import { readFoundryImage, readFoundrySceneJson, validateDataImagePath } from "./foundry-assets.js";
 
 const aliases = Object.freeze({
   "倒地": "prone", "中毒": "poisoned", "失明": "blinded", "魅惑": "charmed",
@@ -119,6 +119,63 @@ export class FoundryServices {
             : { ...runtimeArgs, changes: { ...values.changes, image: runtimeImage } };
         }
         return this.call(action, runtimeArgs, { signal, executionTimeoutMs: 60_000 });
+      });
+    });
+  }
+
+  /**
+   * mtcompat 备团专用：整场景 JSON 经页面原生 sceneImport 落地。模型输入只有备团目录
+   * 内的路径，字节与 base64 全部留在运行时派发里，日志/回执只见摘要。
+   * @param {{operation: "create" | "update", sceneUuid?: string, readRef?: string,
+   *   sourcePath: string, backgroundSourcePath?: string}} params
+   * @param {{taskId: string, metadata: Promise<{world: unknown} | null>}} binding
+   * @param {string} toolCallId @param {AbortSignal} [signal]
+   */
+  async importScene(params, binding, toolCallId, signal) {
+    const reject = (code, message) => ({ status: "rejected", code, message });
+    if (this.mode !== "prep") return reject("MODE_FORBIDDEN", "Scene import is prep-only");
+    const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action: "sceneImport", input: params });
+    if (replay) return replay;
+    const creating = params?.operation === "create";
+    if (!params || (!creating && params.operation !== "update") || typeof params.sourcePath !== "string"
+      || (params.operation === "update"
+        && (typeof params.sceneUuid !== "string" || !params.sceneUuid || typeof params.readRef !== "string")))
+      return reject("INPUT_INVALID", "Scene import needs operation create/update, a prep-directory sourcePath and, for updates, sceneUuid with readRef");
+    const readState = creating ? null : this.readRefs.get(params.readRef);
+    if (!creating && (!readState || readState.sceneUuid !== params.sceneUuid))
+      return reject("READ_REF_INVALID", "Read this scene in the current session first");
+    const metadata = await binding.metadata;
+    if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
+    const cwd = this.getCwd?.();
+    if (!cwd) return reject("CAPABILITY_UNAVAILABLE", "The prep directory is unavailable");
+    if (params.backgroundSourcePath !== undefined && typeof params.backgroundSourcePath !== "string")
+      return reject("INPUT_INVALID", "backgroundSourcePath must be a prep-directory image path when provided");
+    const local = typeof params.backgroundSourcePath === "string";
+    if (local && (!this.withAssets || !this.decodeImage)) return reject("CAPABILITY_UNAVAILABLE", "Local image upload is unavailable");
+    const lease = local ? operation => this.withAssets(cwd, signal, operation) : operation => this.withPage(signal, operation);
+    return lease(async () => {
+      if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
+      let sceneJson, prepared = null;
+      try {
+        sceneJson = await readFoundrySceneJson({ cwd, sourcePath: params.sourcePath });
+        if (local) prepared = await readFoundryImage({ cwd, sourcePath: params.backgroundSourcePath,
+          decodeImage: (bytes, mimeType) => this.decodeImage(bytes, mimeType, signal) });
+      } catch (error) { return reject(String(error.message).split(":")[0], String(error.message)); }
+      if (signal?.aborted) return reject("ABORTED", "Cancelled before dispatch");
+      // Only the digest enters the journal. Base64 exists inside the runtime dispatch, never model output.
+      const args = { operation: params.operation, ...(creating ? {} : { sceneUuid: params.sceneUuid }),
+        ...(readState ? { readState } : {}), sceneJson, world: metadata.world,
+        // No local background file, no upload: the JSON's own background URL (e.g. a bare
+        // OSS https URL) is applied by the page importer as-is.
+        ...(prepared ? { background: { dataPath: prepared.dataPath, syncPlacedTokens: false } } : {}) };
+      return this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world, action: "sceneImport",
+        input: params, args: { ...args, ...(prepared ? { backgroundHash: prepared.hash } : {}) } },
+      ({ requestId }) => {
+        let runtimeArgs = { ...args, requestId };
+        if (prepared) runtimeArgs = { ...runtimeArgs, background: { ...runtimeArgs.background,
+          upload: { base64: prepared.bytes.toString("base64"), hash: prepared.hash,
+            extension: prepared.extension, mimeType: prepared.mimeType } } };
+        return this.call("sceneImport", runtimeArgs, { signal, executionTimeoutMs: 120_000 });
       });
     });
   }

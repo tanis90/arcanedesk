@@ -4,6 +4,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync } from "node:fs";
 
 import { evaluateNavigationSafe, readFoundryPageState } from "./foundry-web.js";
+import { MTCOMPAT_RUNTIME_ACTIONS } from "./foundry-tool-policy.js";
+import { PAGE_PROFILES, clientPageProfile } from "./page-profiles.js";
 
 /**
  * Electron transport for the transport-neutral Foundry SDK client. The
@@ -59,7 +61,9 @@ export class WebContentsFoundryTransport {
  * （Set.has），并入后即走既有队列/序列化/preflight/中断语义。
  * navigateToLobby（方案 B）同样只是 mtcompat 档的扩展名：play 页与会话队列共用，
  * 只由 foundry_lobby_return 调用。
- * @typedef {"pageEval" | "navigateToLobby"} MtcompatRuntimeAction
+ * sceneImport（整场景 JSON 导入）是同一类 mtcompat 档扩展名：只由 foundry_scene_import
+ * 调用，桌面侧不实现导入本体（页面 runtime 负责），只传备团目录内路径与后台直传字节。
+ * @typedef {"pageEval" | "navigateToLobby" | "sceneImport"} MtcompatRuntimeAction
  */
 
 /**
@@ -120,6 +124,31 @@ export class DirectFoundryRuntime extends FoundryRuntimeClient {
   callForSession(telemetry, mode, action, args, options) {
     return this.callContext.run({ telemetry, mode }, () => this.call(action, args, options));
   }
+}
+
+/**
+ * mtcompat 档 client 的唯一构造点：动作白名单、页面档位与巡检语义连同 runtime 源一起
+ * 钉死。main.js 的面板就绪换源（adoptMtcompatRuntimeFromPage 的 createRuntime）与
+ * 真实本地栈验收共用这一份，避免两处参数各自漂移。
+ * @param {{
+ *   runtimeSource?: string,
+ *   getWebContents: () => any,
+ *   onCallResult?: (record: import("@arcanedesk/foundry-sdk/client").FoundryRuntimeCallResultRecord) => void,
+ *   log?: (level: "warn", message: string, details?: unknown) => void,
+ * }} options
+ */
+export function createMtcompatRuntimeClient({ runtimeSource, getWebContents, onCallResult, log }) {
+  if (typeof getWebContents !== "function") throw new TypeError("getWebContents must be a function");
+  return new DirectFoundryRuntime({
+    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+    ...(runtimeSource !== undefined ? { runtimeSource } : {}),
+    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
+    // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
+    inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
+    getWebContents,
+    ...(onCallResult ? { onCallResult } : {}),
+    ...(log ? { log } : {}),
+  });
 }
 
 // ---------- mtcompat 页面的自定义 runtime 源(mt-agent-runtime.js) ----------
@@ -238,6 +267,8 @@ export function resolveMtAgentRuntimeSource({
  * A1 runtime 源页面优先:面板就绪后页面里自持的 __MT_AGENT_RUNTIME_SOURCE__ 是真源,
  * 打包拷贝(包内/用户目录 mt-agent-runtime.js)只是离线兜底。SDK 在构造期钉死
  * runtimeSource(client.ts 的 #runtimeSource),所以采用页面源只能整实例重建后换入。
+ * 页面同时暴露 __MT_AGENT_RUNTIME__ 时,注入自包含委托而不是序列化函数体:
+ * minify 可能在函数体外生成辅助变量,直接 toString 会丢失这些闭包引用。
  *
  * 失败路径一律保持现状、只落日志:源缺席 / 页面读取失败 / 源不是可用函数表达式 /
  * 重建抛错 / 与当前源相同 —— 既有 mtcompat client(或"未安装"的报错态)继续服务,
@@ -245,7 +276,7 @@ export function resolveMtAgentRuntimeSource({
  * @param {{
  *   routed: PageProfileRoutedRuntime,
  *   currentSource?: string | null,
- *   readPageSource: () => Promise<{ ok: boolean, source?: string, reason?: string, error?: string }>,
+ *   readPageSource: () => Promise<{ ok: boolean, source?: string, handle?: boolean, reason?: string, error?: string }>,
  *   createRuntime: (source: string) => DirectFoundryRuntime | null,
  *   log?: (level: "info" | "warn", message: string) => void,
  * }} options
@@ -289,9 +320,13 @@ export async function adoptMtcompatRuntimeFromPage({
   const source = analyzed.source;
   if (source === currentSource) return { adopted: false, reason: "unchanged" };
 
+  const injectionSource = read.handle === true
+    ? `${source.startsWith("//") ? `${source.split("\n", 1)[0]}\n` : ""}(async (action, args, options) => globalThis.__MT_AGENT_RUNTIME__(action, args, options))`
+    : source;
+
   let runtime;
   try {
-    runtime = createRuntime(source);
+    runtime = createRuntime(injectionSource);
   } catch (error) {
     log("warn", `[mt-runtime] rebuilding the mtcompat runtime from the page source failed: ${error?.message ?? error}; keeping the installed runtime`);
     return { adopted: false, reason: "rebuild-failed" };
