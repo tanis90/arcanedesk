@@ -2,7 +2,7 @@ import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
-export const MAX_FOUNDRY_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_FOUNDRY_IMAGE_BYTES = 32 * 1024 * 1024;
 export const MAX_FOUNDRY_SCENE_JSON_BYTES = 10 * 1024 * 1024;
 
 /** Validate a Foundry Data-relative path or a bare HTTPS image URL without normalizing it. */
@@ -62,7 +62,7 @@ export async function readFoundryImage({ cwd, sourcePath, decodeImage }) {
   try {
     const stat = await file.stat();
     if (!stat.isFile()) throw new Error("IMAGE_NOT_FILE: source must be a regular file");
-    if (stat.size <= 0 || stat.size > MAX_FOUNDRY_IMAGE_BYTES) throw new Error("IMAGE_SIZE_INVALID: maximum image size is 10 MiB");
+    if (stat.size <= 0 || stat.size > MAX_FOUNDRY_IMAGE_BYTES) throw new Error(`IMAGE_SIZE_INVALID: maximum image size is ${MAX_FOUNDRY_IMAGE_BYTES / (1024 * 1024)} MiB`);
     // Fixed allocation also bounds a file that grows after stat; never use unbounded readFile.
     bytes = Buffer.alloc(stat.size + 1);
     let offset = 0;

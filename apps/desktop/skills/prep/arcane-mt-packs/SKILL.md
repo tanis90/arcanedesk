@@ -1,6 +1,6 @@
 ---
 name: arcane-mt-packs
-description: 管理 ArcaneDesk mt compat 大厅（奥法地图）的个人内容包库与战役选包。当用户要“上传/替换合集包”“看看我的内容包”“预览包里有什么”“给战役勾选/取消内容包”“删掉某个内容包”，或给出当前备团目录里的 module zip 时使用。上传/替换走大厅导入工具，不收账号密码；世界包导入用 arcane-world-import。
+description: 管理 ArcaneDesk mt compat 大厅（奥法地图）的个人内容包库与战役选包。当用户要“上传/替换合集包”“看看我的内容包”“预览包里有什么”“给战役勾选/取消内容包”“删掉某个内容包”，或点名本机 module zip 时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；上传/替换走大厅导入工具，不收账号密码；世界包导入用 arcane-world-import。
 ---
 
 # mt compat 内容包与战役选包
@@ -17,8 +17,9 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 
 ## 文件边界（硬规则）
 
-- 只处理**当前备团工作目录（agent cwd）内**的 zip，以及 Desktop 已下载并管理的镜像缓存；后者由工具内部识别。
-- 用户给出 cwd 之外的路径时，明确拒绝：“工具只能读取当前备团目录和 ArcaneDesk 自己缓存的内容包，目录外的文件读不了。”不要读取它，不要申请目录外授权，也不要让用户复制到任意临时目录。用户可以把包放进当前备团目录。
+- 接受**当前备团工作目录（agent cwd）内**的 zip、Desktop 已下载并管理的镜像缓存，以及**用户明确点名的本机文件**。用户给出 cwd 之外的准确文件路径并要求上传/替换，就是授权你读取并暂存这个文件，不再拒绝或要求用户手动复制。
+- 目录外文件先检查为普通 `.zip`，再用平台原生命令复制到 cwd 内本次任务专用子目录：Windows 用 `Copy-Item -NoClobber`，macOS/Linux 用 `cp -n`。不得覆盖已有文件，复制后核对源文件与副本的字节数及 SHA-256 一致；源文件不动，副本路径写进报告。随后把**副本路径**交给 `foundry_lobby_import_start`，不要直接传目录外路径。
+- 暂存只针对用户点名的单个文件，不扩展成整目录信任。不要扫描磁盘、复制整个目录、读取无关配置/凭据，或用 shell 直接调云端接口。工具原有的 realpath、普通文件和读取稳定性检查保持不变。
 - 只接受普通 `.zip`；目录形态不走这条通道。
 
 ## 工具面
@@ -56,7 +57,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 ## 上传 / 替换内容包
 
 1. 在大厅页用 `foundry_open` 打开；当前已经开着某个战役的游戏页时，先用上节的 `foundry_lobby_return({})` 回大厅，不要直接 `foundry_open` 大厅地址。未登录就请用户自己登录（见交互预算）。
-2. 在 cwd 内找到用户点名的 module zip（含 `module.json` 与 `packs/`）。纯 `world.json` 世界包不是内容包，转 `arcane-world-import`。
+2. 找到用户点名的 module zip（含 `module.json` 与 `packs/`）；在 cwd 之外时，按“文件边界”先自行暂存并核对副本，不再要求用户手动复制。纯 `world.json` 世界包不是内容包，转 `arcane-world-import`。
 3. 调用 `foundry_lobby_import_start({sourcePath, expectedKind:"collection"})`。不要传 `campaignName`/`ruleset`；内容包不创建战役。
 4. 工具解析后会给出 module id、版本、包数量、条目数、素材体积与“同 moduleId 将替换旧包”的判断（以返回的 `plan` 为准）。走 App 现有审批；拒绝则零写入。
 5. `import_start` 返回 `{jobId, plan}` 后，用 `foundry_lobby_import_job` 跟进。轮询只说 `phase`/`progress`/`currentItem`/`failureCount`，完整报告在终态读。
@@ -101,7 +102,7 @@ mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归
 |---|---|
 | `LOGIN_REQUIRED` | 未登录：结束本轮，请用户在右侧面板自己登录；确认后重试原操作，不用 `foundry_open` 轮询。 |
 | `PROFILE_MISMATCH` / `CAPABILITY_UNAVAILABLE` | 页面不是受信大厅或 App/runtime 版本不足：重开大厅；仍不行让用户更新 ArcaneDesk。 |
-| `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入。 |
+| `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 目录外路径直接传给了工具：按“文件边界”先自行暂存用户点名的文件，再传副本，不让用户手动复制。其它情况是文件不存在、不是普通文件、为空、读取中被改动或不可读：修正后重新调用。 |
 | `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后对账。 |
 | `foundry_lobby_return` 报错 | `CAPABILITY_UNAVAILABLE` = 页面/runtime 版本不足：重开大厅或让用户更新 App；`PROFILE_MISMATCH` = 当前不是 ready 的 mtcompat 游戏页（或 URL 缺 `?campaign=`），从大厅重新打开该战役；`TARGET_CHANGED` = 面板没有落到预期大厅：不重放，先 `foundry_open` 确认当前页面再按实际情况重来；`LOGIN_REQUIRED` = 结束本轮让用户登录；`JOB_INDETERMINATE` = 结果无法确认，不要自动重放。 |
 | `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅用库清单/战役状态对账。 |

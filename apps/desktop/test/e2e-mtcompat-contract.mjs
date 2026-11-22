@@ -1147,7 +1147,7 @@ async function main() {
       && persisted.name === `${sceneName} v2`
       && persisted.walls === 1, persisted);
 
-    // ---- large map: real local JPEG decoding + upload + native scene import ----
+    // ---- >10 MiB map: real local JPEG decoding + upload + native scene import ----
     const largeImageUrl = await page.evaluate(() => {
       const canvas = document.createElement("canvas");
       canvas.width = 6150; canvas.height = 6450;
@@ -1155,9 +1155,9 @@ async function main() {
       ctx.fillStyle = "#7b786d"; ctx.fillRect(0, 0, canvas.width, canvas.height);
       let seed = 0x6afdb44a;
       const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0x100000000; };
-      for (let y = 0; y < canvas.height; y += 8) for (let x = 0; x < canvas.width; x += 8) {
+      for (let y = 0; y < canvas.height; y += 5) for (let x = 0; x < canvas.width; x += 5) {
         ctx.fillStyle = `rgb(${60 + Math.floor(random() * 100)},${55 + Math.floor(random() * 90)},${45 + Math.floor(random() * 70)})`;
-        ctx.fillRect(x, y, 8, 8);
+        ctx.fillRect(x, y, 5, 5);
       }
       ctx.strokeStyle = "#252a30"; ctx.lineWidth = 8;
       for (let x = 0; x <= canvas.width; x += 150) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
@@ -1166,9 +1166,9 @@ async function main() {
     });
     const largeJpeg = dataUrlBytes(largeImageUrl);
     writeFileSync(path.join(prepDir, "large-map.jpg"), largeJpeg);
-    check("fixture.large-jpeg", largeJpeg.length > 1024 * 1024 && largeJpeg.length <= 10 * 1024 * 1024, {
+    check("fixture.large-jpeg", largeJpeg.length > 10 * 1024 * 1024 && largeJpeg.length <= 32 * 1024 * 1024, {
       width: 6150, height: 6450, bytes: largeJpeg.length,
-      note: "deterministic synthetic fixture, not the user's original church image",
+      note: "deterministic synthetic fixture above the former 10 MiB cap, not the user's original church image",
     });
     const largeSceneName = `Contract Large Map ${RUN_ID}`;
     writeFileSync(path.join(prepDir, "large-map.json"), JSON.stringify({

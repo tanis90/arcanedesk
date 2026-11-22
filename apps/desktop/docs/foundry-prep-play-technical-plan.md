@@ -398,11 +398,11 @@ partial/indeterminate 不自动重放。
 
 
 本地 sourcePath 最大 4096 字符；Desktop realpath 校验在用户 prep cwd 内，拒绝目录
-穿越、符号链接越界。首版 png/jpeg/webp，单文件至多 10 MiB；校验真实格式与大小。
+穿越、符号链接越界。png/jpeg/webp 单文件至多 32 MiB（与当前服务端图片上限一致），场景 JSON 仍至多 10 MiB；校验真实格式与大小。
 模型不读取/传 Base64。SDK 内部有界上传以 `arcanedesk/assets/<hash>.<ext>` 为请求目标。
 原生 Foundry 默认不覆盖不同内容并保存稳定 Data 相对路径；mtcompat 以 FilePicker 返回的服务端 URL 为准。
 dataPath 接受有效 Data 相对路径；mtcompat 额外接受无凭据、查询参数和片段的 HTTPS 图片 URL，其它绝对路径、短期签名 URL 与 `..` 仍拒绝。
-无法上传/文件不在围栏时返回原因，不用 shell 越界搬运。工具输出不包含二进制内容。
+用户明确点名的目录外文件可以先按文件边界受控暂存到 cwd，再交工具处理；仅限单个文件、不覆盖既有内容、副本字节与源文件一致，不允许任意扫盘或用 shell 直接上传。工具输出不包含二进制内容。
 
 ## 6. 共享世界、现场与状态
 

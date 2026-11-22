@@ -210,8 +210,9 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
 
 ## 图片资源读取增量
 
-- 新增 foundry-assets.js：本地文件 realpath 围栏、目录 junction 越界拒绝、10 MiB 有界读取、
+- 新增 foundry-assets.js：本地文件 realpath 围栏、目录 junction 越界拒绝、有界读取、
   读取前后文件变化检查、PNG/JPEG/WebP 字节识别、强制解码结果校验和 SHA-256 稳定 Data 路径。
+  初版图片上限为 10 MiB；2026-11-21 起与服务端一致放宽到 32 MiB，场景 JSON 仍保持 10 MiB。
 - Data 图片路径单独校验，拒绝绝对路径、编码绕过与父目录片段；mtcompat 另接受无凭据、查询参数和片段的 HTTPS 图片 URL；图片 bytes 仅供内部上传使用。
 - 4 项定向测试通过，覆盖路径与 junction、大小上限、伪格式、解码失败和按内容生成路径；
   Desktop typecheck 与 source boundary 通过。解码测试当前使用注入接口，尚未验证真实 Chromium 解码器。

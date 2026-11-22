@@ -49,7 +49,7 @@ test("size and format gates reject invalid sources before invoking decoder", asy
   const { cwd } = await fixture(t);
   let decoded = false;
   for (const [name, bytes, error] of [["empty.png", Buffer.alloc(0), /IMAGE_SIZE_INVALID/],
-    ["large.png", Buffer.alloc(MAX_FOUNDRY_IMAGE_BYTES + 1), /IMAGE_SIZE_INVALID/],
+    ["large.png", Buffer.alloc(MAX_FOUNDRY_IMAGE_BYTES + 1), /IMAGE_SIZE_INVALID: maximum image size is 32 MiB/],
     ["fake.png", Buffer.from("not an image"), /IMAGE_FORMAT_INVALID/]]) {
     await writeFile(path.join(cwd, name), bytes);
     await assert.rejects(readFoundryImage({ cwd, sourcePath: name, decodeImage: () => { decoded = true; } }), error);
@@ -57,12 +57,23 @@ test("size and format gates reject invalid sources before invoking decoder", asy
   assert.equal(decoded, false);
 });
 
+test("local images above the former 10 MiB cap remain readable up to 32 MiB", async t => {
+  const { cwd } = await fixture(t);
+  const bytes = Buffer.alloc(12_922_957);
+  png.copy(bytes);
+  await writeFile(path.join(cwd, "large-valid.png"), bytes);
+  const result = await readFoundryImage({ cwd, sourcePath: "large-valid.png", decodeImage: () => ({ width: 1, height: 1 }) });
+  assert.equal(result.bytes.length, bytes.length);
+  assert.equal(result.extension, "png");
+  assert.equal(MAX_FOUNDRY_IMAGE_BYTES, 32 * 1024 * 1024);
+  assert.equal(MAX_FOUNDRY_SCENE_JSON_BYTES, 10 * 1024 * 1024);
+});
+
 test("scene JSON parses objects inside the prep fence and rejects escapes, oversize and wrong roots", async t => {
   const { directory, cwd } = await fixture(t);
   const scene = { name: "教堂", walls: [{ c: [0, 0, 100, 0] }], background: { src: "https://arcanedesk-media.example.com/church.jpg" } };
   await writeFile(path.join(cwd, "scene.json"), JSON.stringify(scene));
   assert.deepEqual(await readFoundrySceneJson({ cwd, sourcePath: "scene.json" }), scene);
-  assert.equal(MAX_FOUNDRY_SCENE_JSON_BYTES, MAX_FOUNDRY_IMAGE_BYTES);
 
   const outside = path.join(directory, "outside");
   await mkdir(outside);
