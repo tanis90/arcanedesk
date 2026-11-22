@@ -402,6 +402,7 @@ partial/indeterminate 不自动重放。
 模型不读取/传 Base64。SDK 内部有界上传以 `arcanedesk/assets/<hash>.<ext>` 为请求目标。
 原生 Foundry 默认不覆盖不同内容并保存稳定 Data 相对路径；mtcompat 以 FilePicker 返回的服务端 URL 为准。
 dataPath 接受有效 Data 相对路径；mtcompat 额外接受无凭据、查询参数和片段的 HTTPS 图片 URL，其它绝对路径、短期签名 URL 与 `..` 仍拒绝。
+runtime 同样按 32 MiB 及对应的 Base64 长度限制校验内部上传。私有桶的持久化引用保持无签名，读取经 `asset-sign` 换签；文档和操作日志不保存签名 query。验收在刷新页面后重新安装并采用候选 runtime，防止部署旧版混入。
 用户明确点名的目录外文件可以先按文件边界受控暂存到 cwd，再交工具处理；仅限单个文件、不覆盖既有内容、副本字节与源文件一致，不允许任意扫盘或用 shell 直接上传。工具输出不包含二进制内容。
 
 ## 6. 共享世界、现场与状态

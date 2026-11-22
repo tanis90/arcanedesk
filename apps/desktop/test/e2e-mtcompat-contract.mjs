@@ -25,8 +25,9 @@
 // navigation, approvals UI or renderer is exercised; only the tool host/service/runtime
 // code paths and the real page.
 //
-// The two backend probes are hard assertions: uploaded images must be readable at
-// their returned URL, and an ordinary Roll update must not hit the entitlement gate.
+// The two backend probes are hard assertions: uploaded bytes must be readable through
+// the page's signing path while durable references stay unsigned, and an ordinary Roll
+// update must not hit the entitlement gate.
 // Any regression in either path fails this contract instead of being skipped.
 //
 // Typed surfaces exercised (all via the real tool.execute path, never pageEval):
@@ -373,6 +374,11 @@ async function main() {
       });
 
     // Prove calls really go through the live page handle: wrap it, then count.
+    report.runtime.handleCapabilities = await page.evaluate(() => ({
+      has32MiBLimit: String(window.__MT_AGENT_RUNTIME__).includes("MAX_IMAGE_UPLOAD_BYTES"),
+    }));
+    check("runtime.handle-uses-candidate-code", report.runtime.handleCapabilities.has32MiBLimit,
+      report.runtime.handleCapabilities);
     await page.evaluate(() => {
       const handle = window.__MT_AGENT_RUNTIME__;
       window.__MT_E2E_CALLS__ = 0;
@@ -740,6 +746,10 @@ async function main() {
       jpegBytes: jpeg.length, webpBytes: webp.length,
     });
 
+    const signedAssetUrl = url => page.evaluate(async rawUrl => {
+      const mod = await import(new URL("asset-sign.mjs", document.baseURI).href);
+      return mod.signUrl(rawUrl);
+    }, url);
     const imageProbes = [];
     if (uploadedUrl) imageProbes.push({ kind: "png", url: uploadedUrl });
     for (const [kind, file, extension] of [["jpeg", "fixture.jpg", "jpg"], ["webp", "fixture.webp", "webp"]]) {
@@ -1126,12 +1136,16 @@ async function main() {
     const rollValue = rollProbe.details?.value ?? {};
     check("env.roll-update", rollValue.updated === true, rollValue);
 
-    // Uploaded bytes must be readable at the returned static URL for every supported format.
-    // A storage/entitlement regression is a failed contract, not a skipped environment case.
+    // dataPath is the durable, unsigned document reference. Private buckets require the
+    // page's signing path for reads; assert real bytes there without persisting signed URLs.
     const probedImages = [];
-    for (const probe of imageProbes) probedImages.push({ ...probe, ...(await fetchStatus(probe.url)) });
+    for (const probe of imageProbes) {
+      const readUrl = await signedAssetUrl(probe.url);
+      probedImages.push({ ...probe, signed: readUrl !== probe.url, ...(await fetchStatus(readUrl)) });
+    }
     check("env.image-get", probedImages.length > 0
-      && probedImages.every(probe => probe.status === 200), { probes: probedImages });
+      && probedImages.every(probe => probe.status === 200 && !new URL(probe.url).search && !new URL(probe.url).hash),
+      { probes: probedImages });
 
     // ---- persistence: the imported scene survives a page reload ----------
     await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -1146,6 +1160,21 @@ async function main() {
     check("scene.persisted-after-reload", persisted.found === true
       && persisted.name === `${sceneName} v2`
       && persisted.walls === 1, persisted);
+
+    // Navigation resets the page runtime and the handle wrapper. Reinstall and adopt the
+    // candidate before the large-map checks instead of silently testing the deployed fallback.
+    await page.addScriptTag({ content: runtimeText });
+    const reloadedAdoption = await adopt(null);
+    report.runtime.reloadedHandleCapabilities = await page.evaluate(() => ({
+      has32MiBLimit: String(window.__MT_AGENT_RUNTIME__).includes("MAX_IMAGE_UPLOAD_BYTES"),
+    }));
+    check("runtime.reloaded-candidate", reloadedAdoption.adopted === true
+      && reloadedAdoption.source === compatRuntime.source
+      && report.runtime.reloadedHandleCapabilities.has32MiBLimit, {
+      adopted: reloadedAdoption.adopted, reason: reloadedAdoption.reason,
+      sourceBytes: reloadedAdoption.source?.length,
+      handle: report.runtime.reloadedHandleCapabilities,
+    });
 
     // ---- >10 MiB map: real local JPEG decoding + upload + native scene import ----
     const largeImageUrl = await page.evaluate(() => {
@@ -1195,10 +1224,12 @@ async function main() {
       && largeImport.details?.verification?.[0]?.width === 6150
       && largeImport.details?.verification?.[0]?.height === 6450
       && largeImport.details?.verification?.[0]?.["grid.size"] === 150 && /\.jpg$/.test(largeUrl), {
-      status: largeImport.details?.status, stats: largeImport.details?.stats, verification: largeImport.details?.verification,
+      status: largeImport.details?.status, code: largeImport.details?.code, message: largeImport.details?.message,
+      stats: largeImport.details?.stats, verification: largeImport.details?.verification,
     });
     if (largeUrl) imageProbes.push({ kind: "large-jpeg", url: largeUrl });
-    const largeProbe = largeUrl ? await fetchStatus(largeUrl) : null;
+    const largeReadUrl = largeUrl ? await signedAssetUrl(largeUrl) : null;
+    const largeProbe = largeReadUrl ? await fetchStatus(largeReadUrl) : null;
     check("image.large-get", largeProbe?.status === 200 && largeProbe.bytes === largeJpeg.length, largeProbe);
     const largeRead = largeUuid ? await invoke("foundry_scene_get", { sceneUuid: largeUuid, include: ["walls", "lights"], limit: 100 }) : null;
     check("scene.large-readback", largeRead?.details?.placeables?.walls?.length === 65
@@ -1230,7 +1261,7 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       return { scene: true, decoded: true, width: image.naturalWidth, height: image.naturalHeight, colors };
-    }, { uuid: largeUuid, expectedUrl: largeUrl }).catch(error => ({ error: String(error?.message ?? error) }));
+    }, { uuid: largeUuid, expectedUrl: largeReadUrl }).catch(error => ({ error: String(error?.message ?? error) }));
     check("scene.large-render", largeActivated?.details?.status === "completed"
       && largeRendered.decoded === true && largeRendered.width === 6150 && largeRendered.height === 6450
       && largeRendered.colors > 32, largeRendered);
