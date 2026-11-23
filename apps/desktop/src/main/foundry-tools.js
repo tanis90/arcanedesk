@@ -85,7 +85,7 @@ export function createFoundryTools(host) {
   return [
     defineTool({
       name: "foundry_image", label: "Upload or Apply Foundry Image",
-      description: "Upload a local PNG/JPEG/WebP from the prep directory (max 10 MiB), or use an existing Data-relative image path. Returns a reusable dataPath for any document or rich text. Optionally apply to an exact world Actor, Item (including embedded Items), or image-type JournalEntryPage UUID. Actor targets update portrait and prototype Token; syncPlacedTokens additionally updates placed Token images across scenes, preserving layout and names. Item updates img; Journal image page updates src. Omit targetUuid for upload only; text Journal pages can embed the returned path using native APIs. Never send Base64. Partial/indeterminate writes must not be replayed. Prep-only.",
+      description: "Upload a local PNG/JPEG/WebP from the prep directory (max 32 MiB), or use an existing Data-relative image path (mtcompat also accepts a bare HTTPS image URL without query or fragment). Returns a reusable dataPath for any document or rich text. Optionally apply to an exact world Actor, Item (including embedded Items), or image-type JournalEntryPage UUID. Actor targets update portrait and prototype Token; syncPlacedTokens additionally updates placed Token images across scenes, preserving layout and names. Item updates img; Journal image page updates src. Omit targetUuid for upload only; text Journal pages can embed the returned path using native APIs. Never send Base64. Partial/indeterminate writes must not be replayed. Prep-only.",
       parameters: Type.Union([
         exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }), targetUuid: Type.Optional(ref()), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
         exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }), targetUuid: Type.Optional(ref()), syncPlacedTokens: Type.Optional(Type.Boolean()) }),
@@ -109,7 +109,7 @@ export function createFoundryTools(host) {
     }),
     defineTool({
       name: "foundry_scene_apply", label: "Apply Scene",
-      description: "Create or update an explicit Scene's metadata, grid, background and Token layout. At most 100 total Token operations; grouped creates/updates/deletes run in order and activation runs last. Token actorLink defaults to its Actor prototype. Background accepts a local prep image or Data-relative path, never Base64. Requires readRef for updates. Partial/indeterminate receipts must not be replayed. Prep-only.",
+      description: "Create or update an explicit Scene's metadata, grid, background and Token layout. At most 100 total Token operations; grouped creates/updates/deletes run in order and activation runs last. Token actorLink defaults to its Actor prototype. Background accepts a local prep image or Data-relative path (mtcompat also accepts a bare HTTPS image URL), never Base64. Requires readRef for updates. Partial/indeterminate receipts must not be replayed. Prep-only.",
       parameters: Type.Union([
         exact({ operation: Type.Literal("create"), scene: exact({ ...sceneFields, name: ref() }), tokens: Type.Optional(tokenLayout) }),
         exact({ operation: Type.Literal("update"), sceneUuid: ref(), readRef: ref(), scene: Type.Optional(exact(sceneFields)), tokens: Type.Optional(tokenLayout) }),
@@ -121,6 +121,23 @@ export function createFoundryTools(host) {
           summary: `${params.operation} Scene; create ${params.tokens?.create?.length ?? 0}, update ${params.tokens?.update?.length ?? 0}, delete ${deletionCount} Tokens`, args: params });
         if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
         return textResult(await host.foundryServices().writeScene(params, binding, id, signal));
+      },
+    }),
+    defineTool({
+      name: "foundry_scene_import", label: "Import Scene JSON",
+      description: "Import a complete Scene from a scene JSON file in the prep directory (max 10 MiB): the page's native importer applies the document itself, so walls, lights, Sounds and other scene data are never hand-written or patched one by one. operation=create creates a new Scene; operation=update targets an exact sceneUuid and requires a current readRef from foundry_scene_get (create needs none); updates compare the scene fingerprint and reject concurrent edits with READ_REF_STALE. backgroundSourcePath optionally points at a local PNG/JPEG/WebP (max 32 MiB) to become the background: the upload and the page-native JSON import both happen inside this tool, and the JSON may also reference an existing bare HTTPS image URL for its background instead. Never send Base64. Partial/indeterminate receipts must not be replayed. mtcompat prep-only.",
+      parameters: Type.Union([
+        exact({ operation: Type.Literal("create"), sourcePath: Type.String({ minLength: 1, maxLength: 4096 }),
+          backgroundSourcePath: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })) }),
+        exact({ operation: Type.Literal("update"), sceneUuid: ref(), readRef: ref(), sourcePath: Type.String({ minLength: 1, maxLength: 4096 }),
+          backgroundSourcePath: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })) }),
+      ]), executionMode: "sequential",
+      execute: async (id, params, signal) => {
+        const binding = host.taskCoordinator().currentInputBinding();
+        const approved = await host.maybeRequestApproval({ tool: "foundry_scene_import",
+          summary: `${params.operation} Scene from prep JSON${params.backgroundSourcePath ? " with background upload" : ""}`, args: params });
+        if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
+        return textResult(await host.foundryServices().importScene(params, binding, id, signal));
       },
     }),
     defineTool({

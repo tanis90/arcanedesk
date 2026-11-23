@@ -37,13 +37,19 @@ test("independent image operations need no Actor handle, bind world and replay o
   const f = fixture(t), params = { image: { dataPath: "assets/image.png" }, targetUuid: "JournalEntry.j.JournalEntryPage.p" };
   assert.equal((await f.service.writeContent("imageApply", params, f.binding, "image")).code, "MODE_FORBIDDEN");
   f.service.mode = "prep";
-  f.service.call = async (action, args) => { f.calls.push({ action, args }); return { status: "completed", dataPath: params.image.dataPath, steps: [], verification: [], warnings: [] }; };
+  f.service.call = async (action, args) => { f.calls.push({ action, args }); return { status: "completed", dataPath: args.image.dataPath, steps: [], verification: [], warnings: [] }; };
   const result = await f.service.writeContent("imageApply", params, f.binding, "image");
   assert.equal(result.status, "completed"); assert.equal(result.dataPath, params.image.dataPath);
   assert.equal(f.calls[0].action, "imageApply"); assert.equal(f.calls[0].args.targetUuid, params.targetUuid);
   assert.deepEqual(f.calls[0].args.world, (await f.binding.metadata).world);
   assert.deepEqual(await f.service.writeContent("imageApply", params, f.binding, "image"), result);
   assert.equal(f.calls.length, 1);
+
+  const remote = { image: { dataPath: "https://media.example.com/campaign/church.jpg" }, targetUuid: "Scene.s" };
+  const remoteResult = await f.service.writeContent("imageApply", remote, f.binding, "remote-image");
+  assert.equal(remoteResult.status, "completed");
+  assert.equal(remoteResult.dataPath, remote.image.dataPath);
+  assert.equal(f.calls[1].args.image.dataPath, remote.image.dataPath);
 });
 
 test("missing admission world and cancellation never dispatch", async t => {
@@ -189,4 +195,109 @@ test("restarted content service returns the original result before resolving exp
   assert.equal(writes,1);
   assert.equal((await restarted.writeActor("actorEdit",{ ...params, changes: { name: "Other" } },noWorld,"call")).code,"TOOL_CALL_CONFLICT");
   assert.equal((await restarted.writeActor("actorEdit",params,noWorld,"different-call")).code,"READ_REF_INVALID");
+});
+
+test("scene import dispatches page-native JSON once, binds update readRef and replays identical calls", async t => {
+  const { writeFileSync } = await import("node:fs");
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-import-service-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const sceneJson = { name: "教堂", walls: [{ c: [0, 0, 100, 0] }],
+    background: { src: "https://arcanedesk-media.oss-cn-beijing.aliyuncs.com/campaign/church.jpg" } };
+  writeFileSync(path.join(directory, "church.json"), JSON.stringify(sceneJson));
+  const calls = [];
+  const service = new FoundryServices({ sessionId: "import", directory, mode: "combat", getCwd: () => directory,
+    withPage: async (_signal, fn) => fn(),
+    decodeImage: () => { throw new Error("decode must not run without a local background"); },
+    call: async (action, args) => {
+      assert.equal(action, "sceneImport"); calls.push(args);
+      return { status: "completed", sceneUuid: "Scene.new", steps: [], verification: [], warnings: [] };
+    } });
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "w" } }) };
+  assert.equal((await service.importScene({ operation: "create", sourcePath: "church.json" }, binding, "create")).code, "MODE_FORBIDDEN");
+  assert.equal(calls.length, 0);
+  service.mode = "prep";
+
+  const create = { operation: "create", sourcePath: "church.json" };
+  const created = await service.importScene(create, binding, "create");
+  assert.equal(created.status, "completed"); assert.equal(created.sceneUuid, "Scene.new");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].operation, "create");
+  assert.deepEqual(calls[0].sceneJson, sceneJson);
+  assert.deepEqual(calls[0].world, { origin: "https://f.test", id: "w" });
+  assert.equal(calls[0].requestId, created.operationRef);
+  assert.equal("sceneUuid" in calls[0], false); assert.equal("readState" in calls[0], false);
+  assert.equal("background" in calls[0], false, "no local background file means no upload object");
+  assert.deepEqual(await service.importScene(create, binding, "create"), created);
+  assert.equal(calls.length, 1, "identical model input replays the stored receipt");
+
+  assert.equal((await service.importScene({ operation: "update", sceneUuid: "Scene.new", sourcePath: "church.json" }, binding, "update")).code, "INPUT_INVALID");
+  assert.equal((await service.importScene({ operation: "update", sceneUuid: "Scene.new", readRef: "missing", sourcePath: "church.json" }, binding, "update")).code, "READ_REF_INVALID");
+  assert.equal((await service.importScene({ operation: "update", sceneUuid: "Scene.other", readRef: "read", sourcePath: "church.json" }, binding, "update")).code, "READ_REF_INVALID");
+  const noWorld = { taskId: "task", metadata: Promise.resolve(null) };
+  service.readRefs.set("read", { sceneUuid: "Scene.new", fields: { name: "Old" } });
+  assert.equal((await service.importScene({ operation: "update", sceneUuid: "Scene.new", readRef: "read", sourcePath: "church.json" }, noWorld, "update")).code, "INPUT_WORLD_UNAVAILABLE");
+  assert.equal(calls.length, 1);
+
+  const update = { operation: "update", sceneUuid: "Scene.new", readRef: "read", sourcePath: "church.json" };
+  const updated = await service.importScene(update, binding, "update");
+  assert.equal(updated.status, "completed");
+  assert.equal(calls[1].operation, "update");
+  assert.equal(calls[1].sceneUuid, "Scene.new");
+  assert.deepEqual(calls[1].readState, { sceneUuid: "Scene.new", fields: { name: "Old" } });
+  assert.equal("readRef" in calls[1], false);
+  assert.equal(calls[1].requestId, updated.operationRef);
+  assert.deepEqual(await service.importScene(update, binding, "update"), updated);
+  assert.equal(calls.length, 2);
+});
+
+test("scene import reads scene and background bytes under one combined lease and journals only digests", async t => {
+  const { writeFileSync, readFileSync } = await import("node:fs");
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-import-image-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const cwd = path.join(directory, "prep");
+  const outside = path.join(directory, "outside");
+  await (await import("node:fs/promises")).mkdir(cwd);
+  await (await import("node:fs/promises")).mkdir(outside);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO1cAAAAASUVORK5CYII=", "base64");
+  writeFileSync(path.join(cwd, "scene.json"), JSON.stringify({ name: "Map" }));
+  writeFileSync(path.join(cwd, "map.png"), png);
+  writeFileSync(path.join(outside, "map.png"), png);
+  let locked = false, pageLeased = 0, calls = 0;
+  const service = new FoundryServices({ sessionId: "importbg", directory, mode: "prep", getCwd: () => cwd,
+    withPage: async (_signal, fn) => { pageLeased++; assert.equal(locked, false); return fn(); },
+    withAssets: async (assetsCwd, _signal, callback) => {
+      assert.equal(assetsCwd, cwd); assert.equal(locked, false); locked = true;
+      try { return await callback(); } finally { locked = false; }
+    },
+    decodeImage: bytes => { assert.equal(locked, true); assert.deepEqual(bytes, png); return { width: 1, height: 1 }; },
+    call: async (action, args) => {
+      assert.equal(locked, true); assert.equal(action, "sceneImport"); calls++;
+      assert.deepEqual(args.sceneJson, { name: "Map" });
+      assert.match(args.background.dataPath, /^arcanedesk\/assets\/[a-f0-9]{64}\.png$/);
+      assert.equal(args.background.syncPlacedTokens, false);
+      assert.equal(args.background.upload.base64, png.toString("base64"));
+      assert.equal(args.background.upload.extension, "png");
+      assert.equal(args.background.upload.mimeType, "image/png");
+      assert.equal("sourcePath" in args.background, false); assert.ok(args.requestId);
+      return { status: "completed", sceneUuid: "Scene.bg", steps: [{ step: "upload-image", state: "completed", targets: [args.background.dataPath] }], verification: [], warnings: [] };
+    } });
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "w" } }) };
+  const params = { operation: "create", sourcePath: "scene.json", backgroundSourcePath: "map.png" };
+  const result = await service.importScene(params, binding, "bg-call");
+  assert.equal(result.status, "completed");
+  assert.deepEqual(await service.importScene(params, binding, "bg-call"), result);
+  assert.equal(calls, 1); assert.equal(pageLeased, 0, "local background uses the combined lease, never the bare page lease");
+  const journal = readFileSync(path.join(directory, "importbg.jsonl"), "utf8");
+  assert.equal(journal.includes(png.toString("base64")), false);
+  assert.equal(journal.includes("sceneJson"), false);
+  assert.equal(JSON.stringify(result).includes("base64"), false);
+
+  const escape = await service.importScene({ ...params, backgroundSourcePath: path.join(outside, "map.png") }, binding, "escape");
+  assert.equal(escape.code, "IMAGE_PATH_OUTSIDE_CWD"); assert.equal(calls, 1);
+  writeFileSync(path.join(cwd, "broken.json"), "{");
+  assert.equal((await service.importScene({ operation: "create", sourcePath: "broken.json" }, binding, "broken")).code, "SCENE_JSON_INVALID");
+  assert.equal(calls, 1);
+  const controller = new AbortController(); controller.abort();
+  assert.equal((await service.importScene(params, binding, "aborted", controller.signal)).code, "ABORTED");
+  assert.equal(calls, 1);
 });

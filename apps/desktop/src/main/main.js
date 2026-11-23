@@ -1,12 +1,12 @@
-import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "./foundry-tool-policy.js";
+import { DESKTOP_FOUNDRY_ACTIONS } from "./foundry-tool-policy.js";
 import { app, BrowserWindow, desktopCapturer, dialog, Menu, Notification, Tray, WebContentsView, ipcMain, safeStorage, session, shell, systemPreferences } from "electron";
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectFoundryRuntime, PageProfileRoutedRuntime, adoptMtcompatRuntimeFromPage, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
+import { DirectFoundryRuntime, PageProfileRoutedRuntime, adoptMtcompatRuntimeFromPage, createMtcompatRuntimeClient, resolveMtAgentRuntimeSource } from "./direct-foundry-runtime.js";
 import { TelemetryClient } from "./telemetry/telemetry-client.js";
 import { readFoundryPageState, readPageAgentRuntimeSource } from "./foundry-web.js";
-import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, clientPageProfile, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, normalizeMtCompatEntryUrl, resolvePageProfile } from "./page-profiles.js";
+import { PANEL_PROFILE_OVERRIDE_ENV, PAGE_PROFILES, createPanelProfileOverrides, createPanelProfileState, isMtCompatNavigationHold, matchPageProfile, normalizeMtCompatEntryUrl, resolvePageProfile } from "./page-profiles.js";
 import { AgentHost } from "./agent-host.js";
 import { MtLobbyClient } from "./mt-lobby-client.js";
 import { findMirrorStageRoots } from "./lobby-mirror-cache.js";
@@ -656,12 +656,8 @@ async function showFoundryEmptyState() {
  * 遥测逐字不变。动作白名单是 mtcompat 档专用表(A3):foundry 面 + pageEval 扩展名。
  */
 function createMtcompatRuntime(runtimeSource) {
-  return new DirectFoundryRuntime({
-    allowedActions: MTCOMPAT_RUNTIME_ACTIONS,
+  return createMtcompatRuntimeClient({
     runtimeSource,
-    pageProfile: clientPageProfile(PAGE_PROFILES.mtcompat),
-    // 巡检按 mtcompat 档解释页面信号(hasGame 检测、ready+world+user 就绪)。
-    inspectPage: (webContents, options) => readFoundryPageState(webContents, { ...options, profileId: PAGE_PROFILES.mtcompat.id }),
     getWebContents: () => foundryView()?.webContents ?? null,
     onCallResult: (record) => telemetry?.foundryRuntimeResult(record),
   });

@@ -526,3 +526,11 @@
 - 回大厅只能走这个 typed action：不用 `foundry_page_eval`、`location.assign`、`ui.nav` 自造跳转，也不放宽 `foundry_open` 的同源/同 pathname 幂等（方案 A 已否决）。成功回执保留真实 `returnPlayUrl`（campaign 来自 play URL 的 `?campaign=`，不用 `game.world.id` 猜），大厅动作完成后 `foundry_open({url:returnPlayUrl})` 回原战役；已在大厅时 `alreadyInLobby:true`，直接继续。
 - `completed` 与预期 `NAVIGATED` 都只表示导航已发起：Desktop 随后确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪，agent 不把导航中断当可重放失败，不自动重放、不降级 eval。其余失败 `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 照实报告并停止。
 - 该工具仅 mtcompat prep：combat 与普通 Foundry 不声明，combat prompt 不改；世界导入与内容包继续沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。大厅 typed 工具由 8 个增至 9 个，r49 为 `revision: 49`。
+
+### 用户点名文件的受控暂存（2026-11-21，r50）
+
+- 用户明确给出本机文件路径并要求上传/导入，即授权 agent 读取并暂存**这个文件**，不再以文件位于 cwd 之外为由拒绝，也不要求用户手动复制。该授权不扩展到同目录其它文件，不新增提问。
+- 保留 typed 工具只接受 prep cwd 与 Desktop 自有镜像缓存的 realpath 围栏，不改成任意路径直传，更不放开成任意目录扫描。目录外文件先用平台原生命令复制到 cwd 内本次任务专用子目录，禁止覆盖；核对源文件与副本的字节数及 SHA-256 一致，再传副本路径，源文件不动并在报告中说明副本位置。
+- 只处理用户点名的普通文件，按通道校验 zip/图片/JSON 类型与大小；不复制整个目录、不读取无关配置或凭据、不用 shell 直接上传。本地暂存不替代大厅计划审批、ruleset 选择、登录或写操作审批。
+- 图片上传上限与当前服务端一致调整为 32 MiB，场景 JSON 上限仍保持 10 MiB；不要求 Agent 为超过旧 10 MiB 上限的原图自行降采样。
+- `arcane-world-import`、`arcane-mt-packs` 与备团图片/场景提示统一采用这套规则，r50 为 `revision: 50`，`minAppVersion` 保持 `0.9.0`。

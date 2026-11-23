@@ -10,6 +10,7 @@ import {
   DirectFoundryRuntime,
   PageProfileRoutedRuntime,
   adoptMtcompatRuntimeFromPage,
+  createMtcompatRuntimeClient,
   resolveMtAgentRuntimeSource,
 } from "../src/main/direct-foundry-runtime.js";
 import { DESKTOP_FOUNDRY_ACTIONS, MTCOMPAT_RUNTIME_ACTIONS } from "../src/main/foundry-tool-policy.js";
@@ -740,6 +741,36 @@ test("adoptMtcompatRuntimeFromPage rebuilds the mtcompat client from the page so
   assert.equal(value.action, "battleContext");
 });
 
+test("adoptMtcompatRuntimeFromPage delegates to the live handle when minified source needs an outer closure", async t => {
+  const minifiedSource = `// mt-agent-runtime v0.9.0
+(async function (action) { return f({ action, runtime: { name: "mt-agent-runtime", protocolVersion: 3 } }); })`;
+  const routed = new PageProfileRoutedRuntime({
+    foundry: createRuntime(),
+    mtcompat: createMtcompatRuntime(),
+    getActiveProfileId: () => "mtcompat",
+  });
+  let injectionSource = null;
+  const outcome = await adoptMtcompatRuntimeFromPage({
+    routed,
+    readPageSource: async () => ({ ok: true, source: minifiedSource, handle: true }),
+    createRuntime: source => {
+      injectionSource = source;
+      return createMtcompatRuntime({ runtimeSource: source });
+    },
+    log: () => {},
+  });
+  assert.equal(outcome.adopted, true);
+  assert.equal(outcome.source, minifiedSource);
+  assert.match(injectionSource, /globalThis\.__MT_AGENT_RUNTIME__/);
+  assert.doesNotMatch(injectionSource, /return f\(/);
+
+  globalThis.__MT_AGENT_RUNTIME__ = async action => ({ action, runtime: { name: "mt-agent-runtime", protocolVersion: 3 } });
+  t.after(() => { delete globalThis.__MT_AGENT_RUNTIME__; });
+  const value = await routed.call("worldInfo", {});
+  assert.equal(value.action, "worldInfo");
+  assert.equal(value.runtime.protocolVersion, 3);
+});
+
 test("adoptMtcompatRuntimeFromPage can install the runtime when no file source was delivered", async () => {
   const routed = new PageProfileRoutedRuntime({
     foundry: createRuntime(),
@@ -808,4 +839,44 @@ test("page runtime adoption keeps the installed runtime on every failure path", 
 
   // 全程既有 client 未动:调用照常走打包拷贝的源(v2)。
   assert.equal((await routed.call("worldInfo", {})).runtime.protocolVersion, 2);
+});
+
+test("createMtcompatRuntimeClient pins the mtcompat profile and its extended action allowlist", async () => {
+  const pageState = {
+    url: "https://mt.example.test/user-files/compat/play.html",
+    path: "/user-files/compat/play.html",
+    detected: true,
+    ready: true,
+    gm: true,
+    user: "gm",
+    world: "cos",
+    hasGame: true,
+    hasMtAgentRuntime: true,
+  };
+  const contentsWith = state => ({
+    isDestroyed: () => false,
+    on() {},
+    off() {},
+    executeJavaScript: async code => (code.includes("hasMtAgentRuntime")
+      ? state
+      : Function(`"use strict"; return (${code});`)()),
+  });
+  const runtimeSource = `(async function (action) { return { action, runtime: { name: "mt-agent-runtime", protocolVersion: 3 } }; })`;
+  const client = createMtcompatRuntimeClient({ runtimeSource, getWebContents: () => contentsWith(pageState) });
+  for (const action of ["sceneImport", "pageEval", "navigateToLobby"]) {
+    assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes(action), false, `${action} stays out of the foundry allowlist`);
+    const value = await client.call(action, {}, { readyTimeoutMs: 25, executionTimeoutMs: 1_000 });
+    assert.equal(value.action, action);
+  }
+
+  // /game is not the mtcompat game path: preflight rejects under the mtcompat profile.
+  const insideFoundryPage = createMtcompatRuntimeClient({
+    runtimeSource,
+    getWebContents: () => contentsWith({ ...pageState, path: "/game", url: "https://mt.example.test/game" }),
+  });
+  await assert.rejects(insideFoundryPage.call("worldInfo", {}, { readyTimeoutMs: 0 }), error => {
+    assert.equal(error.code, "FOUNDRY_SDK_FOUNDRY_NOT_GAME");
+    assert.equal(error.details.profile, "mtcompat");
+    return true;
+  });
 });

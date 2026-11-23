@@ -150,7 +150,9 @@ export async function readFoundryPageState(
 // 调用方(main.js 的面板就绪路径)按 mtcompat 档与 hasMtAgentRuntime 决定。
 const PAGE_RUNTIME_SOURCE_EXPRESSION = `(() => {
   const source = window.__MT_AGENT_RUNTIME_SOURCE__;
-  return typeof source === "string" ? source : null;
+  return typeof source === "string"
+    ? { source, handle: typeof window.__MT_AGENT_RUNTIME__ === "function" }
+    : null;
 })()`;
 
 /**
@@ -163,7 +165,7 @@ const PAGE_RUNTIME_SOURCE_EXPRESSION = `(() => {
  * - 其余(导航/超时/aborted/error):页面不可读,值得落日志。
  * @param {any} webContents
  * @param {{ timeoutMs?: number, signal?: AbortSignal }} [options]
- * @returns {Promise<{ ok: true, source: string } | { ok: false, reason: string, error?: string }>}
+ * @returns {Promise<{ ok: true, source: string, handle: boolean } | { ok: false, reason: string, error?: string }>}
  */
 export async function readPageAgentRuntimeSource(
   webContents,
@@ -176,7 +178,7 @@ export async function readPageAgentRuntimeSource(
   if (outcome.status !== "completed") {
     return { ok: false, reason: outcome.status, ...(outcome.error ? { error: outcome.error } : {}) };
   }
-  const source = typeof outcome.value === "string" ? outcome.value : "";
+  const source = typeof outcome.value?.source === "string" ? outcome.value.source : "";
   if (!source.trim()) return { ok: false, reason: "absent" };
-  return { ok: true, source };
+  return { ok: true, source, handle: outcome.value?.handle === true };
 }

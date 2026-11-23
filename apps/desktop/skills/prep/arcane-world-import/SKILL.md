@@ -1,11 +1,11 @@
 ---
 name: arcane-world-import
-description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 的 mt compat 云端战役（奥法地图大厅）。当用户说“把这个世界传到云端/导入云端/上传到奥法地图/在云端开这个世界/帮我在大厅里导入世界”，或给出当前备团目录里的世界 zip 要求导入时使用。世界包必须位于当前备团工作目录（Desktop 镜像缓存由工具内部处理）；导入走大厅 typed 工具，不收账号密码；旧版 dnd5e（<5.3.0）按大厅规则拒绝并指引升级；本地 FVTT 安装与运维归 arcane-fvtt-setup/ops。
+description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 的 mt compat 云端战役（奥法地图大厅）。当用户说“把这个世界传到云端/导入云端/上传到奥法地图/在云端开这个世界/帮我在大厅里导入世界”，或点名本机世界 zip 要求导入时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；导入走大厅 typed 工具，不收账号密码；旧版 dnd5e（<5.3.0）按大厅规则拒绝并指引升级；本地 FVTT 安装与运维归 arcane-fvtt-setup/ops。
 ---
 
 # FVTT 世界 → mt compat 云端战役
 
-把当前备团目录里的 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。你和用户只面对 `foundry_open` 与 `foundry_lobby_*` 这几个 typed 工具；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
+把本机 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。你和用户只面对 `foundry_open` 与 `foundry_lobby_*` 这几个 typed 工具；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 
 ## 用户交互预算
 
@@ -19,8 +19,9 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 ## 文件边界（硬规则）
 
-- 只处理**当前备团工作目录（agent cwd）内**的 zip，以及 Desktop 已下载并管理的镜像缓存；后者由工具内部识别，你只传工具展示/返回的路径。
-- 用户给出 cwd 之外的路径时，明确拒绝：“工具只能读取当前备团目录和 ArcaneDesk 自己缓存的世界包，目录外的文件读不了。”不要读取它，不要申请目录外授权，也不要让用户把包复制到任意临时目录。用户可以把世界包放进当前备团目录，或使用 Desktop 已缓存的世界包。
+- 接受**当前备团工作目录（agent cwd）内**的 zip、Desktop 已下载并管理的镜像缓存，以及**用户明确点名的本机文件**。用户给出 cwd 之外的准确文件路径并要求导入，就是授权你读取并暂存这个文件，不再拒绝或要求用户手动复制。
+- 目录外文件先检查为普通 `.zip`，再用平台原生命令复制到 cwd 内本次任务专用子目录：Windows 用 `Copy-Item -NoClobber`，macOS/Linux 用 `cp -n`。不得覆盖已有文件，复制后核对源文件与副本的字节数及 SHA-256 一致；源文件不动，副本路径写进报告。随后把**副本路径**交给 `foundry_lobby_import_start`，不要直接传目录外路径。
+- 暂存只针对用户点名的单个文件，不扩展成整目录信任。不要扫描磁盘、复制整个目录、读取无关配置/凭据，或用 shell 直接调云端接口。工具原有的 realpath、普通文件和读取稳定性检查保持不变。
 - 只接受普通 `.zip` 文件；目录形态的世界不走这条通道。路径不存在、不是普通文件、读取中被改动都由工具在写前拒绝，照实报告，零重试。
 
 ## 工具面
@@ -47,7 +48,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 ## 主流程
 
-1. **定位世界包**：在当前备团目录用只读的 `ls`/`find` 找 `.zip`，优先用户点名的文件；多个候选时取用户点名的，没点名就取最近修改的。不要递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
+1. **定位世界包**：用户点名的文件优先；在 cwd 之外时，按“文件边界”先自行暂存并核对副本，不再要求用户手动复制。未点名时只在当前备团目录用只读的 `ls`/`find` 找 `.zip`，取最近修改的，不递归扫描整块磁盘。不确定是不是世界包时不要猜，交给 `import_start` 嗅探，计划里的世界标题会让用户发现选错。
 2. **打开大厅**：`foundry_open` 传入大厅地址。当前已经开着某个战役的游戏页时，先用上节的 `foundry_lobby_return({})` 回大厅，不要直接 `foundry_open` 大厅地址。若右侧出现 Keycloak 登录屏，结束本轮，请用户直接在右侧面板登录/注册；用户说登录好了再继续。**绝不索取密码、验证码或 token**。确认后从下一步继续或重试原大厅操作，不用 `foundry_open` 轮询，不用 `world_status` 检查大厅，也不在 `lobby.html` 或 `/auth/**` 调用 `foundry_page_eval`、`foundry_screenshot`。
 3. **确认本次规则**：调用 `foundry_lobby_rulesets_list`，把当前返回的 `label` 和支持级别展示给用户，针对《世界名》询问希望使用哪一项，并说明战役创建后不可改。用户已经明确选择时核对其 `id` 在返回列表中即可，不重复追问；不在列表中时不能导入，照实给出当前支持项。`world.json`、镜像简介、模组宣传、系统版本和大厅预选都不能代替用户选择，skill 自身也不预设只有 DND 2014/2024。
 4. **启动导入**：调用 `foundry_lobby_import_start`：
@@ -68,7 +69,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 |---|---|
 | `LOGIN_REQUIRED` | 大厅未登录：结束本轮，请用户在右侧面板自己登录；确认后重试 `import_start`，不要用 `foundry_open` 轮询。 |
 | `PROFILE_MISMATCH` / `CAPABILITY_UNAVAILABLE` | 页面不是受信 mt compat 大厅，或 App/页面 runtime 版本不足：重开大厅；仍不行就让用户更新 ArcaneDesk，不要降级到页面脚本或裸 HTTP。 |
-| `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 源文件不在 cwd/镜像缓存、不存在、不是普通文件、为空、读取中被改动或不可读：按“文件边界”解释，零写入；修正后重新调用，不沿用旧路径。 |
+| `FILE_OUTSIDE_FENCE` / `FILE_NOT_FOUND` / `FILE_NOT_REGULAR` / `FILE_EMPTY` / `FILE_CHANGED` / `FILE_NOT_READABLE` | 目录外路径直接传给了工具：按“文件边界”先自行暂存用户点名的文件，再传副本，不让用户手动复制。其它情况是文件不存在、不是普通文件、为空、读取中被改动或不可读：修正后重新调用，不沿用旧路径。 |
 | `TARGET_UNAVAILABLE` / `TARGET_CHANGED` / `TARGET_TIMEOUT` | 大厅页被关闭、切走或导航打断：结果未知时不重放；重开大厅后查状态对账。 |
 | `foundry_lobby_return` 报错 | `CAPABILITY_UNAVAILABLE` = 页面/runtime 版本不足：重开大厅或让用户更新 App；`PROFILE_MISMATCH` = 当前不是 ready 的 mtcompat 游戏页（或 URL 缺 `?campaign=`），从大厅重新打开该战役；`TARGET_CHANGED` = 面板没有落到预期大厅：不重放，先 `foundry_open` 确认当前页面再按实际情况重来；`LOGIN_REQUIRED` = 结束本轮让用户登录；`JOB_INDETERMINATE` = 结果无法确认，不要自动重放。 |
 | `JOB_NOT_FOUND` | 这个 job 不在当前 App 会话里（App 重启或页面已换）：不要重放；回大厅查战役与批次状态。 |
