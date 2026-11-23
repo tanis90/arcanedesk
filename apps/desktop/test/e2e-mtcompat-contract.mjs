@@ -35,8 +35,10 @@
 //   search, actor create/read/update, conditions set, image (PNG/JPEG/WebP upload,
 //   Actor/Item/JournalEntryPage apply, syncPlacedTokens across two Scenes), scene import
 //   (create/update), scene apply (create, Token update, activate, delete, local
-//   background), actor grant items, advancement plan + actor advance, and non-combat
-//   narrative executeAction (cantrip plus a real 1st-level slot). pageEval is used only
+//   background), scene portal (pair lifecycle, stale-read rejection, Token transfer,
+//   real player visibility and GM gating), actor grant items, advancement plan +
+//   actor advance, and non-combat narrative executeAction (cantrip plus a real
+//   1st-level slot). pageEval is used only
 //   for native fixtures (Folder, Item, JournalEntryPage, canvas-rendered image bytes,
 //   Token selection) and for the two backend probes.
 import path from "node:path";
@@ -67,6 +69,8 @@ const KEEP = args.includes("--keep");
 const WATCHDOG_MS = Math.max(60_000, Number(option("watchdog-ms", "900000")) || 900_000);
 const GM_USER = process.env.MT_USER ?? "spike-gm";
 const GM_PASS = process.env.MT_PASS ?? "";
+const PLAYER_USER = process.env.MT_PLAYER_USER ?? null;
+const PLAYER_PASS = process.env.MT_PLAYER_PASS ?? "";
 const RUN_ID = `${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}`;
 const CAMPAIGN_PREFIX = "[desktop-contract-mtcompat-image]";
 const CAMPAIGN_NAME = `${CAMPAIGN_PREFIX} ${RUN_ID}`;
@@ -415,7 +419,7 @@ async function main() {
 
     const tools = new Map(host.buildTools().map(tool => [tool.name, tool]));
     const required = ["world_status", "foundry_page_eval", "foundry_image", "foundry_scene_get",
-      "foundry_scene_import", "foundry_actor_get", "foundry_actor_create", "foundry_actor_update",
+      "foundry_scene_import", "foundry_scene_portal", "foundry_actor_get", "foundry_actor_create", "foundry_actor_update",
       "foundry_conditions_set", "foundry_static_context", "foundry_play_context",
       "foundry_compendium_browse", "foundry_content_search"];
     check("setup.tool-pool", required.every(name => tools.has(name)), {
@@ -901,6 +905,217 @@ async function main() {
     });
     if (applyBackgroundUrl) imageProbes.push({ kind: "scene-background", url: applyBackgroundUrl });
 
+    // ---- scene portals: pair lifecycle, Token transfer and real player visibility ----
+    const portalActor = await invoke("foundry_actor_create", {
+      source: { kind: "blank", actorType: "npc" }, name: `Contract Portal ${RUN_ID}`,
+    });
+    const portalActorUuid = portalActor.details?.verification?.[0]?.actorUuid;
+    const portalSource = await invoke("foundry_scene_apply", {
+      operation: "create",
+      scene: { name: `Contract Portal Source ${RUN_ID}`, active: true, width: 1600, height: 1200,
+        grid: { type: 1, size: 100, distance: 5, units: "ft" } },
+      tokens: { create: [{ actorUuid: portalActorUuid, x: 100, y: 100, actorLink: false }] },
+    });
+    const portalTarget = await invoke("foundry_scene_apply", {
+      operation: "create",
+      scene: { name: `Contract Portal Target ${RUN_ID}`, width: 1600, height: 1200,
+        grid: { type: 1, size: 100, distance: 5, units: "ft" } },
+    });
+    const sourceSceneUuid = portalSource.details?.verification?.[0]?.sceneUuid;
+    const targetSceneUuid = portalTarget.details?.verification?.[0]?.sceneUuid;
+    const sourceSceneId = sourceSceneUuid?.startsWith("Scene.") ? sourceSceneUuid.slice(6) : null;
+    const targetSceneId = targetSceneUuid?.startsWith("Scene.") ? targetSceneUuid.slice(6) : null;
+    const beforePairRead = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["portals", "tokens"] });
+    const sourceTokenUuid = beforePairRead.details?.placeables?.tokens?.[0]?.uuid;
+    const sourceTokenId = sourceTokenUuid?.split(".Token.").at(-1) ?? null;
+    const pair = await invoke("foundry_scene_portal", {
+      operation: "create", sourceSceneUuid, targetSceneUuid,
+      sourcePoint: { x: 200, y: 200 }, targetPoint: { x: 400, y: 400 },
+      name: "Contract Portal", playerVisible: false,
+    });
+    const sourcePortalId = pair.details?.sourcePortalId;
+    const targetPortalId = pair.details?.targetPortalId;
+    check("portal.create-pair", pair.details?.status === "completed"
+      && typeof pair.details?.pairId === "string" && typeof sourcePortalId === "string" && typeof targetPortalId === "string", {
+      status: pair.details?.status, code: pair.details?.code, message: pair.details?.message,
+      pairId: pair.details?.pairId, sourcePortalId, targetPortalId,
+    });
+    const staleDelete = await invoke("foundry_scene_portal", {
+      operation: "delete", sceneUuid: sourceSceneUuid, portalId: sourcePortalId, readRef: beforePairRead.details?.readRef,
+    });
+    check("portal.stale-read-rejected", staleDelete.details?.status === "rejected"
+      && staleDelete.details?.code === "READ_REF_STALE", {
+      status: staleDelete.details?.status, code: staleDelete.details?.code, message: staleDelete.details?.message,
+    });
+    const targetPairRead = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["portals"] });
+    check("portal.read-mirrored-pair", targetPairRead.details?.placeables?.portals?.length === 1
+      && targetPairRead.details.placeables.portals[0].targetPortalId === sourcePortalId
+      && targetPairRead.details.placeables.portals[0].targetSceneId === sourceSceneId
+      && targetPairRead.details.placeables.portals[0].playerVisible === false, {
+      portals: targetPairRead.details?.placeables?.portals,
+    });
+    const beforeMoveRead = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["tokens"] });
+    const tokenShift = await invoke("foundry_scene_apply", {
+      operation: "update", sceneUuid: sourceSceneUuid, readRef: beforeMoveRead.details?.readRef,
+      tokens: { update: [{ tokenId: sourceTokenId, changes: { x: 120 } }] },
+    });
+    const staleTeleport = await invoke("foundry_scene_portal", {
+      operation: "teleport", tokenUuid: sourceTokenUuid, targetSceneUuid, targetPortalId,
+      readRef: beforeMoveRead.details?.readRef,
+    });
+    check("portal.stale-token-read-rejected", tokenShift.details?.status === "completed"
+      && staleTeleport.details?.status === "rejected" && staleTeleport.details?.code === "READ_REF_STALE", {
+      shiftStatus: tokenShift.details?.status, status: staleTeleport.details?.status,
+      code: staleTeleport.details?.code, message: staleTeleport.details?.message,
+    });
+    const currentMoveRead = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["tokens"] });
+    const moved = await invoke("foundry_scene_portal", {
+      operation: "teleport", tokenUuid: sourceTokenUuid, targetSceneUuid, targetPortalId,
+      readRef: currentMoveRead.details?.readRef,
+    });
+    const sourceAfterMove = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["tokens"] });
+    const targetAfterMove = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["tokens"] });
+    check("portal.teleport-preserves-token-id-and-scene-active", moved.details?.status === "completed"
+      && sourceAfterMove.details?.placeables?.tokens?.length === 0
+      && targetAfterMove.details?.placeables?.tokens?.length === 1
+      && targetAfterMove.details.placeables.tokens[0].id === sourceTokenId
+      && targetAfterMove.details.placeables.tokens[0].uuid === `Scene.${targetSceneId}.Token.${sourceTokenId}`
+      && targetAfterMove.details.placeables.tokens[0].x === 350 && targetAfterMove.details.placeables.tokens[0].y === 350
+      && sourceAfterMove.details?.active === true && targetAfterMove.details?.active === false, {
+      status: moved.details?.status, code: moved.details?.code, message: moved.details?.message,
+      sourceTokens: sourceAfterMove.details?.placeables?.tokens,
+      targetTokens: targetAfterMove.details?.placeables?.tokens,
+    });
+    const deleteRead = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["portals"] });
+    const deleted = await invoke("foundry_scene_portal", {
+      operation: "delete", sceneUuid: sourceSceneUuid, portalId: sourcePortalId, readRef: deleteRead.details?.readRef,
+    });
+    const sourceAfterDelete = await invoke("foundry_scene_get", { sceneUuid: sourceSceneUuid, include: ["portals"] });
+    const targetAfterDelete = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["portals"] });
+    check("portal.delete-pair", deleted.details?.status === "completed"
+      && sourceAfterDelete.details?.placeables?.portals?.length === 0
+      && targetAfterDelete.details?.placeables?.portals?.length === 0, {
+      status: deleted.details?.status, code: deleted.details?.code, message: deleted.details?.message,
+    });
+
+    const samePair = await invoke("foundry_scene_portal", {
+      operation: "create", sourceSceneUuid: targetSceneUuid, targetSceneUuid,
+      sourcePoint: { x: 600, y: 600 }, targetPoint: { x: 800, y: 800 },
+      sourceScale: 1.5, targetScale: 0.75, name: "same-scene-portal",
+    });
+    const sameSceneRead = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["portals", "tokens"] });
+    const samePortals = sameSceneRead.details?.placeables?.portals?.filter(portal => portal.pairId === samePair.details?.pairId) ?? [];
+    check("portal.same-scene-scaled-pair", samePair.details?.status === "completed" && samePortals.length === 2
+      && samePortals.find(portal => portal.id === samePair.details?.sourcePortalId)?.scale === 1.5
+      && samePortals.find(portal => portal.id === samePair.details?.targetPortalId)?.scale === 0.75, {
+      status: samePair.details?.status, code: samePair.details?.code, message: samePair.details?.message, portals: samePortals,
+    });
+    const sameTokenUuid = sameSceneRead.details?.placeables?.tokens?.[0]?.uuid;
+    const sameMoved = await invoke("foundry_scene_portal", {
+      operation: "teleport", tokenUuid: sameTokenUuid, targetSceneUuid,
+      targetPortalId: samePair.details?.targetPortalId, readRef: sameSceneRead.details?.readRef,
+    });
+    const sameAfterMove = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["tokens"] });
+    check("portal.same-scene-teleport", sameMoved.details?.status === "completed"
+      && sameAfterMove.details?.placeables?.tokens?.length === 1
+      && sameAfterMove.details.placeables.tokens[0].uuid === sameTokenUuid
+      && sameAfterMove.details.placeables.tokens[0].x === 750 && sameAfterMove.details.placeables.tokens[0].y === 750
+      && sameAfterMove.details?.active === false, {
+      status: sameMoved.details?.status, code: sameMoved.details?.code, message: sameMoved.details?.message,
+      tokens: sameAfterMove.details?.placeables?.tokens,
+    });
+    const sameDeleteRead = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["portals"] });
+    const sameDeleted = await invoke("foundry_scene_portal", {
+      operation: "delete", sceneUuid: targetSceneUuid, portalId: samePair.details?.sourcePortalId,
+      readRef: sameDeleteRead.details?.readRef,
+    });
+    const sameAfterDelete = await invoke("foundry_scene_get", { sceneUuid: targetSceneUuid, include: ["portals"] });
+    check("portal.same-scene-delete", sameDeleted.details?.status === "completed"
+      && sameAfterDelete.details?.placeables?.portals?.length === 0, {
+      status: sameDeleted.details?.status, code: sameDeleted.details?.code, message: sameDeleted.details?.message,
+      portals: sameAfterDelete.details?.placeables?.portals,
+    });
+
+    if (PLAYER_USER && PLAYER_PASS) {
+      const hiddenPair = await invoke("foundry_scene_portal", {
+        operation: "create", sourceSceneUuid, targetSceneUuid,
+        sourcePoint: { x: 200, y: 200 }, targetPoint: { x: 400, y: 400 },
+        name: "hidden-from-player", playerVisible: false,
+      });
+      check("portal.hidden-pair-created", hiddenPair.details?.status === "completed", {
+        status: hiddenPair.details?.status, code: hiddenPair.details?.code, message: hiddenPair.details?.message,
+      });
+      await invoke("foundry_page_eval", {
+        code: `const scene = [...game.scenes].find(value => value.uuid === ${JSON.stringify(sourceSceneUuid)});
+          await scene.update({ navigation: true }); return { navigation: scene.navigation };`,
+      });
+      const fullCampaign = await api.get(`/api/campaigns/${campaignId}`);
+      const playerAuth = await login(PLAYER_USER, PLAYER_PASS);
+      const playerApi = mtApi(playerAuth.token);
+      await playerApi.put(`/api/campaigns/join/${fullCampaign.joinId}`, {});
+      const playerContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } });
+      const playerPage = await playerContext.newPage();
+      await playerPage.addInitScript(([token, id]) => {
+        sessionStorage.setItem("mt.session", JSON.stringify({ access_token: token, refresh_token: null }));
+        sessionStorage.setItem("mt.campaign", id);
+      }, [playerAuth.token, campaignId]);
+      await playerPage.goto(`${BASE}/play.html?campaign=${encodeURIComponent(campaignId)}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      const playerReady = await playerPage.waitForFunction(() => window.__MT_READY__ === true
+        && typeof window.__MT_AGENT_RUNTIME__ === "function", undefined, { timeout: 180_000, polling: 300 }).then(() => true, () => false);
+      check("player.page-ready-real-account", playerReady, { ready: playerReady });
+      const playerContents = createPageContents(playerPage);
+      const playerClient = createMtcompatRuntimeClient({ runtimeSource: compatRuntime.source, getWebContents: () => playerContents });
+      const playerRuntime = new PageProfileRoutedRuntime({
+        foundry: foundryRuntime, mtcompat: playerClient, getActiveProfileId: () => PAGE_PROFILES.mtcompat.id,
+      });
+      const playerHost = new AgentHost({
+        foundryRuntime: playerRuntime,
+        getFoundryView: () => ({ webContents: playerContents }),
+        openFoundry: async () => ({ ok: true, summary: "player contract" }),
+        sendToRenderer: () => {}, log: () => {},
+        profile: { mode: "prep", getCwd: () => prepDir },
+        getPanelProfileId: () => PAGE_PROFILES.mtcompat.id,
+        operationStorageDir: path.join(workDir, "player"),
+        taskStorageDir: path.join(workDir, "player-tasks"),
+      });
+      const playerInput = await captureFoundryInputContext(playerContents);
+      playerHost.taskCoordinator = () => ({
+        currentInputBinding: () => ({ taskId: "contract-player", inputId: "player-input", metadata: Promise.resolve(playerInput) }),
+      });
+      const playerTools = new Map(playerHost.buildTools().map(tool => [tool.name, tool]));
+      const playerInvoke = async (name, params) => {
+        const result = await playerTools.get(name).execute(`player-${name}`, params);
+        return { details: result.details, text: String(result.content?.[0]?.text ?? ""), isError: Boolean(result.isError) };
+      };
+      const playerStatus = await playerInvoke("world_status", {});
+      check("player.world-status-gm-boundary", playerStatus.isError || playerStatus.details?.status === "rejected"
+        || /GM user is required|not a GM|ACTION_FORBIDDEN|FOUNDRY_NOT_GM/.test(playerStatus.text), {
+        status: playerStatus.details?.status, code: playerStatus.details?.code, text: playerStatus.text.slice(0, 240),
+      });
+      const playerWrite = await playerInvoke("foundry_scene_portal", {
+        operation: "create", sourceSceneUuid, targetSceneUuid,
+        sourcePoint: { x: 200, y: 200 }, targetPoint: { x: 400, y: 400 }, name: "player-forbidden",
+      });
+      check("player.portal-write-forbidden", playerWrite.details?.status === "rejected"
+        && ["ACTION_FORBIDDEN", "FOUNDRY_NOT_GM"].includes(playerWrite.details?.code), {
+        status: playerWrite.details?.status, code: playerWrite.details?.code, message: playerWrite.details?.message,
+      });
+      const playerVisibility = await playerPage.evaluate(async ({ uuid }) => {
+        const scene = [...game.scenes].find(value => value.uuid === uuid);
+        const mod = await import(new URL("scene-portals.mjs", document.baseURI).href);
+        return {
+          isGM: game.user?.isGM,
+          rawPortals: mod.scenePortals(scene).length,
+          visiblePortals: mod.visiblePortalsFor(mod.scenePortals(scene), game.user).length,
+        };
+      }, { uuid: sourceSceneUuid });
+      check("player.hidden-portal-not-visible", playerVisibility.isGM === false
+        && playerVisibility.rawPortals === 1 && playerVisibility.visiblePortals === 0, playerVisibility);
+      await playerContext.close();
+    } else {
+      report.notCovered.push("Real player portal visibility and GM write gating: set MT_PLAYER_USER and MT_PLAYER_PASS to enable");
+    }
+
     // ---- advancement: Fighter + Human from the real compendium -----------
     const classIndex = await invoke("foundry_compendium_browse", { scope: "compendium", type: "class", rules: "2024" });
     const raceIndex = await invoke("foundry_compendium_browse", { scope: "compendium", type: "race", rules: "2024" });
@@ -1299,6 +1514,8 @@ async function main() {
       actorAdvanceAtLevelOne: true,
       actorGrantItems: true,
       sceneApplyTokenLifecycle: true,
+      scenePortals: true,
+      realPlayer: Boolean(PLAYER_USER && PLAYER_PASS),
       executeActionNarrative: true,
       electronUi: false,
     };

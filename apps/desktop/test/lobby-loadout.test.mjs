@@ -82,10 +82,10 @@ test("foundry_open loads the mtcompat lobby tools for the next request and repor
   h.setPanelProfile("mtcompat");
   const result = await h.host.buildTools().find(tool => tool.name === "foundry_open").execute("open-1", {});
   assert.equal(result.details.profile, "mtcompat");
-  assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import"]));
+  assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import", "foundry_scene_portal"]));
   assert.equal(h.session.calls.length, beforeCalls + 1);
   for (const name of LOBBY) assert.equal(h.session.active.includes(name), true, name);
-  assert.match(result.content[0].text, /Activated for the next model request \(11\)/);
+  assert.match(result.content[0].text, /Activated for the next model request \(12\)/);
 });
 
 test("opening plain Foundry first activates no lobby tools", async () => {
@@ -281,7 +281,7 @@ test("a real Pi session declares lobby tools only on the request after foundry_o
   host.getPanelProfileId = () => "mtcompat";
   const refreshed = await host.refreshToolLoadout("mtcompat");
   assert.equal(refreshed.changed, true);
-  assert.deepEqual(new Set(refreshed.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import"]));
+  assert.deepEqual(new Set(refreshed.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import", "foundry_scene_portal"]));
   assert.equal(session.getActiveToolNames().some(name => LOBBY.has(name)), true);
 
   await session.prompt("after");

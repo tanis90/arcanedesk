@@ -47,7 +47,7 @@ const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_execute_action", "foundry_conditions_set"]),
   prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
-    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_scene_import", "foundry_scene_portal", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
     ...LOBBY_TOOL_NAMES,
     "web_search", "web_fetch"]),
 });
@@ -79,14 +79,15 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
 
 /**
  * mtcompat 档 client 的 runtime 动作白名单（A3 + 方案 B + sceneImport）：foundry 面 +
- * pageEval + navigateToLobby + sceneImport。pageEval/navigateToLobby 是 arcaneVTT 侧
- * runtime 的扩展 action；sceneImport（整场景 JSON 导入）同样只随 mtcompat client 装配
- * ——四者都不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里，只进本表，foundry 档
+ * pageEval + navigateToLobby + sceneImport + scenePortal。pageEval/navigateToLobby 是
+ * arcaneVTT 侧的扩展 action；sceneImport/scenePortal 同样只随 mtcompat client 装配
+ * ——都不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里，只进本表，foundry 档
  * client 的白名单与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK
  * 既有路径。navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅
- * foundry_lobby_return 调用；sceneImport 只由 foundry_scene_import 调用。
+ * foundry_lobby_return 调用；sceneImport 只由 foundry_scene_import 调用；scenePortal
+ * 只由 foundry_scene_portal 调用。
  */
-export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby"]);
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "scenePortal", "pageEval", "navigateToLobby"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio

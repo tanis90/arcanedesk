@@ -49,6 +49,7 @@ const grant = exact({ uuid: Type.Optional(ref()), packId: Type.Optional(ref()), 
   quantity: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })), equipped: Type.Optional(Type.Boolean()) });
 const dataImage = Type.Union([exact({ dataPath: Type.String({ minLength: 1, maxLength: 4096 }) }),
   exact({ sourcePath: Type.String({ minLength: 1, maxLength: 4096 }) })]);
+const portalPoint = exact({ x: Type.Number(), y: Type.Number() });
 const placementFields = { x: Type.Optional(Type.Number()), y: Type.Optional(Type.Number()), name: Type.Optional(ref()),
   hidden: Type.Optional(Type.Boolean()), disposition: Type.Optional(Type.Union([Type.Literal(-1), Type.Literal(0), Type.Literal(1)])),
   width: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), height: Type.Optional(Type.Number({ exclusiveMinimum: 0 })), elevation: Type.Optional(Type.Number()) };
@@ -103,7 +104,7 @@ export function createFoundryTools(host) {
       name: "foundry_scene_get", label: "Read Scene",
       description: "Read an exact Scene, including one not currently displayed. Returns compact metadata and requested placeable pages plus a session readRef. Include tokens before changing or deleting existing Tokens. Prep-only.",
       parameters: exact({ sceneUuid: ref(), include: Type.Optional(Type.Array(Type.Union([Type.Literal("tokens"), Type.Literal("walls"),
-        Type.Literal("lights"), Type.Literal("tiles"), Type.Literal("notes"), Type.Literal("sounds")]), { maxItems: 6, uniqueItems: true })),
+        Type.Literal("lights"), Type.Literal("tiles"), Type.Literal("notes"), Type.Literal("sounds"), Type.Literal("portals")]), { maxItems: 7, uniqueItems: true })),
         limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cursor: Type.Optional(ref()) }),
       execute: async (_id, params, signal) => textResult(await host.foundryServices().sceneRead(params, signal)),
     }),
@@ -138,6 +139,25 @@ export function createFoundryTools(host) {
           summary: `${params.operation} Scene from prep JSON${params.backgroundSourcePath ? " with background upload" : ""}`, args: params });
         if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
         return textResult(await host.foundryServices().importScene(params, binding, id, signal));
+      },
+    }),
+    defineTool({
+      name: "foundry_scene_portal", label: "Scene Portal",
+      description: "Create or delete a mirrored portal pair between two points in one Scene or across two Scenes, or teleport a Token through a portal using the page-native implementation. create needs sourceSceneUuid, targetSceneUuid, sourcePoint and targetPoint; name is optional, playerVisible defaults to false, and sourceScale/targetScale default to 1 (range 0.5..2). delete requires portalId and a readRef from foundry_scene_get with include portals. teleport requires tokenUuid, targetSceneUuid, targetPortalId and a readRef from the source Scene with include tokens. It preserves the Token _id and does not activate the target Scene. Partial/indeterminate receipts must not be replayed. Prep-only.",
+      parameters: Type.Union([
+        exact({ operation: Type.Literal("create"), sourceSceneUuid: ref(), targetSceneUuid: ref(),
+          sourcePoint: portalPoint, targetPoint: portalPoint, name: Type.Optional(ref()), playerVisible: Type.Optional(Type.Boolean()),
+          sourceScale: Type.Optional(Type.Number({ minimum: 0.5, maximum: 2 })), targetScale: Type.Optional(Type.Number({ minimum: 0.5, maximum: 2 })) }),
+        exact({ operation: Type.Literal("delete"), sceneUuid: ref(), portalId: ref(), readRef: ref() }),
+        exact({ operation: Type.Literal("teleport"), tokenUuid: ref(), targetSceneUuid: ref(), targetPortalId: ref(), readRef: ref() }),
+      ]),
+      executionMode: "sequential",
+      execute: async (id, params, signal) => {
+        const binding = host.taskCoordinator().currentInputBinding();
+        const approved = await host.maybeRequestApproval({ tool: "foundry_scene_portal",
+          summary: `${params.operation} portal${params.name ? ` ${params.name}` : ""}`, args: params });
+        if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
+        return textResult(await host.foundryServices().scenePortal(params, binding, id, signal));
       },
     }),
     defineTool({

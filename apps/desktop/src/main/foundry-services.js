@@ -75,6 +75,24 @@ export class FoundryServices {
     return this.writeContent("sceneApply", params, binding, toolCallId, signal);
   }
 
+  async scenePortal(params, binding, toolCallId, signal) {
+    const reject = (code, message) => ({ status: "rejected", code, message });
+    if (this.mode !== "prep") return reject("MODE_FORBIDDEN", "Scene portals are prep-only");
+    const replay = this.store.replay({ taskId: binding.taskId, toolCallId, action: "scenePortal", input: params });
+    if (replay) return replay;
+    if (!["create", "delete", "teleport"].includes(params?.operation)) return reject("INPUT_INVALID", "Scene portal operation must be create, delete or teleport");
+    const { readRef, ...values } = params;
+    const readState = readRef ? this.readRefs.get(readRef) : null;
+    if (params.operation !== "create" && !readState) return reject("READ_REF_INVALID", "Read this scene in the current session first");
+    if (params.operation === "delete" && readState.sceneUuid !== params.sceneUuid) return reject("READ_REF_INVALID", "Read this scene in the current session first");
+    const metadata = await binding.metadata;
+    if (!metadata?.world) return reject("INPUT_WORLD_UNAVAILABLE", "Connect and submit an instruction in a ready world");
+    return this.withPage(signal, () => this.store.execute({ taskId: binding.taskId, toolCallId, world: metadata.world,
+      action: "scenePortal", input: params, args: { ...values, world: metadata.world, ...(readState ? { readState } : {}) } },
+    ({ requestId }) => this.call("scenePortal", { ...values, world: metadata.world, ...(readState ? { readState } : {}), requestId },
+      { signal, executionTimeoutMs: 60_000 })));
+  }
+
   async writeContent(action, params, binding, toolCallId, signal) {
     const reject = (code, message) => ({ status: "rejected", code, message });
     if (this.mode !== "prep" || !["actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "sceneApply", "imageApply"].includes(action)) return reject("MODE_FORBIDDEN", "Content editing is prep-only");

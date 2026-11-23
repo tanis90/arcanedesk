@@ -301,3 +301,36 @@ test("scene import reads scene and background bytes under one combined lease and
   assert.equal((await service.importScene(params, binding, "aborted", controller.signal)).code, "ABORTED");
   assert.equal(calls, 1);
 });
+
+
+test("scene portal binds world and current read state, and replays only identical calls", async t => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-portal-service-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const calls = [];
+  const readState = { sceneUuid: "Scene.a", world: { origin: "https://f.test", id: "w" }, include: ["portals"], portals: [] };
+  const service = new FoundryServices({ sessionId: "portal", directory, mode: "prep",
+    withPage: async (_signal, fn) => fn(),
+    call: async (action, args) => {
+      calls.push({ action, args });
+      if (action === "sceneRead") return { sceneUuid: "Scene.a", readState };
+      return { status: "completed", steps: [], verification: [], warnings: [] };
+    } });
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "w" } }) };
+  const read = await service.sceneRead({ sceneUuid: "Scene.a", include: ["portals"] });
+  const params = { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.b",
+    sourcePoint: { x: 10, y: 20 }, targetPoint: { x: 30, y: 40 }, name: "stairs" };
+  const created = await service.scenePortal(params, binding, "create");
+  assert.equal(created.status, "completed");
+  assert.equal(calls[1].action, "scenePortal");
+  assert.equal(calls[1].args.world.id, "w");
+  assert.equal(calls[1].args.requestId, created.operationRef);
+  assert.equal("readRef" in calls[1].args, false);
+  const deleted = await service.scenePortal({ operation: "delete", sceneUuid: "Scene.a", portalId: "p1", readRef: read.readRef }, binding, "delete");
+  assert.equal(deleted.status, "completed");
+  assert.equal(calls[2].args.readState.sceneUuid, "Scene.a");
+  assert.equal("readRef" in calls[2].args, false);
+  assert.deepEqual(await service.scenePortal(params, binding, "create"), created);
+  assert.equal(calls.filter(call => call.action === "scenePortal").length, 2);
+  assert.equal((await service.scenePortal({ operation: "delete", sceneUuid: "Scene.other", portalId: "p1", readRef: read.readRef }, binding, "wrong")).code, "READ_REF_INVALID");
+  assert.equal(calls.filter(call => call.action === "scenePortal").length, 2);
+});

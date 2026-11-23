@@ -35,6 +35,42 @@ test("new schemas reject unknown keys and unbounded selectors", () => {
   assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json", readState: { sceneUuid: "Scene.s" } }), false);
 });
 
+test("scene portal schemas preserve pair operations and readRef requirements", async () => {
+  const tools = new Map(createFoundryTools({}).map(tool => [tool.name, tool]));
+  const valid = (name, params) => Value.Check(tools.get(name).parameters, params);
+  assert.equal(valid("foundry_scene_get", { sceneUuid: "Scene.a", include: ["portals", "tokens"] }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.b",
+    sourcePoint: { x: 10, y: 20 }, targetPoint: { x: 30, y: 40 }, playerVisible: true }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.a",
+    sourcePoint: { x: 10, y: 20 }, targetPoint: { x: 30, y: 40 }, sourceScale: 1.5, targetScale: 0.5 }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.b",
+    sourcePoint: { x: 10, y: 20 }, targetPoint: { x: 30, y: 40 }, sourceScale: 2.5 }), false);
+  assert.equal(valid("foundry_scene_portal", { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.b",
+    sourcePoint: { x: 10 }, targetPoint: { x: 30, y: 40 } }), false);
+  assert.equal(valid("foundry_scene_portal", { operation: "delete", sceneUuid: "Scene.a", portalId: "p1", readRef: "read" }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "delete", sceneUuid: "Scene.a", portalId: "p1" }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "teleport", tokenUuid: "Scene.a.Token.t",
+    targetSceneUuid: "Scene.b", targetPortalId: "p2", readRef: "read" }), true);
+  assert.equal(valid("foundry_scene_portal", { operation: "move", sceneUuid: "Scene.a" }), false);
+  let calls = 0;
+  const host = {
+    taskCoordinator: () => ({ currentInputBinding: () => ({}) }),
+    maybeRequestApproval: async () => true,
+    foundryServices: () => ({ scenePortal: async () => { calls++; return { status: "completed" }; } }),
+  };
+  const tool = createFoundryTools(host).find(value => value.name === "foundry_scene_portal");
+  for (const [id, params] of [
+    ["missing-point", { operation: "create", sourceSceneUuid: "Scene.a", targetSceneUuid: "Scene.b",
+      sourcePoint: { x: 10 }, targetPoint: { x: 30, y: 40 } }],
+    ["missing-read-ref", { operation: "delete", sceneUuid: "Scene.a", portalId: "p1" }],
+    ["unsupported-operation", { operation: "move", sceneUuid: "Scene.a" }],
+  ]) {
+    const result = await tool.execute(id, params);
+    assert.equal(result.details.code, "INPUT_INVALID", id);
+  }
+  assert.equal(calls, 0);
+});
+
 test("provider object schemas retain exact branch validation before host access or writes", async () => {
   const tools = new Map(createFoundryTools({}).map(tool => [tool.name, tool]));
   for (const [name, params] of [

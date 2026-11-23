@@ -79,6 +79,7 @@ App/SDK 可推进不依赖包改动的部分和兼容检查；依赖缺失时在
 | foundry_actor_advance | write | ✓ | — | 通过 dnd5e 原生 AdvancementManager 建立 Character 职业成长 |
 | foundry_scene_get | read | ✓ | — | 新增明确场景读取 |
 | foundry_scene_apply | write | ✓ | — | 新增场景元数据、背景、批量 Token |
+| foundry_scene_portal | write | ✓ | — | mtcompat 原生配对端点与同场景／跨场景 Token 传送 |
 | foundry_static_context | read | — | ✓ | 保留 combat_battle_context 的一次重上下文协议，扩展无战斗场景范围 |
 | foundry_execute_action | write | — | ✓ | 替换 combat_execute_turn，兼容战斗与叙事使用 |
 
@@ -331,7 +332,7 @@ Actor/embedded Item API 一次提交 → 可选额外物品去重授予 → 回�
 
 ### 5.7 foundry_scene_get
 
-输入 `sceneUuid`；可选 `include: [tokens,walls,lights,tiles,notes,sounds]`、limit/cursor。
+输入 `sceneUuid`；可选 `include: [tokens,walls,lights,tiles,notes,sounds,portals]`、limit/cursor。
 默认元数据、背景、尺寸、网格、active 与 readRef。显式读取目标 Scene，不依赖当前
 canvas。placeables 分类型分页，默认 50、最大 100，不把整张大场景返回。
 读类型可以宽于首版写类型。
@@ -387,6 +388,16 @@ update 的 readRef 同时保存 Scene 导入内容指纹，读取后墙灯等原
 以 `READ_REF_STALE` 拒绝，避免旧快照整份覆盖新修改。`thumb/active/_stats/folder/sort/navigation`
 是原生导入不会读取的派生或目录字段，不参与该指纹，后台缩略图更新不会误报冲突。
 partial/indeterminate 不自动重放。
+
+### 5.8b foundry_scene_portal（仅 mtcompat）
+
+复用页面 `scene-portals.mjs` 的成对端点、可见性和 Token 传送实现，不在 Desktop 复制第二套传送门规则，也不通过通用 pageEval 写入。仅备团且要求 GM；玩家是否可见由 `playerVisible` 控制，缺省为 false，不因此放开玩家的工具写权限。
+
+- `create` 输入 `sourceSceneUuid`、`targetSceneUuid`、`sourcePoint:{x,y}`、`targetPoint:{x,y}`，可选 `name/playerVisible` 与 `sourceScale/targetScale`（0.5–2，缺省 1）。两个 Scene UUID 可以相同，表示场景内两个不同落点；两端各写一个镜像端点，返回 `pairId/sourcePortalId/targetPortalId`。跨场景目标端写入失败时回滚源端，同场景由页面原生编排一次写入。相同 requestId 已完成恢复只回读，不重复添加。
+- `delete` 输入 `sceneUuid/portalId/readRef`。readRef 必须来自该 Scene 的 `foundry_scene_get(include:["portals"])`，端点身份、配对目标和可见性发生变化时以 `READ_REF_STALE` 拒绝；坐标和缩放调整不阻塞删除。页面原生编排删除两端镜像，跨场景失败回滚，同场景一次写入。
+- `teleport` 输入 `tokenUuid/targetSceneUuid/targetPortalId/readRef`。readRef 必须来自源 Scene 的 tokens 投影；运行时按源 Token 指纹拒绝过期读取。跨场景复用页面先建目标、再删源、失败回滚的编排；同场景只更新原 Token 坐标，不 create/delete 或克隆文档。两种路径都保留 Token `_id` 与文档数据，以目标端点为中心换算左上角并钳制场景边界，不激活目标 Scene。
+
+`foundry_scene_get` 的 include 新增 `portals`，沿用现有 placeables 分页。传送门端点中的 `targetSceneId` 是页面原生的场景内 ID，不冒充 `Scene.<id>` 完整 UUID。三个操作都经过现有世界绑定、审批、操作日志和四态回执；`partial/indeterminate` 不得自动重放。
 
 ### 5.8 foundry_image：独立图片与本地资源
 
