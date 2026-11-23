@@ -23,6 +23,14 @@ test("no panel or unready world stores null instead of guessing a selection", as
   assert.equal(await captureFoundryInputContext(page), null);
 });
 
+test("non-GM pages never create a write binding", async () => {
+  const page = new EventEmitter();
+  page.executeJavaScript = async expression => vm.runInNewContext(expression, {
+    game: { ready: true, user: { isGM: false }, world: { id: "player-world" } },
+  });
+  assert.equal(await captureFoundryInputContext(page), null);
+});
+
 test("navigation during capture cannot bind identity from the old world", async () => {
   const page = new EventEmitter();
   page.executeJavaScript = async () => {

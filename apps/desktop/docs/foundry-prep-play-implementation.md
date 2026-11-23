@@ -348,3 +348,21 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
   先前仅因命令不存在产生的 11 项环境失败已消除，未修改测试或产品行为。
 - 仍未验：Electron 窗口/面板 UI 与用户点击、战斗与自动（midi/掷骰）执行、启用 Ring 的 Token
   图片同步、取消/超时中断 typed 写入（单测覆盖）、lobby 工具（另有专用 harness）。
+
+## 京东云 Dev 非传送门验收增量（2026-11-23）
+
+- 本批不包含 agent 传送门工具或 runtime 改动；相关工作只保存在独立 WIP 分支，不进入本验收结论。
+  Dev `build-info.commit` 为 `3b373a28f1873d3586ef03dc2a3896e155e2a243`，对应 CI 成功；本批前端无新增改动。
+- 原生 API 合同 **26/26**：实际上传、私有 URL 换签、场景原生 JSON 导入与更新、图片目标、
+  叙事施法和状态读写全部通过，无失败或跳过。
+- Desktop 完整工具合同 **183/183**：既有图片、场景、角色和 runtime 链，以及真实玩家入团后的
+  私有大图读取均通过。玩家页面确认 `isGM=false`，经 `asset-sign` 读取 17,671,268 字节地图成功；
+  `world_status` 保留 GM 拒绝。typed 图片写入在非 GM 无世界绑定时以 `INPUT_WORLD_UNAVAILABLE`
+  于派发前拒绝，GM 前后回读图片一致，确认零副作用。报告 `realPlayer=true`、失败与环境失败均为空。
+- 非 GM 不建立写绑定已有 `foundry-input-context` 单测锁定。验收器补上异常记录，避免 `finally`
+  中的进程退出吞掉未预期异常而形成假绿；玩家宿主使用合法独立会话 ID，图片比较使用操作前实际值。
+- 真实 Electron 大厅 `real-lobby-mutate` 通过：原生 File 导入、选包 revision、拒绝零写、删除、
+  play→lobby 返回、返回后异步 ready、清理与会话注销均成功；`lobbyReadyAfterRealReturn=true`，
+  `cleanupCompleted=true`，`noSecretsInReport=true`。ready 等待只修验收时序，不改变产品导航行为。
+- Node `24.22.3` / npm `11.13.0` 下根仓 `npm run verify` 通过。未制作安装包，未触发生产发布。
+  战斗自动执行、Ring 图片同步和取消／超时中断仍按既有报告边界，不因本批结果扩大声明。

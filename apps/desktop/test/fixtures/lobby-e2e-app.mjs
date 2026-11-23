@@ -580,6 +580,13 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     checks.lobbyReturnRealCompleted = returned.details?.status === "completed" && returned.details?.alreadyInLobby !== true;
     checks.lobbyReturnFromCampaign = returned.details?.from?.campaignId === state.campaignId;
     checks.lobbyReturnToLobby = /\/lobby\.html$/.test(String(returned.details?.to?.path ?? ""));
+    await waitFor(async () => {
+      try {
+        return Boolean(await contents.executeJavaScript(
+          `globalThis.__MT_LOBBY__?.phase === "ready" && Boolean(globalThis.__MT_AUTH__) && Boolean(globalThis.__MT_LOBBY_SERVICE__)`,
+        ));
+      } catch { return false; }
+    }, waitAuthMs, "lobby ready after real return");
     const lobbyAfterReturn = await contents.executeJavaScript(
       `({ path: location.pathname, phase: globalThis.__MT_LOBBY__?.phase, auth: Boolean(globalThis.__MT_AUTH__), service: Boolean(globalThis.__MT_LOBBY_SERVICE__) })`,
     ).catch(() => null);

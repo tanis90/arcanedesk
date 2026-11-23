@@ -67,6 +67,8 @@ const KEEP = args.includes("--keep");
 const WATCHDOG_MS = Math.max(60_000, Number(option("watchdog-ms", "900000")) || 900_000);
 const GM_USER = process.env.MT_USER ?? "spike-gm";
 const GM_PASS = process.env.MT_PASS ?? "";
+const PLAYER_USER = process.env.MT_PLAYER_USER ?? null;
+const PLAYER_PASS = process.env.MT_PLAYER_PASS ?? "";
 const RUN_ID = `${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}`;
 const CAMPAIGN_PREFIX = "[desktop-contract-mtcompat-image]";
 const CAMPAIGN_NAME = `${CAMPAIGN_PREFIX} ${RUN_ID}`;
@@ -1267,6 +1269,89 @@ async function main() {
       && largeRendered.colors > 32, largeRendered);
     await page.screenshot({ path: path.join(OUT_DIR, `large-map-${RUN_ID}.png`) }).catch(() => {});
 
+    // ---- real player: native signed reads stay available; typed writes retain the GM gate ----
+    if (PLAYER_USER && PLAYER_PASS) {
+      const fullCampaign = await api.get(`/api/campaigns/${campaignId}`);
+      const playerAuth = await login(PLAYER_USER, PLAYER_PASS);
+      const playerApi = mtApi(playerAuth.token);
+      await playerApi.put(`/api/campaigns/join/${fullCampaign.joinId}`, {});
+      const playerContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } });
+      const playerPage = await playerContext.newPage();
+      await playerPage.addInitScript(([token, id]) => {
+        sessionStorage.setItem("mt.session", JSON.stringify({ access_token: token, refresh_token: null }));
+        sessionStorage.setItem("mt.campaign", id);
+      }, [playerAuth.token, campaignId]);
+      await playerPage.goto(`${BASE}/play.html?campaign=${encodeURIComponent(campaignId)}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      const playerReady = await playerPage.waitForFunction(() => window.__MT_READY__ === true
+        && typeof window.__MT_AGENT_RUNTIME__ === "function", undefined, { timeout: 180_000, polling: 300 }).then(() => true, () => false);
+      const playerIdentity = playerReady ? await playerPage.evaluate(uuid => {
+        const scene = [...game.scenes].find(value => value.uuid === uuid);
+        return { ready: game.ready === true, isGM: game.user?.isGM,
+          sceneBackground: scene?.background?.src ?? null, sceneCount: [...game.scenes].length };
+      }, largeUuid) : null;
+      check("player.page-ready-real-account", playerIdentity?.ready === true && playerIdentity?.isGM === false
+        && playerIdentity?.sceneBackground === largeUrl && playerIdentity?.sceneCount > 0, playerIdentity);
+      const playerAsset = playerReady && largeUrl ? await playerPage.evaluate(async rawUrl => {
+        const mod = await import(new URL("asset-sign.mjs", document.baseURI).href);
+        const readUrl = await mod.signUrl(rawUrl);
+        const response = await fetch(readUrl);
+        return { signed: readUrl !== rawUrl, status: response.status, bytes: (await response.arrayBuffer()).byteLength };
+      }, largeUrl) : null;
+      check("player.private-image-readable", playerAsset?.signed === true && playerAsset?.status === 200
+        && playerAsset?.bytes === largeJpeg.length, playerAsset);
+
+      const playerContents = createPageContents(playerPage);
+      const playerClient = createMtcompatRuntimeClient({ runtimeSource: compatRuntime.source, getWebContents: () => playerContents });
+      const playerRuntime = new PageProfileRoutedRuntime({
+        foundry: foundryRuntime, mtcompat: playerClient, getActiveProfileId: () => PAGE_PROFILES.mtcompat.id,
+      });
+      const playerHost = new AgentHost({
+        foundryRuntime: playerRuntime,
+        getFoundryView: () => ({ webContents: playerContents }),
+        openFoundry: async () => ({ ok: true, summary: "player contract" }),
+        sendToRenderer: () => {}, log: () => {},
+        profile: { mode: "prep", getCwd: () => prepDir },
+        getPanelProfileId: () => PAGE_PROFILES.mtcompat.id,
+        operationStorageDir: path.join(workDir, "player"),
+        taskStorageDir: path.join(workDir, "player-tasks"),
+      });
+      playerHost.describeCurrent = () => ({ id: "contract-player" });
+      const playerInput = await captureFoundryInputContext(playerContents);
+      playerHost.taskCoordinator = () => ({
+        currentInputBinding: () => ({ taskId: "contract-player", inputId: "player-input", metadata: Promise.resolve(playerInput) }),
+      });
+      const playerTools = new Map(playerHost.buildTools().map(tool => [tool.name, tool]));
+      const playerInvoke = async (name, params) => {
+        try {
+          const result = await playerTools.get(name).execute(`player-${name}`, params);
+          return { details: result.details, text: String(result.content?.[0]?.text ?? ""), isError: Boolean(result.isError) };
+        } catch (error) {
+          const message = String(error?.message ?? error);
+          return { details: { status: "rejected", code: error?.code ?? "TOOL_EXECUTION_FAILED", message }, text: message, isError: true };
+        }
+      };
+      const playerStatus = await playerInvoke("world_status", {});
+      check("player.world-status-gm-boundary", (playerStatus.isError || playerStatus.details?.status === "rejected")
+        && (["ACTION_FORBIDDEN", "FOUNDRY_NOT_GM"].includes(playerStatus.details?.code)
+          || /GM user is required|not a GM|ACTION_FORBIDDEN|FOUNDRY_NOT_GM/.test(playerStatus.text)), {
+        status: playerStatus.details?.status, code: playerStatus.details?.code, text: playerStatus.text.slice(0, 240),
+      });
+      const actorBeforePlayer = await invoke("foundry_actor_get", { actorUuid });
+      const playerWrite = await playerInvoke("foundry_image", { dataPath: uploadedUrl, targetUuid: actorUuid });
+      check("player.image-write-forbidden", (playerWrite.isError || playerWrite.details?.status === "rejected")
+        && playerWrite.details?.code === "INPUT_WORLD_UNAVAILABLE" && playerInput === null, {
+        bound: playerInput !== null, status: playerWrite.details?.status,
+        code: playerWrite.details?.code, message: playerWrite.details?.message,
+      });
+      await playerContext.close();
+      const actorAfterPlayer = await invoke("foundry_actor_get", { actorUuid });
+      check("player.image-write-no-side-effect", actorAfterPlayer.details?.img === actorBeforePlayer.details?.img, {
+        expected: actorBeforePlayer.details?.img, actual: actorAfterPlayer.details?.img,
+      });
+    } else {
+      report.notCovered.push("Real player native signed image reads and typed GM write gating: set MT_PLAYER_USER and MT_PLAYER_PASS to enable");
+    }
+
     // ---- journal hygiene: no bytes or scene JSON entered the operation log
     const journalFiles = [];
     try {
@@ -1299,9 +1384,13 @@ async function main() {
       actorAdvanceAtLevelOne: true,
       actorGrantItems: true,
       sceneApplyTokenLifecycle: true,
+      realPlayer: Boolean(PLAYER_USER && PLAYER_PASS),
       executeActionNarrative: true,
       electronUi: false,
     };
+  } catch (error) {
+    report.failures.push({ id: "harness.fatal", detail: safeDetail(error?.stack ?? error, 4000) });
+    console.error(error?.stack ?? error);
   } finally {
     clearTimeout(watchdog);
     await browser?.close().catch(() => {});
