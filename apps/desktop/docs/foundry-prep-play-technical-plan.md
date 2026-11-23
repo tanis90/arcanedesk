@@ -376,17 +376,15 @@ sceneApply 不写 walls/lights/tiles/notes/sounds；这些随完整场景 JSON �
 
 ### 5.8a foundry_scene_import（仅 mtcompat）
 
-输入 `operation`、`sourcePath`，update 另需 `sceneUuid/readRef`；可选 `backgroundSourcePath`。
-sourcePath 是备团目录内完整场景 JSON（最大 10 MiB），背景图也直接从该目录读取，不要求模型
-先上传或手写墙灯。Desktop 负责有界读取、图片解码与操作幂等，runtime 使用真实 SceneDirectory
-实例的 `_importSceneJsonFile(sceneDoc, file, { rethrow: true })`，由页面原生管线导入全部集合。
+输入 `operation`、`sourcePath`，update 另需 `sceneUuid/readRef`。工具描述给一个 DD2VTT 正面示例，完整三分支示例由 `arcane-scene-import` skill 提供。按扩展名分流：
 
-创建保留 `flags.arcanedesk.requestId`，JSON 不能覆盖它。成功必须有原生导入回执并核对尺寸、
-网格、背景和传入集合（含显式空集合）；UI 的失败 toast 不再被当成成功，原始错误交给 agent。
-update 的 readRef 同时保存 Scene 导入内容指纹，读取后墙灯等原生导入会修改的内容发生变化时，
-以 `READ_REF_STALE` 拒绝，避免旧快照整份覆盖新修改。`thumb/active/_stats/folder/sort/navigation`
-是原生导入不会读取的派生或目录字段，不参与该指纹，后台缩略图更新不会误报冲突。
-partial/indeterminate 不自动重放。
+- Foundry 场景 `.json`（最大 10 MiB）：可选 `backgroundSourcePath`（最大 32 MiB），也可沿用 JSON 内的裸 HTTPS 背景。原生管线处理全部嵌入集合，不要求模型逐段写墙灯。
+- Universal VTT `.dd2vtt/.uvtt/.df2vtt`（最大 32 MiB）：保留原始 resolution 和内嵌图，经原生 `uvtt-import` 与 SceneDirectory 导入；网格来自文件，回读尺寸、墙与门窗。不得另传背景。
+- 纯 `.png/.jpg/.jpeg/.webp`（最大 32 MiB）：内部上传并读取真实像素宽高。create 可选 `name`（缺省文件名）和 `grid`，update 可选 `grid`；不从图片猜网格。写入 background offset=0、scale=1，换图重置旧旋转元数据，未传 grid 的 update 保留原网格。
+
+`backgroundSourcePath` 只允许 Foundry JSON；`name` 只允许纯图片 create；`grid` 只允许纯图片。Desktop 负责有界读取、真实图片解码与操作幂等，runtime 使用真实 SceneDirectory 实例的 `_importSceneJsonFile(sceneDoc, file, { rethrow: true })` 或同源纯图片写入语义。Base64 只存在内部派发，不进模型或日志。
+
+创建保留 `flags.arcanedesk.requestId`，来源不能覆盖它。成功回执统一包含 `format/sceneUuid/dataPath/stats/verification`，并核对尺寸、网格、背景和传入集合（含显式空集合）；UVTT 上传失败退回 data URL 不能冒充私有地址上传成功。update 的 readRef 同时保存 Scene 导入内容指纹，读取后墙灯等原生导入会修改的内容发生变化时，以 `READ_REF_STALE` 拒绝，避免旧快照整份覆盖新修改。`thumb/active/_stats/folder/sort/navigation` 不参与该指纹，后台缩略图更新不会误报冲突。partial/indeterminate 不自动重放。
 
 ### 5.8 foundry_image：独立图片与本地资源
 

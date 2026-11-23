@@ -89,10 +89,19 @@ export async function readFoundryImage({ cwd, sourcePath, decodeImage }) {
   return { bytes, hash, ...format, ...dimensions, dataPath: `arcanedesk/assets/${hash}.${format.extension}` };
 }
 
+export function foundrySceneSourceFormat(sourcePath) {
+  const extension = path.extname(String(sourcePath ?? "")).toLowerCase();
+  if (extension === ".json") return "foundry-json";
+  if ([".dd2vtt", ".uvtt", ".df2vtt"].includes(extension)) return "uvtt";
+  if ([".png", ".jpg", ".jpeg", ".webp"].includes(extension)) return "image";
+  throw new Error("SCENE_FORMAT_UNSUPPORTED: expected .json, .dd2vtt, .uvtt, .df2vtt, .png, .jpg, .jpeg or .webp");
+}
+
 /** Bounded prep-directory scene JSON read. Must run under the caller's cwd/page lease; returns the parsed root object only. */
-export async function readFoundrySceneJson({ cwd, sourcePath }) {
+export async function readFoundrySceneJson({ cwd, sourcePath, maxBytes = MAX_FOUNDRY_SCENE_JSON_BYTES }) {
   if (typeof sourcePath !== "string" || !sourcePath || sourcePath.length > 4096 || sourcePath.includes("\0"))
     throw new Error("INPUT_INVALID: invalid scene sourcePath");
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error("INPUT_INVALID: invalid scene size limit");
   const root = await typedRealpath(cwd, "SCENE_NOT_FOUND");
   const resolved = await typedRealpath(path.resolve(root, sourcePath), "SCENE_NOT_FOUND");
   if (!inside(root, resolved)) throw new Error("SCENE_PATH_OUTSIDE_CWD: scene must be inside the prep directory");
@@ -101,7 +110,7 @@ export async function readFoundrySceneJson({ cwd, sourcePath }) {
   try {
     const stat = await file.stat();
     if (!stat.isFile()) throw new Error("SCENE_NOT_FILE: source must be a regular file");
-    if (stat.size <= 0 || stat.size > MAX_FOUNDRY_SCENE_JSON_BYTES) throw new Error("SCENE_SIZE_INVALID: maximum scene size is 10 MiB");
+    if (stat.size <= 0 || stat.size > maxBytes) throw new Error(`SCENE_SIZE_INVALID: maximum scene size is ${maxBytes / (1024 * 1024)} MiB`);
     // Fixed allocation also bounds a file that grows after stat; never use unbounded readFile.
     bytes = Buffer.alloc(stat.size + 1);
     let offset = 0;
