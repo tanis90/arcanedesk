@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,18 +59,26 @@ const REQUIRED_MARKERS = new Map([
     "foundry_module_prepare",
     "prototypeToken.texture.src",
     "ring.subject.texture",
-    "已在场景里的存量 token",
-    "不得直接保留 dnd5e 系统包里的默认头像",
+    "保持 `img`、原型和存量 Token 图像不变",
+    "本身不下载或安装",
+    "type/style/attrs/tags/name/name_zh/desc/desc_zh",
+    "原始 `.svg` 不传给 `foundry_image`",
   ]],
   ["skills/prep/arcane-journal-update/SKILL.md", [
     "JournalEntryPage",
+    "`text.content` 是 HTML 字符串",
+    "<h2>教堂调查</h2>",
+    "foundry_page_eval",
+    "browser_evaluate",
     "多页必须循环单页创建",
     "ownership: { default: 2 }",
+    "page.update({ \"text.content\": updatedHtml })",
+    "不等于已经在玩家屏幕弹窗展示",
     "foundry_image",
   ]],
   ["skills/prep/arcane-module-to-fvtt/SKILL.md", [
     "arcane-assets",
-    "foundry_module_prepare",
+    "格式受支持",
   ]],
   ["skills/prep/arcane-fvtt-mods/SKILL.md", [
     "ARCANE_FVTT_MOD_MANAGER",
@@ -99,7 +108,44 @@ const REQUIRED_MARKERS = new Map([
 for (const [file, markers] of REQUIRED_MARKERS) {
   test(`${file} keeps its hard-won operational rules`, () => {
     const content = readFileSync(path.join(appRoot, file), "utf8");
-    const missing = markers.filter((marker) => !content.includes(marker));
+    const missing = markers.filter(marker => !content.includes(marker));
     assert.deepEqual(missing, [], `${file} is missing required markers: ${missing.join(", ")}`);
   });
 }
+
+function toolExample(source, toolName) {
+  const match = source.match(new RegExp(`\`\`\`js\\n(${toolName}\\(\\{[\\s\\S]*?\\n\\}\\))\\n\`\`\``));
+  assert.ok(match, `Missing ${toolName} example`);
+  return match[1];
+}
+
+test("journal examples execute native writes with HTML on both runtimes", async () => {
+  const source = readFileSync(path.join(appRoot, "skills/prep/arcane-journal-update/SKILL.md"), "utf8");
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  for (const toolName of ["foundry_page_eval", "browser_evaluate"]) {
+    const writes = [];
+    const context = vm.createContext({
+      CONFIG: { JournalEntry: { documentClass: { create: async data => ({
+        ...data,
+        uuid: `Journal.j${writes.length + 1}`,
+        createEmbeddedDocuments: async (type, pages) => {
+          writes.push({ type, pages });
+          return pages.map((page, index) => ({
+            ...page,
+            uuid: `Journal.j1.JournalEntryPage.p${index + 1}`,
+            text: { ...page.text },
+          }));
+        },
+      }) } } },
+    });
+    context.foundry_page_eval = ({ code }) => new AsyncFunction("CONFIG", code)(context.CONFIG);
+    context.browser_evaluate = ({ code }) => vm.runInContext(code, context);
+    const result = await vm.runInContext(toolExample(source, toolName), context);
+    assert.equal(writes.length, 1, toolName);
+    assert.equal(writes[0].type, "JournalEntryPage", toolName);
+    assert.equal(writes[0].pages.length, 1, toolName);
+    assert.match(writes[0].pages[0].text.content, /<h2>调查发现<\/h2>/, toolName);
+    assert.match(writes[0].pages[0].text.content, /<strong>被移动过的暗门<\/strong>/, toolName);
+    assert.equal(result.pageUuid, "Journal.j1.JournalEntryPage.p1", toolName);
+  }
+});

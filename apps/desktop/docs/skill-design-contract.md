@@ -547,3 +547,10 @@
 
 - `arcane-actor-update` 把头像列为建档必要步骤：用户未指定且未明确要求保留原图时，必须主动从 `arcane-assets` 官方画库按种族、职业、装备与风格选图；未安装先用 `foundry_module_prepare` 获取。不得直接保留 dnd5e 系统包默认头像，只有用户明确保留/不换时才跳过。`arcane-module-to-fvtt` 同步该默认规则，不新增工具或交互点。
 - 新增 `arcane-journal-update`：日常 JournalEntry 的创建、有限编辑、玩家 handout 权限和插图统一引导；文字页一次一页，编辑保留其它页面与字段。玩家 handout 才显式设 `ownership.default=2`，默认保持 DM 私有，不静默扩大权限。当前没有 typed journal 工具，使用 `foundry_page_eval` 原生 API，不虚构 `foundry_journal_create`。自有提问为 0，登录与写审批沿用 App 既有流程。
+
+### 人物与日志的执行边界（2026-11-25，r53）
+
+- 收窄 r52 的头像规则：只有新建/复制人物或用户明确要求新增、替换、修复图片时才选图；改名、加法术、升级和属性修改保持全部既有图像。默认仍是头像、原型与存量 Token 同图同步，但用户明确只改一个字段时，先上传取得持久路径，再用原生 Document API 做字段级更新，不用默认 Actor 应用覆盖其它图像。
+- 修正 r52 的画库获取语义：`foundry_module_prepare` 只解析镜像与下载信息，不下载、不安装。已可读取的模块图片使用 `modules/arcane-assets/<index.file>`；否则将 ready 返回的 ZIP 下载到本次备团目录，核对 size/SHA-256 后解压选择，以 cwd 相对 `sourcePath` 上传，不把本地模块安装冒充奥法地图资源就绪。按 index 的语义字段选择真实 PNG/JPEG/WebP，原始 SVG 不进入 `foundry_image`；模组导入复用同一配图流程。
+- 日志正文明确为 HTML，提供包含标题、重点和列表的正面示例；mtcompat 用 `foundry_page_eval`，原生 Foundry 用异步 IIFE 形式的 `browser_evaluate`。续写采用 `text.content` 字段级更新并保留旧页，多页仍逐页创建。DM 私有、Observer 可查看和玩家端弹窗展示是不同状态，不相互冒充。
+- 回归不再只有关键词：两段日志示例都在 mock Document API 上实际执行并校验 HTML；现有模型 benchmark 新增普通修改保图、只换角色卡头像时保留 Token、DM 私有日志、玩家 handout 和续写保留原页的世界状态验收。常规提问仍为 0，登录与写审批沿用 App 既有流程，不新增工具。

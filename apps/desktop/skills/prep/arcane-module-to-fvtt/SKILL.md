@@ -92,7 +92,7 @@ description: 把已建立 Obsidian 资料库的 D&D 5e 模组系统性维护进 
 - 有立绘的角色：方形裁切对焦面部。`scripts/crop-token.mjs`（Node，跨平台）支持 top（头像/半身像）/center（全身怪物）/rect 自定义矩形（抽查发现裁歪后修正）。
 - **裁完必须 read 图片抽查**——全身竖版立绘用 center 会把头切掉（实测踩过）。
 - 应用用 `foundry_image`（sourcePath + targetUuid），已放置的 token 加 `syncPlacedTokens: true` 同步。
-- 无立绘的角色按 `arcane-actor-update` 的默认头像规则，从 `arcane-assets` 官方画库按种族、职业、装备和风格选择，未安装则先用 `foundry_module_prepare` 获取；不要沿用 dnd5e 系统包默认头像。
+- 无立绘的角色按 `arcane-actor-update` 的建档配图流程，从 `arcane-assets` 选择语义匹配且格式受支持的图片，不沿用 dnd5e 系统默认头像。
 
 ## 阶段 8：全局走查
 

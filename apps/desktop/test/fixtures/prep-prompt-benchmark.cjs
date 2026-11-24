@@ -16,7 +16,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   // e2e 矩阵（A5/A12/C1 MVP），自由发挥 prompt + probe-plan 期望 + 终态判定，双臂同标准。
   const matrix=comparison==="matrix"?require("../character-benchmark/matrix-model-adapter.cjs")(evaluate,{runtimeSource:revision.runtimeSource}):null;
   const npcCases=[...(character?.ids||[]),...(matrix?.ids||[]),"npc_wizard","npc_werewolf","npc_priest"];
-  const allCases=[...npcCases,"create_npc","grant_items","edit_image","scene_layout","conditions","upload_image"];
+  const allCases=[...npcCases,"create_npc","grant_items","edit_image","edit_preserves_images","journal_create","journal_handout","journal_append","scene_layout","conditions","upload_image","portrait_only"];
   const cases=caseFilter?caseFilter.split(","):allCases.filter(c=>!npcCases.includes(c));
   assert.ok(cases.length&&new Set(cases).size===cases.length&&cases.every(c=>allCases.includes(c)));
   assert.ok(["js","revision","native-skill","skill-revision","pack-skill","rules-ablation","catalog","matrix"].includes(comparison));
@@ -46,7 +46,7 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
   if(nativeRevision){report.experiment.kind="paired tool revisions with frozen native NPC skill and mode tools";report.experiment.nativeNpc=true;report.experiment.promptPolicy="Same native NPC routing and skill; tool revision differs";}
   if(comparison==="catalog"){report.experiment.kind="catalog query and actor advance ablation";report.experiment.promptPolicy="Same native, pack, build and character guides; same other tools; only production search/list availability and foundry_actor_advance differ";report.experiment.catalogToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"../../src/main/foundry-tools.js"))).digest("hex");}
   if(comparison==="matrix"){report.experiment.kind="matrix free-play: production prep tools versus bare browser_evaluate";report.experiment.promptPolicy="Identical free-play case prompts (only class/subclass/race-or-monster/level pinned); tool arm keeps the production Prep prompt and production prep skills; js arm gets the neutral browser_evaluate routing. Shared character-benchmark defaults for both";report.experiment.matrixToolHash=crypto.createHash("sha256").update(fs.readFileSync(path.join(__dirname,"../../src/main/foundry-tools.js"))).digest("hex");}
-  report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v1-draft2";
+  report.experiment.suiteVersion=cases.includes("npc_priest")?"prep-npc-priest-transfer-draft2":cases.includes("npc_werewolf")?"prep-npc-transfer-draft2":cases.includes("npc_wizard")?"prep-npc-intent-draft2":"prep-v2-content-skills";
   if(characterSuite){report.experiment.suiteVersion=comparison==="catalog"?characterActors?"character-v9-pc-controlled":"character-v10-production-catalog":"character-v7-reviewed-growth";report.experiment.characterVerifier=character.verifier;}
   if(comparison==="matrix"){report.experiment.suiteVersion="matrix-v1-freeplay";report.experiment.matrixVerifier=matrix.verifier;}
   report.experiment.taskTimeoutMs=Number(process.argv.find(a=>a.startsWith("--task-timeout-ms="))?.slice(18)??(characterSuite?300000:180000));
@@ -81,7 +81,8 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const rapier=await game.packs.get("arcane-dnd5e-2014-automation.basicweapons").getDocument(${JSON.stringify(source.rapier)});const data=rapier.toObject();delete data._id;data.system.equipped=false;data._stats??={};data._stats.compendiumSource=rapier.uuid;data.flags??={};data.flags.arcanedesk={sourceUuid:rapier.uuid};await actors[0].createEmbeddedDocuments("Item",[data]);
     const s=await Scene.create({name:${JSON.stringify(label)}+" 场景",width:2000,height:1500,grid:{type:1,size:100,distance:5,units:"ft"},active:false,flags:{arcanedesk:{prepBenchmark:${JSON.stringify(runId)}}}});
     const tokens=[];for(let i=0;i<3;i++)tokens.push((await actors[i].getTokenDocument({x:200+i*200,y:200,actorLink:true})).toObject());await s.createEmbeddedDocuments("Token",tokens);
-    return {protectedEffects,actorIds:actors.map(a=>a.id),sceneId:s.id,label:${JSON.stringify(label)},newName:${JSON.stringify(label)}+" 霜牙",originalSceneId:canvas.scene.id};})()`);
+    let journalId=null;if(${JSON.stringify(caseId)}==="journal_append"){const journal=await JournalEntry.create({name:${JSON.stringify(label)}+" 既有日志",flags:{arcanedesk:{prepBenchmark:${JSON.stringify(runId)}}},pages:[{name:"原始记录",type:"text",text:{content:"<p>原始事实</p>"}}]});journalId=journal.id;}
+    return {protectedEffects,actorIds:actors.map(a=>a.id),sceneId:s.id,label:${JSON.stringify(label)},newName:${JSON.stringify(label)}+" 霜牙",originalSceneId:canvas.scene.id,journalId};})()`);
   const prompts=(id,label)=>({
     npc_priest:`按2014版规则，创建一个三级的精灵牧师 NPC，感知16，其他分配要合理，法术保证有祝福术，装备一把轻锤。命名为“${label} 霜牙”。其他未指定选项自行合理决定；只创建这个 NPC，不修改已有角色。`,
     npc_werewolf:`创建一个狼人，给它动作如潮，把它的武器里加上长弓。命名为“${label} 霜牙”。只创建这个 NPC，不修改已有角色。`,
@@ -89,15 +90,23 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     create_npc:`在 dnd5e.monsters 合集中找到名字精确为 Wolf 的怪物，创建一个名为“${label} 霜牙”的 NPC，并把它的原型 Token 名称也设成“${label} 霜牙”。已有同名则不要重复创建。`,
     grant_items:`给“${label} 角色1”授予 arcane-dnd5e-2014-automation.basicweapons 合集的 Rapier 和 Longbow，各一件。已有同来源的物品原样跳过，不叠加数量；新授予的物品装备上。`,
     edit_image:`把“${label} 角色1”改名为“${label} 队长”，HP 设为当前8、最大18，AC设为固定14。头像、原型Token和所有已放置Token的图片统一换成已有Data路径 systems/dnd5e/tokens/beast/Wolf.webp。不要改变已放置Token的名称、位置或尺寸。`,
+    edit_preserves_images:`把“${label} 角色1”改名为“${label} 队长”，HP 设为当前8、最大18，AC设为固定14。只修改这些字段。`,
+    journal_create:`创建一条名为“${label} 调查记录”的 DM 私有日志，只创建一个文字页。正文用 HTML，包含一个小标题和一个列表，记录两项事实：发现暗门、暗门通往地下室。`,
+    journal_handout:`创建一份名为“${label} 玩家手记”的玩家 handout，只创建一个文字页，让所有玩家可查看。正文用 HTML 标题和列表记录补给：火把、绳索。`,
+    journal_append:`给现有日志“${label} 既有日志”追加一个名为“补充线索”的文字页，用 HTML 列表记录：银色钥匙、潮湿脚印。保留“原始记录”页及其正文，不修改其它日志。`,
     scene_layout:`修改非当前场景“${label} 场景”：把“${label} Token1”移到(300,400)，“${label} Token2”移到(500,400)，删除“${label} Token3”；再放两个“${label} 角色1”的Token，分别叫“新守卫A”和“新守卫B”，位置(700,400)和(900,400)。不切换或激活场景。`,
     conditions:`给世界角色“${label} 角色1”和“${label} 角色2”都加上倒地和中毒状态，不影响“${label} 角色3”。`
   })[id];
   const baseVerify=require("./prep-benchmark-verifier.cjs")(evaluate,imageHash);
   const verify=(id,f)=>characterSuite?character.verify(id,f):matrix?matrix.verify(id,f):id==="npc_priest"?require("./prep-npc-priest-verifier.cjs")(evaluate,f):id==="npc_werewolf"?require("./prep-werewolf-verifier.cjs")(evaluate,f):id==="npc_wizard"?require("./prep-npc-wizard-verifier.cjs")(evaluate,f):baseVerify(id,f);
-  const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}return true;})()`);
+  const cleanup=async f=>evaluate(`(async()=>{const f=${JSON.stringify(f)};const s=game.scenes.get(f.sceneId);if(s?.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Scene ownership mismatch");await s.delete();for(const id of f.actorIds){const a=game.actors.get(id);if(a.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Actor ownership mismatch");await a.delete();}const extra=game.actors.filter(a=>a.name===f.newName);for(const a of extra){if(a.type!=="npc"||!a.items.some(i=>i.name==="Bite"))throw Error("Created Actor fixture mismatch");await a.delete();}const createdJournals=game.journal.filter(j=>j.name===f.label+" 调查记录"||j.name===f.label+" 玩家手记");for(const j of createdJournals)await j.delete();if(f.journalId){const j=game.journal.get(f.journalId);if(j){if(j.flags.arcanedesk?.prepBenchmark!==${JSON.stringify(runId)})throw Error("Journal ownership mismatch");await j.delete();}}return true;})()`);
   for(const trial of report.prepTrials.filter(t=>!t.cleaned&&!t.retainedForReview)){
     assert.equal(trial.state,"returned");assert.equal(trial.taskState,"completed");assert.ok(!trial.timedOut&&trial.tools.every(t=>Number.isFinite(t.ms)));
-    trial.verification=await verify(trial.caseId,trial.fixture);trial.success=trial.verification.ok;
+    trial.verification=await verify(trial.caseId,trial.fixture);
+    const unexpectedImage=trial.caseId==="edit_preserves_images"&&trial.tools.some(t=>t.name==="foundry_image");
+    const missingJournalEval=trial.caseId.startsWith("journal_")&&!trial.tools.some(t=>t.name==="browser_evaluate");
+    if(unexpectedImage||missingJournalEval){trial.verification.ok=false;trial.verification.details.toolContract={unexpectedImage,missingJournalEval};}
+    trial.success=trial.verification.ok;
     if(trial.tools.some(t=>t.status==="indeterminate"))trial.uncertainReceiptReviewed=true;
     else trial.verifierFailureReviewed=true;
     trial.jsFallback=trial.arm==="tools"&&trial.tools.some(t=>t.name==="browser_evaluate");save();
@@ -110,9 +119,9 @@ module.exports = async function benchmark({ evaluate, report, save, root, runId,
     const label=`PB${runId.split("-").at(-1)}-${sample}-${caseId}${npcCases.includes(caseId)?"-"+arm:""}`;const f=characterSuite?await character.setup(caseId,label):matrix?await matrix.setup(caseId,label):await setup(label);if(caseId==="npc_werewolf")f.werewolfSources={...werewolfSources,werewolves:[werewolfSources.werewolf,werewolfSources.werewolf24]};
     const trial={sample,caseId,arm,fixture:f,prompt:characterSuite?character.prompt(caseId,label):matrix?matrix.prompt(caseId,label):prompts(caseId,label),tools:[],usage:[],runtime:[],waits:[],state:"prepared"};report.prepTrials.push(trial);save();
     const cwd=path.join(root,runId,`${sample}-${caseId}-${arm}`);fs.mkdirSync(path.join(cwd,"tasks"),{recursive:true});
-    if(caseId==="upload_image"){
+    if(["upload_image","portrait_only"].includes(caseId)){
       const localImage=path.join(cwd,"benchmark20260508180804.jpg");fs.copyFileSync(imageFile,localImage);
-      trial.prompt=`把世界角色“${label} 角色1”的头像、原型 Token 和所有已放置 Token 图片换成本地文件 ${localImage}。不要改变 Token 名称、位置、尺寸，也不要影响其他角色。`;save();
+      trial.prompt=caseId==="portrait_only"?`只把世界角色“${label} 角色1”的角色卡头像换成本地文件 ${localImage}。不要修改原型 Token 或任何已放置 Token 的图片，也不要影响其他角色。`:`把世界角色“${label} 角色1”的头像、原型 Token 和所有已放置 Token 图片换成本地文件 ${localImage}。不要改变 Token 名称、位置、尺寸，也不要影响其他角色。`;save();
     }
     const skillPath=path.join(cwd,"skills/fvtt-native-npc/SKILL.md");
     if(nativeSkillArm){fs.mkdirSync(path.dirname(skillPath),{recursive:true});fs.copyFileSync(arm==="native_skill_baseline"?baselineSkill:path.join(__dirname,characterActors?"prep-native-character-skill/SKILL.md":"prep-native-npc-skill/SKILL.md"),skillPath);trial.skillHash=crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex");}

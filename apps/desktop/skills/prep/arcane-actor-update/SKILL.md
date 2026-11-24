@@ -1,6 +1,6 @@
 ---
 name: arcane-actor-update
-description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建或修改人物（Actor、角色、NPC）。给人物添加法术、职业能力或专长（优先从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014" 合集包拿）、创建人物、给人物配图、发现 token 拖上地图没有头像、补 token 图或批量修正人物图像时使用。用户未指定头像时，必须主动从 arcane-assets 官方画库选择合适头像，不保留 dnd5e 系统包默认图。
+description: 在 Foundry 或奥法地图（mtcompat play）中新建、复制或修改 NPC/PC，进行车卡升级、授予法术/能力/专长，以及换头像或 Token 图时使用。新建或复制人物且未指定头像时，主动从 arcane-assets 选图；普通修改保持既有图片，除非用户明确要求新增、替换或修复图片。
 ---
 
 # 人物（Actor）更新
@@ -10,6 +10,16 @@ description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建
 - 先用 `world_status` 确认当前是 ready 游戏页：Foundry 的 `/game` 且当前用户是 GM，或 mtcompat 的 `play.html` 且 world/user/runtime 已就绪。`profile` 与 `activatedTools` 只表示产品档位和工具面，不能代替这个判断；`lobby.html` 与 `/auth/**` 不做任何 Actor 读写。
 - 全程优先本 skill 的结构化工具。确需裸 JS 的自定义步骤，Foundry 用 `browser_evaluate`；mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing` 注记，不把 `foundry_page_eval` 用于大厅或登录页。
 - `foundry_screenshot` 只在页面已经 detected 后做视觉核对，不在大厅或登录页调用。
+
+## 先判定操作范围
+
+| 用户意图 | 默认动作 |
+|---|---|
+| 新建或复制 NPC/PC | 完成建档；未提供图片且未明确要求保留来源图时，从 `arcane-assets` 选择头像 |
+| 改名、加法术、升级、改属性等普通修改 | 只改请求涉及的字段，保持 `img`、原型和存量 Token 图像不变 |
+| 新增、替换或修复人物图像 | 使用用户提供的图片；未提供时从 `arcane-assets` 选择 |
+| 没区分头像和 Token 图 | 使用同一张图，同步头像、原型和存量 Token |
+| 明确只改某一个图像字段 | 只改该字段，不用默认同步覆盖其它图像 |
 
 ## Actor 类型与派生计算
 
@@ -197,46 +207,38 @@ foundry_actor_create({
 
 ## 人物头像与 Token 图像同步
 
-Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是互不联动的字段：只设头像，token 会显示默认的神秘人剪影。凡是创建人物或修改人物图像，两个位置必须一起设置、一起回读验证，不允许只改其一。
+人物图像分布在 `actor.img`、`actor.prototypeToken.texture.src` 和场景中各 Token 的 `texture.src`。启用动态 Token 环时，画面主体还可能来自 `prototypeToken.ring.subject.texture`。默认同图同步，但用户明确只改一个字段时，以用户范围为准。
 
-### 字段位置（V13）
+### 从 arcane-assets 选图
 
-- `actor.img` — 角色卡和 Actor 目录里显示的头像。
-- `actor.prototypeToken.texture.src` — 之后新拖入场景的 token 默认图像。
-- 动态 token 环：`prototypeToken.ring.enabled` 为 true 时，token 画面主体取自 `prototypeToken.ring.subject.texture`，必须与上面两个字段一起设置（通常同一张图）。
+只有新建、复制或用户明确要求图像时才进入本流程。按角色的种族、职业、性别、时代、装备和风格选图，不只按职业名猜一个通用立绘。
 
-### 用户未指定头像时：主动从 arcane-assets 选图
+1. 读取画库 `index.json`，用 `type/style/attrs/tags/name/name_zh/desc/desc_zh` 过滤少量候选，再按语义选择。只选 `file` 真实存在且以 `.png/.jpg/.jpeg/.webp` 结尾的条目；索引里的原始 `.svg` 不传给 `foundry_image`。
+2. 当前世界能读取 `modules/arcane-assets/index.json` 和对应图片时，使用 `dataPath: "modules/arcane-assets/<条目的 file>"`，不重复上传。
+3. 否则复用本次任务已解压的画库；没有时调用 `foundry_module_prepare({ query: "arcane-assets" })`。`preparing` 按其 `poll_url` 等待，`ready` 后把 ZIP 下载到本次备团目录的专用子目录，核对返回的 `size` 和 `sha256`，再解压并读取索引。`foundry_module_prepare` 本身不下载或安装；这里不安装、不启用模块，也不修改 Foundry Data。把选中文件的 cwd 相对路径作为 `sourcePath`。
+4. 报告实际选择的资源和匹配依据。画库不可用或没有合适图片时，保留已建 Actor 并明确报告“头像未完成”，不退回 dnd5e 默认图，也不重复创建 Actor。
 
-这是建档的一部分，不是可选的后续美化。用户没有提供头像，也没有明确说“保留原图/不用换图”时，创建或复制人物后必须主动补一张合适的头像，**不得直接保留 dnd5e 系统包里的默认头像，也不要拿无关通用职业立绘代替角色本身**。
+### 应用图片
 
-1. 优先从 `arcane-assets` 官方画库选择：涂鸦风 NPC、具名角色、古典油画和 game-icons 均可。用 `index.json` 中的 `type/style/tags/name/name_zh` 按角色的种族、职业、性别、时代、装备和风格做语义匹配，而不是仅按职业名猜图。
-2. 画库未安装或索引不可读时，先用 `foundry_module_prepare` 获取 `arcane-assets` 并读取实际文件；不因此退回 DND 默认头像。只选真实存在且 `foundry_image` 支持的 PNG/JPEG/WebP，不猜文件名。
-3. 已安装模块中的图片可直接作为 `dataPath`（形如 `modules/arcane-assets/assets/<实际文件>.webp`）；下载到本机缓存的图片用 `sourcePath`。随后调用 `foundry_image({ targetUuid, syncPlacedTokens: true })`，同时更新 `actor.img`、原型 Token 和存量 Token。
-4. 在交付中说明实际选择了哪个资源以及为何匹配；只有用户明确要求保留原图或不换头像时才跳过这一步。
+用户未区分头像和 Token 图时，用 `foundry_image` 一次完成上传和应用：
 
-### 创建人物或修改图片时的默认动作
+```js
+foundry_image({
+  sourcePath: "assets/church-guard.webp",
+  targetUuid: "Actor.<id>",
+  syncPlacedTokens: true,
+})
+```
 
-1. 用户没有分别提供头像图和 token 图时，三个字段用同一张图；用户分别提供时分别设置，并向用户确认哪张图用在哪。用户未指定时，按上一节主动从 `arcane-assets` 选图。
-2. 用 `foundry_image` 一次完成上传和字段更新，不传本机绝对路径或 Base64：
+Actor 应用会同时更新 `actor.img` 与原型 Token，启用 ring 时同步 subject texture；`syncPlacedTokens:true` 同步当前世界各场景的 linked/unlinked 存量 Token，保留名称、位置和尺寸。已有模块图片改用 `dataPath` 入参，其余相同。
 
-   ```js
-   foundry_image({
-     sourcePath: "assets/church-guard.png",
-     targetUuid: "Actor.<id>",
-     syncPlacedTokens: true,
-   })
-   ```
+用户明确只改角色卡头像或只改某一个 Token 图像字段时，先以不带 `targetUuid` 的 `foundry_image` 取得持久 `dataPath`，再用当前运行时的原生 Document API 只更新指定字段。不要把会同步原型 Token 的默认 Actor 应用用于“只换头像”。
 
-   工具会同时写 `actor.img` 与 prototype Token；`syncPlacedTokens:true` 同步当前世界各场景的存量 Token。返回的 `dataPath` 是 Foundry 的 Data 相对路径或 mtcompat 的持久图片 URL，以实际回执为准，不手猜地址。私有 URL 的读取由页面换签处理，不把签名 query 写回文档。
-3. 核对回执中的 `img`、`prototypeToken.texture.src` 和各 Token 步骤；回执没有覆盖目标字段时才用 `foundry_actor_get` 补读。上传成功而应用失败时保留 `dataPath` 对账，`partial/indeterminate` 不自动重放。
-
-### 已在场景里的存量 token
-
-改 `prototypeToken` 只影响之后放置的 token，不会改已放置在场景里的。`syncPlacedTokens:true` 负责存量 linked/unlinked Token；启用 ring 时还同步 subject texture。不要先只改头像再靠用户删除重拖来补救。
+返回的持久路径以回执为准，不猜 OSS 地址，不把签名 query 写回文档。核对回执中的 `img`、原型和各 Token 步骤；未覆盖的字段才用 `foundry_actor_get` 补读。上传成功而应用失败时保留 `dataPath` 对账，`partial/indeterminate` 不自动重放。
 
 ## 验收
 
-1. 工具授予以回执 verification 为准（created/skipped 计数）；裸 JS 授予回读 `actor.items` 确认在角色卡上，来源为 arcane-dnd5e-2014-automation 的包或已报告的回退来源。
-2. 角色卡 / Actor 目录显示头像。
-3. 新拖一个 token 到场景，显示正确图像。
-4. 场景中该人物已有的 token 图像已同步。
+1. 创建、升级和授予以 typed 工具的 verification 回执为准；只有裸 JS 路径才回读对应文档。
+2. 图像任务核对实际资源、`actor.img`、原型 Token 和请求范围内的存量 Token；不为验收额外创建场景 Token。
+3. 普通修改不调用 `foundry_image`，也不把图像字段塞进更新补丁；明确只改一个图像字段时，回读确认其它图像字段未变。
+4. 未完成的头像或其它步骤明确列出，不把部分完成说成全部完成。
