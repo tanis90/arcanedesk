@@ -345,11 +345,12 @@
       gap: 14px;
       align-items: center;
     }
-    /* 首屏唯一一次编排入场:星芒 → 标题 → 说明,依次浮起(composer 与建议 chips 各自接续) */
+    /* 首屏唯一一次编排入场:星芒 → 标题 → 说明 → 胶囊,依次浮起(composer 与建议 chips 各自接续) */
     .welcome > * { animation: rise 0.5s ease both; }
     .welcome > *:nth-child(2) { animation-delay: 0.08s; }
     .welcome > *:nth-child(3) { animation-delay: 0.16s; }
     .welcome > *:nth-child(4) { animation-delay: 0.24s; }
+    .welcome > *:nth-child(5) { animation-delay: 0.32s; }
     @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .welcome .big-logo {
       width: 76px; height: 76px;
@@ -382,6 +383,20 @@
       border-top: 1px solid var(--border);
     }
     .welcome p { font-size: var(--fs-ui); line-height: 1.7; }
+    /* C 位胶囊:欢迎区主入口,挂在 example-chip 上沿用「点击只填入不发送」,accent 强调一级层级 */
+    .welcome .capsule {
+      border: 1px solid var(--accent-dim);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 26px;
+      font-family: var(--font-display);
+      font-size: var(--fs-ui);
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .welcome .capsule:hover { border-color: var(--accent); color: var(--text-strong); background: var(--panel-2); box-shadow: 0 4px 14px var(--shadow), 0 0 0 2px var(--ring); }
     /* ---------- 主页建议 chips(ZCode 式):四字短签横排在 composer 下方,点击只填入不发送 ---------- */
     .home-chips { display: none; }
     body.home .home-chips {
@@ -1825,6 +1840,7 @@
       <h1>ArcaneDesk</h1>
       <div class="ornament">✦</div>
       <p data-i18n-html="welcome.tagline">DM 的 AI 副驾驶。给我一个 Foundry 地址,我会自己打开面板、登录并读取世界;战斗中每步动作都有四态回执。<br/>也可以直接点顶栏的「面板」指示灯手动开关右侧主视觉。</p>
+      <button class="example-chip capsule" data-prompt="连接奥法地图" data-i18n="welcome.arcaneMap.label" data-i18n-prompt="welcome.arcaneMap.prompt" data-i18n-title="welcome.arcaneMap.desc">奥法地图</button>
     </div>
   </main>
   <button class="scroll-bottom" id="scroll-bottom" title="回到底部" data-i18n-title="scrollBottom.title">↓</button>
