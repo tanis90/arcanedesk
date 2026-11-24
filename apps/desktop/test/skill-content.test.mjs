@@ -54,9 +54,22 @@ const REQUIRED_MARKERS = new Map([
   ]],
   ["skills/prep/arcane-actor-update/SKILL.md", [
     "arcane-dnd5e-2014-automation",
+    "arcane-assets",
+    "foundry_module_prepare",
     "prototypeToken.texture.src",
     "ring.subject.texture",
     "已在场景里的存量 token",
+    "不得直接保留 dnd5e 系统包里的默认头像",
+  ]],
+  ["skills/prep/arcane-journal-update/SKILL.md", [
+    "JournalEntryPage",
+    "多页必须循环单页创建",
+    "ownership: { default: 2 }",
+    "foundry_image",
+  ]],
+  ["skills/prep/arcane-module-to-fvtt/SKILL.md", [
+    "arcane-assets",
+    "foundry_module_prepare",
   ]],
   ["skills/prep/arcane-fvtt-mods/SKILL.md", [
     "ARCANE_FVTT_MOD_MANAGER",

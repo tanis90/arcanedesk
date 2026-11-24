@@ -541,3 +541,9 @@
 - 新增 `arcane-scene-import`：地图是高频操作，自有提问为 0；同一个 `foundry_scene_import` 按扩展名处理 Foundry JSON、Universal VTT 和纯图片，正面示例覆盖三种输入。图片尺寸由真实解码决定，网格来自来源、用户显式输入或系统默认，不从图片猜网格；目录外文件仍只按 r50 的点名文件受控暂存。
 - `arcane-actor-update` 补 NPC/PC 最小建档示例，图片统一使用 `foundry_image` 同步头像、原型与存量 Token，不再要求模型先手工搬世界 Data 文件。
 - 新增 `arcane-item-update`：合集发现与 Actor 授予继续走 typed 工具；当前没有独立 `foundry_item_create`，自定义世界 Item 明确走来源克隆与原生 Document API，并回读类型、系统和实际归属，不虚构工具或把授予冒充世界创建。两个新 skill 的登录与写审批均沿用 App 既有流程，不新增交互点。
+
+
+### 默认人物头像与日常日志（2026-11-24，r52）
+
+- `arcane-actor-update` 把头像列为建档必要步骤：用户未指定且未明确要求保留原图时，必须主动从 `arcane-assets` 官方画库按种族、职业、装备与风格选图；未安装先用 `foundry_module_prepare` 获取。不得直接保留 dnd5e 系统包默认头像，只有用户明确保留/不换时才跳过。`arcane-module-to-fvtt` 同步该默认规则，不新增工具或交互点。
+- 新增 `arcane-journal-update`：日常 JournalEntry 的创建、有限编辑、玩家 handout 权限和插图统一引导；文字页一次一页，编辑保留其它页面与字段。玩家 handout 才显式设 `ownership.default=2`，默认保持 DM 私有，不静默扩大权限。当前没有 typed journal 工具，使用 `foundry_page_eval` 原生 API，不虚构 `foundry_journal_create`。自有提问为 0，登录与写审批沿用 App 既有流程。

@@ -1,6 +1,6 @@
 ---
 name: arcane-actor-update
-description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建或修改人物（Actor、角色、NPC）。给人物添加法术、职业能力或专长（优先从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014" 合集包拿）、创建人物、给人物配图、发现 token 拖上地图没有头像、补 token 图或批量修正人物图像时使用。
+description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建或修改人物（Actor、角色、NPC）。给人物添加法术、职业能力或专长（优先从 arcane-dnd5e-2014-automation 模块的 "Arcane 5e 2014" 合集包拿）、创建人物、给人物配图、发现 token 拖上地图没有头像、补 token 图或批量修正人物图像时使用。用户未指定头像时，必须主动从 arcane-assets 官方画库选择合适头像，不保留 dnd5e 系统包默认图。
 ---
 
 # 人物（Actor）更新
@@ -205,9 +205,18 @@ Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是�
 - `actor.prototypeToken.texture.src` — 之后新拖入场景的 token 默认图像。
 - 动态 token 环：`prototypeToken.ring.enabled` 为 true 时，token 画面主体取自 `prototypeToken.ring.subject.texture`，必须与上面两个字段一起设置（通常同一张图）。
 
+### 用户未指定头像时：主动从 arcane-assets 选图
+
+这是建档的一部分，不是可选的后续美化。用户没有提供头像，也没有明确说“保留原图/不用换图”时，创建或复制人物后必须主动补一张合适的头像，**不得直接保留 dnd5e 系统包里的默认头像，也不要拿无关通用职业立绘代替角色本身**。
+
+1. 优先从 `arcane-assets` 官方画库选择：涂鸦风 NPC、具名角色、古典油画和 game-icons 均可。用 `index.json` 中的 `type/style/tags/name/name_zh` 按角色的种族、职业、性别、时代、装备和风格做语义匹配，而不是仅按职业名猜图。
+2. 画库未安装或索引不可读时，先用 `foundry_module_prepare` 获取 `arcane-assets` 并读取实际文件；不因此退回 DND 默认头像。只选真实存在且 `foundry_image` 支持的 PNG/JPEG/WebP，不猜文件名。
+3. 已安装模块中的图片可直接作为 `dataPath`（形如 `modules/arcane-assets/assets/<实际文件>.webp`）；下载到本机缓存的图片用 `sourcePath`。随后调用 `foundry_image({ targetUuid, syncPlacedTokens: true })`，同时更新 `actor.img`、原型 Token 和存量 Token。
+4. 在交付中说明实际选择了哪个资源以及为何匹配；只有用户明确要求保留原图或不换头像时才跳过这一步。
+
 ### 创建人物或修改图片时的默认动作
 
-1. 用户没有分别提供头像图和 token 图时，三个字段用同一张图；用户分别提供时分别设置，并向用户确认哪张图用在哪。
+1. 用户没有分别提供头像图和 token 图时，三个字段用同一张图；用户分别提供时分别设置，并向用户确认哪张图用在哪。用户未指定时，按上一节主动从 `arcane-assets` 选图。
 2. 用 `foundry_image` 一次完成上传和字段更新，不传本机绝对路径或 Base64：
 
    ```js
