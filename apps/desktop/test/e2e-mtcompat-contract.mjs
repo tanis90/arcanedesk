@@ -754,6 +754,99 @@ async function main() {
     }, url);
     const imageProbes = [];
     if (uploadedUrl) imageProbes.push({ kind: "png", url: uploadedUrl });
+    // ---- scene import: UVTT and pure-image create/update through the same typed tool ----
+    const uvtt = {
+      format: 1,
+      resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 4, y: 3 }, pixels_per_grid: 50 },
+      line_of_sight: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]],
+      objects_line_of_sight: [[{ x: 1, y: 1 }, { x: 2, y: 1 }]],
+      portals: [
+        { closed: true, bounds: [{ x: 2, y: 1 }, { x: 2, y: 2 }] },
+        { closed: false, bounds: [{ x: 3, y: 1 }, { x: 3, y: 2 }] },
+      ],
+      image: png.toString("base64"),
+    };
+    writeFileSync(path.join(prepDir, "contract-uvtt.dd2vtt"), JSON.stringify(uvtt));
+    const uvttCreated = await invoke("foundry_scene_import", { operation: "create", sourcePath: "contract-uvtt.dd2vtt" });
+    const uvttUuid = uvttCreated.details?.sceneUuid;
+    const uvttUrl = uvttCreated.details?.dataPath;
+    check("scene.uvtt-create", uvttCreated.details?.status === "completed" && uvttCreated.details?.format === "uvtt"
+      && uvttCreated.details?.stats?.walls === 5 && typeof uvttUrl === "string" && !uvttUrl.startsWith("data:"), {
+      status: uvttCreated.details?.status, code: uvttCreated.details?.code, message: uvttCreated.details?.message,
+      format: uvttCreated.details?.format, stats: uvttCreated.details?.stats,
+    });
+    const uvttRead = await invoke("foundry_scene_get", { sceneUuid: uvttUuid, include: ["walls", "lights"], limit: 100 });
+    check("scene.uvtt-readback", uvttRead.details?.width === 200 && uvttRead.details?.height === 150
+      && uvttRead.details?.["grid.size"] === 50 && uvttRead.details?.["background.src"] === uvttUrl
+      && uvttRead.details?.placeables?.walls?.length === 5 && uvttRead.details?.placeables?.lights?.length === 0, {
+      name: uvttRead.details?.name, width: uvttRead.details?.width, height: uvttRead.details?.height,
+      walls: uvttRead.details?.placeables?.walls?.length,
+    });
+    if (uvttUrl && !uvttUrl.startsWith("data:")) imageProbes.push({ kind: "uvtt-embedded-png", url: uvttUrl });
+    writeFileSync(path.join(prepDir, "contract-uvtt.dd2vtt"), JSON.stringify({
+      ...uvtt,
+      resolution: { ...uvtt.resolution, map_size: { x: 5, y: 4 } },
+      line_of_sight: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], objects_line_of_sight: [], portals: [],
+    }));
+    const uvttUpdated = await invoke("foundry_scene_import", {
+      operation: "update", sceneUuid: uvttUuid, readRef: uvttRead.details?.readRef, sourcePath: "contract-uvtt.dd2vtt",
+    });
+    const uvttUpdatedRead = await invoke("foundry_scene_get", { sceneUuid: uvttUuid, include: ["walls"], limit: 100 });
+    check("scene.uvtt-update", uvttUpdated.details?.status === "completed" && uvttUpdated.details?.format === "uvtt"
+      && uvttUpdatedRead.details?.width === 250 && uvttUpdatedRead.details?.height === 200
+      && uvttUpdatedRead.details?.placeables?.walls?.length === 1, {
+      status: uvttUpdated.details?.status, code: uvttUpdated.details?.code, message: uvttUpdated.details?.message,
+      width: uvttUpdatedRead.details?.width, height: uvttUpdatedRead.details?.height,
+      walls: uvttUpdatedRead.details?.placeables?.walls?.length,
+    });
+
+    const pureCreated = await invoke("foundry_scene_import", {
+      operation: "create", sourcePath: "fixture.jpg", name: `Pure Image ${RUN_ID}`,
+      grid: { type: 1, size: 50, distance: 5, units: "ft" },
+    });
+    const pureUuid = pureCreated.details?.sceneUuid;
+    const pureUrl = pureCreated.details?.dataPath;
+    const pureRead = await invoke("foundry_scene_get", { sceneUuid: pureUuid });
+    check("scene.pure-image-create", pureCreated.details?.status === "completed" && pureCreated.details?.format === "image"
+      && pureRead.details?.width === 64 && pureRead.details?.height === 48
+      && pureRead.details?.["grid.size"] === 50 && pureRead.details?.["background.src"] === pureUrl, {
+      status: pureCreated.details?.status, code: pureCreated.details?.code, message: pureCreated.details?.message,
+      width: pureRead.details?.width, height: pureRead.details?.height, grid: pureRead.details?.["grid.size"],
+    });
+    if (pureUrl && !pureUrl.startsWith("data:")) imageProbes.push({ kind: "pure-jpeg", url: pureUrl });
+    await invoke("foundry_page_eval", {
+      code: `const scene = [...game.scenes].find(value => value.uuid === ${JSON.stringify(pureUuid)});
+        await scene.update({ background: { ...(scene.background ?? {}), offsetX: 17, offsetY: 19, scaleX: 2, scaleY: 3 },
+          flags: { mtcompat: { ...(scene.flags?.mtcompat ?? {}), sceneRotation: { angle: 90 } } });
+        return { offsetX: scene.background?.offsetX, scaleX: scene.background?.scaleX,
+          rotation: scene.flags?.mtcompat?.sceneRotation?.angle };`,
+    });
+    const pureBeforeUpdate = await invoke("foundry_scene_get", { sceneUuid: pureUuid });
+    const pureUpdated = await invoke("foundry_scene_import", {
+      operation: "update", sceneUuid: pureUuid, readRef: pureBeforeUpdate.details?.readRef,
+      sourcePath: "fixture.webp", grid: { size: 75 },
+    });
+    const pureUpdatedRead = await invoke("foundry_scene_get", { sceneUuid: pureUuid });
+    const pureFlags = await invoke("foundry_page_eval", {
+      code: `const scene = [...game.scenes].find(value => value.uuid === ${JSON.stringify(pureUuid)});
+        return { offsetX: scene.background?.offsetX, offsetY: scene.background?.offsetY,
+          scaleX: scene.background?.scaleX, scaleY: scene.background?.scaleY,
+          rotation: scene.flags?.mtcompat?.sceneRotation ?? null, src: scene.background?.src };`,
+    });
+    check("scene.pure-image-update", pureUpdated.details?.status === "completed" && pureUpdated.details?.format === "image"
+      && pureUpdatedRead.details?.width === 64 && pureUpdatedRead.details?.height === 48
+      && pureUpdatedRead.details?.["grid.size"] === 75
+      && pureFlags.details?.value?.offsetX === 0 && pureFlags.details?.value?.offsetY === 0
+      && pureFlags.details?.value?.scaleX === 1 && pureFlags.details?.value?.scaleY === 1
+      && pureFlags.details?.value?.rotation === null && pureFlags.details?.value?.src === pureUpdated.details?.dataPath, {
+      status: pureUpdated.details?.status, code: pureUpdated.details?.code, message: pureUpdated.details?.message,
+      width: pureUpdatedRead.details?.width, height: pureUpdatedRead.details?.height,
+      grid: pureUpdatedRead.details?.["grid.size"], flags: pureFlags.details?.value,
+    });
+    if (pureUpdated.details?.dataPath && !pureUpdated.details.dataPath.startsWith("data:")) {
+      imageProbes.push({ kind: "pure-webp", url: pureUpdated.details.dataPath });
+    }
+
     for (const [kind, file, extension] of [["jpeg", "fixture.jpg", "jpg"], ["webp", "fixture.webp", "webp"]]) {
       const applied = await invoke("foundry_image", { sourcePath: file, targetUuid: actorUuid });
       const appliedUrl = typeof applied.details?.dataPath === "string" ? applied.details.dataPath : null;
@@ -1384,6 +1477,7 @@ async function main() {
       actorAdvanceAtLevelOne: true,
       actorGrantItems: true,
       sceneApplyTokenLifecycle: true,
+      sceneImportFormats: true,
       realPlayer: Boolean(PLAYER_USER && PLAYER_PASS),
       executeActionNarrative: true,
       electronUi: false,

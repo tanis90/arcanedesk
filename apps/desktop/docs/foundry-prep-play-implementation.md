@@ -366,3 +366,22 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
   `cleanupCompleted=true`，`noSecretsInReport=true`。ready 等待只修验收时序，不改变产品导航行为。
 - Node `24.22.3` / npm `11.13.0` 下根仓 `npm run verify` 通过。未制作安装包，未触发生产发布。
   战斗自动执行、Ring 图片同步和取消／超时中断仍按既有报告边界，不因本批结果扩大声明。
+
+## 多格式场景导入与 skill 验收（2026-11-23）
+
+- `foundry_scene_import` 仍是唯一模型工具，按扩展名支持 Foundry JSON、Universal VTT
+  （`.dd2vtt/.uvtt/.df2vtt`）和纯图片；不新增传送门工具。JSON 可另传背景，UVTT 使用内嵌图与网格，
+  纯图片按真实解码尺寸写入背景、offset=0、scale=1，换图清理旧旋转元数据。图片 create 可选名称与
+  网格，update 保留未显式给出的网格字段，不从图片猜网格。
+- 前端 Dev `build-info.commit=639ac5eb407aafa5c348133ff4c407d7565c5010`（PR #388）。
+  真实 Desktop 合同 **199/199**：UVTT create/update 的墙、门、窗、尺寸和网格，纯图片 create/update
+  的尺寸、网格、offset/scale 与 rotation 清理均通过；私有图片读取、既有角色/场景链、真实玩家
+  读取与写拒零副作用同时通过。`sceneImportFormats=true`、`realPlayer=true`，失败和环境失败均为空。
+  原生 API 矩阵 **26/26**，无失败或跳过。
+- 工具描述提供 DD2VTT 正面示例；新增 `arcane-scene-import` 与 `arcane-item-update`，补 NPC/PC
+  最小示例和 `foundry_image` 指引。物品 skill 明确合集授予与自定义世界 Item 的边界，不虚构
+  `foundry_item_create`。bundle revision 51；skills 自包含 **41/41**、包布局 **16/16**。
+- Desktop 定向 **27/27**，Node 24 全仓 `npm run verify` 通过。真实 Dev 验收前的前端专项为
+  **21/21 + 11/11**，apiSurface **165/165**，完整 headless 通过。前端 `stage18-uvtt` 的 I7/I7b/I8
+  连续两次未过（21/24），完整本地 `npm test` 另有 CI_RUN_REQUIRED 和既有用户包断言边界，未把这些
+  检查写成全绿。Desktop CI 的既有 undici/minimatch 生产依赖审计仍需独立处理。

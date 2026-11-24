@@ -534,3 +534,10 @@
 - 只处理用户点名的普通文件，按通道校验 zip/图片/JSON 类型与大小；不复制整个目录、不读取无关配置或凭据、不用 shell 直接上传。本地暂存不替代大厅计划审批、ruleset 选择、登录或写操作审批。
 - 图片上传上限与当前服务端一致调整为 32 MiB，场景 JSON 上限仍保持 10 MiB；不要求 Agent 为超过旧 10 MiB 上限的原图自行降采样。
 - `arcane-world-import`、`arcane-mt-packs` 与备团图片/场景提示统一采用这套规则，r50 为 `revision: 50`，`minAppVersion` 保持 `0.9.0`。
+
+
+### 多格式场景导入与物品能力边界（2026-11-23，r51）
+
+- 新增 `arcane-scene-import`：地图是高频操作，自有提问为 0；同一个 `foundry_scene_import` 按扩展名处理 Foundry JSON、Universal VTT 和纯图片，正面示例覆盖三种输入。图片尺寸由真实解码决定，网格来自来源、用户显式输入或系统默认，不从图片猜网格；目录外文件仍只按 r50 的点名文件受控暂存。
+- `arcane-actor-update` 补 NPC/PC 最小建档示例，图片统一使用 `foundry_image` 同步头像、原型与存量 Token，不再要求模型先手工搬世界 Data 文件。
+- 新增 `arcane-item-update`：合集发现与 Actor 授予继续走 typed 工具；当前没有独立 `foundry_item_create`，自定义世界 Item 明确走来源克隆与原生 Document API，并回读类型、系统和实际归属，不虚构工具或把授予冒充世界创建。两个新 skill 的登录与写审批均沿用 App 既有流程，不新增交互点。

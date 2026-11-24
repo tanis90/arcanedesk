@@ -120,6 +120,9 @@ globalThis.ARCANE_MESSAGES = {
     "welcome.install.label": "安装 FVTT",
     "welcome.install.desc": "帮我安装 FVTT,我把安装包放在 …",
     "welcome.install.prompt": "/skill:arcane-fvtt-setup 帮我安装 FVTT,我把安装包放在 ",
+    "welcome.arcaneMap.label": "奥法地图",
+    "welcome.arcaneMap.desc": "连接奥法地图,进入大厅",
+    "welcome.arcaneMap.prompt": "连接奥法地图",
 
     // ---------- composer / 滚动 / 分栏 ----------
     "composer.placeholder": "输入消息…",
@@ -658,6 +661,9 @@ globalThis.ARCANE_MESSAGES = {
     "welcome.install.label": "Install FVTT",
     "welcome.install.desc": "Help me install FVTT; my installer is in …",
     "welcome.install.prompt": "/skill:arcane-fvtt-setup Help me install FVTT; my installer is in ",
+    "welcome.arcaneMap.label": "Arcane Map",
+    "welcome.arcaneMap.desc": "Connect to the Arcane Map and open the lobby",
+    "welcome.arcaneMap.prompt": "Connect to the Arcane Map",
 
     // ---------- composer / scroll / splitter ----------
     "composer.placeholder": "Message…",

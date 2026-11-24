@@ -27,6 +27,12 @@ test("new schemas reject unknown keys and unbounded selectors", () => {
   assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json" }), true);
   assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json", backgroundSourcePath: "maps/church.png" }), true);
   assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json" }), true);
+  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.dd2vtt" }), true);
+  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.jpg", name: "教堂",
+    grid: { type: 1, size: 150, distance: 5, units: "ft" } }), true);
+  assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref",
+    sourcePath: "maps/church.webp", grid: { size: 100 } }), true);
+  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.jpg", grid: { size: 0 } }), false);
   // Flattened publish schema keeps cross-branch fields optional; the exact union check
   // rejects mismatched branches (update without readRef, create with sceneUuid) before dispatch.
   assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", sourcePath: "maps/church.json" }), true);

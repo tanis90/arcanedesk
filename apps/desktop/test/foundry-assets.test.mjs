@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile, mkdir, symlink, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { readFoundryImage, readFoundrySceneJson, validateDataImagePath, MAX_FOUNDRY_IMAGE_BYTES, MAX_FOUNDRY_SCENE_JSON_BYTES } from "../src/main/foundry-assets.js";
+import { foundrySceneSourceFormat, readFoundryImage, readFoundrySceneJson, validateDataImagePath, MAX_FOUNDRY_IMAGE_BYTES, MAX_FOUNDRY_SCENE_JSON_BYTES } from "../src/main/foundry-assets.js";
 
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO1cAAAAASUVORK5CYII=", "base64");
 const decodeImage = bytes => { assert.deepEqual(bytes, png); return { width: 1, height: 1 }; };
@@ -67,6 +67,26 @@ test("local images above the former 10 MiB cap remain readable up to 32 MiB", as
   assert.equal(result.extension, "png");
   assert.equal(MAX_FOUNDRY_IMAGE_BYTES, 32 * 1024 * 1024);
   assert.equal(MAX_FOUNDRY_SCENE_JSON_BYTES, 10 * 1024 * 1024);
+});
+
+test("scene source formats are detected from bounded filename extensions", () => {
+  assert.equal(foundrySceneSourceFormat("maps/church.json"), "foundry-json");
+  assert.equal(foundrySceneSourceFormat("maps/church.DD2VTT"), "uvtt");
+  assert.equal(foundrySceneSourceFormat("maps/church.uvtt"), "uvtt");
+  assert.equal(foundrySceneSourceFormat("maps/church.df2vtt"), "uvtt");
+  assert.equal(foundrySceneSourceFormat("maps/church.jpeg"), "image");
+  assert.equal(foundrySceneSourceFormat("maps/church.webp"), "image");
+  assert.throws(() => foundrySceneSourceFormat("maps/church.txt"), /SCENE_FORMAT_UNSUPPORTED/);
+});
+
+test("UVTT descriptors can use the bounded 32 MiB reader without changing the Foundry JSON cap", async t => {
+  const { cwd } = await fixture(t);
+  const uvtt = { resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 1, y: 1 }, pixels_per_grid: 100 },
+    image: "a".repeat(MAX_FOUNDRY_SCENE_JSON_BYTES) };
+  await writeFile(path.join(cwd, "large.dd2vtt"), JSON.stringify(uvtt));
+  await assert.rejects(readFoundrySceneJson({ cwd, sourcePath: "large.dd2vtt" }), /SCENE_SIZE_INVALID/);
+  const parsed = await readFoundrySceneJson({ cwd, sourcePath: "large.dd2vtt", maxBytes: MAX_FOUNDRY_IMAGE_BYTES });
+  assert.equal(parsed.image.length, MAX_FOUNDRY_SCENE_JSON_BYTES);
 });
 
 test("scene JSON parses objects inside the prep fence and rejects escapes, oversize and wrong roots", async t => {

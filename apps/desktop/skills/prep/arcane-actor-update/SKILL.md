@@ -24,6 +24,38 @@ description: 在 Foundry 或奥法地图（mtcompat play）游戏世界里新建
 
 Character 路径中，模型只负责选择来源、等级和明确选项。不要自己计算 HP、AC、技能映射、法术位或资源；让 dnd5e 计算并通过一次 read-back 验证。
 
+## 最小建档示例
+
+空白 NPC：
+
+```js
+foundry_actor_create({
+  source: { kind: "blank", actorType: "npc" },
+  name: "教堂守卫",
+})
+```
+
+从合集复制完整 NPC（packId/entryId 必须来自实际 browse 结果）：
+
+```js
+foundry_actor_create({
+  source: { kind: "compendium", packId: "<合集包id>", entryId: "<条目id>" },
+  name: "腐朽牧师",
+})
+```
+
+空白 PC 与基础属性（标准数组；后续种族/ASI 由 advance 加法处理）：
+
+```js
+foundry_actor_create({
+  source: { kind: "blank", actorType: "character" },
+  name: "艾拉",
+  dnd5e: { abilities: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 } },
+})
+```
+
+这些只是建档，不是完整车卡。PC 继续 `arcane-content-catalog` 的 class/race 发现 → `foundry_advancement_plan` → `foundry_actor_advance`；NPC 优先使用完整 stat block，怪物加职业等级也走 plan/advance。图片统一交给下面的 `foundry_image`，不在 create 里传本机路径或 Base64。
+
 ## 车卡 / 升级：写入工具链
 
 车卡与升级全程走结构化写工具，不裸写世界：
@@ -173,15 +205,25 @@ Foundry 里「角色卡上的头像」和「拖进地图的 token 图像」是�
 - `actor.prototypeToken.texture.src` — 之后新拖入场景的 token 默认图像。
 - 动态 token 环：`prototypeToken.ring.enabled` 为 true 时，token 画面主体取自 `prototypeToken.ring.subject.texture`，必须与上面两个字段一起设置（通常同一张图）。
 
-### 创建人物时的默认动作
+### 创建人物或修改图片时的默认动作
 
 1. 用户没有分别提供头像图和 token 图时，三个字段用同一张图；用户分别提供时分别设置，并向用户确认哪张图用在哪。
-2. 图片文件先落进世界 Data 目录内（如 `worlds/<世界id>/assets/`)，字段写世界内相对路径；禁止引用本机绝对路径或临时目录——迁移世界、换机器后图会全丢。
-3. 写入后逐个回读 `img`、`prototypeToken.texture.src`（环启用时含 `ring.subject.texture`），并确认路径指向的文件真实存在。
+2. 用 `foundry_image` 一次完成上传和字段更新，不传本机绝对路径或 Base64：
+
+   ```js
+   foundry_image({
+     sourcePath: "assets/church-guard.png",
+     targetUuid: "Actor.<id>",
+     syncPlacedTokens: true,
+   })
+   ```
+
+   工具会同时写 `actor.img` 与 prototype Token；`syncPlacedTokens:true` 同步当前世界各场景的存量 Token。返回的 `dataPath` 是 Foundry 的 Data 相对路径或 mtcompat 的持久图片 URL，以实际回执为准，不手猜地址。私有 URL 的读取由页面换签处理，不把签名 query 写回文档。
+3. 核对回执中的 `img`、`prototypeToken.texture.src` 和各 Token 步骤；回执没有覆盖目标字段时才用 `foundry_actor_get` 补读。上传成功而应用失败时保留 `dataPath` 对账，`partial/indeterminate` 不自动重放。
 
 ### 已在场景里的存量 token
 
-改 `prototypeToken` 只影响之后放置的 token，不会改已放置在场景里的。修正存量：遍历相关 Scene 的 token 文档，把属于该人物的 token 的 `texture.src`（环启用时含 `ring.subject.texture`）一并更新，或让用户删除后重拖。所有写调用 await 并回读验证。
+改 `prototypeToken` 只影响之后放置的 token，不会改已放置在场景里的。`syncPlacedTokens:true` 负责存量 linked/unlinked Token；启用 ring 时还同步 subject texture。不要先只改头像再靠用户删除重拖来补救。
 
 ## 验收
 

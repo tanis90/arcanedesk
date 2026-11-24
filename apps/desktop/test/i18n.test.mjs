@@ -70,6 +70,26 @@ test("home suggestion chips read: install → open local → read module → con
   );
 });
 
+test("welcome hero carries the Arcane Map capsule feeding the connect prompt", () => {
+  const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
+  const chat = readFileSync(path.join(appRoot, "src/renderer/chat.js"), "utf8");
+  // 胶囊长在欢迎区 C 位(welcome 子树),而非 composer 下方的建议 chips 行
+  const welcomeStart = html.indexOf('<div class="welcome" id="welcome">');
+  const welcomeEnd = html.indexOf("</main>");
+  const welcomeBlock = html.slice(welcomeStart, welcomeEnd);
+  assert.ok(welcomeStart >= 0 && welcomeEnd > welcomeStart, "welcome block not found");
+  assert.match(
+    welcomeBlock,
+    /class="example-chip capsule"[^>]*data-prompt="连接奥法地图"[^>]*data-i18n="welcome\.arcaneMap\.label"[^>]*data-i18n-prompt="welcome\.arcaneMap\.prompt"/,
+  );
+  assert.doesNotMatch(welcomeBlock, /capsule[^>]*data-chip-mode/, "capsule stays mode-agnostic on home");
+  // 点击行为沿用 chips 的「填入不发送」:胶囊不自带 handler,靠 .example-chip 统一绑定
+  assert.match(
+    chat,
+    /querySelectorAll\("\.example-chip"\)[\s\S]*?dataset\.prompt[\s\S]*?input\.focus\(\)/,
+  );
+});
+
 test("site permissions live inside General instead of a dedicated settings tab", () => {
   const html = readFileSync(path.join(appRoot, "src/renderer/index.html"), "utf8");
   const paneRefs = [...html.matchAll(/class="tab(?: active)?" data-pane="([^"]+)"/g)]

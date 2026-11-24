@@ -222,6 +222,8 @@ test("scene import dispatches page-native JSON once, binds update readRef and re
   assert.equal(created.status, "completed"); assert.equal(created.sceneUuid, "Scene.new");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].operation, "create");
+  assert.equal(calls[0].sourceFormat, "foundry-json");
+  assert.equal(calls[0].sourceName, "church.json");
   assert.deepEqual(calls[0].sceneJson, sceneJson);
   assert.deepEqual(calls[0].world, { origin: "https://f.test", id: "w" });
   assert.equal(calls[0].requestId, created.operationRef);
@@ -300,4 +302,63 @@ test("scene import reads scene and background bytes under one combined lease and
   const controller = new AbortController(); controller.abort();
   assert.equal((await service.importScene(params, binding, "aborted", controller.signal)).code, "ABORTED");
   assert.equal(calls, 1);
+});
+
+
+test("scene import forwards UVTT and pure image sources with bounded internal payloads", async t => {
+  const { writeFileSync, readFileSync } = await import("node:fs");
+  const { mkdir } = await import("node:fs/promises");
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-import-formats-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const cwd = path.join(directory, "prep");
+  await mkdir(cwd);
+  const uvtt = { resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 2, y: 3 }, pixels_per_grid: 50 },
+    line_of_sight: [[{ x: 0, y: 0 }, { x: 1, y: 1 }]], portals: [], image: "aW1hZ2U=" };
+  writeFileSync(path.join(cwd, "church.dd2vtt"), JSON.stringify(uvtt));
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO1cAAAAASUVORK5CYII=", "base64");
+  writeFileSync(path.join(cwd, "church.png"), png);
+  const calls = [];
+  const service = new FoundryServices({ sessionId: "formats", directory, mode: "prep", getCwd: () => cwd,
+    withPage: async (_signal, fn) => fn(),
+    withAssets: async (_cwd, _signal, fn) => fn(),
+    decodeImage: () => ({ width: 320, height: 200 }),
+    call: async (action, args) => {
+      assert.equal(action, "sceneImport");
+      calls.push(args);
+      return { status: "completed", sceneUuid: `Scene.${args.sourceFormat}`, steps: [], verification: [], warnings: [] };
+    } });
+  const binding = { taskId: "task", metadata: Promise.resolve({ world: { origin: "https://f.test", id: "w" } }) };
+
+  const uvttResult = await service.importScene({ operation: "create", sourcePath: "church.dd2vtt" }, binding, "uvtt");
+  assert.equal(uvttResult.status, "completed");
+  assert.equal(calls[0].sourceFormat, "uvtt");
+  assert.equal(calls[0].sourceName, "church.dd2vtt");
+  assert.deepEqual(calls[0].sceneJson, uvtt);
+  assert.equal("background" in calls[0], false);
+
+  const imageResult = await service.importScene({ operation: "create", sourcePath: "church.png", name: "教堂",
+    grid: { type: 1, size: 150, distance: 5, units: "ft" } }, binding, "image");
+  assert.equal(imageResult.status, "completed");
+  assert.equal(calls[1].sourceFormat, "image");
+  assert.equal(calls[1].sourceName, "church.png");
+  assert.equal(calls[1].name, "教堂");
+  assert.deepEqual(calls[1].dimensions, { width: 320, height: 200 });
+  assert.deepEqual(calls[1].grid, { type: 1, size: 150, distance: 5, units: "ft" });
+  assert.equal("sceneJson" in calls[1], false);
+  assert.equal(calls[1].background.upload.base64, png.toString("base64"));
+
+  for (const [id, params, code] of [
+    ["uvtt-background", { operation: "create", sourcePath: "church.dd2vtt", backgroundSourcePath: "church.png" }, "INPUT_INVALID"],
+    ["json-name", { operation: "create", sourcePath: "church.json", name: "wrong" }, "INPUT_INVALID"],
+    ["uvtt-grid", { operation: "create", sourcePath: "church.dd2vtt", grid: { size: 100 } }, "INPUT_INVALID"],
+    ["image-update-name", { operation: "update", sceneUuid: "Scene.image", readRef: "read", sourcePath: "church.png", name: "wrong" }, "INPUT_INVALID"],
+    ["unknown-extension", { operation: "create", sourcePath: "church.txt" }, "SCENE_FORMAT_UNSUPPORTED"],
+  ]) {
+    assert.equal((await service.importScene(params, binding, id)).code, code, id);
+  }
+  assert.equal(calls.length, 2, "invalid format combinations never dispatch");
+  const journal = readFileSync(path.join(directory, "formats.jsonl"), "utf8");
+  assert.equal(journal.includes(png.toString("base64")), false);
+  assert.equal(journal.includes("sceneJson"), false);
+  assert.equal(journal.includes("resolution"), false);
 });
