@@ -62,12 +62,18 @@ const REQUIRED_MARKERS = new Map([
     "ring.subject.texture",
     "保持 `img`、原型和存量 Token 图像不变",
     "本身不下载或安装",
+    "https://github.com/tanis90/arcanedesk-fvtt-mods",
+    "镜像未收录不等于画库不存在",
     "type/style/attrs/tags/name/name_zh/desc/desc_zh",
     "原始 `.svg` 不传给 `foundry_image`",
+    "advance 与授予前必须",
   ]],
   ["skills/prep/arcane-item-update/SKILL.md", [
     "map_api_search({ prefix: \"game.items\" })",
     "touched/missing",
+    "JSON.parse(JSON.stringify(doc))",
+    "CONFIG.Item.documentClass.create",
+    "arcane-journal-update",
   ]],
   ["skills/prep/arcane-journal-update/SKILL.md", [
     "JournalEntryPage",
@@ -98,6 +104,16 @@ const REQUIRED_MARKERS = new Map([
     "map_api_call",
     "kind: \"action\"",
     "不走 `map_api_call`",
+    "先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`",
+    "复用当前 URL 的 origin",
+  ]],
+  ["skills/prep/arcane-world-import/SKILL.md", [
+    "先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`",
+    "复用当前 URL 的 origin",
+  ]],
+  ["skills/prep/arcane-mt-packs/SKILL.md", [
+    "先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`",
+    "复用当前 URL 的 origin",
   ]],
   ["skills/prep/arcane-module-to-fvtt/SKILL.md", [
     "arcane-assets",
@@ -147,23 +163,29 @@ test("journal examples execute native writes with HTML on both runtimes", async 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   for (const toolName of ["map_page_eval", "browser_evaluate"]) {
     const writes = [];
+    const creates = [];
     const context = vm.createContext({
-      CONFIG: { JournalEntry: { documentClass: { create: async data => ({
-        ...data,
-        uuid: `Journal.j${writes.length + 1}`,
-        createEmbeddedDocuments: async (type, pages) => {
-          writes.push({ type, pages });
-          return pages.map((page, index) => ({
-            ...page,
-            uuid: `Journal.j1.JournalEntryPage.p${index + 1}`,
-            text: { ...page.text },
-          }));
-        },
-      }) } } },
+      CONFIG: { JournalEntry: { documentClass: { create: async data => {
+        creates.push(data);
+        return {
+          ...data,
+          uuid: `Journal.j${writes.length + 1}`,
+          createEmbeddedDocuments: async (type, pages) => {
+            writes.push({ type, pages });
+            return pages.map((page, index) => ({
+              ...page,
+              uuid: `Journal.j1.JournalEntryPage.p${index + 1}`,
+              text: { ...page.text },
+            }));
+          },
+        };
+      } } } },
     });
     context.map_page_eval = ({ code }) => new AsyncFunction("CONFIG", code)(context.CONFIG);
     context.browser_evaluate = ({ code }) => vm.runInContext(code, context);
     const result = await vm.runInContext(toolExample(source, toolName), context);
+    assert.equal(creates.length, 1, toolName);
+    assert.equal(creates[0].ownership.default, 0, toolName);
     assert.equal(writes.length, 1, toolName);
     assert.equal(writes[0].type, "JournalEntryPage", toolName);
     assert.equal(writes[0].pages.length, 1, toolName);

@@ -506,6 +506,20 @@ test("A3 审批拦截：与 browser_evaluate 同级，拒绝后绝不派发页�
   assert.deepEqual(calls, []);
 });
 
+test("A3 大厅和登录页在审批前硬拒绝，不派发任何页面代码", async () => {
+  for (const kind of ["lobby", "auth"]) {
+    const { host, tool, calls } = pageEvalHarness({ receipt: { status: "completed", value: 1, touched: [], missing: [] } });
+    host.lobbyClient = () => ({ classifyPanelUrl: () => ({ kind }) });
+    const approvals = [];
+    host.maybeRequestApproval = async payload => { approvals.push(payload); return true; };
+    const result = await tool.execute("eval-1", { code: "return location.href;" });
+    assert.equal(result.isError, true, kind);
+    assert.match(result.content[0].text, /PROFILE_MISMATCH/, kind);
+    assert.deepEqual(calls, [], kind);
+    assert.equal(approvals.length, 0, kind);
+  }
+});
+
 test("A3 结果呈现：completed 空增量只回 value；带注记附尾（- path [status] note / - feature ×count）", async () => {
   const empty = pageEvalHarness({ receipt: { status: "completed", value: { hp: 7 }, touched: [], missing: [] } });
   const plain = await empty.tool.execute("eval-1", { code: "return { hp: 7 };" });

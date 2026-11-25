@@ -1,11 +1,11 @@
 ---
 name: arcane-mt-packs
-description: 管理 ArcaneDesk mt compat 大厅（奥法地图）的个人内容包库与战役选包。当用户要“上传/替换合集包”“看看我的内容包”“预览包里有什么”“给战役勾选/取消内容包”“删掉某个内容包”，或点名本机 module zip 时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；上传/替换走大厅导入工具，不收账号密码；世界包导入用 arcane-world-import。
+description: 管理 ArcaneDesk mt compat 大厅（奥法地图）的个人内容包库与战役选包。当用户要“上传/替换合集包”“看看我的内容包”“预览包里有什么”“给战役勾选/取消内容包”“删掉某个内容包”，或点名本机 module zip 时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；上传/替换走大厅导入工具，不收账号密码；世界包导入用 arcane-world-import。任何页面动作前先读 arcane-mt-lobby。
 ---
 
 # mt compat 内容包与战役选包
 
-mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归当前账号所有，物理存在大厅）和**战役选包**（战役引用库里的包，play 页据此聚合 compendium）。先按 `arcane-mt-lobby` 确认大厅与 action/job 分工；本 skill 只管这两层，以及删除包后的影响说明；世界包导入属于 `arcane-world-import`。
+mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归当前账号所有，物理存在大厅）和**战役选包**（战役引用库里的包，play 页据此聚合 compendium）。**任何页面或工具调用前，先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`**，确认大厅与 action/job 分工；不能只读本 skill 就动手。当前已经是 mtcompat 大厅或游戏页时，复用当前 URL 的 origin（包括内部 dev 部署），不要改成公共主入口。本 skill 只管这两层，以及删除包后的影响说明；世界包导入属于 `arcane-world-import`。
 
 打开大厅用 `foundry_open`；上传/替换走 `map_lobby_import_start` / `map_lobby_import_job`；库清单、条目读取、选包与删除走 `map_api_call`。不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 

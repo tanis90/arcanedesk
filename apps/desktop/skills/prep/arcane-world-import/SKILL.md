@@ -1,11 +1,11 @@
 ---
 name: arcane-world-import
-description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 的 mt compat 云端战役（奥法地图大厅）。当用户说“把这个世界传到云端/导入云端/上传到奥法地图/在云端开这个世界/帮我在大厅里导入世界”，或点名本机世界 zip 要求导入时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；导入走大厅 typed 工具，不收账号密码；旧版 dnd5e（<5.3.0）按大厅规则拒绝并指引升级；本地 FVTT 安装与运维归 arcane-fvtt-setup/ops。
+description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 的 mt compat 云端战役（奥法地图大厅）。当用户说“把这个世界传到云端/导入云端/上传到奥法地图/在云端开这个世界/帮我在大厅里导入世界”，或点名本机世界 zip 要求导入时使用。用户明确给出的文件即使在备团目录外，也先按“文件边界”受控暂存；导入走大厅 typed 工具，不收账号密码；旧版 dnd5e（<5.3.0）按大厅规则拒绝并指引升级；本地 FVTT 安装与运维归 arcane-fvtt-setup/ops。任何页面动作前先读 arcane-mt-lobby。
 ---
 
 # FVTT 世界 → mt compat 云端战役
 
-把本机 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。先按 `arcane-mt-lobby` 确认大厅页面与长程 job 路由，再按本 skill 处理世界包。使用 `foundry_open`、`map_lobby_import_start` / `map_lobby_import_job`，以及 `map_api_call` 的只读 action；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
+把本机 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。**任何页面或工具调用前，先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`**，确认大厅页面与长程 job 路由，再按本 skill 处理世界包。当前已经是 mtcompat 大厅或游戏页时，复用当前 URL 的 origin（包括内部 dev 部署），不要改成公共主入口。使用 `foundry_open`、`map_lobby_import_start` / `map_lobby_import_job`，以及 `map_api_call` 的只读 action；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 
 ## 用户交互预算
 

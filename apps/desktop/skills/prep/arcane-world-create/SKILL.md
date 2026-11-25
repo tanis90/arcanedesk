@@ -1,6 +1,6 @@
 ---
 name: arcane-world-create
-description: 在奥法地图（mt compat）大厅从空白创建战役/世界，不使用 Foundry 世界 ZIP。用户说“新建世界”“创建战役”“开一个空白团”时使用；导入现有世界 ZIP 改用 arcane-world-import。
+description: 在奥法地图（mt compat）大厅从空白创建战役/世界，不使用 Foundry 世界 ZIP。用户说“新建世界”“创建战役”“开一个空白团”时使用；导入现有世界 ZIP 改用 arcane-world-import。任何页面动作前先读 arcane-mt-lobby。
 ---
 
 # 从空白创建奥法战役
@@ -9,7 +9,7 @@ description: 在奥法地图（mt compat）大厅从空白创建战役/世界，
 
 ## 创建前边界
 
-先按 `arcane-mt-lobby` 确认大厅页面、导航与通用写入原则。本 skill 只增加三项创建特有边界，不额外追问：
+**任何页面或工具调用前，先用原生 `read` 读取 `arcane-mt-lobby/SKILL.md`**（以 `available_skills` 给出的实际路径为准），确认大厅页面、导航与通用写入原则；不能只读本 skill 就动手。当前已经是 mtcompat 大厅或游戏页时，复用当前 URL 的 origin（包括内部 dev 部署），不要改用公共主入口替换它。本 skill 只增加三项创建特有边界，不额外追问：
 
 1. 规则选择：先用 `map_api_call({ id: "lobbyRulesetsList", args: {} })` 读取当前支持的规则并让用户明确选择；创建后不可改，不替用户决定。
 2. 登录：未登录时让用户在右侧面板自行登录，不收账号密码。

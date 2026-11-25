@@ -39,11 +39,11 @@ foundry_actor_grant_items({
 优先复用合集文档并改名/做有限自定义：
 
 1. 用 browse 找到精确合集 UUID，读取完整来源文档。
-2. 在 ready 游戏页走原生 Document API：Foundry 用 `browser_evaluate`；mtcompat 先用 `map_api_search({ prefix: "game.items" })` 读取声明面，再用 `map_page_eval` 并读取 `touched/missing`。复制来源数据，去掉原 `_id` 与不适用于目标世界的目录归属，再创建世界 Item；保留来源类型和未明确要求修改的字段。
+2. 在 ready 游戏页走原生 Document API：Foundry 用 `browser_evaluate`；mtcompat 先用 `map_api_search({ prefix: "game.items" })` 读取声明面，再用 `map_page_eval` 并读取 `touched/missing`。真实 Document 用 `toObject()` 取源数据；若合集读取返回的是 plain object，按回执改用 `JSON.parse(JSON.stringify(doc))`，不要继续调用不存在的 `toObject()`。去掉原 `_id`、合集 `uuid` 与不适用于目标世界的目录归属，再用 `CONFIG.Item.documentClass.create` 创建世界 Item；保留来源类型和未明确要求修改的字段。
 3. 回读新 Item 的 `uuid/name/type/system`，以及与任务相关的 `activities/effects`。只完成创建不等于规则自动化已经可用；来源缺失、字段不兼容或执行能力未知要照实报告。
 4. 需要给 NPC/PC 使用时，另走 `foundry_actor_grant_items`（合集来源）或原生嵌入 Item 路径，并核对实际归属，不把“世界已创建”当成“Actor 已持有”。
 
-自定义规则字段没有可靠来源时，不从物品名称猜结构。只改用户明确要求的字段；`partial/indeterminate` 不自动重放，先按 UUID 对账。
+自定义规则字段没有可靠来源时，不从物品名称猜结构。只改用户明确要求的字段；`partial/indeterminate` 不自动重放，先按 UUID 对账。同一任务涉及日志或富文本页面时，也必须读取 `arcane-journal-update`，不能用本 skill 代替日志的 HTML、权限和页面创建流程。
 
 ## 物品图片：使用 foundry_image
 

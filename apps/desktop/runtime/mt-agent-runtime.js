@@ -3140,12 +3140,13 @@
         const setHas = (container, sub) => container?.value?.has?.(sub) ?? container?.has?.(sub)
           ?? (Array.isArray(container?.value) && container.value.includes(sub))
           ?? (Array.isArray(container) && container.includes(sub)) ?? false;
-        const traitLanded = (key) => {
+        const traitLanded = (key, mode) => {
           if (!traitFamilies) return null;
           // dnd5e 特质值存叶段（weapon:sim:dagger 落 "dagger"、languages:standard:common 落
           // "common"），全余段与叶都接受
           const parts = String(key).split(":"), seg = parts[0], sub = parts.slice(1).join(":"), leaf = parts[parts.length - 1];
           const has = (container) => setHas(container, sub) || (leaf !== sub && setHas(container, leaf));
+          if (mode === "mastery" && seg === "weapon") return has(actor.system?.traits?.weaponProf?.mastery);
           if (seg === "skills") return (actor.system?.skills?.[leaf]?.value ?? 0) >= 1;
           if (seg === "tool") return (actor.system?.tools?.[sub]?.value ?? 0) >= 1 || (leaf !== sub && (actor.system?.tools?.[leaf]?.value ?? 0) >= 1);
           if (seg === "saves") return (actor.system?.abilities?.[leaf]?.proficient ?? 0) >= 1;
@@ -3183,7 +3184,7 @@
               continue;
             }
             for (const key of entry.dataFor.chosen) {
-              if (traitLanded(key) === false) warnOnce({ code: "TRAIT_GRANT_NOT_LANDED", value: key,
+              if (traitLanded(key, mode) === false) warnOnce({ code: "TRAIT_GRANT_NOT_LANDED", value: key,
                 message: key + " did not land on the actor (this actor type may not have the field in this system version); disclose it rather than hand-patching" });
             }
           }

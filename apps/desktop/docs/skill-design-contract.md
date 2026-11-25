@@ -573,3 +573,15 @@
 - 独立 Map 通道只保留 `map_lobby_return`、`map_lobby_import_start`、`map_lobby_import_job`、`map_scene_import`、`map_page_eval` 与两个通用 API 工具。普通 Foundry 不支持的 `foundry_lobby_*`、`foundry_scene_import`、`foundry_page_eval` 不再作为模型可见的平行工具面。
 - 不保留 `foundry_lobby_*` / `foundry_page_eval` 兼容别名。按实际 release 核对：0.9.0-78def2f7 的 Map 支持只经内部试用；上一个纯 FVTT 版本 0.8.0-dea6b56c 不含这些工具，本次改名不影响该版本用户体验。隐藏别名也不能保证真实 LLM 调用未激活工具，故删除旧专用实现，只保留 `map_api_call` 与上述专用通道。
 - `arcane-mt-packs` 的列表、条目预览、选包和删除全部改为 `map_api_call` 加操作 id；合集 ZIP 仍走 `map_lobby_import_start` / `map_lobby_import_job` 长程任务，不经过通用调用。
+
+### 大厅渐进披露与 eval 页面硬边界（2026-11-25，r57）
+
+- 真实 LLM 验收发现：模型只读专项 skill 就并行调用页面工具，未读大厅总则，并把当前 dev 页面换成公共主入口。`arcane-world-create`、`arcane-world-import`、`arcane-mt-packs` 与总则现在明确要求在任何页面/工具调用前先用原生 `read` 加载 `arcane-mt-lobby/SKILL.md`；已有 mtcompat 页面时复用当前 origin，不把默认公共域名当成强制目标。
+- 登录页与大厅不得执行页面 eval 不再只靠提示词：`map_page_eval` 在审批前检查真实页面分类，非 ready play 一律 `PROFILE_MISMATCH`，零审批、零页面派发。`LOGIN_REQUIRED` 的错误指引同步禁止 lobby/auth eval，防止用读取登录表单绕过登录边界。
+
+### 日志私有创建、事实边界与画库兜底（2026-11-25，r58）
+
+- 真实 LLM 验收发现 Map 构造器给省略权限的 JournalEntry 补 `default:3`。Map 另修默认值为 NONE(0)；Desk 两种运行时的创建示例都显式传 `ownership:{default:0}`，handout 才改成 2，保证第一笔写入就符合用户指定范围，不依赖事后补救。
+- 事实记录只能做语言组织，环境痕迹、程度、时间和因果推断也属于新增事实；用户没有要求创作时不补写。交互预算不变。
+- `arcane-assets` 是 `tanis90/arcanedesk-fvtt-mods` 的第一方正式模块，镜像未收录不代表不可用。按名称查询失败后改用仓库 URL 解析一次，再读第一方 manifest 的正式 download；仍走备团目录下载、实际 SHA-256、解压索引与 typed 图片工具，不增加提问，也不以默认图代替完成。
+- 真实矩阵补参：advance 的 readRef 必须包含 items 投影；授予条目的 uuid 与 packId+entryId 二选一。物品 skill 区分真实 Document 与 plain-object 合集投影，后者直接复制 JSON 数据。人物、物品、日志任务在蒸馏段和专项 skill 都要求先读对应领域，混合任务逐份加载，不让物品 skill 代替日志流程。

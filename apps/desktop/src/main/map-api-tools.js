@@ -43,7 +43,9 @@ function errorResult(error) {
   const code = typeof error?.code === "string" ? error.code : matched?.[1] ?? "MAP_API_FAILED";
   const guidance = code === "JOB_INDETERMINATE"
     ? " The result is uncertain; do not replay. Re-open the page and inspect the resulting campaign/world state."
-    : code === "CAPABILITY_UNAVAILABLE"
+    : code === "LOGIN_REQUIRED"
+      ? " Ask the user to sign in directly in the panel; never evaluate the lobby or auth page with map_page_eval or browser_evaluate."
+      : code === "CAPABILITY_UNAVAILABLE"
       ? " The deployed Map runtime does not expose this API yet; do not substitute raw REST or page eval."
       : "";
   return rejection(code, `${message}${guidance}`);

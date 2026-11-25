@@ -13,8 +13,8 @@ description: 在 Foundry 或奥法地图（mtcompat play）中创建、续写或
 - mtcompat 使用 `map_page_eval`，读取 `touched/missing` 注记；原生 Foundry 使用 `browser_evaluate`，传入一个异步 IIFE 表达式，不使用顶层 `return`。
 - 在 mtcompat 写原生日志 API 前，先调用 `map_api_search({ prefix: "game.journal" })`，读取 `surface.entries` 中的状态和 `note/use`，再按 Document API 示例执行。不要查 `JournalEntry` 或 `CONFIG.JournalEntry` 后把空结果当成不支持。
 - 不为文风、排版或默认可见性追问：已有标题和正文就直接写，要求润色或创作时直接完成。续写或修改的目标无法唯一确定时，不猜文档、不写入，报告需要的具体目标。
-- 默认创建 DM 私有日志；只有明确给玩家的 handout 才在 JournalEntry 上设置 `ownership: { default: 2 }`（Observer）。已有日志的权限不被静默扩大。Observer 表示玩家可查看，不等于已经在玩家屏幕弹窗展示。
-- 用户给的是事实记录时，不补造剧情、线索、NPC 对话或调查结果。用户要求创作或润色时才发挥，并保持已有事实不变。
+- 默认创建 DM 私有日志，创建参数始终显式带 `ownership: { default: 0 }`，不依赖运行时默认值；只有明确给玩家的 handout 才设 `ownership: { default: 2 }`（Observer）。已有日志的权限不被静默扩大。Observer 表示玩家可查看，不等于已经在玩家屏幕弹窗展示。
+- 用户给的是事实记录时，只做语言组织，不增加任何事实；未经提供的环境痕迹、程度、时间和因果推断也不能补。用户要求创作或润色时才发挥，并保持已有事实不变。
 
 ## 正文使用 HTML
 
@@ -45,6 +45,7 @@ map_page_eval({
   ].join("\\n");
   const journal = await CONFIG.JournalEntry.documentClass.create({
     name: "教堂调查记录",
+    ownership: { default: 0 },
   });
   const pages = await journal.createEmbeddedDocuments("JournalEntryPage", [{
     name: "第一次调查",
@@ -59,7 +60,7 @@ map_page_eval({
 })
 ```
 
-给玩家的 handout 只在 JournalEntry 创建参数中增加 `ownership: { default: 2 }`，不为正文另造权限字段。
+给玩家的 handout 只把示例中的 `ownership: { default: 0 }` 改为 `ownership: { default: 2 }`，不为正文另造权限字段。
 
 **多页必须循环单页创建**，每次向 `createEmbeddedDocuments` 传一页。每页都有明确的 `name` 和 `type`。
 
@@ -73,6 +74,7 @@ browser_evaluate({
     const content = "<h2>调查发现</h2><p>我们发现了<strong>被移动过的暗门</strong>。</p>";
     const journal = await CONFIG.JournalEntry.documentClass.create({
       name: "教堂调查记录",
+      ownership: { default: 0 },
     });
     const pages = await journal.createEmbeddedDocuments("JournalEntryPage", [{
       name: "第一次调查",

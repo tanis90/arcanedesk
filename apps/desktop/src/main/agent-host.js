@@ -1339,6 +1339,7 @@ export class AgentHost {
         "https://arcanemap.cn, https://arcanemap.ssskill.cn) / and /lobby.html normalize to the compat lobby; " +
         "the /user-files/compat[...]/lobby.html and play.html pages and the /auth/** Keycloak login flow display in the panel; the same play path on any other host is refused " +
         "as an untrusted page (other compat deployments need the ARCANEDESK_PANEL_PROFILE_OVERRIDES escape hatch). " +
+        "When an mt-compat page is already open, reuse its current URL/origin (including internal dev deployments enabled by an operator override) instead of replacing it with the public main entry. " +
         "Only play.html is the game page: lobby/auth pages display but never satisfy game readiness. " +
         "The response's profile field reports which page kind was detected (\"foundry\" or \"mtcompat\"). " +
         "Idempotent: repeated opens of the same lobby/play pathname, or any same-origin open while a trusted /auth/** page is showing, " +
@@ -1544,6 +1545,18 @@ export class AgentHost {
         "Read the touched/missing annotations in every receipt; a reported stub means rewrite per its note.",
       ],
       execute: async (_toolCallId, params, signal) => {
+        let panel = null;
+        try {
+          panel = host.lobbyClient?.()?.classifyPanelUrl?.();
+        } catch (error) {
+          if (error?.code !== "TARGET_UNAVAILABLE") return { ...textResult(error?.message ?? String(error)), isError: true };
+        }
+        if (panel && panel.kind !== "play") {
+          return {
+            ...textResult("PROFILE_MISMATCH: map_page_eval only runs on a ready play.html page; lobby and Keycloak/auth pages are never evaluated. Use map_api_call for lobby actions or map_lobby_return before evaluating a play page."),
+            isError: true,
+          };
+        }
         const approved = await host.maybeRequestApproval({
           tool: "map_page_eval",
           summary: params.code?.slice(0, 200),

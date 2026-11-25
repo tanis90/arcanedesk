@@ -74,8 +74,8 @@ foundry_actor_create({
    （标准数组/购点分配，整数 1..20）随 `dnd5e.abilities` 同批下发——种族/ASI 加成是
    advance 时对基础值做加法，属性必须先于 advance 落地，create 天然满足这个顺序。
    怪物复制用 `source.kind:"compendium"` + packId/entryId。同名冲突按回执处理，不重复创建。
-2. readRef：一切写操作前用 `foundry_actor_get` 读 actor 拿 `readRef`；授予前
-   `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。
+2. readRef：一切写操作前用 `foundry_actor_get` 读 actor 拿 `readRef`；advance 与授予前必须
+   `include:["items"]`，改 prototype Token 前 `include:["prototypeToken"]`。授予条目只传 `{uuid}` 或 `{packId,entryId}`，不要两者混传；browse 已返回 uuid 时直接传 `{uuid,quantity}`。
 3. 事后改属性：`foundry_actor_update` 的 `dnd5e.abilities` 是 SET 语义修正路径——
    advance 之后写入的必须是含种族/ASI 加成的最终基础值；名称/HP/AC/token 同此出口。
    种族侧选择（技能/工具/语言/自选属性点/变体专长）同样进 plan 的
@@ -216,7 +216,8 @@ foundry_actor_create({
 1. 读取画库 `index.json`，用 `type/style/attrs/tags/name/name_zh/desc/desc_zh` 过滤少量候选，再按语义选择。只选 `file` 真实存在且以 `.png/.jpg/.jpeg/.webp` 结尾的条目；索引里的原始 `.svg` 不传给 `foundry_image`。
 2. 当前世界能读取 `modules/arcane-assets/index.json` 和对应图片时，使用 `dataPath: "modules/arcane-assets/<条目的 file>"`，不重复上传。
 3. 否则复用本次任务已解压的画库；没有时调用 `foundry_module_prepare({ query: "arcane-assets" })`。`preparing` 按其 `poll_url` 等待，`ready` 后把 ZIP 下载到本次备团目录的专用子目录，核对返回的 `size` 和 `sha256`，再解压并读取索引。`foundry_module_prepare` 本身不下载或安装；这里不安装、不启用模块，也不修改 Foundry Data。把选中文件的 cwd 相对路径作为 `sourcePath`。
-4. 报告实际选择的资源和匹配依据。画库不可用或没有合适图片时，保留已建 Actor 并明确报告“头像未完成”，不退回 dnd5e 默认图，也不重复创建 Actor。
+4. 镜像未收录不等于画库不存在。改用 `foundry_module_prepare({ query: "https://github.com/tanis90/arcanedesk-fvtt-mods" })` 查一次第一方仓库，不反复换自然语言重试；仍未收录时，读取第一方 `modules/arcane-assets/module.json` 的 `download`，把这个正式 ZIP 下载到备团目录专用子目录。记录实际 SHA-256，解压后核对 `module.json` 的 `id:"arcane-assets"` 并读取索引，再按上面流程选图。网络失败要如实报告，不改用 dnd5e 或无关图片。
+5. 报告实际选择的资源和匹配依据。确实无法取得画库或没有合适图片时，保留已建 Actor 并明确报告“头像未完成”，不退回 dnd5e 默认图，也不重复创建 Actor。
 
 ### 应用图片
 

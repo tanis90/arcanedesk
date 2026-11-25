@@ -39,6 +39,7 @@ function harness({ page = "lobby", result = null, previewResult = null, approve 
     }
     if (action === "apiCall") {
       if (args.preview === true) return previewResult ?? { status: "preview", operationId: args.id, value: null };
+      if (result instanceof Error) throw result;
       if (result) return result;
       return { status: "completed", operationId: args.id, value: { campaign: { id: "c1", name: args.args.name } } };
     }
@@ -122,4 +123,13 @@ test("destructive writes preview impact before requesting approval", async () =>
   assert.equal(h.calls[1].args.preview, true);
   assert.equal(h.approvals.length, 1);
   assert.equal(h.approvals[0].args.preview.totals.packs, 1);
+});
+
+test("login-required guidance forbids lobby and auth page evaluation", async () => {
+  const error = Object.assign(new Error("LOGIN_REQUIRED: sign in first"), { code: "LOGIN_REQUIRED" });
+  const h = harness({ result: error });
+  const result = await h.tools.get("map_api_call").execute("login", { id: "lobbyCampaignsList", args: {} });
+  assert.equal(result.details.code, "LOGIN_REQUIRED");
+  assert.match(result.content[0].text, /never evaluate the lobby or auth page/);
+  assert.match(result.content[0].text, /map_page_eval/);
 });
