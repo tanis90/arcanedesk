@@ -84,3 +84,4 @@ foundry_scene_import({
 - `SCENE_FORMAT_UNSUPPORTED`、`SCENE_SIZE_INVALID`、`IMAGE_DECODE_FAILED` 或格式组合错误时修正输入，不改扩展名绕过。
 - 旧 App/runtime 不认识多格式导入时报告版本缺口，不退回 `browser_evaluate` 或 `foundry_page_eval` 手搓场景。
 - 头像、物品图、Token 图和富文本图片仍用 `foundry_image`，不要用场景导入替代。Token 放置和小范围场景元数据修改才用 `foundry_scene_apply`。
+- 场景导入是带文件处理和专门回执的 workflow，始终用 `foundry_scene_import`，不走通用 `foundry_api_call`。

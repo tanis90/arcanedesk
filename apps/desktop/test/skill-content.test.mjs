@@ -57,6 +57,7 @@ const REQUIRED_MARKERS = new Map([
     "arcane-dnd5e-2014-automation",
     "arcane-assets",
     "foundry_module_prepare",
+    "foundry_api_search({ prefix: \"game.actors\" })",
     "prototypeToken.texture.src",
     "ring.subject.texture",
     "保持 `img`、原型和存量 Token 图像不变",
@@ -64,10 +65,15 @@ const REQUIRED_MARKERS = new Map([
     "type/style/attrs/tags/name/name_zh/desc/desc_zh",
     "原始 `.svg` 不传给 `foundry_image`",
   ]],
+  ["skills/prep/arcane-item-update/SKILL.md", [
+    "foundry_api_search({ prefix: \"game.items\" })",
+    "touched/missing",
+  ]],
   ["skills/prep/arcane-journal-update/SKILL.md", [
     "JournalEntryPage",
     "`text.content` 是 HTML 字符串",
     "<h2>教堂调查</h2>",
+    "foundry_api_search({ prefix: \"game.journal\" })",
     "foundry_page_eval",
     "browser_evaluate",
     "多页必须循环单页创建",
@@ -75,6 +81,14 @@ const REQUIRED_MARKERS = new Map([
     "page.update({ \"text.content\": updatedHtml })",
     "不等于已经在玩家屏幕弹窗展示",
     "foundry_image",
+  ]],
+  ["skills/prep/arcane-world-create/SKILL.md", [
+    "lobbyCampaignCreate",
+    "foundry_lobby_rulesets_list",
+    "foundry_api_search",
+    "foundry_api_call",
+    "kind: \"action\"",
+    "不走 `foundry_api_call`",
   ]],
   ["skills/prep/arcane-module-to-fvtt/SKILL.md", [
     "arcane-assets",

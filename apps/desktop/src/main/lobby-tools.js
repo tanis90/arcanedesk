@@ -1,5 +1,5 @@
-// mt-compat 大厅的 9 个 typed tool。实现静态注册；声明由 AgentHost 按真实页面档位
-// 动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
+// mt-compat 大厅的 9 个 typed tool。Map 的 apiOperationSearch/apiCall 另见 map-api-tools.js。
+// 实现静态注册；声明由 AgentHost 按真实页面档位动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { defineTool as definePiTool } from "@earendil-works/pi-coding-agent";

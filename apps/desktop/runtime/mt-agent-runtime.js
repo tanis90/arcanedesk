@@ -2,11 +2,12 @@
 // 自写 agent runtime 的只读 + 写集 + 两个战斗 action。
 // 宿主（foundry-sdk 客户端，az packages/foundry-sdk/src/client.ts:331 custom runtimeSource）
 // 以「函数源串」装载本 runtime 替代 412KB Foundry 原版；契约沿用（ADR D8）：签名
-// async (action, args, options)、protocolVersion 握手（az contracts.ts = 2）、错误码约定
+// async (action, args, options)、protocolVersion 握手（v0.9.0 起 = 3：新增 navigateToLobby
+// play→lobby 退出 action，纯增量——v2 词汇原样兼容）、错误码约定
 // Error("CODE: message")、GM 门 = options.requireGM !== false && !game.user.isGM。
 // 本模块无副作用，只注册两个句柄：
 //   window.__MT_AGENT_RUNTIME__        —— 页内可直接调用的函数（调试/本仓库门槛）
-//   window.__MT_AGENT_RUNTIME_SOURCE__ —— 函数源串（首行 `// mt-agent-runtime v0.8.0`
+//   window.__MT_AGENT_RUNTIME_SOURCE__ —— 函数源串（首行 `// mt-agent-runtime v0.9.0`
 //     协议头 + 括号包裹表达式；az 端 `(source)(action,args,options)` 包装与裸 eval 均可求值）。
 //   宿主装载路径：fetch 本文件 → 取源串（或按协议头行直取源体）→ 装载。
 // 铁律：函数体只允许引用页面全局（globalThis 上的 game/canvas/fromUuid/location 等）——
@@ -14,11 +15,17 @@
 // 在函数体内内联（与下方 RUNTIME 保持同步；stage8-m2-verify 有三方一致性断言）。
 //
 // 大厅能力（lobby actions，2026-11-11）：mt compat lobby 页没有 game，本 runtime 在
-// game/ready/GM 门之前薄分发 11 个 lobby action（lobbyImportInspect/Run/Status/Cancel、
+// game/ready/GM 门之前薄分发 13 个 lobby action（lobbyImportInspect/Run/Status/Cancel、
 // lobbyCampaignsList、lobbyPacksList/Read/DeletePreview/Delete、lobbyCampaignPacksGet/Update）
 // 到 globalThis.__MT_LOBBY_SERVICE__——业务真源在 web/lobby-service.mjs（服务会脱离 DOM 执行，
 // 不能 import 到这里）。动作语义/版本见 ../arcanedesk/apps/desktop/docs/lobby-actions-plan.md；服务未装配时
 // CAPABILITY_UNAVAILABLE，绝不伪造成功。
+//
+// 方案 B play → lobby（2026-11-13，foundry-open-lobby-return-plan §3.2）：navigateToLobby({})
+// 同样在 game/ready/GM 门之前薄分发到 globalThis.__MT_PLAY_EXIT__（web/play-exit.mjs 自装配，
+// play.html 静态装载）——与用户点设置页「返回战役大厅」同一条实现：URL ?campaign= 取战役
+// 身份、清 live client/续期定时器、保留会话、原生导航 lobby.html。回执形状/失败语义见该
+// 计划 §3.1/§3.3；句柄缺席（旧部署页）CAPABILITY_UNAVAILABLE，由 Desktop fail-closed。
 //
 // M2 语义源：az packages/foundry-sdk/src/runtime-source.ts（同 owner Apache-2.0，逻辑自由
 // 移植，API 调用按本仓库 shim 实况适配）。契约形状以 az contracts.ts 为准：staticContext/
@@ -26,6 +33,10 @@
 // sceneRead :357-369、contentSearch :448-464、compendiumBrowse :479-591；M3 写集：
 // actorCreate :421-426、actorEdit :427-433、actorGrantItems :409-411+434、sceneApply :370-385、
 // imageApply :413-419+335、conditionsSet :621-627、PlayWriteReceipt :629-632。
+// sceneImport（mtcompat 扩展）：同一 action 承载 Foundry 场景 JSON / Universal VTT / 纯图片三种
+// 备团素材（Desktop foundry_scene_import 按扩展名分派 sourceFormat/sourceName/dimensions）；三者
+// 都走页面原生落地面（_importSceneJsonFile / _applySceneImage），字段按 sourceFormat 组合白名单、
+// 上传未确认绝不 completed。
 // M4b（K5）：conditionsSet——az conditionsSetData 语义移植（显式状态幂等/DAE 守卫/解析期
 // 世界焦点变更拒绝/写入期 CONDITION_CHANGED partial/SOURCE_MANAGED 零写/AMBIGUOUS_COMBAT/
 // 专注两路），平价线 tools/stage8-m4b-parity.mjs 逐 case 对账 az conditions-set.test.mjs。
@@ -93,8 +104,9 @@
 //     语义 = 本桌无 arcane flags 作者。summon 类 activity 不入目录，interaction 契约声明
 //     （choiceDefault/selectionConstraints/independent-projectiles）不解析——allocation
 //     输入恒拒（az 无 flags 时同码）。
-//   - sceneRead 的 lights/tiles/notes/sounds：shim 侧是未规格化裸数据，报空数组 + degraded。
-//   - actorRead 的 folderId：game.folders 不存在（M3 前无 folder 语义），恒 null。
+//   - sceneRead 的 lights/tiles/notes/sounds：已改为按真实集合与明确字段投影返回；空集合只表示
+//     场景本身无对应文档，不再报降级。walls 同时返回 c/move/sight/sound/light/door/ds/dir/threshold。
+//   - actorRead/actorCreate/actorEdit 的 folderId：读写真实 Folder id，null 表示移出文件夹。
 //   - 无战斗时的 play 焦点：az 用全场景 token；M2 按 M2 指令取 game.user.targets + 选中
 //     placeables（空焦点是合法答案——空数组不是错误）。读面（playContext/staticContext）
 //     与 M5 executeAction 的焦点/contextRef 同用此口径（客户端读到的 ref 与执行校验
@@ -104,13 +116,15 @@
 //     （CONFIG.DND5E.spellcasting.getSpellSlotKey 优先，缺席回退单职业 spell<level> 直读）。
 //
 // M3 写集已知降级/偏差（对照 az runtime，逐条在实现处标注）：
-//   - upload 真字节：az 走 FilePicker.upload 落字节到 dataPath；shim 的静态面已实装
-//     （页内素材库/缩略图，MT /api/files，TD-C），上传通道探针两要件（静态 upload + __MT_AUTH__
-//     凭证）——无会话档（stub/本地）false：image/背景带 upload 仍 rejected CAPABILITY_UNAVAILABLE
-//     （dataPath-only）；真实登录档 true（技术债⑤口径，见 prepPrepareImage）。载荷字节的落地仍由
-//     调用面 dataPath 直引承担（本 runtime 不代发 POST）。docs/stage8-api-gap.md §3-D。
-//   - folders：game.folders 缺席 —— actorCreate/actorEdit 的 folderId 记 warning 跳过
-//     （az prepFolder 会写 folder）。
+//   - upload 真字节：az 走 FilePicker.upload 落字节到 dataPath；本 runtime 已真值化同一链——
+//     prepPrepareImage 按 az 有界规则验 upload 载荷 + SHA-256 复核（prepImageHash，subtle 缺时
+//     纯 JS 后备），prepUploadImage 真实 new File + FilePicker.upload("data","arcanedesk/assets")
+//     落字节，以 result.path/result.url 为确认（MT 地址空间是 URL，返回 URL ≠ 请求 dataPath 是
+//     预期；签名 query 剥除不落盘），prepared.dataPath 改指真实 URL 供后续全部写入使用。上传
+//     通道探针两要件（静态 upload + __MT_AUTH__ 凭证）保持：无会话档（stub/本地）带 upload 仍
+//     rejected CAPABILITY_UNAVAILABLE（dataPath-only）；真实登录档真上传。upload 步入 steps 四态
+//     回执：验形/hash 错误零上传 rejected；已发出结果未知 step unknown → indeterminate/partial
+//     （绝不 rejected 零写入）；落定才 completed。docs/stage8-api-gap.md §3-D。
 //   - prototypeToken 活实例是 shim 合成 getter（L3 起回读持久化源 _source.prototypeToken +
 //     dnd5e 体型映射兜底，name 缺面才随 actor.name 派生）；写经 update 点路径落 _source/REST，
 //     验证以 toObject() 持久化源为准（az 读活实例）。
@@ -127,15 +141,35 @@
 //   - 守卫错误码沿用 az 词汇：READ_REF_INVALID（身份/缺失，宿主 foundry-services.js:88
 //     同码预检）/ READ_REF_STALE（受影响字段漂移）。
 (() => {
-  const RUNTIME = { name: "mt-agent-runtime", version: "0.8.0", protocolVersion: 2 };
+  const RUNTIME = { name: "mt-agent-runtime", version: "0.10.0", protocolVersion: 4 };
 
   window.__MT_AGENT_RUNTIME__ = async (action, args, options) => {
     // 握手常量（内联，勿引用模块作用域；与文件头 RUNTIME 保持同步）
-    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.8.0", protocolVersion: 2 };
+    const RUNTIME_META = { name: "mt-agent-runtime", version: "0.10.0", protocolVersion: 4 };
     const g = globalThis;
 
     if (typeof action !== "string" || !action) {
       throw new Error("INVALID_ACTION: action must be a non-empty string");
+    }
+    if ((action === "apiOperationSearch" || action === "apiCall") && /\/lobby\.html$/.test(g.location?.pathname ?? "")) {
+      const lobbyService = g.__MT_LOBBY_SERVICE__;
+      if (!lobbyService || typeof lobbyService.dispatch !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: lobby service is not installed");
+      }
+      return await lobbyService.dispatch(action, args ?? {});
+    }
+    if (action === "apiOperationSearch") {
+      const registry = g.__MT_PLAY_OPERATIONS__;
+      if (!registry || typeof registry.search !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: play operation registry is not installed");
+      }
+      const result = registry.search(args ?? {});
+      const prefix = typeof args?.prefix === "string" ? args.prefix : "";
+      const surface = g.__MT_API_SURFACE__;
+      if (prefix && typeof surface?.query === "function") {
+        return { ...result, surface: surface.query({ prefix }) };
+      }
+      return result;
     }
     // 大厅能力（../arcanedesk/apps/desktop/docs/lobby-actions-plan.md §3.2/§3.3）：源串脱离 ESM 闭包执行，不能捕获
     // lobby-service 的 import——只经页面全局句柄薄分发。lobby 页没有 game，故这组动作
@@ -150,10 +184,21 @@
       }
       return await lobbyService.dispatch(action, args ?? {});
     }
+    // 方案 B play → lobby（../arcanedesk/apps/desktop/docs/foundry-open-lobby-return-plan.md
+    // §3.2）：与设置页「返回战役大厅」同一实现（web/play-exit.mjs），薄分发经页面全局句柄；
+    // 排在 game/ready/GM 门之前——退出动作不许被「未 ready/非 GM」误拦（GM 门语义只管读写集）。
+    if (action === "navigateToLobby") {
+      const playExit = g.__MT_PLAY_EXIT__;
+      if (!playExit || typeof playExit.navigateToLobby !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: play exit surface is not installed");
+      }
+      return await playExit.navigateToLobby(args ?? {});
+    }
     if (!["worldInfo", "doctor", "apiSurface", "staticContext", "playContext", "battleContext", "turnContext",
       "actorRead", "sceneRead", "contentSearch", "compendiumBrowse",
-      "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "advancementPlan", "sceneApply", "imageApply", "conditionsSet",
-      "executeTurn", "executeAction", "pageEval"].includes(action)) {
+      "actorCreate", "actorEdit", "actorGrantItems", "actorAdvance", "advancementPlan",
+      "advancementItemPlan", "actorAdvanceItem", "sceneApply", "sceneImport", "imageApply", "conditionsSet",
+      "executeTurn", "executeAction", "pageEval", "apiCall"].includes(action)) {
       throw new Error("ACTION_UNKNOWN: " + action);
     }
     // 原版 requireReady 同序：game 在位 → game.ready → GM 门（只读集，门保持 M1 语义）
@@ -705,6 +750,17 @@
         throw new Error("WORLD_CHANGED: bound world mismatch");
       }
     }
+    function prepFolderId(value) {
+      if (value === null) return null;
+      if (typeof value !== "string" || !value.trim() || value.length > 256) {
+        throw new Error("INPUT_INVALID: exact Folder required");
+      }
+      const id = value.trim();
+      if (!collectionValues(game.folders).some((folder) => folder.id === id && folder.type === "Actor")) {
+        throw new Error("FOLDER_NOT_FOUND: exact Actor Folder required");
+      }
+      return id;
+    }
     async function prepActor(uuid) {
       if (typeof uuid !== "string" || !uuid || uuid.length > 256) throw new Error("INPUT_INVALID: exact Actor UUID required");
       const resolved = await g.fromUuid(uuid);
@@ -725,7 +781,6 @@
     function prepActorFields(actor, include = []) {
       const hp = actor.system?.attributes?.hp ?? {}, ac = actor.system?.attributes?.ac ?? {};
       const fields = { name: actor.name,
-        // 降级：game.folders 不存在（M3 前无 folder 语义）——folder 恒 null
         folder: actor.folder?.id ?? actor.folder ?? null, img: actor.img ?? null,
         "system.attributes.hp.value": hp.value ?? null, "system.attributes.hp.max": hp.max ?? null,
         "system.attributes.hp.temp": hp.temp ?? null, "system.attributes.ac.flat": ac.flat ?? null,
@@ -817,6 +872,12 @@
       for (const key of ["type", "size", "distance", "units"]) fields["grid." + key] = scene.grid?.[key] ?? null;
       return fields;
     }
+    function prepSceneFingerprint(scene) {
+      const data = JSON.parse(JSON.stringify(scene.toObject()));
+      // scene-json-import 不读取这些派生/目录字段；后台缩略图和展示状态变化不能阻止导入。
+      for (const key of ["thumb", "active", "_stats", "folder", "sort", "navigation"]) delete data[key];
+      return fnv1a64Hex(JSON.stringify(data));
+    }
     function prepPlacementFields(token) {
       const fields = {};
       for (const key of ["name", "x", "y", "hidden", "disposition", "width", "height", "elevation", "actorId", "actorLink"]) {
@@ -852,20 +913,23 @@
         offset = Number(parts[3]);
       }
       const fields = prepSceneFields(scene);
-      // 降级：lights/tiles/notes/sounds 在 shim 侧是未规格化裸数据——按 M2 声明报空集合
-      const DEGRADED_PLACEABLES = ["lights", "tiles", "notes", "sounds"];
       const result = { sceneUuid: scene.uuid, ...fields, placeables: {}, nextCursors: {},
         readState: { sceneUuid: scene.uuid, world: { origin: g.location?.origin, id: game.world.id },
-          fields, include,
-          ...(include.includes("tokens") ? { tokens: collectionValues(scene.tokens).map(prepSceneTokenState) } : {}) },
-        ...(include.some((key) => DEGRADED_PLACEABLES.includes(key)) ? { degraded: DEGRADED_PLACEABLES.filter((key) => include.includes(key)).map((key) => key + ":pre-M4") } : {}) };
+          fields, include, documentFingerprint: prepSceneFingerprint(scene),
+          ...(include.includes("tokens") ? { tokens: collectionValues(scene.tokens).map(prepSceneTokenState) } : {}) } };
+      const projection = {
+        tokens: ["name", "x", "y", "hidden", "disposition", "width", "height", "elevation", "actorId", "actorLink"],
+        walls: ["c", "move", "sight", "sound", "light", "door", "ds", "dir", "threshold"],
+        lights: ["x", "y", "dim", "bright", "angle", "color", "alpha", "darkness", "hidden"],
+        tiles: ["x", "y", "width", "height", "rotation", "hidden", "locked", "z", "sort", "overhead", "roof", "texture"],
+        notes: ["x", "y", "text", "icon", "fontSize", "fontFamily", "textAnchor", "hidden", "color", "bgColor", "title", "entry"],
+        sounds: ["x", "y", "radius", "path", "volume", "fade", "hidden", "paused", "repeat", "delay", "type"],
+      };
       for (const key of include) {
-        const entries = DEGRADED_PLACEABLES.includes(key) ? [] : collectionValues(scene[key]);
+        const entries = collectionValues(scene[key]);
         result.placeables[key] = entries.slice(offset, offset + limit).map((doc) => {
           const value = { id: doc.id, uuid: doc.uuid };
-          const keys = { tokens: ["name", "x", "y", "hidden", "disposition", "width", "height", "elevation", "actorId", "actorLink"],
-            walls: ["c", "door", "ds", "move", "sight"] }[key];
-          for (const field of keys) if (doc[field] !== undefined) value[field] = doc[field];
+          for (const field of projection[key]) if (doc[field] !== undefined) value[field] = doc[field];
           return value;
         });
         result.nextCursors[key] = offset + limit < entries.length ? "scene:v1:" + signature + ":" + (offset + limit) : null;
@@ -1093,13 +1157,44 @@
     // 绝不用 dnd5e 同名条目替代；内置 classUuid 的 userModuleScope 为 null，原逻辑逐字节不变。
     // 启用面复用 content-sources 的 refs 读面（页面全局转交；runtime 是函数源串，不能静态
     // import）。启用面缺席时只回退 game.settings 的 userPacks 旧档，不把 game.packs 存在当启用。
+    // 补充：Auto 导入包同时有 canonical 与 storage 两个身份（见下方注册表说明），故
+    // 「哪些包属于本用户模块」与「是否启用」一律以 storage id 为准，canonical 只作入参身份。
     function packIdFromUuid(uuid) {
       const parts = String(uuid ?? "").split(".");
       return parts[0] === "Compendium" && parts.length >= 4 ? parts[1] + "." + parts[2] : "";
     }
+    // Auto 导入包在 bootstrap registerUserPacks 里以 canonical id（`<module>.<pack>`）注册，
+    // 同时把存储 id（`user-<module>.<pack>`）作为别名挂进 game.packs；__MT_USER_PACKS__.registered
+    // 每项 { id: canonical, storagePackId: "user-…", moduleId } 是两者配对的唯一权威。
+    // 启用面（战役 packRefs / settings.userPacks）只认 storage id，canonical 从未在启用集里，
+    // 因此任何启用判定都必须先经注册表回到 storage id——绝不靠加/去 "user-" 前缀猜别名。
+    function storagePackIdForCanonical(packId) {
+      const canonical = String(packId ?? "");
+      if (!canonical || canonical.startsWith("user-")) return null;
+      const registered = g.__MT_USER_PACKS__?.registered;
+      if (!Array.isArray(registered)) return null;
+      for (const entry of registered) {
+        if (String(entry?.id ?? "") !== canonical) continue;
+        const storage = String(entry?.storagePackId ?? "");
+        const moduleId = String(entry?.moduleId ?? "");
+        // storage 必须是合法 user- 名（user-<module>.<pack>）；登记了可用的 moduleId 时还要与
+        // storage 的模块段一致，否则不认这对别名（moduleId 缺失/unknown 的旧档不据此否决）。
+        const moduleMatches = !moduleId || moduleId === "unknown" || storage.startsWith("user-" + moduleId + ".");
+        const valid = storage.startsWith("user-") && storage !== canonical
+          && storage.includes(".") && moduleMatches;
+        return valid ? storage : null;
+      }
+      return null;
+    }
     function userModuleScope(uuid) {
-      const packId = packIdFromUuid(uuid);
-      if (!String(packId).startsWith("user-")) return null;
+      let packId = packIdFromUuid(uuid);
+      // canonical 源（Auto 导入包、flags.sourceId 不带 user-）经注册表映射成同模块 user scope；
+      // 未登记 canonical（普通内置/第三方模块包）与旧行为一致返回 null。
+      if (!String(packId).startsWith("user-")) {
+        const storage = storagePackIdForCanonical(packId);
+        if (!storage) return null;
+        packId = storage;
+      }
       const dot = packId.indexOf(".");
       const moduleId = dot > "user-".length ? packId.slice("user-".length, dot) : "";
       return moduleId ? { packId, moduleId, namespace: "user-" + moduleId + ".", classIdentifier: null } : null;
@@ -1129,16 +1224,32 @@
         return (cfg?.userPacks?.[id] ?? true) !== false;
       } catch { return true; }
     }
+    // 用户内容包的逻辑身份 → 存储 id（user-…）：raw user 包原样返回，登记过的 canonical
+    // 经注册表回到 storage id，其余（内置/未登记 canonical/第三方模块）返回 null。
+    function userPackStorageIdFor(packId) {
+      const id = String(packId ?? "");
+      if (!id) return null;
+      return id.startsWith("user-") ? id : storagePackIdForCanonical(id);
+    }
     function userPackAllowed(packId, scope) {
-      return !!scope && String(packId ?? "").startsWith(scope.namespace) && userPackEnabled(packId);
+      if (!scope) return false;
+      const id = String(packId ?? "");
+      // 启用面只认存储 id：raw user 引用本身即存储 id；登记过的 canonical 先回退 storage id，
+      // 再核同 module 命名空间与启用面（绝不直接拿 canonical 查启用集）。
+      const storage = userPackStorageIdFor(id);
+      if (!storage || !storage.startsWith(scope.namespace)) return false;
+      return userPackEnabled(storage);
     }
     // 停用用户包不得因 game.packs 残留继续授予（class/subclass/race 源与直接 ItemGrant
-    // 同闸；启用面未知时 userPackEnabled 回退旧档，不误杀）
+    // 同闸；启用面未知时 userPackEnabled 回退旧档，不误杀）。登记过的 canonical 引用按同一
+    // 闸核其 storage id 的启用面——避免候选可见却在执行时绕过停用包；未登记 canonical 保持
+    // 内置逻辑（不视为用户包）。
     async function assertUserPackGrantable(packId) {
-      if (!String(packId ?? "").startsWith("user-")) return;
+      const storage = userPackStorageIdFor(packId);
+      if (!storage) return;
       await ensureUserPackRefs();
-      if (!userPackEnabled(packId)) {
-        throw new Error("CAPABILITY_UNAVAILABLE: user content pack is not enabled in this campaign: " + packId);
+      if (!userPackEnabled(storage)) {
+        throw new Error("CAPABILITY_UNAVAILABLE: user content pack is not enabled in this campaign: " + storage);
       }
     }
     // class/subclass/race 文档里的 ItemGrant/ItemChoice 引用（含子职业 -> 特性/法术）在
@@ -1174,13 +1285,20 @@
       return (name || String(packIdOf(pack) ?? "").split(".").pop().toLowerCase()) === "spells";
     }
     async function userPackPacksForScope(scope, { spellsOnly = false } = {}) {
-      const packs = [];
+      // canonical 注册包与 storage 别名可能同时在 game.packs（bootstrap 的别名安装）：按存储 id
+      // 去重并优先 canonical 包——canonical 是世界里 @UUID/advancement 实际引用的一侧。
+      const byStorage = new Map();
       for (const pack of collectionValues(game.packs)) {
         if (pack?.metadata?.type !== "Item") continue;
         const packId = packIdOf(pack);
-        if (!String(packId ?? "").startsWith(scope.namespace) || !userPackEnabled(packId)) continue;
-        packs.push(pack);
+        const storage = userPackStorageIdFor(packId);
+        if (!storage || !storage.startsWith(scope.namespace) || !userPackEnabled(storage)) continue;
+        const current = byStorage.get(storage);
+        if (!current || (String(current.packId).startsWith("user-") && !String(packId).startsWith("user-"))) {
+          byStorage.set(storage, { pack, packId });
+        }
       }
+      const packs = [...byStorage.values()].map((entry) => entry.pack);
       if (!spellsOnly) return packs;
       // 「优先/限定本模块 spells」：模块有自己的 spells 包时只扫它；没有才退回同命名空间
       // 全部启用包（成员判定再按 flags.spellClasses 注解收窄）。
@@ -1277,31 +1395,127 @@
       }
       return abilities;
     }
-    // az prepDataImage + prepPrepareImage 的 dataPath-only 子集：真字节上传通道（az 的
-    // image.upload：bytes → 目标路径落地）判据两要件（技术债⑤，TD-C 遗留口径）——① 静态入口
-    // FilePicker.upload（bootstrap 素材库实装：位置参数形状，带凭证走 MT /api/files，POST 字节
-    // → {path,url}）② 会话句柄 __MT_AUTH__ 的文件服务凭证（accessToken）。旧三要件把「az 字节
-    // 应用链」也计入 —— 该链一期边界外，探针恒 false、能力面恒报不可用；TD-C 落地的静态 upload
-    // 即通道本体，故改按「本环境能否上传字节」如实判定：stub/无会话档 false（带 upload 仍
-    // CAPABILITY_UNAVAILABLE，dataPath-only），真实登录档 true。probe 只回答通道面；载荷字节的
-    // 落地仍由调用面的 dataPath 直引承担（本 runtime 不代发 POST，见文件头 M3 写集降级注）。
+    // az prepDataImage + prepPrepareImage + prepUploadImage 移植（upload 真字节链真值化）：
+    // 带 upload 的图像按 az 有界规则先验形（{base64,hash,mimeType,extension} 白名单 + MIME/
+    // 扩展名映射 + hash 形状 + base64 字符集/长度上界），再过上传通道探针（技术债⑤两要件——
+    // ① 静态入口 FilePicker.upload（bootstrap 素材库实装：位置参数形状，带凭证走 MT /api/files，
+    // POST 字节 → {path,url}）② 会话句柄 __MT_AUTH__ 的文件服务凭证 accessToken）——探针缺席
+    // CAPABILITY_UNAVAILABLE（stub/无会话档 dataPath-only），在场均抛 INPUT_INVALID：验形在
+    // 探针之前，hash/base64 形状错误零上传（不消耗任何写）。过闸后解 base64 → SHA-256 复核
+    // （prepImageHash：subtle 优先，LAN 无 subtle 档用 az 同款纯 JS 后备），不符 INPUT_INVALID
+    // 零上传。MT 对 az 的两处偏差（地址空间不同）：① 不要求 dataPath === "arcanedesk/assets/
+    // <hash>.<ext>"（az 的 upload 落点即 dataPath；MT 落点是服务端定的 URL，请求 dataPath 只是
+    // 期望标识）② prepUploadImage 认 result.path/result.url 为确认（MT 的存储地址空间是 URL，
+    // 绝对 URL 是成功不是错误；az 要求 result.path === dataPath——MT 以 FilePicker 返回的资源
+    // URL 作为写入引用，不把请求路径当存储主键），签名 query 不落盘（显示面 asset-sign 换签；
+    // URL 可读性与画布渲染另由真实页面验收覆盖）。上传步骤入 steps 四态回执：dispatch 前失败 rejected 零写入；
+    // 已发出结果未知 step 保持 unknown + message → 回执 indeterminate/partial；落定才 completed。
     function imageUploadChannelAvailable() {
       return typeof g.FilePicker?.upload === "function" && !!g.__MT_AUTH__?.accessToken;
     }
     function prepDataImage(image) {
       writePrepObject(image, ["dataPath", "syncPlacedTokens", "upload"]);
       const dataPath = image.dataPath;
-      if (typeof dataPath !== "string" || !dataPath.trim() || dataPath.length > 512 || dataPath.includes("..")) {
-        throw new Error("INPUT_INVALID: image dataPath required");
+      const invalid = () => { throw new Error("INPUT_INVALID: image must be a PNG/JPEG/WebP Data-relative path or bare HTTPS URL"); };
+      if (typeof dataPath !== "string" || !dataPath || dataPath.length > 4096) invalid();
+      if (/^https?:\/\//i.test(dataPath)) {
+        let url;
+        try { url = new URL(dataPath); } catch { invalid(); }
+        if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash
+          || /[\\\x00-\x1f\x7f]/.test(dataPath) || !/\.(png|jpe?g|webp)$/i.test(url.pathname)) invalid();
+        return dataPath;
       }
-      return dataPath.trim();
+      if (/[\\\\\x00-\x1f\x7f:?#%]/.test(dataPath) || dataPath.startsWith("/")
+        || dataPath.split("/").some((part) => !part || part === "." || part === "..")
+        || !/\.(png|jpe?g|webp)$/i.test(dataPath)) invalid();
+      return dataPath;
     }
+    // az prepImageHash：subtle 优先；HTTP LAN Foundry 页缺 SubtleCrypto 时用纯 JS SHA-256
+    // （有界图像输入保证 padding 与轮次有界，az 同实现）。
+    async function prepImageHash(bytes) {
+      if (g.crypto?.subtle) {
+        return Array.from(new Uint8Array(await g.crypto.subtle.digest("SHA-256", bytes)),
+          (byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+      const primes = [];
+      for (let candidate = 2; primes.length < 64; candidate++) {
+        if (!primes.some((prime) => prime * prime <= candidate && candidate % prime === 0)) primes.push(candidate);
+      }
+      const constants = primes.map((prime) => (Math.cbrt(prime) % 1 * 4294967296) >>> 0);
+      const hash = primes.slice(0, 8).map((prime) => (Math.sqrt(prime) % 1 * 4294967296) >>> 0);
+      const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64); padded.set(bytes); padded[bytes.length] = 128;
+      const view = new DataView(padded.buffer); view.setUint32(padded.length - 4, bytes.length * 8);
+      const words = new Uint32Array(64), rotate = (value, count) => (value >>> count) | (value << (32 - count));
+      for (let offset = 0; offset < padded.length; offset += 64) {
+        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4);
+        for (let i = 16; i < 64; i++) {
+          const a = words[i - 15], b = words[i - 2];
+          words[i] = (words[i - 16] + (rotate(a, 7) ^ rotate(a, 18) ^ (a >>> 3)) + words[i - 7]
+            + (rotate(b, 17) ^ rotate(b, 19) ^ (b >>> 10))) >>> 0;
+        }
+        let [a, b, c, d, e, f, h0, h1] = hash;
+        for (let i = 0; i < 64; i++) {
+          const first = (h1 + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & h0))
+            + constants[i] + words[i]) >>> 0;
+          const second = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+          h1 = h0; h0 = f; f = e; e = (d + first) >>> 0; d = c; c = b; b = a; a = (first + second) >>> 0;
+        }
+        [a, b, c, d, e, f, h0, h1].forEach((value, index) => { hash[index] = (hash[index] + value) >>> 0; });
+      }
+      return hash.map((value) => value.toString(16).padStart(8, "0")).join("");
+    }
+    const MAX_IMAGE_UPLOAD_BYTES = 32 * 1024 * 1024;
+    const MAX_IMAGE_UPLOAD_BASE64_LENGTH = 4 * Math.ceil(MAX_IMAGE_UPLOAD_BYTES / 3);
     async function prepPrepareImage(image) {
       const dataPath = prepDataImage(image);
-      if (image.upload && !imageUploadChannelAvailable()) {
+      if (!image.upload) return { dataPath };
+      const upload = writePrepObject(image.upload, ["base64", "hash", "mimeType", "extension"]);
+      const mime = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" }[upload.extension];
+      const invalidUploadField = !mime || mime !== upload.mimeType ? "mime"
+        : typeof upload.hash !== "string" || !/^[a-f0-9]{64}$/.test(upload.hash) ? "hash"
+        : typeof upload.base64 !== "string" ? "base64-type"
+        : !upload.base64.length ? "base64-empty"
+        : upload.base64.length > MAX_IMAGE_UPLOAD_BASE64_LENGTH ? `base64-length=${upload.base64.length}`
+        : !/^[A-Za-z0-9+/]*={0,2}$/.test(upload.base64) ? "base64-charset" : null;
+      if (invalidUploadField) {
+        throw new Error(`INPUT_INVALID: invalid bounded image upload (${invalidUploadField})`);
+      }
+      if (!imageUploadChannelAvailable()) {
         throw new Error("CAPABILITY_UNAVAILABLE: image upload bytes cannot be applied in this shim (dataPath only)");
       }
-      return { dataPath };
+      const binary = g.atob(upload.base64);
+      if (!binary.length || binary.length > MAX_IMAGE_UPLOAD_BYTES) throw new Error("INPUT_INVALID: image upload exceeds 32 MiB");
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      const digest = await prepImageHash(bytes);
+      if (digest !== upload.hash) throw new Error("INPUT_INVALID: image content hash mismatch");
+      return { dataPath, bytes, hash: upload.hash, mimeType: upload.mimeType, extension: upload.extension };
+    }
+    // az prepUploadImage 的 shim 适配：真实 new File + FilePicker.upload("data","arcanedesk/assets",
+    // file)（MT 的 path 参数是 libPath 分类，落点 URL 由服务端定）；result.path/result.url 任一
+    // 即确认，相对地址按页面 origin 展开成绝对 URL，剥签名 query 后写回 prepared.dataPath——
+    // 调用面（actorCreate/actorEdit/sceneApply/imageApply）一律在 upload 之后重读 dataPath 落盘。
+    async function prepUploadImage(prepared, world, steps) {
+      if (!prepared?.bytes) return;
+      prepWorld(world);
+      const step = { step: "upload-image", state: "unknown", targets: [prepared.dataPath] };
+      steps.push(step);
+      const filename = prepared.hash + "." + prepared.extension;
+      const file = new File([prepared.bytes], filename, { type: prepared.mimeType });
+      const result = await g.FilePicker.upload("data", "arcanedesk/assets", file, { overwrite: false }, { notify: false });
+      const returned = typeof result?.path === "string" && result.path.trim() ? result.path.trim()
+        : (typeof result?.url === "string" && result.url.trim() ? result.url.trim() : null);
+      if (!returned) throw new Error("IMAGE_UPLOAD_UNCONFIRMED: server did not confirm an upload URL");
+      let url = returned;
+      if (!/^https?:\/\//i.test(url)) {
+        try { url = new URL(url, g.location?.href ?? undefined).href; } catch { /* 非 URL 形状原样保留 */ }
+      }
+      try {
+        const parsed = new URL(url); parsed.search = ""; parsed.hash = ""; url = parsed.href;
+      } catch { /* 裸路径（服务端未回 URL 地址空间）原样保留 */ }
+      prepared.dataPath = url;
+      step.url = url;
+      step.targets = [url];
+      step.state = "completed";
     }
     // az prepImagePatch：token 图像字段（ring 启用时同步 subject 贴图）
     function prepImagePatch(token, img, prefix = "") {
@@ -1486,7 +1700,8 @@
       for (const plan of grantPlans) {
         if (plan.sourceType !== "spell") continue;
         const grantPackId = packIdFromUuid(plan.sourceUuid);
-        const userGrant = String(grantPackId).startsWith("user-");
+        // 登记过的 canonical 用户包（Auto 导入）与 raw user 包同面：都按本包注解验表
+        const userGrant = !!userPackStorageIdFor(grantPackId);
         // 用户职业 / 用户包法术：内置职业表不认识用户法术 id（同 id 还可能撞车），一律改用
         // 本包 flags.spellClasses 验证；无注解 = 无法验证 → 按原 fail-open 放行。
         if (classScope || userGrant) {
@@ -1734,8 +1949,6 @@
           && (typeof prototypeName !== "string" || !prototypeName.trim() || prototypeName.length > 256)) {
           throw new Error("INPUT_INVALID: prototype Token name required");
         }
-        // 降级：无 folder 语义——非空 folderId 记 warning 跳过（az prepFolder 校验后写入）
-        if (input.folderId != null) warnings.push("folders-absent:folderId-ignored");
         let data, sourceUuid = null;
         if (input.source?.kind === "blank" && ["character", "npc"].includes(input.source.actorType)) {
           data = { type: input.source.actorType };
@@ -1745,6 +1958,7 @@
           delete data._id; delete data.folder;
           sourceUuid = "Compendium." + cleanText(input.source.packId) + ".Actor." + cleanText(input.source.entryId);
         } else throw new Error("INPUT_INVALID: Actor source required");
+        if (input.folderId !== undefined) data.folder = prepFolderId(input.folderId);
         // 基础能力随创建落位（az 注释：种族/ASI 增量叠加在基础值上）
         const abilityScores = input.dnd5e === undefined ? null
           : prepAbilityScores(writePrepObject(input.dnd5e, ["abilities"]).abilities ?? {});
@@ -1758,7 +1972,7 @@
         }
         const plans = await prepPrepareGrants(input.initialItems ?? []);
         const preparedImage = input.image ? await prepPrepareImage(input.image) : null;
-        const imagePath = preparedImage?.dataPath ?? null;
+        let imagePath = preparedImage?.dataPath ?? null;
         prepWorld(input.world);
         // 幂等恢复：同 requestId 的 Actor 已在世 → completed 引用返回（宿主 operationStore
         // 重放回放原回执；无宿主的页内口径，见文件头偏差声明）
@@ -1780,6 +1994,9 @@
         data.flags ??= {};
         data.flags.arcanedesk = { ...data.flags.arcanedesk, requestId: input.requestId, ...(sourceUuid ? { sourceUuid } : {}) };
         started = true;
+        // az 同序：create 前先落上传（actor-image 落盘用真实 URL；upload 步入 steps 四态回执）
+        await prepUploadImage(preparedImage, input.world, steps);
+        if (preparedImage) imagePath = preparedImage.dataPath;
         createdActor = await (g.CONFIG?.Actor?.documentClass ?? g.Actor).create(data, { renderSheet: false });
         if (!createdActor?.uuid) throw new Error("Actor creation was not confirmed");
         steps.push({ step: "create-actor", state: "completed", targets: [createdActor.uuid], name: createdActor.name });
@@ -1838,9 +2055,9 @@
         const actor = await prepActor(input.actorUuid);
         const changes = writePrepObject(input.changes, ["name", "folderId", "prototypeToken", "dnd5e", "image"]);
         const patch = {};
-        let imageTargets = [], imagePath = null;
+        let imageTargets = [], imagePath = null, preparedImage = null;
         if (changes.image) {
-          const preparedImage = await prepPrepareImage(changes.image);
+          preparedImage = await prepPrepareImage(changes.image);
           imagePath = preparedImage.dataPath;
           Object.assign(patch, { img: imagePath }, prepImagePatch(actor.prototypeToken, imagePath, "prototypeToken."));
           if (changes.image.syncPlacedTokens) imageTargets = prepImageTargets(actor, input.readState);
@@ -1851,8 +2068,7 @@
           }
           patch.name = changes.name;
         }
-        // 降级：无 folder 语义——az 写 folder；此处记 warning 跳过（不当失败）
-        if ("folderId" in changes && changes.folderId != null) warnings.push("folders-absent:folderId-ignored");
+        if ("folderId" in changes) patch.folder = prepFolderId(changes.folderId);
         if (changes.prototypeToken) {
           for (const [key, value] of Object.entries(writePrepObject(changes.prototypeToken, ["name", "width", "height", "disposition"]))) {
             if (key === "name" ? typeof value !== "string" || value.length > 256
@@ -1893,6 +2109,16 @@
         prepCheckRead(actor, input.readState, [...keys,
           ...(changes.image ? ["prototypeToken.ring.enabled"] : []),
           ...(changes.dnd5e?.ac ? ["system.attributes.ac.calc"] : [])]);
+        // az 同序：update 前先落上传（patch 图像键重指真实 URL；upload 步入 steps 四态回执——
+        // 已发出结果未知走 indeterminate/partial，落定才 completed）
+        started = !!preparedImage?.bytes;
+        await prepUploadImage(preparedImage, input.world, steps);
+        if (preparedImage) {
+          imagePath = preparedImage.dataPath;
+          patch.img = imagePath;
+          Object.assign(patch, prepImagePatch(actor.prototypeToken, imagePath, "prototypeToken."));
+        }
+        if (changes.image?.syncPlacedTokens) imageTargets = prepImageTargets(actor, input.readState);
         started = true;
         await actor.update({ ...patch });
         // 读回复核：prototypeToken.* 以持久化源为准（活实例是合成 getter，文件头降级）
@@ -1950,12 +2176,22 @@
         const result = await prepApplyGrants(actor, plans, input.requestId);
         const actual = result.created
           .filter((item) => (actor.items?.get?.(item.id) ?? null) !== null);
+        // 阶段 12 item 源：本次新授物品若自身带未完成 advancement（专长内部选择/固定授予），
+        // 回报 pending 供 studio 续接 actorAdvanceItem；只扫本次新建物品，不读旧卡。
+        const pendingAdvancements = pendingAdvancementsForItems(
+          actual.map((entry) => actor.items?.get?.(entry.id) ?? null).filter(Boolean),
+          itemAdvancementMaxLevel(actor));
         steps.push({ step: "grant-items", targets: [actor.uuid],
           state: actual.length === result.expected ? "completed" : "unknown",
           created: actual, skippedExisting: result.skippedExisting });
-        return actual.length === result.expected
-          ? { status: "completed", steps, verification: steps, warnings: [] }
-          : { status: "partial", retry: false, steps, message: "Some Items were not confirmed" };
+        if (actual.length === result.expected) {
+          // verification 仍是 steps 数组（J6 契约），pending 同时挂数组属性与回执顶层的显式位置
+          const verification = steps;
+          verification.pendingAdvancements = pendingAdvancements;
+          return { status: "completed", steps, verification, pendingAdvancements, warnings: [] };
+        }
+        return { status: "partial", retry: false, steps, pendingAdvancements,
+          message: "Some Items were not confirmed" };
       } catch (error) {
         return started
           ? { status: "indeterminate", retry: false, steps, message: writeErrorMessage(error) }
@@ -2109,6 +2345,9 @@
         const key = label + ":" + level + ":" + kind, ordinal = ordinals[key] = (ordinals[key] ?? -1) + 1;
         const slot = key + ":" + ordinal, title = advancement.title ?? kind;
         const cfg = advancement.configuration?.toObject?.() ?? advancement.configuration ?? {};
+        // 真实来源文档类型（race/class/subclass/item 的类型）：仅作为选择槽的附加元数据，
+        // 供补选 UI 按来源显示；不改 slot/key，也不参与校验（advancement.item 是伪文档的父物品）。
+        const sourceType = typeof advancement.item?.type === "string" ? advancement.item.type : null;
         const entry = { slot, level, kind, advancement, step, dataFor: undefined, unmet: null };
         plan.steps.push(entry);
         if (kind === "HitPointsAdvancement") {
@@ -2153,15 +2392,26 @@
               const pool = pools[index], subslot = slot + ".pool" + index;
               if (derivedDrHere) continue;
               const expanded = await expandTraitPool(pool.pool);
+              const available = cfg.mode === "default"
+                ? expanded.filter((key) => !((key.startsWith("skills:") || key.startsWith("tool:"))
+                  && (ctx.landedTraits ?? new Set()).has(key)))
+                : expanded;
               const matches = (value) => expanded.includes(value)
                 || pool.pool.some((key) => key.endsWith(":*") && value.startsWith(key.slice(0, -1)));
-              plan.choiceRequirements.push({ slot: subslot, level, kind, label: title, count: pool.count, valueFormat: "trait-key", candidates: expanded, required: true,
-                ...(cfg.mode && cfg.mode !== "default" ? { mode: cfg.mode,
-                  note: cfg.mode === "expertise" ? "every pick must already be proficient — on the sheet or chosen in an earlier skills/tools slot of this same call. Invalid picks reject the whole advance before any write" : undefined } : {}) });
+              // 原生 UI 的 selected 池：default 熟练项不再作为候选；前序槽已满足的池不再制造必选。
+              if (available.length || cfg.mode !== "default") {
+                plan.choiceRequirements.push({ slot: subslot, level, kind, label: title, count: pool.count, valueFormat: "trait-key", candidates: available, required: true,
+                  ...(sourceType ? { sourceType } : {}),
+                  ...(cfg.mode && cfg.mode !== "default" ? { mode: cfg.mode,
+                    note: cfg.mode === "expertise" ? "every pick must already be proficient — on the sheet or chosen in an earlier skills/tools slot of this same call. Invalid picks reject the whole advance before any write" : undefined } : {}) });
+              }
               const raw = slotValue(subslot);
               let picked = null, problem = null;
-              if (raw === undefined) { /* missing → need/have below */ }
-              else if (!Array.isArray(raw) || raw.some((value) => typeof value !== "string")) problem = "slot value must be an array of trait keys";
+              if (raw === undefined) {
+                if (cfg.mode === "default" && available.length >= pool.count) {
+                  picked = available.slice(0, pool.count); // 原生 default：按序取未熟练候选
+                }
+              } else if (!Array.isArray(raw) || raw.some((value) => typeof value !== "string")) problem = "slot value must be an array of trait keys";
               else if (new Set(raw).size !== raw.length) problem = "duplicate values in slot";
               else {
                 const outside = raw.filter((value) => !matches(value));
@@ -2169,9 +2419,11 @@
                 else if (raw.length === pool.count) picked = raw;
               }
               if (picked) chosen.push(...picked);
-              if (!picked) entry.unmet = problem
-                ? { slot: subslot, label: title, kind, reason: problem }
-                : { slot: subslot, label: title, kind, need: pool.count, have: Array.isArray(raw) ? raw.length : 0 };
+              if (!picked && !(raw === undefined && cfg.mode === "default" && available.length === 0)) {
+                entry.unmet = problem
+                  ? { slot: subslot, label: title, kind, reason: problem }
+                  : { slot: subslot, label: title, kind, need: pool.count, have: Array.isArray(raw) ? raw.length : 0 };
+              }
               else if (expertiseMode) {
                 const invalid = picked.filter((key) => !(ctx.landedTraits ?? new Set()).has(key));
                 if (invalid.length) entry.unmet = { slot: subslot, label: title, kind,
@@ -2217,7 +2469,8 @@
           // restriction:{level:"0"}）；枚举同一集合让计划能回答「可以挑什么」。不可枚举形状
           //（level "available"、无 type）保持 candidates:null。
           const candidates = hasPool ? [...poolUuids] : await enumerateItemChoicePoolCandidates(cfg, ctx.rules, scope);
-          plan.choiceRequirements.push({ slot, level, kind, label: title, count, valueFormat: "pool-uuid", candidates, required: true });
+          plan.choiceRequirements.push({ slot, level, kind, label: title, count, valueFormat: "pool-uuid", candidates, required: true,
+            ...(sourceType ? { sourceType } : {}) });
           const raw = slotValue(slot);
           let picked = null, problem = null;
           if (raw === undefined) { /* missing → need/have below */ }
@@ -2264,7 +2517,8 @@
             plan.automaticSteps.push({ slot, level, kind, label: title, summary: "grant " + requiredItems.length + " items", optionalSkipped: optional.length ? optional : undefined });
           }
         } else if (kind === "SubclassAdvancement") {
-          if (!consumed) plan.choiceRequirements.push({ slot, level, kind, label: title, count: 1, valueFormat: "subclass-uuid", required: true });
+          if (!consumed) plan.choiceRequirements.push({ slot, level, kind, label: title, count: 1, valueFormat: "subclass-uuid", required: true,
+            ...(sourceType ? { sourceType } : {}) });
           // 已消耗级：apply 保留（subclass 物插入通道——克隆旧物已摘除），槽不列、不强制
           if (!subclassUuid) entry.unmet = consumed ? null : { slot, label: title, kind, reason: "subclassUuid" };
           else entry.dataFor = { uuid: subclassUuid };
@@ -2288,6 +2542,7 @@
             if (fixedSummary) plan.automaticSteps.push({ slot, level, kind, label: title, summary: fixedSummary });
             if (consumed) continue; // 已消耗级的 ASI：不重列（幻影必填）、不重放（WIZ5 复利事故根因）
             plan.choiceRequirements.push({ slot, level, kind, label: title, count: points, valueFormat: allowFeat ? "asi-or-feat" : "asi-assignment", required: true, cap,
+              ...(sourceType ? { sourceType } : {}),
               ...(allowFeat ? { note: "fill with { abilityScore: {...} } (floating points only, fixed is automatic) or { feat: \"<uuid>\" }" } : {}) });
             const raw = slotValue(slot);
             const isObject = raw !== null && typeof raw === "object" && !Array.isArray(raw);
@@ -2730,10 +2985,22 @@
           });
           const remove = collectionValues(actor.items).map((item) => item.id)
             .filter((id) => !items.some((item) => item._id === id));
-          await actor.update(object, { isAdvancement: true });
-          if (create.length) await actor.createEmbeddedDocuments("Item", create, { keepId: true, isAdvancement: true });
-          if (update.length) await actor.updateEmbeddedDocuments("Item", update, { diff: false, recursive: false, isAdvancement: true });
-          if (remove.length) await actor.deleteEmbeddedDocuments("Item", remove, { isAdvancement: true });
+          // issue #343：新建 class/子职 + 删旧物 + 顶层字段（details.originalClass 等）必须
+          // 整单原子落库。逐笔写时每笔都整卡重发 /foundry/items，中间快照会把待删旧物写回
+          // 或与 delete 交错（实测 L2→L3 刷新后仍是 2 级）。事务快照必须早于任何写（含顶层
+          // update）——事务内顶层字段只记账，与 items 并成同一个 ops 数组发一次请求。
+          // delete 留最后：新建失败时旧职业/子职在盘上原样保留。
+          const transactional = typeof actor.beginEmbeddedBatch === "function" && actor.beginEmbeddedBatch();
+          try {
+            await actor.update(object, { isAdvancement: true });
+            if (update.length) await actor.updateEmbeddedDocuments("Item", update, { diff: false, recursive: false, isAdvancement: true });
+            if (create.length) await actor.createEmbeddedDocuments("Item", create, { keepId: true, isAdvancement: true });
+            if (remove.length) await actor.deleteEmbeddedDocuments("Item", remove, { isAdvancement: true });
+            if (transactional) await actor.endEmbeddedBatch();
+          } catch (error) {
+            if (transactional) actor.rollbackEmbeddedBatch();
+            throw error;
+          }
           started = true;
         };
         let subclassItemId = null, subclassAdvancements = null;
@@ -3008,6 +3275,10 @@
           }
           return out;
         };
+        // 阶段 12 item 源：本次调用新建物品（advancement 授予 + additionalItems/spellFill）里，
+        // 自身仍有未完成 advancement 的专长/特性。旧卡物品不在差集里，绝不重扫。
+        const pendingAdvancements = pendingAdvancementsForItems(
+          collectionValues(actor.items).filter((item) => !itemIdsBefore.has(item.id)), itemAdvancementMaxLevel(actor));
         const verification = {
           actorUuid: actor.uuid, type: actor.type, level: actor.system?.details?.level ?? null,
           hp: { value: hp.value ?? null, max: hp.max ?? null,
@@ -3056,8 +3327,9 @@
           ...(legacySpellRepair.repaired ? { legacySpellRepair } : {}),
           ...(spellMerge.merged ? { spellMerge } : {}),
           ...(spellFill ? { spellFill: { ...spellFill, created: spellFill.created.map((entry) => ({ ...entry, ...grantActivityCount(entry) })) } } : {}),
+          pendingAdvancements,
         };
-        return { status: "completed", steps, verification, warnings };
+        return { status: "completed", steps, verification, pendingAdvancements, warnings };
       } catch (error) {
         return { status: started ? "partial" : "rejected", ...(started ? { retry: false, steps, message: writeErrorMessage(error) } : { code: writeErrorMessage(error).split(":")[0], message: writeErrorMessage(error) }) };
       }
@@ -3448,6 +3720,7 @@
             // 顶层 subclassUuid 参数
             const serialized = { slot: req.slot, level: req.level, kind: req.kind, label: req.label, count: req.count,
               valueFormat: req.valueFormat, key: req.valueFormat === "subclass-uuid" ? "subclassUuid" : req.slot,
+              ...(req.sourceType ? { sourceType: req.sourceType } : {}),
               ...(req.candidates ? { candidates: req.candidates } : {}), ...(req.cap !== undefined ? { cap: req.cap } : {}),
               ...(req.mode ? { mode: req.mode } : {}), ...(req.note ? { note: req.note } : {}), required: req.required !== false };
             if (serialized.valueFormat === "subclass-uuid" && !serialized.candidates) {
@@ -3507,6 +3780,1455 @@
           warnings: [] };
       } catch (error) {
         return writeReject(error);
+      }
+    }
+
+    // =========================================================================
+    // —— 阶段 12 M3+：item 源 advancement（advancementItemPlan / actorAdvanceItem）——
+    // 只执行本次新授物品自身的 advancement：以 `item:<actorItemId>` 为槽标签，复用
+    // normalizeAdvancementSteps 的 bySlot/原子提交，不重放 class HP/等级、不算法术位、
+    // 不跑 fullSpellList，也不做同源法术合流（专长法术的 advancementOrigin/独立次数
+    // 语义必须与职业法术分开）。
+    // 完成/幂等闸 = 原生 advancement.value（ItemChoice.value.added[level]、ItemGrant.value.added、
+    // Trait.value.chosen、ASI.value.type/assignments）。level 0 是物品 advancement 的
+    // 合法等级（2024 Magic Initiate 的 choices["0"]），绝不按 handledLevel 当历史跳过。
+    // 法术 ItemChoice 的多职业声明：计划可选传 choices.bySlot["item:<id>:spellClass"] 预览
+    // 单一来源职业，返回该职业真实 class 文档的名称/属性并按其过滤候选；执行期同一约束强校验。
+    // =========================================================================
+    const ITEM_ADVANCEMENT_DEPTH_LIMIT = 8;
+    const ITEM_ADVANCEMENT_KINDS = new Set(["ItemChoiceAdvancement", "ItemGrantAdvancement",
+      "TraitAdvancement", "AbilityScoreImprovementAdvancement", "ScaleValueAdvancement"]);
+    const ITEM_ABILITY_ORDER = ["str", "dex", "con", "int", "wis", "cha"];
+
+    // dnd5e 5.3 Item5e#_prepareAdvancement 把直播面挂成 { byId, byLevel, byType,
+    // needingConfiguration }（纯对象，不是可迭代 Collection）；旧夹具/早期 shim 是
+    // Collection/数组。统一取 Advancement 实例列表——只认带 byId 的真 5.x 形状，
+    // 其余按可迭代值处理（jsdom 夹具零变化）。
+    function itemAdvancementValues(item) {
+      const adv = item?.advancement;
+      if (!adv) return [];
+      if (adv.byId && typeof adv.byId === "object" && !Array.isArray(adv.byId)) {
+        return Object.values(adv.byId).filter(Boolean);
+      }
+      return collectionValues(adv);
+    }
+    function itemAdvancementSourceUuid(item) {
+      return item?.flags?.arcanedesk?.sourceUuid ?? item?._stats?.compendiumSource
+        ?? item?.flags?.dnd5e?.sourceId ?? item?.flags?.core?.sourceId ?? null;
+    }
+    function itemAdvancementData(item) {
+      try { return writePlainData(item) ?? {}; } catch { return {}; }
+    }
+    function itemAdvancementValue(advancement) {
+      // 存储真相优先：dnd5e PseudoDocument#updateSource 会把变更镜像进 advancement._source /
+      // 父物品源，但嵌套 value 模型实例在 shim 里可能保留旧快照（ItemChoice.apply 后
+      // advancement.value.added 仍空、toObject().value 已写）。推进/幂等判定读 toObject
+      // （= 即将落库的源），避免「值已记录但直播面旧」被误判未完成而整体拒绝。
+      let raw;
+      try { raw = advancement?.toObject?.()?.value; } catch { raw = undefined; }
+      if (raw === undefined || raw === null) raw = advancement?.value;
+      if (raw === undefined || raw === null) return {};
+      try { return typeof raw?.toObject === "function" ? raw.toObject() : JSON.parse(JSON.stringify(raw)); }
+      catch { return {}; }
+    }
+    function itemAdvancementConfiguration(advancement) {
+      const raw = advancement?.configuration;
+      if (raw === undefined || raw === null) return {};
+      try { return typeof raw?.toObject === "function" ? raw.toObject() : JSON.parse(JSON.stringify(raw)); }
+      catch { return {}; }
+    }
+    function itemAdvancementClassIds(cfg) {
+      const out = [];
+      for (const listType of collectionValues(cfg?.restriction?.list)) {
+        const text = String(listType);
+        const at = text.indexOf("class:");
+        if (at < 0) continue;
+        const id = lower(text.slice(at + 6));
+        if (id && !out.includes(id)) out.push(id);
+      }
+      return out;
+    }
+    function itemAdvancementLevelsFromConfig(kind, cfg, advancement = null) {
+      if (kind === "ItemChoiceAdvancement") {
+        return [...new Set(Object.keys(cfg?.choices ?? {}).map(Number)
+          .filter((level) => Number.isInteger(level) && level >= 0))];
+      }
+      const raw = advancement?.level ?? cfg?.level ?? 0;
+      const level = Number(raw);
+      return Number.isInteger(level) && level >= 0 ? [level] : [0];
+    }
+    function itemAdvancementLevels(advancement, kind, cfg) {
+      const raw = advancement?.levels;
+      if (Array.isArray(raw) && raw.length) {
+        return [...new Set(raw.map(Number).filter((level) => Number.isInteger(level) && level >= 0))];
+      }
+      return itemAdvancementLevelsFromConfig(kind, cfg, advancement);
+    }
+    function itemAdvancementHasWork(kind, cfg) {
+      if (kind === "ItemChoiceAdvancement") {
+        return collectionValues(cfg?.choices).some((per) => Number(per?.count ?? 0) > 0);
+      }
+      if (kind === "ItemGrantAdvancement") return collectionValues(cfg?.items).length > 0;
+      if (kind === "TraitAdvancement") {
+        return collectionValues(cfg?.grants).length > 0
+          || collectionValues(cfg?.choices).some((pool) => Number(pool?.count ?? 0) > 0);
+      }
+      if (kind === "AbilityScoreImprovementAdvancement") {
+        const fixed = cfg?.fixed ?? {};
+        return Number(cfg?.points ?? 0) > 0 || Object.values(fixed).some((value) => Number(value) > 0);
+      }
+      if (kind === "ScaleValueAdvancement") return Object.keys(cfg?.scale ?? {}).length > 0;
+      return false;
+    }
+    // 原生 configuredForLevel 的干净室重述：只看持久化的 advancement.value，不看卡面派生。
+    // 返回 true 表示该 advancement 在这一级已经完成/无工作，计划与执行都不再碰它。
+    function itemAdvancementConfigApplied(kind, cfg, value, level) {
+      if (kind === "ItemChoiceAdvancement") {
+        const per = cfg?.choices?.[level] ?? cfg?.choices?.[String(level)];
+        const count = Number(per?.count ?? 0);
+        if (!count) return true;
+        const added = value?.added?.[level] ?? value?.added?.[String(level)] ?? {};
+        return Object.keys(added ?? {}).length >= count;
+      }
+      if (kind === "ItemGrantAdvancement") {
+        const required = collectionValues(cfg?.items).filter((item) => !item?.optional);
+        if (!required.length) return true;
+        return Object.keys(value?.added ?? {}).length > 0;
+      }
+      if (kind === "TraitAdvancement") {
+        if (!itemAdvancementHasWork(kind, cfg)) return true;
+        const chosen = value?.chosen;
+        const size = chosen instanceof Set ? chosen.size
+          : Array.isArray(chosen) ? chosen.length
+          : chosen && typeof chosen === "object" ? Object.keys(chosen).length : 0;
+        return size > 0;
+      }
+      if (kind === "AbilityScoreImprovementAdvancement") {
+        if (!itemAdvancementHasWork(kind, cfg)) return true;
+        if (!value?.type) return false;
+        if (value.type === "feat") return Object.keys(value.feat ?? {}).length > 0;
+        if (value.type === "asi") return Object.keys(value.assignments ?? {}).length > 0;
+        return false;
+      }
+      if (kind === "ScaleValueAdvancement") {
+        if (!itemAdvancementHasWork(kind, cfg)) return true;
+        return Object.keys(value ?? {}).length > 0;
+      }
+      return true;
+    }
+    function itemAdvancementIsApplied(advancement, kind, level) {
+      return itemAdvancementConfigApplied(kind, itemAdvancementConfiguration(advancement),
+        itemAdvancementValue(advancement), level);
+    }
+    // 仅供回执/续接的 pending 报告：本次新物品里还有未完成 advancement 才返回。旧卡不扫。
+    function pendingAdvancementInfoForItem(item, maxLevel = Infinity) {
+      if (!item) return null;
+      const type = item.type ?? null;
+      if (["class", "subclass", "race"].includes(type)) return null;
+      const advancements = [];
+      let live = [];
+      try { live = itemAdvancementValues(item); } catch { live = []; }
+      let sawLiveKind = false;
+      if (live.length) {
+        try {
+          for (const advancement of live) {
+            const kind = advancement?.constructor?.name ?? "";
+            if (!ITEM_ADVANCEMENT_KINDS.has(kind)) continue;
+            sawLiveKind = true;
+            const cfg = itemAdvancementConfiguration(advancement);
+            if (!itemAdvancementHasWork(kind, cfg)) continue;
+            const value = itemAdvancementValue(advancement);
+            for (const level of itemAdvancementLevels(advancement, kind, cfg)) {
+              if (level > maxLevel || itemAdvancementConfigApplied(kind, cfg, value, level)) continue;
+              advancements.push({ id: advancement.id ?? advancement._id ?? null,
+                type: kind.replace(/Advancement$/, ""), level, title: advancement.title ?? null });
+            }
+          }
+        } catch { advancements.length = 0; live = []; }
+      }
+      if (!sawLiveKind) {
+        let source;
+        try { source = itemAdvancementData(item); } catch { return null; }
+        for (const advancement of collectionValues(source.system?.advancement)) {
+          const kind = String(advancement?.type ?? "") + "Advancement";
+          if (!ITEM_ADVANCEMENT_KINDS.has(kind)) continue;
+          const cfg = advancement?.configuration ?? {};
+          if (!itemAdvancementHasWork(kind, cfg)) continue;
+          for (const level of itemAdvancementLevelsFromConfig(kind, cfg, advancement)) {
+            if (level > maxLevel || itemAdvancementConfigApplied(kind, cfg, advancement?.value ?? {}, level)) continue;
+            advancements.push({ id: advancement?._id ?? null, type: String(advancement?.type ?? ""),
+              level, title: advancement?.title ?? null });
+          }
+        }
+      }
+      if (!advancements.length) return null;
+      return { itemId: item.id ?? null, uuid: item.uuid ?? null, name: item.name ?? null, type,
+        sourceUuid: itemAdvancementSourceUuid(item), advancements };
+    }
+    function pendingAdvancementsForItems(items, maxLevel = Infinity) {
+      const out = [];
+      for (const item of items ?? []) {
+        try {
+          const info = pendingAdvancementInfoForItem(item, maxLevel);
+          if (info) out.push(info);
+        } catch { /* 回执报告绝不因单个物品的读面异常打断已成功的写 */ }
+      }
+      return out;
+    }
+    function prepItemAdvancementIds(itemIds) {
+      if (!Array.isArray(itemIds) || !itemIds.length || itemIds.length > 50) {
+        throw new Error("INPUT_INVALID: itemIds must be 1..50 Actor Item ids");
+      }
+      if (itemIds.some((id) => typeof id !== "string" || !id || id.length > 256)) {
+        throw new Error("INPUT_INVALID: itemIds must be Actor Item id strings");
+      }
+      const unique = [...new Set(itemIds)];
+      if (unique.length !== itemIds.length) throw new Error("INPUT_INVALID: duplicate itemIds");
+      return unique;
+    }
+    function prepItemAdvancementChain(input) {
+      const raw = input.visitedSourceUuids;
+      if (raw !== undefined && (!Array.isArray(raw) || raw.length > 100
+        || raw.some((uuid) => typeof uuid !== "string" || !uuid || uuid.length > 256))) {
+        throw new Error("INPUT_INVALID: visitedSourceUuids must be at most 100 UUID strings");
+      }
+      const depth = input.depth === undefined ? 0 : input.depth;
+      if (!Number.isInteger(depth) || depth < 0 || depth > ITEM_ADVANCEMENT_DEPTH_LIMIT) {
+        throw new Error("INPUT_INVALID: depth must be an integer 0.." + ITEM_ADVANCEMENT_DEPTH_LIMIT);
+      }
+      return { visited: new Set(raw ?? []), depth };
+    }
+    function prepItemAdvancementChoices(input) {
+      const choices = input.choices ?? {};
+      if (!choices || typeof choices !== "object" || Array.isArray(choices)) {
+        throw new Error("INPUT_INVALID: choices must be an object keyed by advancement_plan slot");
+      }
+      writePrepObject(choices, ["bySlot"]);
+      const bySlot = choices.bySlot ?? {};
+      if (!bySlot || typeof bySlot !== "object" || Array.isArray(bySlot)) {
+        throw new Error("INPUT_INVALID: choices.bySlot must be an object keyed by advancement_plan slot");
+      }
+      for (const [key, value] of Object.entries(bySlot)) {
+        if (!key || key.length > 256) throw new Error("INPUT_INVALID: choices.bySlot keys are plan slot strings");
+        if (value === null || value === undefined) {
+          throw new Error("INPUT_INVALID: choices.bySlot[" + JSON.stringify(key) + "] must not be null");
+        }
+      }
+      return bySlot;
+    }
+    // shim 适配：ItemGrantAdvancement#apply 先 actor.updateSource({items})（触发 clone 的
+    // prepareData 重准备 system 模型），再 this.updateSource(value.added)——此时 this 已
+    // 指向旧 system 模型上的 PseudoDocument，镜像只写旧 _source；clone.reset()/落库读到
+    // 的是新模型源，value.added 丢失（ITEM_ADVANCEMENT_NOT_SETTLED 实证）。把已 apply
+    // 到实例上的 value 复制回物品源与新 system 模型源——不改玩家选择，只补齐镜像缺口。
+    function syncItemAdvancementValue(liveItem, advId, value) {
+      const safe = (() => { try { return JSON.parse(JSON.stringify(value ?? {})); } catch { return null; } })();
+      if (!safe || !Object.keys(safe).length) return;
+      for (const holder of [liveItem?._source, liveItem?.system?._source]) {
+        if (!holder || typeof holder !== "object") continue;
+        const bag = holder.system?.advancement ?? holder.advancement;
+        if (!bag || typeof bag !== "object") continue;
+        const entry = Array.isArray(bag) ? bag.find((row) => row?._id === advId) : bag[advId];
+        if (entry && typeof entry === "object") entry.value = JSON.parse(JSON.stringify(safe));
+      }
+    }
+    function itemAdvancementItemOnActor(actor, id) {
+      return collectionValues(actor.items).find((item) => item.id === id || item._id === id) ?? null;
+    }
+    async function prepItemAdvancementTargets(actor, itemIds) {
+      const targets = [];
+      for (const id of itemIds) {
+        const item = itemAdvancementItemOnActor(actor, id);
+        if (!item) throw new Error("ACTOR_ITEM_NOT_FOUND: no Item " + id + " on " + actor.uuid);
+        const type = item.type ?? null;
+        if (["class", "subclass", "race"].includes(type)) {
+          throw new Error("ACTOR_ITEM_TYPE_UNSUPPORTED: item-source advancement does not replay " + type
+            + " items (use actorAdvance for class/race/subclass steps)");
+        }
+        const sourceUuid = itemAdvancementSourceUuid(item);
+        if (sourceUuid) await assertUserPackGrantable(packIdFromUuid(sourceUuid));
+        // 该物品 advancement 里引用的固定授予/候选包也必须处于启用面（用户包停用零写入）
+        const sourceData = itemAdvancementData(item);
+        if (sourceData?.system?.advancement) await assertAdvancementSourcesEnabled([sourceData]);
+        targets.push({ id: item.id ?? id, item, type, sourceUuid });
+      }
+      return targets;
+    }
+    function itemAdvancementMaxLevel(actor) {
+      return Math.max(1, Number(actor.system?.details?.level) || 0);
+    }
+    function itemAdvancementBaseCtx(actor, candidateDocs) {
+      return {
+        actor,
+        landedTraits: new Set([
+          ...Object.entries(actor.system?.skills ?? {}).filter(([, skill]) => (skill?.value ?? 0) >= 1).map(([key]) => "skills:" + key),
+          ...Object.entries(actor.system?.tools ?? {}).filter(([, tool]) => (tool?.value ?? 0) >= 1).map(([key]) => "tool:" + key)]),
+        candidateDocs: candidateDocs ?? new Map(),
+        classInfoCache: new Map(),
+        spellClassCache: new Map(),
+        isNpc: actor.type === "npc",
+        hpHistory: {}, hitDie: null,
+      };
+    }
+    async function prepItemAdvancementClone(actor, targets) {
+      if (typeof actor.clone !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: Actor#clone is required for item-source advancement");
+      }
+      let clone;
+      try { clone = actor.clone({}, { keepId: true }); }
+      catch (error) {
+        throw new Error("CAPABILITY_UNAVAILABLE: could not clone the Actor for item advancement ("
+          + writeErrorMessage(error) + ")");
+      }
+      if (typeof clone?.items?.get !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: cloned Actor has no embedded Item collection");
+      }
+      const liveTargets = [];
+      for (const target of targets) {
+        const liveItem = clone.items.get(target.id);
+        if (!liveItem) throw new Error("ACTOR_ITEM_NOT_FOUND: Item " + target.id + " missing from the advancement clone");
+        liveTargets.push({ ...target, liveItem });
+      }
+      return { clone, liveTargets };
+    }
+    // 活实例枚举：直接读克隆物品的 advancement 集合（byLevel 已由 Item5e 准备）。不做
+    // class/HP/subclass；这些由 actorAdvance 的 class 重放负责，绝不能混进 item 补选。
+    function itemAdvancementEntries(liveItem, maxLevel) {
+      const advancements = itemAdvancementValues(liveItem);
+      if (!advancements.length) {
+        throw new Error("CAPABILITY_UNAVAILABLE: Item#advancement is unavailable for "
+          + String(liveItem?.name ?? liveItem?.id ?? "target item"));
+      }
+      const entries = [];
+      for (const advancement of advancements) {
+        const kind = advancement?.constructor?.name ?? "";
+        if (!ITEM_ADVANCEMENT_KINDS.has(kind)) continue;
+        const cfg = itemAdvancementConfiguration(advancement);
+        if (!itemAdvancementHasWork(kind, cfg)) continue;
+        const value = itemAdvancementValue(advancement);
+        for (const level of itemAdvancementLevels(advancement, kind, cfg)) {
+          if (level > maxLevel) continue;
+          entries.push({ advancement, kind, cfg, level,
+            applied: itemAdvancementConfigApplied(kind, cfg, value, level) });
+        }
+      }
+      return entries;
+    }
+    function itemAdvancementFlowSteps(entries) {
+      return entries.filter((entry) => !entry.applied)
+        .map((entry) => ({ type: "forward", flow: { advancement: entry.advancement, level: entry.level } }));
+    }
+    function itemAdvancementValueAtLevel(entry) {
+      const value = itemAdvancementValue(entry.advancement);
+      return value?.added?.[entry.level] ?? value?.added?.[String(entry.level)] ?? {};
+    }
+    function actorHeldSpellSources(actor) {
+      const out = new Set();
+      for (const item of collectionValues(actor.items)) {
+        if (item.type !== "spell") continue;
+        const source = itemAdvancementSourceUuid(item);
+        if (source) out.add(source);
+      }
+      return out;
+    }
+    async function itemSpellDoc(ctx, uuid) {
+      if (!ctx.candidateDocs.has(uuid)) {
+        ctx.candidateDocs.set(uuid, await g.fromUuid(uuid).catch(() => null));
+      }
+      return ctx.candidateDocs.get(uuid);
+    }
+    // dnd5e registry spellLists 成员判定（内置与用户包共用）：SpellList#has 只认 uuid /
+    // _stats.compendiumSource；用户包文档可能没有 compendiumSource，但原始 SRD identifier
+    // （如 phbsplColorSpray → color-spray）与 spell-list 的 identifiers 是同一身份——可解析时
+    // 用它做真实归属核查，不再把未知注解一律放行。任一列表都不可用 → null（未知 fail-open）。
+    function registryClassMembership(doc, uuid, declaredClasses, { allowIdentifiers = true } = {}) {
+      const registry = g.dnd5e?.registry?.spellLists;
+      if (typeof registry?.forType !== "function") return null;
+      const identifierSet = new Set();
+      for (const value of [doc?.system?.identifier, doc?.identifier, doc?._source?.system?.identifier]) {
+        const id = lower(value);
+        if (id) identifierSet.add(id);
+      }
+      const set = new Set();
+      let anyList = false;
+      for (const id of declaredClasses) {
+        const list = registry.forType("class:" + id);
+        if (!list) continue;
+        anyList = true;
+        let hit = false;
+        try {
+          // SpellList#has 同时接受 Item5e 与 compendium UUID；shim 的 fromUuid 返回裸数据，
+          // 两种形状都试，避免把可解析法术误判成不在列表。
+          if (typeof list.has === "function" && (list.has(doc) || list.has(uuid))) hit = true;
+          if (!hit && allowIdentifiers && list.identifiers && typeof list.identifiers.has === "function") {
+            for (const ident of identifierSet) if (list.identifiers.has(ident)) { hit = true; break; }
+          }
+        } catch { /* 单列表故障按未命中 */ }
+        if (hit) set.add(id);
+      }
+      return anyList ? set : null;
+    }
+    // 用户包法术 → 原始 SRD 身份：只认可验证的原始文档，不按名字/裸 identifier 猜。
+    //   · _stats.compendiumSource 只指向内置 dnd5e.spells/spells24；用户包自身或任意
+    //     第三方 Compendium 别名不是原始身份（即使 _id 与 identifier 与 SRD 相同）。
+    //   · 否则：原始 UUID 的 _id 必须在内置 spells/spells24 包里真实存在，且 identifier 一致
+    //     （同名 slug 的自制法术不会通过：内置包没有该 _id 就是未知）
+    async function canonicalSpellUuid(doc) {
+      const sourceUuid = String(doc?._stats?.compendiumSource ?? "").trim();
+      if (/^Compendium\.dnd5e\.spells(?:24)?\./.test(sourceUuid)) return sourceUuid;
+      const version = lower(doc?.system?.source?.rules) === "2014" ? "2014" : "2024";
+      const packId = version === "2014" ? "dnd5e.spells" : "dnd5e.spells24";
+      const pack = g.game?.packs?.get?.(packId);
+      if (!pack?.getIndex) return null;
+      const index = await pack.getIndex().catch(() => null);
+      if (!index) return null;
+      const entries = Array.isArray(index) ? index : [...(index?.values?.() ?? [])];
+      const hit = entries.find((entry) => String(entry?._id ?? "") === String(doc?._id ?? ""));
+      if (!hit) return null;
+      if (lower(hit?.system?.identifier) !== lower(doc?.system?.identifier)) return null;
+      return "Compendium." + packId + ".Item." + hit._id;
+    }
+    // 法术 → 声明内职业列表成员。
+    //   内置法术：registry spellLists（uuid / compendiumSource / identifiers；与 normalize 的
+    //   restriction 校验同一面）。
+    //   用户包法术：spellClasses 注解优先。整包无注解时（2024 导入包就是 SRD24 重打包）先按
+    //   UUID 末段回退 studio 规则版本的职业表映射（spellClassMapData，与 fullSpellList/内置
+    //   同一数据面），再把可验证的原始 SRD 身份交给 registry 成员判定（identifiers 只对
+    //   **已验证的原始身份**放行）。身份不可证 → null = 未知 fail-open，绝不把同名 slug
+    //   当作原始法术；映射未收录的模块自制法术同样返回 null。
+    //   仍无法判定的返回 null：候选/选卡面按未知 fail-open 保留，提交侧只在命中集合不含
+    //   所选职业时整拒（不猜成员资格）。
+    async function itemSpellClassMembership(ctx, uuid, declaredClasses) {
+      const cacheKey = uuid + "\n" + [...declaredClasses].sort().join(",") + "\n" + String(ctx.rules ?? "");
+      if (ctx.spellClassCache.has(cacheKey)) return ctx.spellClassCache.get(cacheKey);
+      const doc = await itemSpellDoc(ctx, uuid);
+      let result = null;
+      if (doc && (doc.type ?? doc.documentName) === "spell") {
+        const packId = packIdFromUuid(uuid);
+        const userPack = !!userPackStorageIdFor(packId);
+        let annotated = false;
+        if (userPack) {
+          const data = itemAdvancementData(doc);
+          const classes = spellClassesFromFlags(data.flags ?? doc.flags);
+          if (Array.isArray(classes) && classes.length) {
+            annotated = true;
+            const set = new Set(classes.map((name) => lower(name)));
+            result = new Set([...declaredClasses].filter((id) => set.has(id)));
+          } else {
+            const bySpellId = await spellClassMapData(ctx.rules ?? "2014");
+            const mapped = bySpellId?.[String(uuid).split(".").pop()];
+            if (Array.isArray(mapped) && mapped.length) {
+              const set = new Set(mapped.map((name) => lower(name)));
+              result = new Set([...declaredClasses].filter((id) => set.has(id)));
+            }
+          }
+        }
+        if (!annotated) {
+          const canonical = userPack ? await canonicalSpellUuid(doc) : uuid;
+          if (canonical) {
+            const viaRegistry = registryClassMembership(doc, canonical, declaredClasses, { allowIdentifiers: userPack });
+            if (viaRegistry) result = viaRegistry;
+            if (!viaRegistry && userPack) {
+              const version = lower(doc?.system?.source?.rules) === "2014" ? "2014" : "2024";
+              const map = await spellClassMapData(version);
+              const classes = map?.[doc?._id];
+              if (Array.isArray(classes) && classes.length) {
+                const set = new Set(classes.map((name) => lower(name)));
+                result = new Set([...declaredClasses].filter((id) => set.has(id)));
+              }
+            }
+          }
+        }
+      }
+      ctx.spellClassCache.set(cacheKey, result);
+      return result;
+    }
+    // 用户包法术「整包无注解、职业表映射已解析且该 id 不在表内」= 已知的非职业法术
+    // （Magic Initiate 回退口径：候选面隐藏，提交侧由命中集合否决）。映射面缺席或包内有
+    // 注解 → 身份不可证（未知），保持 fail-open，不冒充成员也不隐藏候选。
+    async function userPackSpellUnmapped(ctx, uuid) {
+      const packId = packIdFromUuid(uuid);
+      if (!userPackStorageIdFor(packId)) return false;
+      const doc = await itemSpellDoc(ctx, uuid);
+      if (!doc) return false;
+      const classes = spellClassesFromFlags(itemAdvancementData(doc).flags ?? doc.flags);
+      if (Array.isArray(classes) && classes.length) return false;
+      const bySpellId = await spellClassMapData(ctx.rules ?? "2014");
+      if (!bySpellId) return false;
+      const mapped = bySpellId[String(uuid).split(".").pop()];
+      return !(Array.isArray(mapped) && mapped.length);
+    }
+    function normalizeItemAbilityList(raw) {
+      const values = raw instanceof Set ? [...raw]
+        : Array.isArray(raw) ? raw
+        : raw && typeof raw === "object" ? Object.values(raw) : raw ? [raw] : [];
+      const abilities = [];
+      for (const value of values) {
+        const ability = lower(value);
+        if (!ability) continue;
+        if (g.CONFIG?.DND5E?.abilities && !g.CONFIG.DND5E.abilities[ability]) continue;
+        if (!abilities.includes(ability)) abilities.push(ability);
+      }
+      return abilities;
+    }
+    // 职业身份只从实际 class 文档（演员卡上的 class 物优先，其次同规则面/同用户命名空间的
+    // classes 包）读取：名称与 spellcasting.ability 同源。绝不写死 class→ability 映射；
+    // 多面冲突或缺失 → null（调用方 fail-closed，不猜）。
+    async function itemClassInfo(ctx, classId, target) {
+      const cacheKey = String(target.sourceUuid ?? "") + "\n" + classId;
+      if (ctx.classInfoCache.has(cacheKey)) return ctx.classInfoCache.get(cacheKey);
+      const ids = new Set(), names = new Set();
+      for (const item of collectionValues(ctx.actor?.items)) {
+        if (item.type !== "class") continue;
+        if (lower(item.system?.identifier) !== classId) continue;
+        if (item.name) names.add(String(item.name));
+        for (const ability of normalizeItemAbilityList(item.system?.spellcasting?.ability)) ids.add(ability);
+      }
+      if (!ids.size) {
+        const rules = classRulesVersion(target.item, target.sourceUuid);
+        const userScope = userModuleScope(target.sourceUuid);
+        const packs = userScope
+          ? await userPackPacksForScope(userScope)
+          : collectionValues(game.packs).filter((pack) => {
+            if (pack?.metadata?.type !== "Item") return false;
+            const packId = packIdOf(pack);
+            return /(^|[.])classes24?$/.test(String(packId)) || /classes/i.test(String(packId));
+          });
+        const docs = [];
+        for (const pack of packs) {
+          const packId = packIdOf(pack);
+          if (userScope && !userPackAllowed(packId, userScope)) continue;
+          const index = await pack.getIndex?.({ fields: ["type", "name", "system.identifier",
+            "system.spellcasting", "system.source.rules"] }).catch(() => null);
+          if (!index) continue;
+          for (const entry of collectionValues(index)) {
+            if (entry.type !== "class" || lower(entry.system?.identifier) !== classId) continue;
+            const uuid = "Compendium." + packId + ".Item." + entry._id;
+            let doc = await g.fromUuid(uuid).catch(() => null);
+            if (!doc && typeof pack.getDocument === "function") doc = await pack.getDocument(entry._id).catch(() => null);
+            if (!doc) continue;
+            const data = itemAdvancementData(doc);
+            const entryRules = classRulesVersion({ system: data.system ?? entry.system ?? {} }, uuid);
+            if (rules === "2024" ? entryRules === "2014" : entryRules === "2024") continue;
+            docs.push(data);
+          }
+        }
+        for (const data of docs) {
+          if (data.name) names.add(String(data.name));
+          for (const ability of normalizeItemAbilityList(data.system?.spellcasting?.ability)) ids.add(ability);
+        }
+      }
+      // 名称或属性不唯一/缺失都视为不可判定：选择器不能展示可能错误的职业。
+      const result = ids.size === 1 && names.size === 1
+        ? { id: classId, name: [...names][0], ability: [...ids][0] } : null;
+      ctx.classInfoCache.set(cacheKey, result);
+      return result;
+    }
+    async function itemClassOptions(ctx, classes, target) {
+      const out = [];
+      for (const id of classes) {
+        const info = await itemClassInfo(ctx, id, target);
+        if (!info) {
+          throw new Error("CAPABILITY_UNAVAILABLE: cannot derive the name and spellcasting ability for class "
+            + JSON.stringify(id) + " (class document or its spellcasting.ability is unavailable for "
+            + String(target.item?.name ?? target.id) + "); refusing to guess a class→ability mapping");
+        }
+        if (!out.some((entry) => entry.id === id)) out.push(info);
+      }
+      return out;
+    }
+    async function itemClassAbilities(ctx, classes, target) {
+      const out = [];
+      for (const info of await itemClassOptions(ctx, classes, target)) {
+        if (!out.includes(info.ability)) out.push(info.ability);
+      }
+      return out.sort((a, b) => ITEM_ABILITY_ORDER.indexOf(a) - ITEM_ABILITY_ORDER.indexOf(b));
+    }
+    function itemAbilitySlotKey(itemId) {
+      return "item:" + itemId + ":spellAbility";
+    }
+    function itemSpellClassSlotKey(itemId) {
+      return "item:" + itemId + ":spellClass";
+    }
+    // 同一 item 上的 spell ItemChoice 组：声明内职业列表取交集。多职业时必须由玩家选定
+    // 「法术来源职业」（计划槽 item:<id>:spellClass，valueFormat=spell-class）；职业必须
+    // 属于该交集，属性从该职业真实 class 文档派生（不再要求玩家另选属性）。只有交集恰好
+    // 单职业时自动确定；无 class 列表声明的普通 ItemChoice 原样返回 null（行为不变）。
+    async function prepItemSpellConstraint(ctx, target, entries, plan, bySlot, phase) {
+      const spellEntries = entries.filter((entry) => entry.kind === "ItemChoiceAdvancement"
+        && String(entry.cfg?.type ?? "") === "spell");
+      if (!spellEntries.length) return null;
+      const hasPendingSpell = (plan?.steps ?? []).some((entry) => {
+        if (entry.kind !== "ItemChoiceAdvancement") return false;
+        const cfg = entry.cfg ?? itemAdvancementConfiguration(entry.advancement);
+        return String(cfg?.type ?? "") === "spell";
+      });
+      if (!hasPendingSpell) return null;
+      const declaredSets = spellEntries.map((entry) => new Set(itemAdvancementClassIds(entry.cfg)))
+        .filter((set) => set.size);
+      if (!declaredSets.length) return null;
+      let declared = new Set(declaredSets[0]);
+      for (const set of declaredSets.slice(1)) declared = new Set([...declared].filter((id) => set.has(id)));
+      if (!declared.size) {
+        throw new Error("ITEM_SPELL_LIST_CONFLICT: spell ItemChoice advancements on "
+          + JSON.stringify(String(target.item?.name ?? target.id))
+          + " declare no common class list (intersection is empty)");
+      }
+      let configured = null;
+      for (const entry of spellEntries) {
+        const abilities = normalizeItemAbilityList(entry.cfg?.spell?.ability);
+        if (!abilities.length) continue;
+        configured = configured ? new Set([...configured].filter((ability) => abilities.includes(ability)))
+          : new Set(abilities);
+        if (!configured.size) {
+          throw new Error("CAPABILITY_UNAVAILABLE: spell.ability declarations on "
+            + JSON.stringify(String(target.item?.name ?? target.id)) + " have no common ability");
+        }
+      }
+      const appliedSelections = [];
+      for (const entry of spellEntries) {
+        if (!entry.applied) continue;
+        for (const uuid of Object.values(itemAdvancementValueAtLevel(entry))) {
+          if (typeof uuid === "string" && uuid) appliedSelections.push(uuid);
+        }
+      }
+      const pendingSelections = [];
+      if (phase === "execute") {
+        for (const entry of plan?.steps ?? []) {
+          if (entry.kind !== "ItemChoiceAdvancement") continue;
+          const pendingCfg = entry.cfg ?? itemAdvancementConfiguration(entry.advancement);
+          if (String(pendingCfg?.type ?? "") !== "spell") continue;
+          if (Array.isArray(entry.dataFor?.selected)) pendingSelections.push(...entry.dataFor.selected);
+        }
+      }
+      const seen = new Set();
+      for (const uuid of [...appliedSelections, ...pendingSelections]) {
+        if (seen.has(uuid)) {
+          throw new Error("SPELL_ALREADY_KNOWN: spell " + uuid + " is selected more than once on "
+            + JSON.stringify(String(target.item?.name ?? target.id)) + " (item-source spells cannot be merged or duplicated)");
+        }
+        seen.add(uuid);
+      }
+      const held = actorHeldSpellSources(ctx.actor);
+      if (phase === "execute") {
+        for (const uuid of pendingSelections) {
+          if (held.has(uuid)) {
+            throw new Error("SPELL_ALREADY_KNOWN: the actor already has a spell with source "
+              + uuid + " (item-source spells must stay separate from existing class spells and duplicates would never settle)");
+          }
+        }
+      }
+      async function sharedClassesFor(selections, base) {
+        let shared = new Set(base);
+        for (const uuid of selections) {
+          const classes = await itemSpellClassMembership(ctx, uuid, declared);
+          // 无注解 = 未知（旧档/未标注内容包），按 Studio 同一 fail-open 口径不缩小共享职业，
+          // 只有可验证的成员集合才参与取交集。可验证但交集为空仍 fail-closed（下方 throw）。
+          if (!classes) continue;
+          const next = new Set([...shared].filter((id) => classes.has(id)));
+          if (!next.size) {
+            throw new Error("ITEM_SPELL_LIST_CONFLICT: selected spells on "
+              + JSON.stringify(String(target.item?.name ?? target.id))
+              + " do not share one declared class list (intersection is empty)");
+          }
+          shared = next;
+        }
+        return shared;
+      }
+      const appliedShared = await sharedClassesFor(appliedSelections, declared);
+      const classOptions = await itemClassOptions(ctx, appliedShared, target);
+      if (!classOptions.length) {
+        throw new Error("CAPABILITY_UNAVAILABLE: no spellcasting class is available for the declared class list of "
+          + JSON.stringify(String(target.item?.name ?? target.id)));
+      }
+      if (configured) {
+        for (const info of classOptions) {
+          if (!configured.has(info.ability)) {
+            throw new Error("CAPABILITY_UNAVAILABLE: class " + JSON.stringify(info.id) + " on "
+              + JSON.stringify(String(target.item?.name ?? target.id)) + " casts with "
+              + JSON.stringify(info.ability) + ", which is not allowed by the spell.ability declaration ("
+              + [...configured].join(", ") + "); refusing to offer a class whose ability would be rejected");
+          }
+        }
+      }
+      const classKey = itemSpellClassSlotKey(target.id);
+      const abilityKey = itemAbilitySlotKey(target.id);
+      const rawClass = bySlot?.[classKey];
+      let providedClass = null;
+      if (rawClass !== undefined) {
+        if (typeof rawClass !== "string" || !rawClass.trim()) {
+          throw new Error("ITEM_SPELL_CLASS_INVALID: " + classKey + " must be a single class identifier string");
+        }
+        providedClass = rawClass;
+        if (!classOptions.some((info) => info.id === providedClass)) {
+          throw new Error("ITEM_SPELL_CLASS_INVALID: " + classKey + " = " + JSON.stringify(providedClass)
+            + " is not in the declared class list intersection (" + classOptions.map((info) => info.id).join(", ")
+            + ") for " + JSON.stringify(String(target.item?.name ?? target.id)));
+        }
+      }
+      const requireClassChoice = classOptions.length > 1;
+      const selectedInfo = requireClassChoice
+        ? (providedClass ? classOptions.find((info) => info.id === providedClass) ?? null : null)
+        : classOptions[0];
+      const classMissing = requireClassChoice && !selectedInfo;
+      const selectedClass = selectedInfo?.id ?? null;
+      const selectedAbility = selectedInfo?.ability ?? null;
+      const effectiveClasses = selectedInfo ? new Set([selectedInfo.id]) : appliedShared;
+      const availableAbilities = await itemClassAbilities(ctx, appliedShared, target);
+      if (phase === "execute" && selectedInfo) {
+        for (const uuid of pendingSelections) {
+          const classes = await itemSpellClassMembership(ctx, uuid, declared);
+          if (!classes) continue; // 无注解 = 未知：不猜，按 Studio fail-open 口径放行
+          if (!classes.has(selectedInfo.id)) {
+            throw new Error("ITEM_SPELL_CLASS_MISMATCH: spell " + uuid + " is not on the "
+              + JSON.stringify(selectedInfo.name) + " (" + selectedInfo.id + ") spell list; all spells on "
+              + JSON.stringify(String(target.item?.name ?? target.id)) + " must belong to the selected class");
+          }
+        }
+      }
+      if (selectedAbility && bySlot?.[abilityKey] !== undefined) {
+        const raw = bySlot[abilityKey];
+        if (typeof raw !== "string" || !raw.trim()) {
+          throw new Error("ITEM_SPELL_ABILITY_INVALID: " + abilityKey + " must be a single spellcasting ability string");
+        }
+        if (raw !== selectedAbility) {
+          throw new Error("ITEM_SPELL_ABILITY_INVALID: " + abilityKey + " = " + JSON.stringify(raw)
+            + " does not match the spellcasting ability derived from class "
+            + JSON.stringify(selectedInfo.name) + " (" + selectedAbility + "); the ability is no longer a separate choice");
+        }
+      }
+      return { classKey, requireClassChoice, classMissing, classOptions,
+        selectedClass, selectedAbility, abilityKey, requireAbility: false,
+        planAbilities: availableAbilities, allowedAbilities: availableAbilities,
+        chosenAbility: selectedAbility, abilityMissing: false,
+        declaredClasses: declared, effectiveClasses,
+        appliedSelections, pendingSelections };
+    }
+    async function filterItemSpellCandidates(ctx, target, plan, entries, constraint) {
+      if (!constraint) return;
+      const held = actorHeldSpellSources(ctx.actor);
+      const entryBySlot = new Map((plan.steps ?? []).map((entry) => [entry.slot, entry]));
+      let dropped = 0;
+      for (const req of plan.choiceRequirements ?? []) {
+        const entry = entryBySlot.get(req.slot);
+        if (!entry || entry.kind !== "ItemChoiceAdvancement") continue;
+        const entryCfg = entry.cfg ?? itemAdvancementConfiguration(entry.advancement);
+        if (String(entryCfg?.type ?? "") !== "spell") continue;
+        if (!Array.isArray(req.candidates)) continue;
+        const filtered = [];
+        for (const uuid of req.candidates) {
+          if (held.has(uuid)) continue;
+          const classes = await itemSpellClassMembership(ctx, uuid, constraint.declaredClasses);
+          // 可验证但不在交集内 → 隐藏；身份不可证（无注解/映射缺席）→ 未知 fail-open 保留。
+          if (classes && ![...classes].some((id) => constraint.effectiveClasses.has(id))) {
+            dropped++;
+            continue;
+          }
+          // 用户包整包无注解且职业表映射已解析、id 不在表内 → 已知非职业法术，候选面同样隐藏
+          //（Magic Initiate 回退口径）；执行/选卡侧仍按未知 fail-open，不整拒。
+          if (!classes && await userPackSpellUnmapped(ctx, uuid)) {
+            dropped++;
+            continue;
+          }
+          filtered.push(uuid);
+        }
+        req.candidates = filtered;
+      }
+      if (dropped) plan.itemSpellCandidateFilter = {
+        dropped, note: "spells outside the declared class intersection/selected class or unresolvable are hidden",
+      };
+    }
+    function serializeItemAdvancePlanItem(target, pendingInfo) {
+      return { itemId: target.id, uuid: target.item?.uuid ?? null, name: target.item?.name ?? null,
+        type: target.type ?? null, sourceUuid: target.sourceUuid ?? null,
+        advancements: pendingInfo?.advancements ?? [] };
+    }
+    function itemAdvanceEmptyPlan(actor, targets, chain) {
+      return { status: "completed", actorUuid: actor.uuid, itemIds: targets.map((target) => target.id),
+        items: [], automaticSteps: [], choiceRequirements: [], choicesTemplate: {},
+        pendingAdvancements: [], chain: { depth: chain.depth, nextDepth: chain.depth + 1,
+          visitedSourceUuids: [...chain.visited] },
+        coverage: { itemCount: targets.length, pendingItemCount: 0, nativeStepCount: 0,
+          automaticStepCount: 0, choiceStepCount: 0, uncoveredRequiredSteps: [] },
+        warnings: [] };
+    }
+    async function advancementItemPlanData(input) {
+      try {
+        writeInputGuard(input, "advancementItemPlan");
+        if (input.world !== undefined) prepWorld(input.world);
+        if (typeof input.actorUuid !== "string" || !input.actorUuid) {
+          throw new Error("INPUT_INVALID: actorUuid required for item advancement plans");
+        }
+        const actor = await prepActor(input.actorUuid);
+        if (actor.type !== "character" && actor.type !== "npc") {
+          throw new Error("ACTOR_TYPE_UNSUPPORTED: item advancement plan requires a Character or NPC Actor");
+        }
+        const itemIds = prepItemAdvancementIds(input.itemIds);
+        const chain = prepItemAdvancementChain(input);
+        const previewBySlot = prepItemAdvancementChoices(input);
+        const targets = await prepItemAdvancementTargets(actor, itemIds);
+        const maxLevel = itemAdvancementMaxLevel(actor);
+        const pendingTargets = targets.map((target) => ({ ...target,
+          pendingInfo: pendingAdvancementInfoForItem(target.item, maxLevel) })).filter((target) => target.pendingInfo);
+        if (!pendingTargets.length) return itemAdvanceEmptyPlan(actor, targets, chain);
+        for (const target of pendingTargets) {
+          if (target.sourceUuid && chain.visited.has(target.sourceUuid)) {
+            throw new Error("ADVANCEMENT_CYCLE: " + target.sourceUuid
+              + " is already in visitedSourceUuids (item advancement chain does not converge)");
+          }
+        }
+        if (chain.depth >= ITEM_ADVANCEMENT_DEPTH_LIMIT) {
+          throw new Error("ADVANCEMENT_DEPTH_EXCEEDED: item advancement depth limit "
+            + ITEM_ADVANCEMENT_DEPTH_LIMIT + " reached before " + pendingTargets.map((t) => t.id).join(", "));
+        }
+        const { liveTargets } = await prepItemAdvancementClone(actor, pendingTargets);
+        const candidateDocs = new Map();
+        const baseCtx = itemAdvancementBaseCtx(actor, candidateDocs);
+        const resolved = [];
+        for (const target of liveTargets) {
+          const entries = itemAdvancementEntries(target.liveItem, maxLevel);
+          const pendingEntries = entries.filter((entry) => !entry.applied);
+          const ctx = { ...baseCtx, rules: classRulesVersion(target.item, target.sourceUuid) };
+          const scope = userModuleScope(target.sourceUuid);
+          const plan = await normalizeAdvancementSteps(ctx, "item:" + target.id,
+            itemAdvancementFlowSteps(entries), Math.max(1, maxLevel), {}, null, 0, scope);
+          const constraint = await prepItemSpellConstraint(ctx, target, entries, plan, previewBySlot, "plan");
+          await filterItemSpellCandidates(ctx, target, plan, entries, constraint);
+          if (constraint) {
+            const spellSlots = new Set((plan.steps ?? []).filter((entry) => entry.kind === "ItemChoiceAdvancement"
+              && String(entry.cfg?.type ?? itemAdvancementConfiguration(entry.advancement)?.type ?? "") === "spell")
+              .map((entry) => entry.slot));
+            for (const req of plan.choiceRequirements ?? []) {
+              if (!spellSlots.has(req.slot)) continue;
+              req.spellClassRequired = true;
+              if (constraint.selectedClass) req.spellClass = constraint.selectedClass;
+              if (constraint.selectedAbility) req.spellAbility = constraint.selectedAbility;
+            }
+            if (constraint.requireClassChoice) {
+              plan.choiceRequirements.unshift({ slot: constraint.classKey, level: 0, kind: "ItemSpellClass",
+                label: (target.item?.name ?? "Item") + " spellcasting class", count: 1,
+                valueFormat: "spell-class", candidates: constraint.classOptions.map((info) => info.id),
+                candidateNames: Object.fromEntries(constraint.classOptions.map((info) => [info.id, info.name])),
+                classes: constraint.classOptions,
+                selected: constraint.selectedClass ?? null, ability: constraint.selectedAbility ?? null,
+                required: true,
+                note: "all spells chosen on this item must be on the selected class list; its real class document supplies the spellcasting ability" });
+            }
+          }
+          resolved.push({ target, entries, pendingEntries, plan, constraint });
+        }
+        const automaticSteps = [], choiceRequirements = [], uncoveredRequiredSteps = [];
+        let nativeStepCount = 0;
+        for (const { target, plan, constraint } of resolved) {
+          nativeStepCount += (plan.steps ?? []).length;
+          for (const step of plan.automaticSteps ?? []) {
+            automaticSteps.push({ itemId: target.id, slot: step.slot, level: step.level, kind: step.kind,
+              label: step.label, ...(step.summary ? { summary: step.summary } : {}) });
+          }
+          for (const req of plan.choiceRequirements ?? []) {
+            const serialized = { itemId: target.id, slot: req.slot, level: req.level, kind: req.kind,
+              label: req.label, count: req.count, valueFormat: req.valueFormat, key: req.slot,
+              ...(req.sourceType ? { sourceType: req.sourceType } : {}),
+              ...(req.candidates ? { candidates: req.candidates } : {}),
+              ...(req.candidateNames ? { candidateNames: req.candidateNames } : {}),
+              ...(req.spellClassRequired ? { spellClassRequired: true } : {}),
+              ...(req.spellClass ? { spellClass: req.spellClass } : {}),
+              ...(req.spellAbility ? { spellAbility: req.spellAbility } : {}),
+              ...(Array.isArray(req.classes) ? { classes: req.classes } : {}),
+              ...(req.selected !== undefined ? { selected: req.selected } : {}),
+              ...(req.ability !== undefined ? { ability: req.ability } : {}),
+              ...(req.cap !== undefined ? { cap: req.cap } : {}),
+              ...(req.mode ? { mode: req.mode } : {}), ...(req.note ? { note: req.note } : {}),
+              required: req.required !== false };
+            if (serialized.candidates && req.valueFormat !== "spell-ability" && !serialized.candidateNames) {
+              const hydrated = await hydrateCandidateNames(serialized.candidates);
+              if (Object.keys(hydrated).length) serialized.candidateNames = hydrated;
+            }
+            choiceRequirements.push(serialized);
+          }
+          for (const uncovered of plan.uncovered ?? []) {
+            uncoveredRequiredSteps.push(target.id + " " + uncovered.slot + " "
+              + (uncovered.label ?? uncovered.kind) + ": " + uncovered.reason);
+          }
+        }
+        const choicesTemplate = {};
+        for (const req of choiceRequirements) {
+          choicesTemplate[req.key] = req.valueFormat === "spell-ability" || req.valueFormat === "spell-class" ? ""
+            : req.valueFormat === "asi-assignment" || req.valueFormat === "asi-or-feat" ? { abilityScore: {} } : [];
+        }
+        const itemSpellClasses = resolved.filter((entry) => entry.constraint).map(({ target, constraint }) => ({
+          itemId: target.id, key: constraint.classKey, slot: constraint.classKey,
+          required: constraint.requireClassChoice,
+          selected: constraint.selectedClass, ability: constraint.selectedAbility,
+          declaredClasses: [...constraint.declaredClasses], classes: constraint.classOptions,
+        }));
+        return { status: "completed", actorUuid: actor.uuid, itemIds,
+          items: pendingTargets.map((target) => serializeItemAdvancePlanItem(target, target.pendingInfo)),
+          automaticSteps, choiceRequirements, choicesTemplate, itemSpellClasses,
+          pendingAdvancements: pendingTargets.map((target) => target.pendingInfo),
+          chain: { depth: chain.depth, nextDepth: chain.depth + 1,
+            visitedSourceUuids: [...chain.visited, ...pendingTargets.map((target) => target.sourceUuid).filter(Boolean)] },
+          coverage: { itemCount: targets.length, pendingItemCount: pendingTargets.length,
+            nativeStepCount, automaticStepCount: automaticSteps.length,
+            choiceStepCount: choiceRequirements.length, uncoveredRequiredSteps },
+          warnings: [] };
+      } catch (error) {
+        return writeReject(error);
+      }
+    }
+    function itemAdvancementGrantedUuids(resolved) {
+      const out = [];
+      for (const { plan } of resolved) {
+        for (const entry of plan.steps ?? []) {
+          if (!entry.dataFor) continue;
+          if (typeof entry.dataFor.uuid === "string") out.push(entry.dataFor.uuid);
+          if (Array.isArray(entry.dataFor.selected)) {
+            for (const uuid of entry.dataFor.selected) if (typeof uuid === "string") out.push(uuid);
+          }
+        }
+      }
+      return out;
+    }
+    function assertItemAdvancementNoCycle(resolved, pendingTargets, chain) {
+      const visited = new Set([...chain.visited, ...pendingTargets.map((target) => target.sourceUuid).filter(Boolean)]);
+      for (const uuid of itemAdvancementGrantedUuids(resolved)) {
+        if (visited.has(uuid)) {
+          throw new Error("ADVANCEMENT_CYCLE: granting " + uuid
+            + " would repeat an item already in this advancement chain (" + [...visited].join(" → ")
+            + "); stopping before any write");
+        }
+      }
+      return visited;
+    }
+    async function actorAdvanceItemData(input) {
+      let started = false;
+      const steps = [], warnings = [];
+      try {
+        writeInputGuard(input, "actorAdvanceItem");
+        prepWorld(input.world);
+        if (!input.requestId || typeof input.requestId !== "string") {
+          throw new Error("INPUT_INVALID: request identity required for item advancement");
+        }
+        const actor = await prepActor(input.actorUuid);
+        if (actor.type !== "character" && actor.type !== "npc") {
+          throw new Error("ACTOR_TYPE_UNSUPPORTED: item advancement requires a Character or NPC Actor");
+        }
+        if (!input.readState?.items) throw new Error("READ_REF_INVALID: read Actor items before item advancement");
+        prepCheckRead(actor, input.readState, []);
+        const itemIds = prepItemAdvancementIds(input.itemIds);
+        const chain = prepItemAdvancementChain(input);
+        const bySlot = prepItemAdvancementChoices(input);
+        const targets = await prepItemAdvancementTargets(actor, itemIds);
+        for (const target of targets) {
+          const before = (input.readState.items ?? []).find((item) => item.id === target.id);
+          if (!before) {
+            throw new Error("READ_REF_INVALID: read Actor items after granting before item advancement (missing "
+              + target.id + ")");
+          }
+          if (before.sourceUuid !== target.sourceUuid || before.type !== target.type) {
+            throw new Error("READ_REF_STALE: target Item " + target.id + " identity changed since the read");
+          }
+        }
+        const maxLevel = itemAdvancementMaxLevel(actor);
+        const pendingTargets = targets.map((target) => ({ ...target,
+          pendingInfo: pendingAdvancementInfoForItem(target.item, maxLevel) })).filter((target) => target.pendingInfo);
+        if (!pendingTargets.length) {
+          return { status: "completed", steps: [], verification: { actorUuid: actor.uuid,
+            type: actor.type, level: actor.system?.details?.level ?? null,
+            items: targets.map((target) => ({ itemId: target.id, uuid: target.item?.uuid ?? null,
+              name: target.item?.name ?? null, type: target.type ?? null, sourceUuid: target.sourceUuid ?? null })),
+            pendingAdvancements: [] }, pendingAdvancements: [], warnings: [] };
+        }
+        for (const target of pendingTargets) {
+          if (target.sourceUuid && chain.visited.has(target.sourceUuid)) {
+            throw new Error("ADVANCEMENT_CYCLE: " + target.sourceUuid
+              + " is already in visitedSourceUuids (item advancement chain does not converge)");
+          }
+        }
+        if (chain.depth >= ITEM_ADVANCEMENT_DEPTH_LIMIT) {
+          throw new Error("ADVANCEMENT_DEPTH_EXCEEDED: item advancement depth limit "
+            + ITEM_ADVANCEMENT_DEPTH_LIMIT + " reached before " + pendingTargets.map((t) => t.id).join(", "));
+        }
+        const { clone, liveTargets } = await prepItemAdvancementClone(actor, pendingTargets);
+        const candidateDocs = new Map();
+        const baseCtx = itemAdvancementBaseCtx(actor, candidateDocs);
+        const resolved = [], validSlots = new Set(), unmet = [];
+        for (const target of liveTargets) {
+          const entries = itemAdvancementEntries(target.liveItem, maxLevel);
+          const ctx = { ...baseCtx, rules: classRulesVersion(target.item, target.sourceUuid) };
+          const scope = userModuleScope(target.sourceUuid);
+          const plan = await normalizeAdvancementSteps(ctx, "item:" + target.id,
+            itemAdvancementFlowSteps(entries), Math.max(1, maxLevel), { bySlot }, null, 0, scope);
+          for (const req of plan.choiceRequirements ?? []) {
+            if (req.valueFormat !== "subclass-uuid") validSlots.add(req.slot);
+          }
+          const constraint = await prepItemSpellConstraint(ctx, target, entries, plan, bySlot, "execute");
+          if (constraint) {
+            validSlots.add(constraint.classKey);
+            validSlots.add(constraint.abilityKey);
+            if (constraint.classMissing) {
+              unmet.push({ slot: constraint.classKey, itemId: target.id, kind: "ItemSpellClass",
+                label: (target.item?.name ?? "Item") + " spellcasting class", need: 1, have: 0,
+                reason: "choose one of " + constraint.classOptions.map((info) => info.id + " (" + info.ability + ")").join(", ")
+                  + " — every spell on this item must come from the selected class; the class document supplies the ability" });
+            }
+            if (constraint.selectedAbility) {
+              for (const entry of plan.steps ?? []) {
+                if (entry.kind !== "ItemChoiceAdvancement") continue;
+                const pendingCfg = entry.cfg ?? itemAdvancementConfiguration(entry.advancement);
+                if (String(pendingCfg?.type ?? "") !== "spell") continue;
+                if (!entry.dataFor || entry.dataFor.ability !== undefined) continue;
+                entry.dataFor.ability = constraint.selectedAbility;
+              }
+            }
+          }
+          for (const unmetEntry of plan.unmet ?? []) unmet.push({ ...unmetEntry, itemId: target.id });
+          resolved.push({ target, entries, plan, constraint });
+        }
+        const unknownSlots = Object.keys(bySlot).filter((key) => !validSlots.has(key));
+        if (unknownSlots.length) {
+          throw new Error("CHOICE_SLOT_UNKNOWN: " + unknownSlots.join(", ")
+            + " — copy keys verbatim from advancementItemPlan choiceRequirements[].key (valid: "
+            + [...validSlots].join(", ") + ")");
+        }
+        if (unmet.length) {
+          throw new Error("ADVANCEMENT_NEEDS_CHOICE: " + unmet.slice(0, 8).map((entry) =>
+            [entry.slot, entry.label, entry.reason ?? ("need " + entry.need
+              + (entry.have !== undefined ? ", have " + entry.have : ""))].filter(Boolean).join(" ")).join("; "));
+        }
+        assertItemAdvancementNoCycle(resolved, pendingTargets, chain);
+        // 逐 item 应用；live 实例按 id 重解析（shim 的 updateSource 会自 _source 重建模型，
+        // 旧实例会脱管），每步后 clone.reset() 与 actorAdvance 同款。
+        const appliedEntries = [];
+        for (const { target, plan } of resolved) {
+          for (const entry of plan.steps ?? []) {
+            if (entry.dataFor === undefined) continue;
+            const liveItem = clone.items.get(target.id) ?? target.liveItem;
+            const liveAdvancement = liveItem?.advancement?.byId?.[entry.advancement.id]
+              ?? collectionValues(liveItem?.advancement).find((adv) => (adv.id ?? adv._id) === entry.advancement.id)
+              ?? entry.advancement;
+            if (itemAdvancementIsApplied(liveAdvancement, entry.kind, entry.level)) continue;
+            try { normalizeSpellConfiguration(liveAdvancement?.configuration); } catch { /* 非 spell 配置原样 */ }
+            await liveAdvancement.apply(entry.level, entry.dataFor, { automatic: true });
+            syncItemAdvancementValue(liveItem, entry.advancement.id, itemAdvancementValue(liveAdvancement));
+            try { clone.reset?.(); } catch { /* 派生刷新尽力 */ }
+            const afterItem = clone.items.get(target.id) ?? liveItem;
+            const afterAdvancement = afterItem?.advancement?.byId?.[entry.advancement.id]
+              ?? collectionValues(afterItem?.advancement).find((adv) => (adv.id ?? adv._id) === entry.advancement.id)
+              ?? liveAdvancement;
+            if (!itemAdvancementIsApplied(afterAdvancement, entry.kind, entry.level)) {
+              throw new Error("ITEM_ADVANCEMENT_NOT_SETTLED: " + entry.slot
+                + " did not record its value (the engine likely filtered a duplicate/unsupported selection); "
+                + "refusing to commit an advancement that would stay pending forever");
+            }
+            appliedEntries.push({ target, entry });
+            steps.push({ itemId: target.id, label: "item", level: entry.level, kind: entry.kind, slot: entry.slot });
+          }
+        }
+        if (!appliedEntries.length) {
+          return { status: "completed", steps: [], verification: { actorUuid: actor.uuid,
+            type: actor.type, level: actor.system?.details?.level ?? null,
+            items: pendingTargets.map((target) => ({ itemId: target.id, uuid: target.item?.uuid ?? null,
+              name: target.item?.name ?? null, type: target.type ?? null, sourceUuid: target.sourceUuid ?? null })),
+            pendingAdvancements: [] }, pendingAdvancements: [], warnings: [] };
+        }
+        // 物品级原子提交：与 actorAdvance 同一四写镜像，但不跑 HP/法术位/全表/合流。
+        const canon = (value) => {
+          if (Array.isArray(value)) return value.map(canon);
+          if (value && typeof value === "object") {
+            const out = {};
+            for (const key of Object.keys(value).sort()) {
+              const entry = canon(value[key]);
+              if (entry === undefined) continue;
+              if (entry && typeof entry === "object" && !Array.isArray(entry) && !Object.keys(entry).length) continue;
+              out[key] = entry;
+            }
+            return out;
+          }
+          return value;
+        };
+        const object = clone.toObject(), items = object.items ?? []; delete object.items;
+        const existing = new Map(collectionValues(actor.items).map((item) => [item.id, item]));
+        const create = items.filter((item) => !existing.has(item._id));
+        const update = items.filter((item) => {
+          const current = existing.get(item._id);
+          if (!current) return false;
+          return JSON.stringify(canon(current.toObject())) !== JSON.stringify(canon(item));
+        });
+        const remove = collectionValues(actor.items).map((item) => item.id)
+          .filter((id) => !items.some((item) => item._id === id));
+        const actorBefore = actor.toObject?.() ?? {};
+        delete actorBefore.items;
+        const actorChanged = JSON.stringify(canon(actorBefore)) !== JSON.stringify(canon(object));
+        const itemIdsBefore = new Set(collectionValues(actor.items).map((item) => item.id));
+        if (actorChanged || create.length || update.length || remove.length) {
+          started = true;
+          if (actorChanged) await actor.update(object, { isAdvancement: true });
+          if (create.length) await actor.createEmbeddedDocuments("Item", create, { keepId: true, isAdvancement: true });
+          if (update.length) await actor.updateEmbeddedDocuments("Item", update, { diff: false, recursive: false, isAdvancement: true });
+          if (remove.length) await actor.deleteEmbeddedDocuments("Item", remove, { isAdvancement: true });
+        }
+        try { actor.reset?.(); } catch { /* 派生刷新尽力 */ }
+        const createdItems = collectionValues(actor.items).filter((item) => !itemIdsBefore.has(item.id));
+        const createdInfo = createdItems.map((item) => ({ itemId: item.id ?? null, uuid: item.uuid ?? null,
+          name: item.name ?? null, type: item.type ?? null, sourceUuid: itemAdvancementSourceUuid(item) }));
+        const pendingAdvancements = pendingAdvancementsForItems(createdItems, maxLevel);
+        const targetPending = pendingAdvancementsForItems(
+          pendingTargets.map((target) => itemAdvancementItemOnActor(actor, target.id)).filter(Boolean), maxLevel);
+        if (targetPending.length) {
+          return { status: "partial", retry: false, steps,
+            code: "ITEM_ADVANCEMENT_NOT_SETTLED",
+            message: "Item advancement committed but target items still report pending advancements: "
+              + targetPending.map((entry) => entry.name ?? entry.itemId).join(", "),
+            pendingAdvancements: [...targetPending, ...pendingAdvancements] };
+        }
+        const nextVisited = new Set([...chain.visited, ...pendingTargets.map((target) => target.sourceUuid).filter(Boolean)]);
+        const cycle = pendingAdvancements.find((entry) => entry.sourceUuid && nextVisited.has(entry.sourceUuid));
+        if (cycle) {
+          return { status: "partial", retry: false, steps, code: "ADVANCEMENT_CYCLE",
+            message: "item advancement granted " + (cycle.name ?? cycle.sourceUuid)
+              + " which is already in this chain; stopping to avoid a loop",
+            pendingAdvancements };
+        }
+        if (pendingAdvancements.length && chain.depth + 1 >= ITEM_ADVANCEMENT_DEPTH_LIMIT) {
+          return { status: "partial", retry: false, steps, code: "ADVANCEMENT_DEPTH_EXCEEDED",
+            message: "item advancement depth limit " + ITEM_ADVANCEMENT_DEPTH_LIMIT
+              + " reached; " + pendingAdvancements.map((entry) => entry.name ?? entry.itemId).join(", ")
+              + " still pending",
+            pendingAdvancements };
+        }
+        const verification = { actorUuid: actor.uuid, type: actor.type,
+          level: actor.system?.details?.level ?? null,
+          items: pendingTargets.map((target) => ({ itemId: target.id, uuid: target.item?.uuid ?? null,
+            name: target.item?.name ?? null, type: target.type ?? null, sourceUuid: target.sourceUuid ?? null })),
+          applied: steps, createdItems: createdInfo, pendingAdvancements,
+          chain: { depth: chain.depth, nextDepth: chain.depth + 1,
+            visitedSourceUuids: [...nextVisited] } };
+        return { status: "completed", steps, verification, pendingAdvancements, warnings };
+      } catch (error) {
+        return started
+          ? { status: steps.length ? "partial" : "indeterminate", retry: false, steps,
+              code: writeErrorMessage(error).split(":")[0], message: writeErrorMessage(error) }
+          : writeReject(error);
+      }
+    }
+
+    // —— sceneImport（mtcompat 专用）：同一 typed action 承载三种备团素材——
+    //   sourceFormat="foundry-json"（缺省，旧调用兼容）：Foundry 场景导出 JSON + 可选背景上传；
+    //   sourceFormat="uvtt"：原始 Universal VTT JSON（.dd2vtt/.uvtt/.df2vtt），内嵌图先经
+    //     prepPrepareImage/prepUploadImage 真上传，原始 JSON 交给页面原生导入器（uvtt-import.mjs
+    //     的解析/映射与场景配置浮窗同链）；create 只在 flags.arcanedesk 注入 requestId；
+    //   sourceFormat="image"：纯 PNG/JPEG/WebP，dimensions 是 Desktop 真实解码像素；载荷口径与
+    //     配置浮窗「导入图片…」共用 web/scene-image-apply.mjs（宽高按图、offset/scale 归零、换图
+    //     重置 flags.mtcompat.sceneRotation、其余 flags 保留）。
+    // 字段白名单按 sourceFormat 组合校验（background 只属 foundry-json/image，sceneJson 只属
+    // foundry-json/uvtt，dimensions 只属 image，name 仅 create；grid 只属 image）。任一上传未被
+    // 服务端确认（无上传通道 / 未回 URL）都不会把 data: URL 或请求 dataPath 冒充成功：dispatch
+    // 前 rejected 零写入，已发出结果未知则 indeterminate/partial；requestId 只做 completed 恢复，
+    // partial/indeterminate 一律不重放。
+    const SCENE_IMPORT_FORMATS = ["foundry-json", "uvtt", "image"];
+    const SCENE_IMPORT_GRID_KEYS = ["type", "size", "distance", "units"];
+    // 备团文件名（Desktop 给 path.basename）：只用于默认场景名；路径分隔符/控制字符 fail-closed
+    function sceneImportBaseName(value) {
+      if (value === undefined) return null;
+      if (typeof value !== "string") throw new Error("INPUT_INVALID: sourceName must be a file basename");
+      const raw = value.trim();
+      if (!raw || raw.length > 4096 || /[\\/\x00-\x1f\x7f]/.test(raw)) {
+        throw new Error("INPUT_INVALID: sourceName must be a file basename");
+      }
+      return raw.replace(/\.[^.]+$/, "").trim();
+    }
+    function prepSceneImportGrid(grid) {
+      const picked = {};
+      for (const [key, value] of Object.entries(writePrepObject(grid, SCENE_IMPORT_GRID_KEYS))) {
+        if (key === "type" ? !Object.values(g.CONST?.GRID_TYPES ?? {}).includes(value)
+          : key === "units" ? typeof value !== "string" || !value.trim() || value.length > 256
+          : !Number.isFinite(value) || value <= 0) {
+          throw new Error("INPUT_INVALID: unsupported grid " + key);
+        }
+        picked[key] = value;
+      }
+      return picked;
+    }
+    function sceneImportReplay(scene, format) {
+      const stats = format === "foundry-json"
+        ? { walls: collectionValues(scene.walls).length, lights: collectionValues(scene.lights).length }
+        : format === "uvtt"
+          ? { walls: collectionValues(scene.walls).length,
+              doors: collectionValues(scene.walls).filter((wall) => wall?.door === 1 && wall?.ds === 0).length,
+              windows: collectionValues(scene.walls).filter((wall) => wall?.door === 1 && wall?.ds !== 0).length }
+          : { width: scene.width, height: scene.height, ...(Number.isFinite(scene.grid?.size) ? { gridSize: scene.grid.size } : {}) };
+      return { status: "completed", sceneUuid: scene.uuid, format,
+        dataPath: scene.background?.src ?? null, stats,
+        steps: [{ step: "import-scene-json", state: "completed", targets: [scene.uuid], recovered: true }],
+        verification: [{ sceneUuid: scene.uuid, ...prepSceneFields(scene), recovered: true }],
+        warnings: ["requestId-replay:recovered-existing-scene"] };
+    }
+    async function sceneImportData(input) {
+      let started = false, scene = null, prepared = null;
+      const steps = [];
+      try {
+        writeInputGuard(input, "sceneImport");
+        writePrepObject(input, ["operation", "sceneUuid", "readState", "sourceFormat", "sourceName",
+          "name", "grid", "dimensions", "background", "sceneJson", "world", "requestId"]);
+        prepWorld(input.world);
+        if (!["create", "update"].includes(input.operation) || !input.requestId) {
+          throw new Error("INPUT_INVALID: Scene import operation and request identity required");
+        }
+        const create = input.operation === "create";
+        const format = input.sourceFormat ?? "foundry-json";
+        if (!SCENE_IMPORT_FORMATS.includes(format)) {
+          throw new Error("INPUT_INVALID: sourceFormat must be foundry-json, uvtt or image");
+        }
+        if (create && (input.sceneUuid || input.readState)) {
+          throw new Error("INPUT_INVALID: create does not accept existing Scene handles");
+        }
+        if (!create && (!input.sceneUuid || !input.readState)) {
+          throw new Error("READ_REF_INVALID: read this Scene before importing into it");
+        }
+        const baseName = sceneImportBaseName(input.sourceName);
+        if (input.name !== undefined) {
+          if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 256) {
+            throw new Error("INPUT_INVALID: Scene name must be a non-empty string");
+          }
+          // name 只作为 create 的场景名（image 的直接命名 / uvtt 覆盖 sourceName 默认名）；
+          // foundry-json 的场景名以 JSON 自身为准，update 一律改名走 sceneApply，不在此暗改。
+          if (!create || format === "foundry-json") {
+            throw new Error("INPUT_INVALID: name is only supported when creating a Scene from a uvtt or image source");
+          }
+        }
+        if (input.grid !== undefined && format !== "image") {
+          throw new Error("INPUT_INVALID: grid is only supported with a pure image source");
+        }
+        const grid = input.grid === undefined ? null : prepSceneImportGrid(input.grid);
+        if (format === "image") {
+          if (input.sceneJson !== undefined) throw new Error("INPUT_INVALID: pure image sources do not accept sceneJson");
+          const dimensions = input.dimensions;
+          if (!dimensions || typeof dimensions !== "object" || Array.isArray(dimensions)) {
+            throw new Error("INPUT_INVALID: pure image sources require decoded dimensions");
+          }
+          writePrepObject(dimensions, ["width", "height"]);
+          if (!Number.isInteger(dimensions.width) || dimensions.width <= 0
+            || !Number.isInteger(dimensions.height) || dimensions.height <= 0) {
+            throw new Error("INPUT_INVALID: image dimensions must be decoded pixel integers");
+          }
+          if (!input.background || typeof input.background !== "object" || Array.isArray(input.background)) {
+            throw new Error("INPUT_INVALID: pure image sources require background upload bytes");
+          }
+        } else {
+          if (input.sceneJson === undefined) throw new Error("INPUT_INVALID: sceneJson is required for this source format");
+          if (input.dimensions !== undefined) throw new Error("INPUT_INVALID: dimensions are only supported with a pure image source");
+          if (format === "uvtt" && input.background !== undefined) {
+            throw new Error("INPUT_INVALID: UVTT carries its own image; background must not be supplied");
+          }
+        }
+        const directory = game.scenes?.directory;
+        const nativeImport = typeof directory?._importSceneJsonFile === "function";
+        const nativeImage = typeof directory?._applySceneImage === "function";
+        if (format === "image" ? !nativeImage : !nativeImport) {
+          throw new Error("CAPABILITY_UNAVAILABLE: Scene import surface is not mounted");
+        }
+        const existing = create && collectionValues(game.scenes)
+          .find((value) => value.flags?.arcanedesk?.requestId === input.requestId);
+        if (existing) return sceneImportReplay(existing, format);
+
+        const isPlainObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+        const textOf = () => {
+          if (typeof input.sceneJson === "string") return input.sceneJson;
+          if (isPlainObject(input.sceneJson)) return JSON.stringify(input.sceneJson);
+          throw new Error("INPUT_INVALID: sceneJson must be a JSON string or object");
+        };
+        let json = null, mapped = null, uvttParsed = null, uvttMod = null;
+        if (format === "foundry-json") {
+          const mod = await import(new URL("./scene-json-import.mjs", g.location?.href ?? "http://localhost/").href);
+          json = mod.parseSceneJson(textOf());
+          mod.validateSceneJson(json);
+          mapped = mod.mapSceneImport(json);
+          if (create && (typeof mapped.data.name !== "string" || !mapped.data.name.trim())) {
+            throw new Error("INPUT_INVALID: imported Scene name required");
+          }
+        } else if (format === "uvtt") {
+          const text = textOf();
+          try { json = JSON.parse(text); } catch { throw new Error("INPUT_INVALID: Universal VTT must be JSON text"); }
+          uvttMod = await import(new URL("./uvtt-import.mjs", g.location?.href ?? "http://localhost/").href);
+          uvttParsed = uvttMod.parseUvtt(text);
+          // create 的默认场景名 = name ?? sourceName 去扩展名（UVTT 文件本身无场景名）；update 保留现名
+          // （下方 prepScene 后回填，name 比对项随之跳过）。
+          const defaultName = create
+            ? (input.name ?? baseName ?? "").trim()
+            : (baseName ?? "").trim();
+          if (create && !defaultName) throw new Error("INPUT_INVALID: Scene name or sourceName required");
+          const mappedUvtt = uvttMod.mapToSceneData(uvttParsed, { name: defaultName || undefined });
+          mapped = { data: mappedUvtt.scene, stats: mappedUvtt.stats };
+        }
+
+        if (create && format !== "image") {
+          if (collectionValues(game.scenes).some((value) => value.name === mapped.data.name)) {
+            throw new Error("NAME_COLLISION: Scene name already exists");
+          }
+        }
+        if (format === "image" && create) {
+          const sceneName = (input.name ?? baseName ?? "").trim();
+          if (!sceneName) throw new Error("INPUT_INVALID: Scene name or sourceName required");
+          if (collectionValues(game.scenes).some((value) => value.name === sceneName)) {
+            throw new Error("NAME_COLLISION: Scene name already exists");
+          }
+        }
+        if (!create) {
+          scene = await prepScene(input.sceneUuid);
+          if (input.readState.documentFingerprint !== undefined
+            && input.readState.documentFingerprint !== prepSceneFingerprint(scene)) {
+            throw new Error("READ_REF_STALE: Scene content changed; reread before importing");
+          }
+          prepCheckSceneRead(scene, input.readState,
+            ["name", "background.src", "width", "height", "grid.type", "grid.size", "grid.distance", "grid.units"],
+            { update: [], deleteIds: [] });
+          // update 不按文件名改名（sourceName/name 只服务 create 的默认名）——与配置浮窗
+          // 「地图描述」update 口径一致，payload 写回现名。
+          if (format === "uvtt") mapped.data.name = scene.name;
+        }
+
+        // —— 上传（所有格式统一走 prepPrepareImage/prepUploadImage；未确认一律不假成功）——
+        let imageSrc = null;
+        if (format === "uvtt") {
+          const bytes = uvttMod.base64ToBytes(uvttParsed.image.base64);
+          if (!bytes.length || bytes.length > MAX_IMAGE_UPLOAD_BYTES) {
+            throw new Error("INPUT_INVALID: embedded UVTT image exceeds 32 MiB");
+          }
+          const hash = await prepImageHash(bytes);
+          prepared = await prepPrepareImage({
+            dataPath: `arcanedesk/assets/${hash}.${uvttParsed.image.ext}`,
+            upload: { base64: uvttParsed.image.base64, hash,
+              mimeType: uvttParsed.image.mime, extension: uvttParsed.image.ext },
+          });
+          if (!prepared?.bytes) {
+            throw new Error("CAPABILITY_UNAVAILABLE: image upload bytes cannot be applied in this shim (dataPath only)");
+          }
+          started = true;
+          await prepUploadImage(prepared, input.world, steps);
+          imageSrc = prepared.dataPath;
+          if (!/^https?:\/\//i.test(String(imageSrc ?? ""))) {
+            throw new Error("IMAGE_UPLOAD_UNCONFIRMED: embedded image did not resolve to a private URL");
+          }
+        } else if (input.background) {
+          prepared = await prepPrepareImage(input.background);
+          started = !!prepared.bytes;
+          await prepUploadImage(prepared, input.world, steps);
+          imageSrc = prepared.dataPath;
+          // 纯图片必须真上传（无 dataPath-only 语义）；foundry-json 的 dataPath-only 沿用既有口径。
+          if (format === "image" && !/^https?:\/\//i.test(String(imageSrc ?? ""))) {
+            throw new Error(started ? "IMAGE_UPLOAD_UNCONFIRMED: image did not resolve to a private URL"
+              : "INPUT_INVALID: pure image sources require background upload bytes");
+          }
+        }
+
+        if (format === "image") {
+          if (create) {
+            const SceneClass = g.CONFIG?.Scene?.documentClass ?? g.Scene;
+            const sceneName = (input.name ?? baseName).trim();
+            const step = { step: "create-scene", targets: [], state: "unknown" };
+            steps.push(step);
+            started = true;
+            scene = await SceneClass.create({ name: sceneName, active: false,
+              flags: { arcanedesk: { requestId: input.requestId } } });
+            if (!scene?.uuid) throw new Error("SCENE_IMPORT_FAILED: Scene creation not confirmed");
+            step.targets = [scene.uuid];
+            step.state = "completed";
+          } else {
+            started = true;
+          }
+          const importStep = { step: "import-scene-image", state: "unknown", targets: [scene.uuid] };
+          steps.push(importStep);
+          const { patch } = await directory._applySceneImage(scene, {
+            src: imageSrc, width: input.dimensions.width, height: input.dimensions.height, grid,
+          });
+          const mod = await import(new URL("./scene-image-apply.mjs", g.location?.href ?? "http://localhost/").href);
+          const mismatches = mod.sceneImageMismatches(scene, patch);
+          if (mismatches.length) {
+            throw new Error("SCENE_IMPORT_NOT_SETTLED: Scene image fields did not settle: "
+              + mismatches.map((entry) => entry.field).join(","));
+          }
+          if (create && scene.flags?.arcanedesk?.requestId !== input.requestId) {
+            throw new Error("SCENE_IMPORT_NOT_SETTLED: request identity did not land");
+          }
+          importStep.state = "completed";
+          prepWorld(input.world);
+          const stats = { width: scene.width, height: scene.height,
+            ...(Number.isFinite(scene.grid?.size) ? { gridSize: scene.grid.size } : {}) };
+          return { status: "completed", sceneUuid: scene.uuid, format, dataPath: scene.background?.src ?? null,
+            stats, steps,
+            verification: [{ sceneUuid: scene.uuid, ...prepSceneFields(scene),
+              "background.offsetX": scene.background?.offsetX ?? null,
+              "background.offsetY": scene.background?.offsetY ?? null,
+              "background.scaleX": scene.background?.scaleX ?? null,
+              "background.scaleY": scene.background?.scaleY ?? null,
+              "flags.mtcompat.sceneRotation": scene.flags?.mtcompat?.sceneRotation ?? null,
+              "flags.arcanedesk.requestId": scene.flags?.arcanedesk?.requestId ?? null }],
+            warnings: [] };
+        }
+
+        // —— foundry-json / uvtt：JSON 原样交给页面原生导入器（解析/映射/落库同一链）——
+        if (prepared) {
+          // 真发出过上传才要求私有 URL；UVTT 内嵌图必上传，故恒要求（见上方分支）。
+          if (format === "uvtt" && !imageSrc) {
+            throw new Error("IMAGE_UPLOAD_UNCONFIRMED: embedded image was not uploaded");
+          }
+          if (prepared.bytes && !/^https?:\/\//i.test(String(imageSrc ?? ""))) {
+            throw new Error("IMAGE_UPLOAD_UNCONFIRMED: background upload did not resolve to a private URL");
+          }
+          mapped.data.background = { ...(mapped.data.background ?? {}), src: imageSrc };
+        }
+        prepWorld(input.world);
+        const SceneClass = g.CONFIG?.Scene?.documentClass ?? g.Scene;
+        if (create) {
+          started = true;
+          scene = await SceneClass.create({ name: mapped.data.name, active: false,
+            flags: { arcanedesk: { requestId: input.requestId } } });
+          steps.push({ step: "create-scene", state: "completed", targets: [scene.uuid] });
+        } else {
+          started = true;
+        }
+        const importStep = { step: "import-scene-json", state: "unknown", targets: [scene.uuid], stats: mapped.stats };
+        steps.push(importStep);
+        const importPayload = { ...json,
+          ...(mapped.data.background ? { background: mapped.data.background } : {}),
+          ...(create ? { flags: { ...(json.flags ?? {}),
+            arcanedesk: { ...(json.flags?.arcanedesk ?? {}), requestId: input.requestId } } } : {}) };
+        const suffix = format === "uvtt" ? ".dd2vtt" : ".json";
+        const fileName = `${(baseName || mapped.data.name || "scene")}${suffix}`;
+        const file = new g.File([JSON.stringify(importPayload)], fileName, { type: "application/json" });
+        const applied = await directory._importSceneJsonFile(scene, file,
+          { rethrow: true, ...(format === "uvtt" && imageSrc ? { imageSrc } : {}) });
+        if (!applied) throw new Error("SCENE_IMPORT_FAILED: page-native importer did not confirm Scene data");
+        const backgroundMatches = !mapped.data.background?.src || scene.background?.src === mapped.data.background.src;
+        const collectionKeys = ["walls", "lights", "tiles", "notes", "sounds", "tokens", "templates", "drawings", "regions"];
+        const countsMatch = collectionKeys.every((key) => !Object.hasOwn(mapped.stats, key)
+          || collectionValues(scene[key]).length === mapped.stats[key]);
+        const scalarEntries = ["width", "height", "padding", "tokenVision"].flatMap((key) =>
+          mapped.data[key] === undefined ? [] : [[key, mapped.data[key]]]);
+        for (const [key, value] of Object.entries(mapped.data.grid ?? {})) scalarEntries.push(["grid." + key, value]);
+        const scalarsMatch = scalarEntries.every(([key, value]) => {
+          const actual = key.startsWith("grid.") ? scene.grid?.[key.slice(5)] : scene[key];
+          return JSON.stringify(actual ?? null) === JSON.stringify(value ?? null);
+        });
+        const requestIdMatches = !create || scene.flags?.arcanedesk?.requestId === input.requestId;
+        if ((mapped.data.name !== undefined && scene.name !== mapped.data.name)
+          || !backgroundMatches || !countsMatch || !scalarsMatch || !requestIdMatches) {
+          throw new Error("SCENE_IMPORT_NOT_SETTLED: imported Scene data did not settle");
+        }
+        importStep.state = "completed";
+        prepWorld(input.world);
+        return { status: "completed", sceneUuid: scene.uuid, format,
+          dataPath: prepared?.dataPath ?? mapped.data.background?.src ?? null,
+          stats: mapped.stats, steps,
+          verification: [{ sceneUuid: scene.uuid, ...prepSceneFields(scene),
+            placeableCounts: Object.fromEntries(collectionKeys.map((key) => [key, collectionValues(scene[key]).length])) }],
+          warnings: [] };
+      } catch (error) {
+        return started
+          ? { status: steps.some((step) => step.state === "completed") ? "partial" : "indeterminate",
+              retry: false, steps, message: writeErrorMessage(error) }
+          : writeReject(error);
       }
     }
 
@@ -3586,9 +5308,10 @@
             patch["grid." + key] = value;
           }
         }
+        let preparedImage = null;
         if (changes.background) {
-          const prepared = await prepPrepareImage(changes.background);
-          patch["background.src"] = prepared.dataPath;
+          preparedImage = await prepPrepareImage(changes.background);
+          patch["background.src"] = preparedImage.dataPath;
         }
         const raw = writePrepObject(input.tokens ?? {}, ["create", "update", "deleteIds"]);
         const layout = { create: raw.create ?? [], update: raw.update ?? [], deleteIds: raw.deleteIds ?? [] };
@@ -3682,6 +5405,10 @@
             throw new Error("ACTOR_CHANGED: placement Actor or prototype changed");
           }
         }
+        // az 同序：建/改场景前先落背景上传（patch 重指返回 URL；upload 步入 steps 四态回执）
+        started = !!preparedImage?.bytes;
+        await prepUploadImage(preparedImage, input.world, steps);
+        if (preparedImage) patch["background.src"] = preparedImage.dataPath;
         if (create) {
           started = true;
           const step = { step: "create-scene", targets: [], state: "unknown" };
@@ -3772,9 +5499,10 @@
       }
     }
 
-    // —— imageApply（az imageApplyData；dataPath-only——Actor 走 actorEdit 全链（含
-    //    syncPlacedTokens），Item 直写 img；upload 的处置随上传通道探针分档：无凭证档
-    //    CAPABILITY_UNAVAILABLE，真实登录档放行 dataPath 直引）——
+    // —— imageApply（az imageApplyData；Actor 走 actorEdit 全链（含 syncPlacedTokens），
+    //    Item 写 img、image 类型 JournalEntryPage 写 src（文本页前置拒绝）；upload 真上传后
+    //    dataPath 上呈返回 URL——upload-only 等 upload-image completed 才 completed，
+    //    无凭证档 CAPABILITY_UNAVAILABLE，dataPath-only 原行为）——
     async function imageApplyData(input) {
       let started = false, dataPath;
       const steps = [];
@@ -3793,17 +5521,22 @@
           }
           doc = await g.fromUuid(input.targetUuid);
           // shim 适配：dnd5e 的 Item5e/MidiActor 实例不带 documentName 静态面——
-          // 世界集合成员身份 + uuid 链形状双重兜底判型（M2 prepActor 同款口径）
+          // 世界集合成员身份 + uuid 链形状双重兜底判型（M2 prepActor 同款口径）。
+          // JournalEntryPage 必须先按 UUID 形状识别，不能被四段 Item 误判吞掉。
           const targetParts = String(input.targetUuid).split(".");
           const targetKind = targetParts[0] === "Actor" && targetParts.length === 2 ? "Actor"
+            : targetParts[0] === "JournalEntry" && targetParts.length === 4 && targetParts[2] === "JournalEntryPage" ? "JournalEntryPage"
             : (targetParts[0] === "Item" && targetParts.length === 2)
               || (targetParts.length === 4 && targetParts[2] === "Item") ? "Item" : null;
-          docName = typeof doc?.documentName === "string" ? doc.documentName
+          docName = targetKind === "JournalEntryPage" ? targetKind
+            : typeof doc?.documentName === "string" ? doc.documentName
             : doc && collectionValues(game.actors).includes(doc) ? "Actor"
             : targetKind;
-          if (!doc || doc.uuid !== input.targetUuid || !["Actor", "Item"].includes(docName)) {
-            // 降级：JournalEntryPage 图页（az 支持）在 shim 无语义面——一并拒绝
-            throw new Error("IMAGE_TARGET_UNSUPPORTED: use a world Actor or Item; JournalEntryPage targets are unsupported in this shim");
+          if (!doc || doc.uuid !== input.targetUuid || !["Actor", "Item", "JournalEntryPage"].includes(docName)) {
+            throw new Error("IMAGE_TARGET_UNSUPPORTED: use a world Actor, Item or image JournalEntryPage");
+          }
+          if (docName === "JournalEntryPage" && doc.type !== "image") {
+            throw new Error("IMAGE_TARGET_UNSUPPORTED: JournalEntryPage must have type=image");
           }
         }
         if (input.syncPlacedTokens && docName !== "Actor") {
@@ -3816,23 +5549,44 @@
           const image = { ...input.image, syncPlacedTokens: !!input.syncPlacedTokens };
           const result = await actorEditData({ actorUuid: doc.uuid, readState, world: input.world,
             requestId: input.requestId, changes: { image } });
-          return { ...result, ...(result.status !== "rejected" ? { dataPath: input.image.dataPath } : {}) };
+          // dataPath 上呈真实落盘地址：upload 后 actorEdit 的 upload-image 步带 url（无 upload
+          // 时保持请求 dataPath 原样——dataPath-only 语义不变）
+          const uploadedUrl = result?.steps?.find((step) => step.step === "upload-image")?.url ?? null;
+          return { ...result,
+            ...(result.status !== "rejected" ? { dataPath: uploadedUrl ?? input.image.dataPath } : {}) };
         }
+        // az 同序：目标写入前先落上传——upload-only（无 targetUuid）也必须等 upload-image
+        // completed 才 completed（dataPath 上呈返回的真实 URL）；dispatch 前失败 rejected 零写入
         const prepared = await prepPrepareImage(input.image);
         dataPath = prepared.dataPath;
+        started = !!prepared.bytes;
+        await prepUploadImage(prepared, input.world, steps);
+        dataPath = prepared.dataPath;
+        prepWorld(input.world);
         if (doc) {
-          const before = doc.img ?? null;
+          const targetKey = docName === "JournalEntryPage" ? "src" : "img";
+          const before = doc[targetKey] ?? null;
           const step = { step: "document-image", targets: [doc.uuid], state: "unknown", before };
           steps.push(step);
           started = true;
-          // shim 适配：嵌入 Item 的 update() 不落库——经父文档 updateEmbeddedDocuments
-          if (doc.parent?.updateEmbeddedDocuments) {
+          // shim 适配：嵌入 Item 的 update() 不落库——经父文档对应嵌入集合更新；
+          // JournalEntryPage 的 pages 不走 Item 集合，必须经父 JournalEntry 的 pages 数组整体更新。
+          if (docName === "JournalEntryPage") {
+            const pages = collectionValues(doc.parent?.pages).map((page) => {
+              const data = typeof page.toObject === "function" ? page.toObject() : { ...page };
+              return (page.id ?? page._id) === doc.id ? { ...data, src: dataPath } : data;
+            });
+            await doc.parent.update({ pages });
+            const confirmed = await g.fromUuid(input.targetUuid);
+            step.after = confirmed?.src ?? null;
+          } else if (doc.parent?.updateEmbeddedDocuments) {
             await doc.parent.updateEmbeddedDocuments("Item", [{ _id: doc.id, img: dataPath }]);
+            step.after = doc.img ?? null;
           } else {
             await doc.update({ img: dataPath });
+            step.after = doc.img ?? null;
           }
           prepWorld(input.world);
-          step.after = doc.img ?? null;
           if (step.after === dataPath) step.state = "completed";
         }
         return steps.every((step) => step.state === "completed")
@@ -5968,6 +7722,22 @@
       };
     }
 
+    if (action === "apiCall") {
+      const registry = g.__MT_PLAY_OPERATIONS__;
+      if (!registry || typeof registry.get !== "function") {
+        throw new Error("CAPABILITY_UNAVAILABLE: play operation registry is not installed");
+      }
+      const operation = registry.get(args?.id);
+      if (!args?.args || typeof args.args !== "object" || Array.isArray(args.args)) {
+        throw new Error("INPUT_INVALID: apiCall args must be an object");
+      }
+      return {
+        status: "completed",
+        operationId: operation.id,
+        value: await g.__MT_AGENT_RUNTIME__(operation.id, args.args, options),
+      };
+    }
+
     if (action === "worldInfo") {
       return { runtime: RUNTIME_META, world, system, user, ready: !!game.ready,
         modules, moduleVersions, moduleList, capabilities, shim, page };
@@ -6002,7 +7772,11 @@
     // 阶段 11 M4：advancement 双 action（az 08/09 fragment 移植；自包异常转回执，不向宿主抛）
     if (action === "actorAdvance") return await actorAdvanceData(args);
     if (action === "advancementPlan") return await advancementPlanData(args);
+    // 阶段 12 item 源 advancement：只补本次新授物品内部的选择/固定授予
+    if (action === "advancementItemPlan") return await advancementItemPlanData(args);
+    if (action === "actorAdvanceItem") return await actorAdvanceItemData(args);
     if (action === "sceneApply") return await sceneApplyData(args);
+    if (action === "sceneImport") return await sceneImportData(args);
     if (action === "imageApply") return await imageApplyData(args);
     if (action === "conditionsSet") return await conditionsSetData(args);
     // M5 战斗集：executeTurn/executeAction 自包异常为回执（rejected/partial/indeterminate），

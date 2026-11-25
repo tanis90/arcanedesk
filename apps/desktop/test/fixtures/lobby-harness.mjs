@@ -91,6 +91,14 @@ export function createLobbyService(state = createLobbyState(), overrides = {}) {
       state.listCalls += 1;
       return { campaigns: [{ id: "campaign-1", name: "Curse of Strahd", ruleset: "dnd5e", owner: "dm", playUrl: "https://arcanemap.com/user-files/compat/play.html?campaign=campaign-1" }] };
     },
+    async apiOperationSearch(params) {
+      state.apiSearchCalls = [...(state.apiSearchCalls ?? []), params];
+      return { page: "lobby", operations: [{ id: "lobbyCampaignCreate", kind: "action", effect: "write", summary: "创建空白战役" }] };
+    },
+    async apiCall(params) {
+      state.apiCallCalls = [...(state.apiCallCalls ?? []), params];
+      return { status: "completed", operationId: params.id, value: { campaign: { id: "campaign-1" } } };
+    },
     async lobbyPacksList({ moduleId } = {}) {
       state.packListCalls = (state.packListCalls ?? 0) + 1;
       return { revision: state.packRevision, packCount: state.packs.length, modules: [{ moduleId: moduleId ?? "module-a", packs: state.packs }] };

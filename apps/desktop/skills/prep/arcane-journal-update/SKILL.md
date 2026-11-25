@@ -11,6 +11,7 @@ description: 在 Foundry 或奥法地图（mtcompat play）中创建、续写或
 
 - 先用 `world_status` 确认 ready 游戏页和 GM 身份。大厅、登录页和玩家账号不做日志写入。
 - mtcompat 使用 `foundry_page_eval`，读取 `touched/missing` 注记；原生 Foundry 使用 `browser_evaluate`，传入一个异步 IIFE 表达式，不使用顶层 `return`。
+- 在 mtcompat 写原生日志 API 前，先调用 `foundry_api_search({ prefix: "game.journal" })`，读取 `surface.entries` 中的状态和 `note/use`，再按 Document API 示例执行。不要查 `JournalEntry` 或 `CONFIG.JournalEntry` 后把空结果当成不支持。
 - 不为文风、排版或默认可见性追问：已有标题和正文就直接写，要求润色或创作时直接完成。续写或修改的目标无法唯一确定时，不猜文档、不写入，报告需要的具体目标。
 - 默认创建 DM 私有日志；只有明确给玩家的 handout 才在 JournalEntry 上设置 `ownership: { default: 2 }`（Observer）。已有日志的权限不被静默扩大。Observer 表示玩家可查看，不等于已经在玩家屏幕弹窗展示。
 - 用户给的是事实记录时，不补造剧情、线索、NPC 对话或调查结果。用户要求创作或润色时才发挥，并保持已有事实不变。

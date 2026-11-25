@@ -29,6 +29,7 @@ import { captureFoundryInputContext } from "./foundry-input-context.js";
 import { FoundryServices } from "./foundry-services.js";
 import { createFoundryTools } from "./foundry-tools.js";
 import { createLobbyTools } from "./lobby-tools.js";
+import { createMapApiTools } from "./map-api-tools.js";
 import { MtLobbyClient } from "./mt-lobby-client.js";
 import { createModMirrorTools } from "./mod-mirror-tools.js";
 import { activeToolNamesForPoolInProfile, normalizePolicyProfile, verifyActiveTools } from "./foundry-tool-policy.js";
@@ -1687,7 +1688,7 @@ export class AgentHost {
     }) : null;
 
     // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
-    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
+    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createMapApiTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
       ...(webSearch ? [webSearch] : []),
       ...(webFetch ? [webFetch] : [])];
   }

@@ -82,6 +82,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 ## 边界
 
+- 不使用世界 ZIP、只从空白创建战役时转 `arcane-world-create`。本 skill 的世界/合集导入是长程 job，始终走 `foundry_lobby_import_start` / `foundry_lobby_import_job`，不走 `foundry_api_call`。
 - 没有单独的 `campaignId`/合并参数，不等于永远新建：工具按 `campaignName`（默认世界标题）查同名战役；不存在才新建，同名且 ruleset 一致时复用并追加，ruleset 不一致直接拒绝。不要盲目重复导入同一战役，追加会叠文档。
 - 不导入聊天记录、世界设置、世界自有 compendium packs；这些在报告中说明即可。
 - 缺失素材（`icons/`、`modules/`、未随包携带）只报告，不阻断导入；超限文件按工具/服务端政策报错，不另造大小门槛。

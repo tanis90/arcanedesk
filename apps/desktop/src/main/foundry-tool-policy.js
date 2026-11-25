@@ -21,7 +21,7 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
  * 备团的 foundry_page_eval、foundry_scene_import（整场景 JSON 走页面原生 sceneImport，
- * 桌面只传备团目录内路径，字节不进模型）与 9 个 lobby typed tools；备团是「typed action
+ * 桌面只传备团目录内路径，字节不进模型）、9 个 lobby typed tools 与 2 个 Map API tools；备团是「typed action
  * 铺不满、eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
  * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
  * 战斗再补）。
@@ -42,6 +42,11 @@ export const LOBBY_TOOL_NAMES = Object.freeze([
   "foundry_lobby_return",
 ]);
 
+export const MAP_API_TOOL_NAMES = Object.freeze([
+  "foundry_api_search",
+  "foundry_api_call",
+]);
+
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
   combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
     "foundry_execute_action", "foundry_conditions_set"]),
@@ -49,6 +54,7 @@ const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
     "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
     ...LOBBY_TOOL_NAMES,
+    ...MAP_API_TOOL_NAMES,
     "web_search", "web_fetch"]),
 });
 
@@ -86,7 +92,7 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
  * 既有路径。navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅
  * foundry_lobby_return 调用；sceneImport 只由 foundry_scene_import 调用。
  */
-export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby"]);
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby", "apiOperationSearch", "apiCall"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio

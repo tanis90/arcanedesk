@@ -65,7 +65,7 @@
 ### 3.1 总体链路
 
 ```text
-LLM：9 个 typed tools
+LLM：9 个大厅 typed tools + 2 个 Map API tools（`foundry_api_search` / `foundry_api_call`；后者只接 Map 轻量同步 JSON action）
   ↓
 Desktop tool policy + 每次调用的目标守卫
   ↓

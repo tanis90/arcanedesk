@@ -554,3 +554,10 @@
 - 修正 r52 的画库获取语义：`foundry_module_prepare` 只解析镜像与下载信息，不下载、不安装。已可读取的模块图片使用 `modules/arcane-assets/<index.file>`；否则将 ready 返回的 ZIP 下载到本次备团目录，核对 size/SHA-256 后解压选择，以 cwd 相对 `sourcePath` 上传，不把本地模块安装冒充奥法地图资源就绪。按 index 的语义字段选择真实 PNG/JPEG/WebP，原始 SVG 不进入 `foundry_image`；模组导入复用同一配图流程。
 - 日志正文明确为 HTML，提供包含标题、重点和列表的正面示例；mtcompat 用 `foundry_page_eval`，原生 Foundry 用异步 IIFE 形式的 `browser_evaluate`。续写采用 `text.content` 字段级更新并保留旧页，多页仍逐页创建。DM 私有、Observer 可查看和玩家端弹窗展示是不同状态，不相互冒充。
 - 回归不再只有关键词：两段日志示例都在 mock Document API 上实际执行并校验 HTML；现有模型 benchmark 新增普通修改保图、只换角色卡头像时保留 Token、DM 私有日志、玩家 handout 和续写保留原页的世界状态验收。常规提问仍为 0，登录与写审批沿用 App 既有流程，不新增工具。
+
+### Map 自有 API 发现与轻量调用（2026-11-25，r54）
+
+- Map 只声明自己的操作、参数 schema、示例和 `action/workflow/job` 执行语义，不登记 Desk 工具名或 Desk 暴露策略。Desk 自己的工具仍由模型工具列表、`activatedTools` 与 skills 发现。新增固定 `foundry_api_search` / `foundry_api_call` 仅用于 Map 自有轻量、同步、JSON action；workflow/job、本地文件和复杂工作流继续走既有专用通道，通用调用在 Desk 与 Map 两侧均 fail-closed。
+- 新增 `arcane-world-create`：空白创建走 Map `lobbyCampaignCreate`，UI 与 agent 共用规则回执校验、默认封面、规则落档和 CoC 门禁。规则选择、登录与创建审批沿用现有边界；先查同名，成功后回读，partial/indeterminate 只按战役 id 对账，不重建、不盲删。ZIP 世界导入继续 `arcane-world-import` 的 start/job，场景导入继续 `foundry_scene_import`，不与通用调用混合。
+- mtcompat 原生 API 回退在人物、物品、日志 skill 中分别补 `foundry_api_search` 的 `game.actors` / `game.items` / `game.journal` 前缀；声明面与可调用操作分开解读，不能把查不到 `JournalEntry` 当成不支持，也不能把 surface 条目当 Desk 工具名。统一路由规则由 Desk 蒸馏段持有，Map 不反向耦合。
+- 回归包括 Map 操作元数据无 Desk 路由、job 零写入拒绝、共享创建回滚/partial、真实 Chromium 空白创建，以及 Desk 搜索/审批/partial 单测；skill 发布校验覆盖新 skill 与查询前缀。

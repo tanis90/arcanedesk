@@ -51,6 +51,8 @@ export const SURFACE_RULES = Object.freeze([
   "eval 返回里的 `touched`/`missing` 必须读；报了你踩桩，就按 note 绕开重写。",
 ]);
 
+export const MAP_API_ROUTING_RULE = "先使用当前已激活的 Desk 工具。没有合适工具时，用 `foundry_api_search` 查询 Map 自有 API。`foundry_api_call` 只调用 Map 的轻量、同步、JSON action；workflow/job、本地文件和复杂工作流仍走各自既有通道。";
+
 /**
  * 状态严重度档位（§2.5 Tier 0 排序：absent > stub-noop > stub-fixed > partial）。
  * full 只收带 delta 的条目（真面无语义差不进坑位榜）：URL 地址空间（FilePicker.upload）、
@@ -121,6 +123,7 @@ function renderSegment({ revision, defaultPolicy, entryCount, domainCount, pitfa
   for (const entry of extensions) lines.push(renderEntryLine(entry));
   lines.push("纪律（逐字，PRD §2.5）：");
   SURFACE_RULES.forEach((rule, index) => lines.push(`${index + 1}. ${rule}`));
+  lines.push(MAP_API_ROUTING_RULE);
   return lines.join("\n");
 }
 

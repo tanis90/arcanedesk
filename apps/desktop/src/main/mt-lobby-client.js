@@ -26,6 +26,8 @@ export const MT_LOBBY_ACTIONS = Object.freeze([
   "lobbyImportStatus",
   "lobbyImportCancel",
   "lobbyCampaignsList",
+  "apiOperationSearch",
+  "apiCall",
   "lobbyPacksList",
   "lobbyPackRead",
   "lobbyPacksDeletePreview",
@@ -37,7 +39,7 @@ export const MT_LOBBY_ACTIONS = Object.freeze([
 const ACTION_SET = new Set(MT_LOBBY_ACTIONS);
 // rulesetsList 由当前部署的 rulesets.mjs 提供，不要求 lobby service 另装同名方法。
 const LOBBY_TOOL_ACTIONS = new Set(MT_LOBBY_ACTIONS.filter(name => name !== "getFileInput" && name !== "lobbyRulesetsList"));
-const WRITE_ACTIONS = new Set(["lobbyImportRun", "lobbyPacksDelete", "lobbyCampaignPacksUpdate"]);
+const WRITE_ACTIONS = new Set(["lobbyImportRun", "lobbyPacksDelete", "lobbyCampaignPacksUpdate", "apiCall"]);
 /** 兼容 compat 的 phase、未来可能的 status/state；succeeded 是 compat 的成功终态。 */
 export const TERMINAL_JOB_STATES = Object.freeze([
   "succeeded", "completed", "failed", "cancelled", "canceled", "aborted", "indeterminate", "done", "rejected", "error",

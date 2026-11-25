@@ -8,7 +8,7 @@ description: 在 Foundry 或奥法地图（mtcompat play）中新建、复制或
 ## 页面与工具准入
 
 - 先用 `world_status` 确认当前是 ready 游戏页：Foundry 的 `/game` 且当前用户是 GM，或 mtcompat 的 `play.html` 且 world/user/runtime 已就绪。`profile` 与 `activatedTools` 只表示产品档位和工具面，不能代替这个判断；`lobby.html` 与 `/auth/**` 不做任何 Actor 读写。
-- 全程优先本 skill 的结构化工具。确需裸 JS 的自定义步骤，Foundry 用 `browser_evaluate`；mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing` 注记，不把 `foundry_page_eval` 用于大厅或登录页。
+- 全程优先本 skill 的结构化工具。确需裸 JS 的自定义步骤，Foundry 用 `browser_evaluate`；mtcompat 的 ready `play.html` 先用 `foundry_api_search({ prefix: "game.actors" })` 读取声明面，再用 `foundry_page_eval` 并读取 `touched/missing` 注记，不把 `foundry_page_eval` 用于大厅或登录页。
 - `foundry_screenshot` 只在页面已经 detected 后做视觉核对，不在大厅或登录页调用。
 
 ## 先判定操作范围

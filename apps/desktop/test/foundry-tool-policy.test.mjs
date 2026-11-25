@@ -6,7 +6,7 @@ import path from "node:path";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager,
   createReadTool, createWriteTool, createEditTool, createBashTool, createPowerShellTool } from "@earendil-works/pi-coding-agent";
 import { AgentHost } from "../src/main/agent-host.js";
-import { TOOL_NAMES_BY_PROFILE, MTCOMPAT_RUNTIME_ACTIONS, LOBBY_TOOL_NAMES, activeToolNames, activeToolNamesForPool, activeToolNamesForPoolInProfile, activeToolNamesForProfile, normalizePolicyProfile, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
+import { TOOL_NAMES_BY_PROFILE, MTCOMPAT_RUNTIME_ACTIONS, LOBBY_TOOL_NAMES, MAP_API_TOOL_NAMES, activeToolNames, activeToolNamesForPool, activeToolNamesForPoolInProfile, activeToolNamesForProfile, normalizePolicyProfile, verifyActiveTools, DESKTOP_FOUNDRY_ACTIONS } from "../src/main/foundry-tool-policy.js";
 import { PAGE_PROFILES } from "../src/main/page-profiles.js";
 import { SearchStore } from "../src/main/search/store.js";
 import { testSecretStorage } from "./test-secret-storage.mjs";
@@ -114,7 +114,7 @@ test("real Pi mtcompat prep session activates foundry_page_eval（foundry 档不
   customTools.push(createReadTool(cwd), createWriteTool(cwd), createEditTool(cwd),
     process.platform === "win32" ? createPowerShellTool(cwd) : createBashTool(cwd));
   const expected = activeToolNamesForPoolInProfile("prep", customTools, "mtcompat");
-  assert.equal(expected.length, 38, "mtcompat 备团 40 静态成员 - 未配置的 web_search/web_fetch");
+  assert.equal(expected.length, 40, "mtcompat 备团 42 静态成员 - 未配置的 web_search/web_fetch");
   assert.equal(activeToolNamesForPoolInProfile("prep", customTools, "foundry").includes("foundry_page_eval"), false);
   const { session } = await createAgentSession({ cwd, agentDir: cwd, settingsManager, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(cwd), modelRuntime: runtime, model: runtime.getModel("test", "model"),
@@ -142,10 +142,10 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   assert.deepEqual(combatMtcompat, combatFoundry);
   assert.deepEqual(combatMtcompat, activeToolNames("combat"));
   assert.equal(combatMtcompat.includes("foundry_page_eval"), false);
-  // mtcompat 备团 = foundry 备团 + foundry_page_eval + foundry_scene_import + 9 个 lobby tools。
+  // mtcompat 备团 = foundry 备团 + pageEval + sceneImport + 9 个 lobby tools + 2 个 Map API tools。
   const prepFoundry = activeToolNamesForProfile("prep", "foundry");
   const prepMtcompat = activeToolNamesForProfile("prep", "mtcompat");
-  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", "foundry_scene_import", ...LOBBY_TOOL_NAMES].sort());
+  assert.deepEqual([...prepMtcompat].sort(), [...prepFoundry, "foundry_page_eval", "foundry_scene_import", ...LOBBY_TOOL_NAMES, ...MAP_API_TOOL_NAMES].sort());
   assert.equal(prepMtcompat.includes("foundry_page_eval"), true);
   assert.equal(prepMtcompat.includes("foundry_scene_import"), true);
   assert.equal(prepFoundry.includes("foundry_page_eval"), false);
@@ -154,12 +154,12 @@ test("档位维度：mtcompat 档自带策略面，foundry 档名单逐字节不
   // 旧调用方语义：无档位 = 开放默认档；模式校验照旧。
   assert.equal(activeToolNames("combat").length, 6);
   assert.equal(activeToolNames("prep").length, 29, "静态 allowlist 29 = 27 有效 + web_search/web_fetch 静态成员");
-  assert.equal(prepMtcompat.length, 40, "mtcompat 备团 40 = foundry 备团 29 + foundry_page_eval + foundry_scene_import + 9 lobby tools");
+  assert.equal(prepMtcompat.length, 42, "mtcompat 备团 42 = foundry 备团 29 + pageEval + sceneImport + 9 lobby + 2 Map API");
   assert.throws(() => activeToolNamesForProfile("unknown-mode", "mtcompat"), /Unknown tool mode/);
 });
 
 test("A3 runtime 白名单：pageEval/navigateToLobby/sceneImport 只随 mtcompat client 装配，foundry 档白名单逐字不变", () => {
-  assert.deepEqual([...MTCOMPAT_RUNTIME_ACTIONS], [...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby"]);
+  assert.deepEqual([...MTCOMPAT_RUNTIME_ACTIONS], [...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby", "apiOperationSearch", "apiCall"]);
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("pageEval"), false);
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("navigateToLobby"), false);
   assert.equal(DESKTOP_FOUNDRY_ACTIONS.includes("sceneImport"), false);
