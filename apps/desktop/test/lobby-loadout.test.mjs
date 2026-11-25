@@ -83,10 +83,10 @@ test("foundry_open loads the mtcompat lobby tools for the next request and repor
   h.setPanelProfile("mtcompat");
   const result = await h.host.buildTools().find(tool => tool.name === "foundry_open").execute("open-1", {});
   assert.equal(result.details.profile, "mtcompat");
-  assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import"]));
+  assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "map_page_eval", "map_scene_import"]));
   assert.equal(h.session.calls.length, beforeCalls + 1);
   for (const name of LOBBY) assert.equal(h.session.active.includes(name), true, name);
-  assert.match(result.content[0].text, /Activated for the next model request \(13\)/);
+  assert.match(result.content[0].text, /Activated for the next model request \(7\)/);
 });
 
 test("opening plain Foundry first activates no lobby tools", async () => {
@@ -145,9 +145,9 @@ test("restoring a session computes the loadout from the current real profile, no
 });
 
 test("combat and plain Foundry policy tables never contain lobby tools", () => {
-  assert.equal(LOBBY_TOOL_NAMES.length, 9);
-  assert.equal(TOOL_NAMES_BY_PROFILE.foundry.combat.includes("foundry_lobby_import_start"), false);
-  assert.equal(TOOL_NAMES_BY_PROFILE.mtcompat.combat.includes("foundry_lobby_import_start"), false);
+  assert.equal(LOBBY_TOOL_NAMES.length, 3);
+  assert.equal(TOOL_NAMES_BY_PROFILE.foundry.combat.includes("map_lobby_import_start"), false);
+  assert.equal(TOOL_NAMES_BY_PROFILE.mtcompat.combat.includes("map_lobby_import_start"), false);
   assert.equal(TOOL_NAMES_BY_PROFILE.foundry.prep.some(name => LOBBY.has(name)), false);
   for (const name of LOBBY) assert.equal(TOOL_NAMES_BY_PROFILE.mtcompat.prep.includes(name), true, name);
 });
@@ -282,7 +282,7 @@ test("a real Pi session declares lobby tools only on the request after foundry_o
   host.getPanelProfileId = () => "mtcompat";
   const refreshed = await host.refreshToolLoadout("mtcompat");
   assert.equal(refreshed.changed, true);
-  assert.deepEqual(new Set(refreshed.activatedTools), new Set([...LOBBY, "foundry_page_eval", "foundry_scene_import"]));
+  assert.deepEqual(new Set(refreshed.activatedTools), new Set([...LOBBY, "map_page_eval", "map_scene_import"]));
   assert.equal(session.getActiveToolNames().some(name => LOBBY.has(name)), true);
 
   await session.prompt("after");

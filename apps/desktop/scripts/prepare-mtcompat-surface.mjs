@@ -51,7 +51,7 @@ export const SURFACE_RULES = Object.freeze([
   "eval 返回里的 `touched`/`missing` 必须读；报了你踩桩，就按 note 绕开重写。",
 ]);
 
-export const MAP_API_ROUTING_RULE = "先使用当前已激活的 Desk 工具。没有合适工具时，用 `foundry_api_search` 查询 Map 自有 API。`foundry_api_call` 只调用 Map 的轻量、同步、JSON action；workflow/job、本地文件和复杂工作流仍走各自既有通道。";
+export const MAP_API_ROUTING_RULE = "先使用当前已激活的 Desk 工具。没有合适工具时，用 `map_api_search` 查询 Map 自有 API。`map_api_call` 只调用 Map 的轻量、同步、JSON action；workflow/job、本地文件和复杂工作流仍走各自既有通道。";
 export const MAP_LOBBY_SKILL_RULE = "在奥法地图大厅执行创建、导入、选包、删除等操作时，先读 `arcane-mt-lobby`；具体字段和流程再加载对应专项 skill。";
 
 /**

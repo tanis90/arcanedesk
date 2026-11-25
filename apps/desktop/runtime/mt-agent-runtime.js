@@ -34,7 +34,7 @@
 // actorCreate :421-426、actorEdit :427-433、actorGrantItems :409-411+434、sceneApply :370-385、
 // imageApply :413-419+335、conditionsSet :621-627、PlayWriteReceipt :629-632。
 // sceneImport（mtcompat 扩展）：同一 action 承载 Foundry 场景 JSON / Universal VTT / 纯图片三种
-// 备团素材（Desktop foundry_scene_import 按扩展名分派 sourceFormat/sourceName/dimensions）；三者
+// 备团素材（Desktop map_scene_import 按扩展名分派 sourceFormat/sourceName/dimensions）；三者
 // 都走页面原生落地面（_importSceneJsonFile / _applySceneImage），字段按 sourceFormat 组合白名单、
 // 上传未确认绝不 completed。
 // M4b（K5）：conditionsSet——az conditionsSetData 语义移植（显式状态幂等/DAE 守卫/解析期

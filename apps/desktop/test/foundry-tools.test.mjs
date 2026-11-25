@@ -24,21 +24,21 @@ test("new schemas reject unknown keys and unbounded selectors", () => {
   assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter" }, tokens: { create: [{ actorUuid: "Actor.a", x: 0, y: 0 }] } }), true);
   assert.equal(valid("foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", tokens: { walls: [] } }), false);
   assert.equal(valid("foundry_scene_apply", { operation: "create", scene: { name: "Encounter", background: { sourcePath: "map.webp", syncPlacedTokens: true } } }), false);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json", backgroundSourcePath: "maps/church.png" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.dd2vtt" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.jpg", name: "教堂",
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.json" }), true);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.json", backgroundSourcePath: "maps/church.png" }), true);
+  assert.equal(valid("map_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json" }), true);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.dd2vtt" }), true);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.jpg", name: "教堂",
     grid: { type: 1, size: 150, distance: 5, units: "ft" } }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref",
+  assert.equal(valid("map_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref",
     sourcePath: "maps/church.webp", grid: { size: 100 } }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.jpg", grid: { size: 0 } }), false);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.jpg", grid: { size: 0 } }), false);
   // Flattened publish schema keeps cross-branch fields optional; the exact union check
   // rejects mismatched branches (update without readRef, create with sceneUuid) before dispatch.
-  assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", sourcePath: "maps/church.json" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json", sceneUuid: "Scene.s" }), true);
-  assert.equal(valid("foundry_scene_import", { operation: "create", sourcePath: "maps/church.json", background: { dataPath: "a.png" } }), false);
-  assert.equal(valid("foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json", readState: { sceneUuid: "Scene.s" } }), false);
+  assert.equal(valid("map_scene_import", { operation: "update", sceneUuid: "Scene.s", sourcePath: "maps/church.json" }), true);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.json", sceneUuid: "Scene.s" }), true);
+  assert.equal(valid("map_scene_import", { operation: "create", sourcePath: "maps/church.json", background: { dataPath: "a.png" } }), false);
+  assert.equal(valid("map_scene_import", { operation: "update", sceneUuid: "Scene.s", readRef: "ref", sourcePath: "maps/church.json", readState: { sceneUuid: "Scene.s" } }), false);
 });
 
 test("provider object schemas retain exact branch validation before host access or writes", async () => {
@@ -48,8 +48,8 @@ test("provider object schemas retain exact branch validation before host access 
     ["foundry_play_context", { view: "current", operationRef: "unexpected" }],
     ["foundry_scene_apply", { operation: "update", sceneUuid: "Scene.s", scene: { name: "Renamed" } }],
     ["foundry_scene_apply", { operation: "create", scene: { name: "New" }, sceneUuid: "Scene.s" }],
-    ["foundry_scene_import", { operation: "create", sourcePath: "scene.json", sceneUuid: "Scene.s" }],
-    ["foundry_scene_import", { operation: "update", sceneUuid: "Scene.s", sourcePath: "scene.json" }],
+    ["map_scene_import", { operation: "create", sourcePath: "scene.json", sceneUuid: "Scene.s" }],
+    ["map_scene_import", { operation: "update", sceneUuid: "Scene.s", sourcePath: "scene.json" }],
     ["foundry_execute_action", {}],
     ["foundry_execute_action", { actionRef: "one", actions: [{ actionRef: "two" }] }],
     ["foundry_execute_action", { actions: [{ actionRef: "one" }], resolution: "narrative" }],

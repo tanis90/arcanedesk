@@ -1,4 +1,4 @@
-// mt-compat 大厅的 9 个 typed tool。Map 的 apiOperationSearch/apiCall 另见 map-api-tools.js。
+// mt-compat 大厅的 3 个专用工具与 9 个不激活的历史别名。Map 的 apiOperationSearch/apiCall 另见 map-api-tools.js。
 // 实现静态注册；声明由 AgentHost 按真实页面档位动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
 import { Type } from "typebox";
 import { Value } from "typebox/value";
@@ -244,7 +244,7 @@ function navigateToLobbyFailure(error) {
 /** @param {any} host */
 export function createLobbyTools(host) {
   const lobbyReturn = defineTool({
-    name: "foundry_lobby_return",
+    name: "map_lobby_return",
     label: "Return to mt-compat lobby",
     description:
       "Leave the current mt-compat play page and return to its trusted campaign lobby. No parameters. " +
@@ -269,7 +269,7 @@ export function createLobbyTools(host) {
         const client = requirePrep(host);
         const panelProfile = typeof host.panelProfileId === "function" ? host.panelProfileId() : null;
         if (panelProfile !== null && panelProfile !== undefined && panelProfile !== PAGE_PROFILES.mtcompat.id) {
-          throw new MtLobbyError("PROFILE_MISMATCH", "foundry_lobby_return is only available on the mt-compat page profile");
+          throw new MtLobbyError("PROFILE_MISMATCH", "map_lobby_return is only available on the mt-compat page profile");
         }
         const current = client.classifyPanelUrl();
         if (current.kind === "lobby") {
@@ -346,14 +346,14 @@ export function createLobbyTools(host) {
   });
 
   const importStart = defineTool({
-    name: "foundry_lobby_import_start",
+    name: "map_lobby_import_start",
     label: "Import into mt-compat lobby",
     description:
       "Import one local FVTT world zip or pack-collection zip into the mt-compat lobby. Only available on the trusted mt-compat lobby page after foundry_open; " +
       "the source file must be a regular file inside the current prep directory or an existing Arcane mirror staging directory (mod-manager world/module stage). " +
-      "For a world import (including auto-detection), ruleset is required: call foundry_lobby_rulesets_list, ask the user to choose from the current deployment's supported rules, and never infer the choice from metadata, descriptions, or lobby defaults. Collection imports do not require ruleset. " +
+      "For a world import (including auto-detection), ruleset is required: use map_api_call with id=lobbyRulesetsList, ask the user to choose from the current deployment's supported rules, and never infer the choice from metadata, descriptions, or lobby defaults. Collection imports do not require ruleset. " +
       "The tool binds the real File in the panel, inspects it, asks for approval, then starts ONE import job. " +
-      "Returns {jobId, plan}; poll with foundry_lobby_import_job. Never pass credentials, base64, or zip contents. " +
+      "Returns {jobId, plan}; poll with map_lobby_import_job. Never pass credentials, base64, or zip contents. " +
       "On LOGIN_REQUIRED, end the turn and let the user sign in directly in the panel.",
     parameters: Type.Union([
       exact({
@@ -388,7 +388,7 @@ export function createLobbyTools(host) {
           if (!rulesets.some(ruleset => ruleset?.id === params.ruleset)) {
             return rejection(
               "INPUT_INVALID",
-              "The selected ruleset is not supported by the current deployment; call foundry_lobby_rulesets_list and ask the user to choose a returned id",
+              "The selected ruleset is not supported by the current deployment; use map_api_call with id=lobbyRulesetsList and ask the user to choose a returned id",
               { supportedRulesets: rulesets.map(ruleset => bounded(ruleset)).slice(0, 100), jobStarted: false },
             );
           }
@@ -405,7 +405,7 @@ export function createLobbyTools(host) {
         }, signal);
         const plan = bounded(inspection.plan);
         const summary = `Import ${file.filename} (${file.size} bytes, sha256 ${file.sha256.slice(0, 12)}…) as ${inspection.kind ?? params.expectedKind ?? "auto"}: ${planSummary(inspection.plan)}${params.failurePolicy === "continue" ? "; continue on per-item failures" : ""}`;
-        const approved = await approve(host, "foundry_lobby_import_start", summary, {
+        const approved = await approve(host, "map_lobby_import_start", summary, {
           filename: file.filename,
           size: file.size,
           sha256: file.sha256,
@@ -418,7 +418,7 @@ export function createLobbyTools(host) {
         runDispatched = true;
         const started = await client.runImport(target, inspection.preparationId, signal);
         return textResult(
-          `Import started as job ${started.jobId}. Poll with foundry_lobby_import_job (action=status); the full report is only returned in a terminal state.`,
+          `Import started as job ${started.jobId}. Poll with map_lobby_import_job (action=status); the full report is only returned in a terminal state.`,
           { jobId: started.jobId, plan: bounded(started.plan ?? inspection.plan) },
         );
       } catch (error) {
@@ -432,10 +432,10 @@ export function createLobbyTools(host) {
   });
 
   const importJob = defineTool({
-    name: "foundry_lobby_import_job",
+    name: "map_lobby_import_job",
     label: "mt-compat import job",
     description:
-      "Read or cancel one mt-compat lobby import job started by foundry_lobby_import_start. " +
+      "Read or cancel one mt-compat lobby import job started by map_lobby_import_start. " +
       "action=status may wait up to 25000 ms and returns phase/progress/currentItem/failureCount; the full report/failures appear only in a terminal state. " +
       "action=cancel only means the cancel was accepted — it is not proof that the job stopped and cleaned up; poll status. " +
       "If the lobby page navigated, reloaded, or crashed, the job becomes indeterminate and is never replayed automatically.",
@@ -673,5 +673,16 @@ export function createLobbyTools(host) {
     },
   });
 
-  return [lobbyReturn, rulesetsList, importStart, importJob, campaignsList, campaignPacksGet, campaignPacksUpdate, packsRead, packsDelete];
+  const legacyAliases = [
+    { ...lobbyReturn, name: "foundry_lobby_return" },
+    rulesetsList,
+    { ...importStart, name: "foundry_lobby_import_start" },
+    { ...importJob, name: "foundry_lobby_import_job" },
+    campaignsList,
+    campaignPacksGet,
+    campaignPacksUpdate,
+    packsRead,
+    packsDelete,
+  ];
+  return [lobbyReturn, importStart, importJob, ...legacyAliases];
 }

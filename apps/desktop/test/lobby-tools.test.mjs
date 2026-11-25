@@ -74,12 +74,15 @@ function returnHarness(t, {
     ...(foundryRuntime ? { foundryRuntime } : {}),
   };
   const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
-  return { page, client, calls, host, tools, tool: tools.get("foundry_lobby_return") };
+  return { page, client, calls, host, tools, tool: tools.get("map_lobby_return") };
 }
 
-test("the tool pool registers exactly the nine lobby tools with exact schemas", () => {
+test("the tool pool exposes three dedicated lobby tools and nine inactive legacy aliases", () => {
   const tools = new Map(createLobbyTools({ profile: { mode: "prep" } }).map(tool => [tool.name, tool]));
   assert.deepEqual([...tools.keys()], [
+    "map_lobby_return",
+    "map_lobby_import_start",
+    "map_lobby_import_job",
     "foundry_lobby_return",
     "foundry_lobby_rulesets_list",
     "foundry_lobby_import_start",
@@ -90,16 +93,16 @@ test("the tool pool registers exactly the nine lobby tools with exact schemas", 
     "foundry_lobby_packs_read",
     "foundry_lobby_packs_delete",
   ]);
-  const lobbyReturn = tools.get("foundry_lobby_return");
+  const lobbyReturn = tools.get("map_lobby_return");
   assert.equal(Value.Check(lobbyReturn.parameters, {}), true);
   assert.equal(Value.Check(lobbyReturn.parameters, { unexpected: true }), false);
-  const start = tools.get("foundry_lobby_import_start");
+  const start = tools.get("map_lobby_import_start");
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", ruleset: "2024" }), true);
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "world", ruleset: "2014" }), true);
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", ruleset: "2024", base64: "x" }), false);
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "collection" }), true, "collection imports do not require ruleset");
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "module", ruleset: "2024" }), false);
-  assert.equal(Value.Check(tools.get("foundry_lobby_import_job").parameters, { jobId: "j", action: "status", waitMs: 30000 }), false);
+  assert.equal(Value.Check(tools.get("map_lobby_import_job").parameters, { jobId: "j", action: "status", waitMs: 30000 }), false);
   const update = tools.get("foundry_lobby_campaign_packs_update");
   assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, add: ["a"], remove: ["b"] }), true);
   assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, enabledSourcesPatch: { srd2014: true, srd2024: false } }), true);
@@ -122,7 +125,7 @@ test("world imports reject missing ruleset before binding, inspecting, approval,
     ["world", { sourcePath: "world.zip", expectedKind: "world" }],
   ]) {
     const h = harness(t);
-    const result = await h.tools.get("foundry_lobby_import_start").execute(`start-no-ruleset-${suffix}`, args);
+    const result = await h.tools.get("map_lobby_import_start").execute(`start-no-ruleset-${suffix}`, args);
     assert.equal(result.details.code, "INPUT_INVALID", suffix);
     assert.equal(h.page.state.inspectCalls.length, 0, suffix);
     assert.equal(h.page.state.runCalls.length, 0, suffix);
@@ -132,11 +135,11 @@ test("world imports reject missing ruleset before binding, inspecting, approval,
 
 test("world imports reject a ruleset outside the current registry before binding or dispatch", async (t) => {
   const h = harness(t);
-  const result = await h.tools.get("foundry_lobby_import_start").execute("start-unknown-ruleset", {
+  const result = await h.tools.get("map_lobby_import_start").execute("start-unknown-ruleset", {
     sourcePath: "world.zip", expectedKind: "world", ruleset: "unknown-rule",
   });
   assert.equal(result.details.code, "INPUT_INVALID");
-  assert.match(result.content[0].text, /foundry_lobby_rulesets_list/);
+  assert.match(result.content[0].text, /map_api_call.*lobbyRulesetsList/);
   assert.deepEqual(result.details.supportedRulesets.map(ruleset => ruleset.id), ["2014", "2024", "octopus", "coc7"]);
   assert.equal(h.page.state.inspectCalls.length, 0);
   assert.equal(h.page.state.runCalls.length, 0);
@@ -145,7 +148,7 @@ test("world imports reject a ruleset outside the current registry before binding
 
 test("an import binds the native file, inspects, asks approval, then runs one job", async (t) => {
   const h = harness(t);
-  const result = await h.tools.get("foundry_lobby_import_start").execute("start-1", {
+  const result = await h.tools.get("map_lobby_import_start").execute("start-1", {
     sourcePath: "world.zip",
     expectedKind: "world",
     campaignName: "Test",
@@ -161,7 +164,7 @@ test("an import binds the native file, inspects, asks approval, then runs one jo
   assert.equal(h.page.state.runCalls.length, 1);
   assert.deepEqual(h.page.state.runCalls[0], { preparationId: "prep-secret" });
   assert.equal(h.approvals.length, 1);
-  assert.equal(h.approvals[0].tool, "foundry_lobby_import_start");
+  assert.equal(h.approvals[0].tool, "map_lobby_import_start");
   assert.equal(h.approvals[0].args.ruleset, "2014");
   assert.equal(JSON.stringify(h.approvals[0]).includes(h.directory), false);
   assert.equal(JSON.stringify(h.approvals[0]).includes("sourcePath"), false);
@@ -174,7 +177,7 @@ test("an import binds the native file, inspects, asks approval, then runs one jo
 
 test("external expectedKind=collection is normalized to module before the runtime call", async (t) => {
   const h = harness(t);
-  const result = await h.tools.get("foundry_lobby_import_start").execute("start-collection", {
+  const result = await h.tools.get("map_lobby_import_start").execute("start-collection", {
     sourcePath: "world.zip",
     expectedKind: "collection",
   });
@@ -186,7 +189,7 @@ test("external expectedKind=collection is normalized to module before the runtim
 
 test("approval denial after inspect starts no job", async (t) => {
   const h = harness(t, { approved: false });
-  const result = await h.tools.get("foundry_lobby_import_start").execute("start-denied", { sourcePath: "world.zip", ruleset: "2024" });
+  const result = await h.tools.get("map_lobby_import_start").execute("start-denied", { sourcePath: "world.zip", ruleset: "2024" });
   assert.equal(result.details.code, "DECLINED");
   assert.equal(h.page.state.inspectCalls.length, 1);
   assert.equal(h.page.state.runCalls.length, 0);
@@ -198,7 +201,7 @@ test("path fence failures never bind or dispatch", async (t) => {
   t.after(() => rmSync(outsideDir, { recursive: true, force: true }));
   const outside = path.join(outsideDir, "outside.zip");
   writeFileSync(outside, "outside");
-  const result = await h.tools.get("foundry_lobby_import_start").execute("start-outside", { sourcePath: outside, ruleset: "2024" });
+  const result = await h.tools.get("map_lobby_import_start").execute("start-outside", { sourcePath: outside, ruleset: "2024" });
   assert.equal(result.isError, true);
   assert.equal(result.details.code, "FILE_OUTSIDE_FENCE");
   assert.equal(h.page.state.inspectCalls.length, 0);
@@ -208,15 +211,15 @@ test("path fence failures never bind or dispatch", async (t) => {
 
 test("import_job status waits for the terminal report and cancel calls the contract", async (t) => {
   const h = harness(t);
-  await h.tools.get("foundry_lobby_import_start").execute("start-2", { sourcePath: "world.zip", ruleset: "2024" });
-  const status = await h.tools.get("foundry_lobby_import_job").execute("status-1", { jobId: "job-1", action: "status", waitMs: 2_000 });
+  await h.tools.get("map_lobby_import_start").execute("start-2", { sourcePath: "world.zip", ruleset: "2024" });
+  const status = await h.tools.get("map_lobby_import_job").execute("status-1", { jobId: "job-1", action: "status", waitMs: 2_000 });
   assert.equal(status.isError, undefined);
   assert.match(status.content[0].text, /Terminal/);
   assert.equal(status.details.status, "succeeded");
   assert.equal(status.details.report.actors, 12);
   assert.ok(h.page.state.statusCalls >= 2);
 
-  const cancel = await h.tools.get("foundry_lobby_import_job").execute("cancel-1", { jobId: "job-1", action: "cancel" });
+  const cancel = await h.tools.get("map_lobby_import_job").execute("cancel-1", { jobId: "job-1", action: "cancel" });
   assert.equal(cancel.isError, undefined);
   assert.match(cancel.content[0].text, /accepted is not proof of stop\/cleanup/);
   assert.equal(cancel.details.status, "cancelling");
@@ -227,11 +230,11 @@ test("import_job status waits for the terminal report and cancel calls the contr
 test("job status compacts status/state/phase consistently and never emits unknown when a field exists", async (t) => {
   for (const [field, value] of [["status", "completed"], ["state", "failed"], ["phase", "succeeded"]]) {
     const h = harness(t);
-    await h.tools.get("foundry_lobby_import_start").execute(`start-${field}`, { sourcePath: "world.zip", ruleset: "2024" });
+    await h.tools.get("map_lobby_import_start").execute(`start-${field}`, { sourcePath: "world.zip", ruleset: "2024" });
     h.page.service.lobbyImportStatus = async ({ jobId }) => ({
       jobId, [field]: value, terminal: true, report: { marker: field }, failures: [],
     });
-    const result = await h.tools.get("foundry_lobby_import_job").execute(`status-${field}`, { jobId: "job-1", action: "status" });
+    const result = await h.tools.get("map_lobby_import_job").execute(`status-${field}`, { jobId: "job-1", action: "status" });
     assert.equal(result.details.status, value, field);
     assert.equal(result.details.terminal, true, field);
     assert.doesNotMatch(result.content[0].text, /unknown/, field);
@@ -240,9 +243,9 @@ test("job status compacts status/state/phase consistently and never emits unknow
 
 test("union arguments reject invalid combinations before any page call", async (t) => {
   const h = harness(t);
-  const status = await h.tools.get("foundry_lobby_import_job").execute("bad-status", { jobId: "job-1", action: "status", waitMs: 30_000 });
+  const status = await h.tools.get("map_lobby_import_job").execute("bad-status", { jobId: "job-1", action: "status", waitMs: 30_000 });
   assert.equal(status.details.code, "INPUT_INVALID");
-  const cancel = await h.tools.get("foundry_lobby_import_job").execute("bad-cancel", { jobId: "job-1", action: "cancel", waitMs: 10 });
+  const cancel = await h.tools.get("map_lobby_import_job").execute("bad-cancel", { jobId: "job-1", action: "cancel", waitMs: 10 });
   assert.equal(cancel.details.code, "INPUT_INVALID");
   const read = await h.tools.get("foundry_lobby_packs_read").execute("bad-read", { packId: "p", moduleId: "m" });
   assert.equal(read.details.code, "INPUT_INVALID");
@@ -360,8 +363,8 @@ test("tool redaction preserves remote URLs while masking real local paths", asyn
       posixFile: "/var/lib/arcane/world.zip",
     },
   });
-  await h.tools.get("foundry_lobby_import_start").execute("start-url-redaction", { sourcePath: "world.zip", ruleset: "2024" });
-  const result = await h.tools.get("foundry_lobby_import_job").execute("status-url-redaction", { jobId: "job-1", action: "status" });
+  await h.tools.get("map_lobby_import_start").execute("start-url-redaction", { sourcePath: "world.zip", ruleset: "2024" });
+  const result = await h.tools.get("map_lobby_import_job").execute("status-url-redaction", { jobId: "job-1", action: "status" });
   assert.equal(result.details.report.assetUrl, assetUrl);
   assert.equal(result.details.report.playUrl, playUrl);
   assert.equal(result.details.report.localFile, "[path]");
@@ -403,14 +406,14 @@ test("lobby tools fail closed outside prep mode even if invoked from history", a
 test("import_start reports jobStarted=false before dispatch and unknown after a run was sent", async (t) => {
   const inspectFailure = harness(t);
   inspectFailure.page.state.failLogin = true;
-  const beforeRun = await inspectFailure.tools.get("foundry_lobby_import_start").execute("start-before", { sourcePath: "world.zip", ruleset: "2024" });
+  const beforeRun = await inspectFailure.tools.get("map_lobby_import_start").execute("start-before", { sourcePath: "world.zip", ruleset: "2024" });
   assert.equal(beforeRun.details.jobStarted, false);
 
   const runFailure = harness(t);
   runFailure.page.service.lobbyImportRun = async () => {
     throw Object.assign(new Error("the page navigated after run"), { code: "JOB_INDETERMINATE" });
   };
-  const afterRun = await runFailure.tools.get("foundry_lobby_import_start").execute("start-after", { sourcePath: "world.zip", ruleset: "2024" });
+  const afterRun = await runFailure.tools.get("map_lobby_import_start").execute("start-after", { sourcePath: "world.zip", ruleset: "2024" });
   assert.equal(afterRun.details.code, "JOB_INDETERMINATE");
   assert.equal(afterRun.details.jobStarted, "unknown");
   assert.equal(runFailure.page.state.inspectCalls.length, 1);
@@ -419,15 +422,15 @@ test("import_start reports jobStarted=false before dispatch and unknown after a 
 test("login-required runtime errors are surfaced as stable codes", async (t) => {
   const h = harness(t);
   h.page.state.failLogin = true;
-  const result = await h.tools.get("foundry_lobby_import_start").execute("login", { sourcePath: "world.zip", ruleset: "2024" });
+  const result = await h.tools.get("map_lobby_import_start").execute("login", { sourcePath: "world.zip", ruleset: "2024" });
   assert.equal(result.details.code, "LOGIN_REQUIRED");
   assert.match(result.content[0].text, /sign in directly/);
   assert.equal(h.page.state.runCalls.length, 0);
 });
 
-// ---- 方案 B：foundry_lobby_return（play → 受信 lobby，typed action + 就绪确认）----
+// ---- 方案 B：map_lobby_return（play → 受信 lobby，typed action + 就绪确认）----
 
-test("foundry_lobby_return saves the trusted play URL, dispatches navigateToLobby, then confirms the lobby", async (t) => {
+test("map_lobby_return saves the trusted play URL, dispatches navigateToLobby, then confirms the lobby", async (t) => {
   const h = returnHarness(t);
   const result = await h.tool.execute("return-1", {});
   assert.equal(result.isError, undefined);

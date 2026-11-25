@@ -442,12 +442,12 @@ test("structured tools fail closed when the page runtime is unavailable", async 
   await assert.rejects(tools.get("foundry_play_context").execute("turn", {}), /Foundry runtime unavailable/);
 });
 
-// ---- 方案 B：foundry_lobby_return 的宿主接线 ----
+// ---- 方案 B：map_lobby_return 的宿主接线 ----
 
-test("foundry_lobby_return is registered with an empty-object schema", () => {
+test("map_lobby_return is registered with an empty-object schema", () => {
   const { tools } = buildHarness();
-  const tool = tools.get("foundry_lobby_return");
-  assert.ok(tool, "工具池含 foundry_lobby_return");
+  const tool = tools.get("map_lobby_return");
+  assert.ok(tool, "工具池含 map_lobby_return");
   assert.equal(tool.parameters.type, "object");
   assert.deepEqual(tool.parameters.properties, {});
   assert.deepEqual(tool.parameters.required ?? [], []);
@@ -473,7 +473,7 @@ test("callFoundryRuntime keeps telemetry/mode scope and fails closed without a r
   assert.throws(() => host.callFoundryRuntime("worldInfo", {}), /Foundry page runtime is unavailable/);
 });
 
-// ---- A3：foundry_page_eval（mtcompat 档的兜底 eval，touched/missing 当场返回）----
+// ---- A3：map_page_eval（mtcompat 档的兜底 eval，touched/missing 当场返回）----
 
 function pageEvalHarness({ receipt, failure } = {}) {
   const calls = [];
@@ -483,12 +483,12 @@ function pageEvalHarness({ receipt, failure } = {}) {
     return receipt;
   } });
   host.maybeRequestApproval = async () => true;
-  return { host, tools, calls, tool: tools.get("foundry_page_eval") };
+  return { host, tools, calls, tool: tools.get("map_page_eval") };
 }
 
-test("A3 注册与 schema：foundry_page_eval 在池里，参数 {code, requestId?}", () => {
+test("A3 注册与 schema：map_page_eval 在池里，参数 {code, requestId?}", () => {
   const { tool } = pageEvalHarness({ receipt: { status: "completed", touched: [], missing: [] } });
-  assert.ok(tool, "工具池含 foundry_page_eval");
+  assert.ok(tool, "工具池含 map_page_eval");
   assert.equal(tool.parameters.type, "object");
   assert.deepEqual(Object.keys(tool.parameters.properties).sort(), ["code", "requestId"]);
   assert.deepEqual(tool.parameters.required, ["code"]);
@@ -500,7 +500,7 @@ test("A3 审批拦截：与 browser_evaluate 同级，拒绝后绝不派发页�
   host.maybeRequestApproval = async (payload) => { approvals.push(payload); return false; };
   const result = await tool.execute("eval-1", { code: "return game.user.isGM;" });
   assert.equal(approvals.length, 1);
-  assert.equal(approvals[0].tool, "foundry_page_eval");
+  assert.equal(approvals[0].tool, "map_page_eval");
   assert.equal(approvals[0].summary, "return game.user.isGM;");
   assert.match(result.content[0].text, /DM declined this code; do not retry it\./);
   assert.deepEqual(calls, []);

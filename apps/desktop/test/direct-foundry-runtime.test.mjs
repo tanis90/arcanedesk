@@ -134,7 +134,7 @@ test("navigateToLobby is mtcompat-only and keeps SDK NAVIGATED/interruption sema
     "FOUNDRY_SDK_ACTION_UNSUPPORTED",
   );
 
-  // 普通 tools 的导航中断语义不动：SDK 仍抛 NAVIGATED，只有 foundry_lobby_return 把它当预期。
+  // 普通 tools 的导航中断语义不动：SDK 仍抛 NAVIGATED，只有 map_lobby_return 把它当预期。
   await rejectsWithCode(
     createRuntime({
       allowedActions: MTCOMPAT_RUNTIME_ACTIONS,

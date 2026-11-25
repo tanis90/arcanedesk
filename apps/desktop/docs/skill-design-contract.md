@@ -497,7 +497,7 @@
 ### arcane-world-import / arcane-mt-packs 大厅 typed 工具（2026-11-11，r46）
 
 - r46 起，r45 的 ROPC 与本地迁移脚本流程不再作为主路径或降级通道；世界与合集包统一走 mt compat 大厅的**原生 File + typed lobby tools**。文件只接受 prep cwd 与 Desktop 自有镜像缓存（realpath 围栏、普通文件、size/mtime + 流式 sha256），目录外路径直接拒绝，不做目录外授权。
-- 大厅工具面固定 7 个：`foundry_lobby_import_start`、`foundry_lobby_import_job`、`foundry_lobby_campaigns_list`、`foundry_lobby_campaign_packs_get`、`foundry_lobby_campaign_packs_update`、`foundry_lobby_packs_read`、`foundry_lobby_packs_delete`；不引入 Code Mode、tool_search、裸 REST/eval 或通用文件选择器。
+- 大厅工具面固定 7 个：`map_lobby_import_start`、`map_lobby_import_job`、`foundry_lobby_campaigns_list`、`foundry_lobby_campaign_packs_get`、`foundry_lobby_campaign_packs_update`、`foundry_lobby_packs_read`、`foundry_lobby_packs_delete`；不引入 Code Mode、tool_search、裸 REST/eval 或通用文件选择器。
 - `import_start` 是唯一导入写入口：内部完成文件绑定、inspect、计划与审批后启动一个 job，返回 `{jobId, plan}`；`import_job` 只做 status（可等待）与 cancel，轮询只报 phase/progress/currentItem/failureCount，完整报告只在终态返回。取消被接受不等于已停止并清理；导航/刷新/崩溃后 job 只标 indeterminate，不自动重放。
 - 免密码：登录只由用户在面板内完成 Keycloak 流程，agent 不接触账号、密码、验证码或 token。旧版 dnd5e（< 5.3.0）与大厅同门拒绝并指引升级，不做 ROPC/本地脚本降级。
 - 写操作（`import_start`、`campaign_packs_update`、`packs_delete`）沿用 App 现有 `maybeRequestApproval`，不新增权限级别或审批框架；拒批即零底层写。
@@ -507,23 +507,23 @@
 
 ### ArcaneMap 页面路由与登录后重试（2026-11-12，r47）
 
-- `profile` 只区分 Foundry 与 mtcompat 产品档位，`activatedTools` 只表示该档位的工具面；实际调用前还要看 `page.path`、登录状态和游戏就绪状态。`lobby.html` 与 `/auth/**` 可展示，但 `world_status`、`foundry_page_eval` 和游戏读写工具只归 ready 游戏页。
+- `profile` 只区分 Foundry 与 mtcompat 产品档位，`activatedTools` 只表示该档位的工具面；实际调用前还要看 `page.path`、登录状态和游戏就绪状态。`lobby.html` 与 `/auth/**` 可展示，但 `world_status`、`map_page_eval` 和游戏读写工具只归 ready 游戏页。
 - `LOGIN_REQUIRED` 时结束本轮，由用户在面板里登录；确认后重试原来的大厅操作，不用 `foundry_open` 轮询，也不用 `world_status` 检查大厅。大厅资源查询、导入和选包继续走对应 `foundry_lobby_*` 工具。
-- Actor 与 compendium 工作先确认 ready 游戏页。复杂页面 JS 在 Foundry 用 `browser_evaluate`，在 mtcompat 的 ready `play.html` 用 `foundry_page_eval` 并读取 `touched/missing`；`foundry_screenshot` 只在页面 detected 后使用。
+- Actor 与 compendium 工作先确认 ready 游戏页。复杂页面 JS 在 Foundry 用 `browser_evaluate`，在 mtcompat 的 ready `play.html` 用 `map_page_eval` 并读取 `touched/missing`；`foundry_screenshot` 只在页面 detected 后使用。
 - 本地 FVTT 安装、运维、模组安装和模组世界建设流程不套用到奥法地图大厅：世界包归 `arcane-world-import`，个人内容包与战役选包归 `arcane-mt-packs`。
 
 ### 世界导入规则显式选择（2026-11-12，r48）
 
 - 世界包与简介不能替用户决定规则，skill 也不写死 2014/2024 或 COC。新增只读 `foundry_lobby_rulesets_list` / 页面动作 `lobbyRulesetsList`，从当前部署的 `rulesets.mjs` 注册表返回 `{id,label,system,supportLevel?}`；每次世界导入先把当前实际支持项交给用户选择，战役创建后不可变，计划审批不能代替这项选择。
-- `foundry_lobby_import_start` 对 `expectedKind:"world"` 与省略 `expectedKind` 的自动识别一律要求 `ruleset`，缺参在任何文件读取或大厅写入之前报 `INPUT_INVALID`，不再落入大厅默认值；传入值还必须命中当前规则列表，否则同样零写入拒绝。合集包不创建战役，保持不需要 `ruleset`。
+- `map_lobby_import_start` 对 `expectedKind:"world"` 与省略 `expectedKind` 的自动识别一律要求 `ruleset`，缺参在任何文件读取或大厅写入之前报 `INPUT_INVALID`，不再落入大厅默认值；传入值还必须命中当前规则列表，否则同样零写入拒绝。合集包不创建战役，保持不需要 `ruleset`。
 - 世界导入交互预算由 2 点改为 3 点：本次规则选择、按需登录、导入计划确认；大厅 typed 工具由 7 个增至 8 个，r48 为 `revision: 48`。
 - 奥法地图主入口为 `https://arcanemap.com/`。三个受信 origin 的 `/` 与 `/lobby.html` 在 `foundry_open` 导航前统一归一到 `/user-files/compat/lobby.html`，不得先按 Foundry 开放档加载再等待重定向；其它 origin 不做这项归一。
 - “打开/连接奥法地图”的默认域名由 prep/combat 系统提示词直接约束，不单独维护路由 skill；世界导入和内容包仍分别使用 `arcane-world-import`、`arcane-mt-packs`。
 
 ### play → lobby → play 往返（2026-11-13，r49）
 
-- 当前在 mtcompat play 页而任务需要大厅时，先一句话说明“会暂时离开当前游戏”，再调用无参数 `foundry_lobby_return({})`；这是说明不是提问，不新增交互点。离开游戏后要做的仍是大厅原有动作，交互预算不变（世界导入 3 点、内容包按原预算）。
-- 回大厅只能走这个 typed action：不用 `foundry_page_eval`、`location.assign`、`ui.nav` 自造跳转，也不放宽 `foundry_open` 的同源/同 pathname 幂等（方案 A 已否决）。成功回执保留真实 `returnPlayUrl`（campaign 来自 play URL 的 `?campaign=`，不用 `game.world.id` 猜），大厅动作完成后 `foundry_open({url:returnPlayUrl})` 回原战役；已在大厅时 `alreadyInLobby:true`，直接继续。
+- 当前在 mtcompat play 页而任务需要大厅时，先一句话说明“会暂时离开当前游戏”，再调用无参数 `map_lobby_return({})`；这是说明不是提问，不新增交互点。离开游戏后要做的仍是大厅原有动作，交互预算不变（世界导入 3 点、内容包按原预算）。
+- 回大厅只能走这个 typed action：不用 `map_page_eval`、`location.assign`、`ui.nav` 自造跳转，也不放宽 `foundry_open` 的同源/同 pathname 幂等（方案 A 已否决）。成功回执保留真实 `returnPlayUrl`（campaign 来自 play URL 的 `?campaign=`，不用 `game.world.id` 猜），大厅动作完成后 `foundry_open({url:returnPlayUrl})` 回原战役；已在大厅时 `alreadyInLobby:true`，直接继续。
 - `completed` 与预期 `NAVIGATED` 都只表示导航已发起：Desktop 随后确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪，agent 不把导航中断当可重放失败，不自动重放、不降级 eval。其余失败 `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 照实报告并停止。
 - 该工具仅 mtcompat prep：combat 与普通 Foundry 不声明，combat prompt 不改；世界导入与内容包继续沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。大厅 typed 工具由 8 个增至 9 个，r49 为 `revision: 49`。
 
@@ -538,7 +538,7 @@
 
 ### 多格式场景导入与物品能力边界（2026-11-23，r51）
 
-- 新增 `arcane-scene-import`：地图是高频操作，自有提问为 0；同一个 `foundry_scene_import` 按扩展名处理 Foundry JSON、Universal VTT 和纯图片，正面示例覆盖三种输入。图片尺寸由真实解码决定，网格来自来源、用户显式输入或系统默认，不从图片猜网格；目录外文件仍只按 r50 的点名文件受控暂存。
+- 新增 `arcane-scene-import`：地图是高频操作，自有提问为 0；同一个 `map_scene_import` 按扩展名处理 Foundry JSON、Universal VTT 和纯图片，正面示例覆盖三种输入。图片尺寸由真实解码决定，网格来自来源、用户显式输入或系统默认，不从图片猜网格；目录外文件仍只按 r50 的点名文件受控暂存。
 - `arcane-actor-update` 补 NPC/PC 最小建档示例，图片统一使用 `foundry_image` 同步头像、原型与存量 Token，不再要求模型先手工搬世界 Data 文件。
 - 新增 `arcane-item-update`：合集发现与 Actor 授予继续走 typed 工具；当前没有独立 `foundry_item_create`，自定义世界 Item 明确走来源克隆与原生 Document API，并回读类型、系统和实际归属，不虚构工具或把授予冒充世界创建。两个新 skill 的登录与写审批均沿用 App 既有流程，不新增交互点。
 
@@ -546,23 +546,30 @@
 ### 默认人物头像与日常日志（2026-11-24，r52）
 
 - `arcane-actor-update` 把头像列为建档必要步骤：用户未指定且未明确要求保留原图时，必须主动从 `arcane-assets` 官方画库按种族、职业、装备与风格选图；未安装先用 `foundry_module_prepare` 获取。不得直接保留 dnd5e 系统包默认头像，只有用户明确保留/不换时才跳过。`arcane-module-to-fvtt` 同步该默认规则，不新增工具或交互点。
-- 新增 `arcane-journal-update`：日常 JournalEntry 的创建、有限编辑、玩家 handout 权限和插图统一引导；文字页一次一页，编辑保留其它页面与字段。玩家 handout 才显式设 `ownership.default=2`，默认保持 DM 私有，不静默扩大权限。当前没有 typed journal 工具，使用 `foundry_page_eval` 原生 API，不虚构 `foundry_journal_create`。自有提问为 0，登录与写审批沿用 App 既有流程。
+- 新增 `arcane-journal-update`：日常 JournalEntry 的创建、有限编辑、玩家 handout 权限和插图统一引导；文字页一次一页，编辑保留其它页面与字段。玩家 handout 才显式设 `ownership.default=2`，默认保持 DM 私有，不静默扩大权限。当前没有 typed journal 工具，使用 `map_page_eval` 原生 API，不虚构 `foundry_journal_create`。自有提问为 0，登录与写审批沿用 App 既有流程。
 
 ### 人物与日志的执行边界（2026-11-25，r53）
 
 - 收窄 r52 的头像规则：只有新建/复制人物或用户明确要求新增、替换、修复图片时才选图；改名、加法术、升级和属性修改保持全部既有图像。默认仍是头像、原型与存量 Token 同图同步，但用户明确只改一个字段时，先上传取得持久路径，再用原生 Document API 做字段级更新，不用默认 Actor 应用覆盖其它图像。
 - 修正 r52 的画库获取语义：`foundry_module_prepare` 只解析镜像与下载信息，不下载、不安装。已可读取的模块图片使用 `modules/arcane-assets/<index.file>`；否则将 ready 返回的 ZIP 下载到本次备团目录，核对 size/SHA-256 后解压选择，以 cwd 相对 `sourcePath` 上传，不把本地模块安装冒充奥法地图资源就绪。按 index 的语义字段选择真实 PNG/JPEG/WebP，原始 SVG 不进入 `foundry_image`；模组导入复用同一配图流程。
-- 日志正文明确为 HTML，提供包含标题、重点和列表的正面示例；mtcompat 用 `foundry_page_eval`，原生 Foundry 用异步 IIFE 形式的 `browser_evaluate`。续写采用 `text.content` 字段级更新并保留旧页，多页仍逐页创建。DM 私有、Observer 可查看和玩家端弹窗展示是不同状态，不相互冒充。
+- 日志正文明确为 HTML，提供包含标题、重点和列表的正面示例；mtcompat 用 `map_page_eval`，原生 Foundry 用异步 IIFE 形式的 `browser_evaluate`。续写采用 `text.content` 字段级更新并保留旧页，多页仍逐页创建。DM 私有、Observer 可查看和玩家端弹窗展示是不同状态，不相互冒充。
 - 回归不再只有关键词：两段日志示例都在 mock Document API 上实际执行并校验 HTML；现有模型 benchmark 新增普通修改保图、只换角色卡头像时保留 Token、DM 私有日志、玩家 handout 和续写保留原页的世界状态验收。常规提问仍为 0，登录与写审批沿用 App 既有流程，不新增工具。
 
 ### Map 自有 API 发现与轻量调用（2026-11-25，r54）
 
-- Map 只声明自己的操作、参数 schema、示例和 `action/workflow/job` 执行语义，不登记 Desk 工具名或 Desk 暴露策略。Desk 自己的工具仍由模型工具列表、`activatedTools` 与 skills 发现。新增固定 `foundry_api_search` / `foundry_api_call` 仅用于 Map 自有轻量、同步、JSON action；workflow/job、本地文件和复杂工作流继续走既有专用通道，通用调用在 Desk 与 Map 两侧均 fail-closed。
-- 新增 `arcane-world-create`：空白创建走 Map `lobbyCampaignCreate`，UI 与 agent 共用规则回执校验、默认封面、规则落档和 CoC 门禁。规则选择、登录与创建审批沿用现有边界；先查同名，成功后回读，partial/indeterminate 只按战役 id 对账，不重建、不盲删。ZIP 世界导入继续 `arcane-world-import` 的 start/job，场景导入继续 `foundry_scene_import`，不与通用调用混合。
-- mtcompat 原生 API 回退在人物、物品、日志 skill 中分别补 `foundry_api_search` 的 `game.actors` / `game.items` / `game.journal` 前缀；声明面与可调用操作分开解读，不能把查不到 `JournalEntry` 当成不支持，也不能把 surface 条目当 Desk 工具名。统一路由规则由 Desk 蒸馏段持有，Map 不反向耦合。
+- Map 只声明自己的操作、参数 schema、示例和 `action/workflow/job` 执行语义，不登记 Desk 工具名或 Desk 暴露策略。Desk 自己的工具仍由模型工具列表、`activatedTools` 与 skills 发现。新增固定 `map_api_search` / `map_api_call` 仅用于 Map 自有轻量、同步、JSON action；workflow/job、本地文件和复杂工作流继续走既有专用通道，通用调用在 Desk 与 Map 两侧均 fail-closed。
+- 新增 `arcane-world-create`：空白创建走 Map `lobbyCampaignCreate`，UI 与 agent 共用规则回执校验、默认封面、规则落档和 CoC 门禁。规则选择、登录与创建审批沿用现有边界；先查同名，成功后回读，partial/indeterminate 只按战役 id 对账，不重建、不盲删。ZIP 世界导入继续 `arcane-world-import` 的 start/job，场景导入继续 `map_scene_import`，不与通用调用混合。
+- mtcompat 原生 API 回退在人物、物品、日志 skill 中分别补 `map_api_search` 的 `game.actors` / `game.items` / `game.journal` 前缀；声明面与可调用操作分开解读，不能把查不到 `JournalEntry` 当成不支持，也不能把 surface 条目当 Desk 工具名。统一路由规则由 Desk 蒸馏段持有，Map 不反向耦合。
 - 回归包括 Map 操作元数据无 Desk 路由、job 零写入拒绝、共享创建回滚/partial、真实 Chromium 空白创建，以及 Desk 搜索/审批/partial 单测；skill 发布校验覆盖新 skill 与查询前缀。
 
 ### 大厅总则与专项路由（2026-11-25，r55）
 
 - 新增 `arcane-mt-lobby` 作为所有大厅写操作的基础 skill：负责登录与 play↔lobby 导航、Desk 与 Map 各自的能力发现、action/workflow/job 分流、规则选择、审批、回读和不确定结果对账。它不是“提到奥法地图就全部加载”，而是 description 负责发现，mtcompat 蒸馏段额外保证大厅创建、导入、选包和删除前必读。
 - `arcane-world-create` 只保留空白创建的同名检查、规则选择、`lobbyCampaignCreate` 调用和 campaignId/playUrl 回读；`arcane-world-import` 继续世界 ZIP 长程 job；`arcane-mt-packs` 继续个人内容包库与战役选包的专用语义。三者链接总则而不复制大厅通用原则，避免合集包任务漏掉统一路由。
+
+### Map 工具通用化与命名（2026-11-25，r56）
+
+- 大厅轻量操作统一走 `map_api_search` / `map_api_call`：规则列表、战役读取/创建/改名/删除、成员列表/请离、个人库与条目读取、战役选包和删除。删除类操作通过 `preview:true` 先取影响预览，再审批执行；revision 过期、名称不匹配和 job/workflow 均零写入拒绝。封面上传仍是独立文件 workflow，不在本轮通用化范围。
+- 独立 Map 通道只保留 `map_lobby_return`、`map_lobby_import_start`、`map_lobby_import_job`、`map_scene_import`、`map_page_eval` 与两个通用 API 工具。普通 Foundry 不支持的 `foundry_lobby_*`、`foundry_scene_import`、`foundry_page_eval` 不再作为模型可见的平行工具面。
+- main 上已有的 9 个 `foundry_lobby_*` 和 `foundry_page_eval` 保留不激活的兼容别名，避免历史调用失效；它们不进入 activatedTools，不是新的模型引导入口。`foundry_scene_import` 与 `foundry_api_search/call` 属新增能力，直接改名、无别名。新 skill 只教 `map_api_call` 与上述专用通道。
+- `arcane-mt-packs` 的列表、条目预览、选包和删除全部改为 `map_api_call` 加操作 id；合集 ZIP 仍走 `map_lobby_import_start` / `map_lobby_import_job` 长程任务，不经过通用调用。

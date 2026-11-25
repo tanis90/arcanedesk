@@ -222,7 +222,7 @@ export class MtLobbyClient {
   }
 
   /**
-   * 当前页面档位判定（play/lobby/auth）——foundry_lobby_return 的入口校验。
+   * 当前页面档位判定（play/lobby/auth）——map_lobby_return 的入口校验。
    * 受信 origin + play.html 必须有非空 ?campaign=（战役身份只认 URL，不读 game.world.id）。
    * 非受信 origin、非 compat 路径、play 缺 campaign 一律 PROFILE_MISMATCH（fail-closed）。
    * @param {string} [rawUrl]
@@ -395,7 +395,7 @@ export class MtLobbyClient {
   }
 
   /**
-   * foundry_lobby_return 的确认阶段：有界只读等待，复用 preflight 等 auth、runtime 与
+   * map_lobby_return 的确认阶段：有界只读等待，复用 preflight 等 auth、runtime 与
    * __MT_LOBBY_SERVICE__ 全部就绪。每次轮询都重新读取当前 webContents 并重新捕获
    * target —— 导航会推高旧 target 的 epoch，绝不能拿旧 target 假报 TARGET_CHANGED。
    * 不派发任何页面动作，只读 preflight；超时不重放。

@@ -4,8 +4,9 @@
 // Fixture mode (default; no cloud or login required):
 //   node test/e2e-lobby-actions.mjs [--report=<path>] [--keep]
 //   - starts Electron, serves a fixture lobby page, attaches CDP, and calls the
-//     real createLobbyTools implementations: import_start/job, campaigns, packs,
-//     delete, path fence, mirror staging cache and approval denial.
+//     real createLobbyTools/createMapApiTools implementations: search/call,
+//     campaign create/read, import_start/job, packs, delete preview, path fence,
+//     mirror staging cache and approval denial.
 //   - asserts a disk-backed File was bound, the model never saw preparationId
 //     or server paths, and Page.fileChooserOpened stayed zero.
 //
@@ -20,14 +21,14 @@
 //     they are never placed in argv and are scrubbed from the report.
 //   - --insecure-tls is a harness-only Electron switch for the self-signed local
 //     stack; it does not change production configuration.
-//   - --mutate runs the full real contract: isolated REST campaign (ruleset 2024),
-//     campaigns_list, module import through the native File channel, packs read,
-//     campaign packs get/update with expectedRevision, stale + approval-denial
-//     zero-write checks, pack delete preview/delete, play-page rejection and
-//     foundry_lobby_return alreadyInLobby. Only objects created by the run are
-//     deleted again.
-//   - without --mutate only the three read tools run (campaigns/ packs/ rulesets)
-//     against the real deployment.
+//   - --mutate runs the full real contract: an isolated campaign (ruleset 2024)
+//     created/read/deleted through map_api_call, collection import through the
+//     native File channel, packs read, campaign packs get/update with
+//     expectedRevision, stale + approval-denial zero-write checks, pack delete
+//     preview/delete, play-page rejection and map_lobby_return alreadyInLobby.
+//     Only objects created by the run are deleted again.
+//   - without --mutate only read-only map_api_search/map_api_call operations run
+//     against the real deployment (campaigns/ packs/ rulesets).
 //
 // --compat-root points at a read-only mt-foundry-compat worktree whose
 // tools/fixtures/make-t7-module-zip.mjs generates the import fixture. It is only

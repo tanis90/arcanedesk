@@ -51,13 +51,13 @@ function errorResult(error) {
 
 export function createMapApiTools(host) {
   const search = defineTool({
-    name: "foundry_api_search",
+    name: "map_api_search",
     label: "Search Map APIs",
     description:
       "Search Map-owned runtime operations and API declarations only. Desk tools are discovered from the model tool list and activatedTools, not from this catalog. " +
       "Use query for text, prefix for an exact API/operation prefix, optional kind=action|workflow|job, and limit 1..20 (default 10). " +
       "On play, a prefix also returns matching apiSurface declarations. Search is read-only and never invokes an operation. " +
-      "Only operations with kind=action may be called with foundry_api_call; workflow/job results are informational and are not generic-call instructions.",
+      "Only operations with kind=action may be called with map_api_call; workflow/job results are informational and are not generic-call instructions.",
     parameters: Type.Object({
       query: Type.Optional(Type.String({ maxLength: 200 })),
       prefix: Type.Optional(Type.String({ maxLength: 128 })),
@@ -77,11 +77,11 @@ export function createMapApiTools(host) {
   });
 
   const call = defineTool({
-    name: "foundry_api_call",
+    name: "map_api_call",
     label: "Call Map API",
     description:
       "Invoke one Map-owned lightweight synchronous JSON action by registered id and args. Never send JavaScript, REST paths, files, or Desk tool names. " +
-      "First use foundry_api_search to inspect the operation schema and example. Only kind=action is executable here; workflow and job return OPERATION_KIND_UNSUPPORTED without side effects. " +
+      "First use map_api_search to inspect the operation schema and example. Only kind=action is executable here; workflow and job return OPERATION_KIND_UNSUPPORTED without side effects. " +
       "Write actions use the existing approval flow. Partial/indeterminate outcomes must not be replayed; inspect actual state instead. " +
       "This does not replace dedicated Desk tools for scene/world imports, file uploads, actor advancement, combat, or other complex workflows.",
     parameters: Type.Object({
@@ -90,7 +90,7 @@ export function createMapApiTools(host) {
     }, { additionalProperties: false }),
     executionMode: "sequential",
     promptGuidelines: [
-      "Use currently activated Desk tools first. Use this only for a Map-owned action discovered through foundry_api_search.",
+      "Use currently activated Desk tools first. Use this only for a Map-owned action discovered through map_api_search.",
       "Never invoke workflow or job operations with this tool; dedicated workflows have their own channels.",
     ],
     execute: async (_toolCallId, params, signal) => {
@@ -104,11 +104,18 @@ export function createMapApiTools(host) {
         if (operation.kind !== "action") {
           return rejection("OPERATION_KIND_UNSUPPORTED", `${params.id} is ${operation.kind}; generic api_call only accepts action`);
         }
+        let preview = null;
+        if (operation.requiresPreview) {
+          preview = await callMap(host, "apiCall", { id: params.id, args: params.args, preview: true }, signal);
+          if (preview?.status !== "preview") return rejection("PREVIEW_FAILED", `${params.id} did not return a valid impact preview`);
+          if (preview.value?.expectedNameMatches === false) return rejection("TARGET_CHANGED", "The target name changed before deletion; do not retry with the old name");
+        }
         if (operation.effect === "write" && typeof host.maybeRequestApproval === "function") {
+          const previewText = preview?.value ? `；影响 ${JSON.stringify(preview.value).slice(0, 500)}` : "";
           const approved = await host.maybeRequestApproval({
-            tool: "foundry_api_call",
-            summary: `${operation.summary} (${operation.id})`,
-            args: { operationId: operation.id, kind: operation.kind, effect: operation.effect },
+            tool: "map_api_call",
+            summary: `${operation.summary} (${operation.id})${previewText}`,
+            args: { operationId: operation.id, kind: operation.kind, effect: operation.effect, preview: preview?.value ?? null },
           });
           if (!approved) return rejection("DECLINED", "The user declined this Map operation; do not retry it.");
         }

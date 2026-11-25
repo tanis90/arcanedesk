@@ -124,7 +124,7 @@ export function createFoundryTools(host) {
       },
     }),
     defineTool({
-      name: "foundry_scene_import", label: "Import Scene",
+      name: "map_scene_import", label: "Import Scene",
       description: "Import a Scene from one local file in the prep directory: Foundry scene .json (max 10 MiB), Universal VTT .dd2vtt/.uvtt/.df2vtt (max 32 MiB), or pure .png/.jpg/.jpeg/.webp (max 32 MiB). Foundry JSON accepts optional backgroundSourcePath and may reference a bare HTTPS background instead. UVTT uses its embedded image and grid. Pure image uploads and applies the image with decoded pixel dimensions; optional name is create-only and grid (type/size/distance/units) can be set for either operation, otherwise no grid is inferred. Example: {operation:'create',sourcePath:'maps/church.dd2vtt'}. update requires sceneUuid and a current readRef from foundry_scene_get; create needs neither. Returns format, sceneUuid, dataPath and verification. Never send Base64. Partial/indeterminate receipts must not be replayed. mtcompat prep-only.",
       parameters: Type.Union([
         exact({ operation: Type.Literal("create"), sourcePath: Type.String({ minLength: 1, maxLength: 4096 }),
@@ -134,7 +134,7 @@ export function createFoundryTools(host) {
       ]), executionMode: "sequential",
       execute: async (id, params, signal) => {
         const binding = host.taskCoordinator().currentInputBinding();
-        const approved = await host.maybeRequestApproval({ tool: "foundry_scene_import",
+        const approved = await host.maybeRequestApproval({ tool: "map_scene_import",
           summary: `${params.operation} Scene from ${params.sourcePath}${params.backgroundSourcePath ? " with background upload" : ""}`, args: params });
         if (!approved) return textResult({ status: "rejected", code: "DECLINED", message: "DM declined; do not retry." });
         return textResult(await host.foundryServices().importScene(params, binding, id, signal));

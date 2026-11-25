@@ -83,9 +83,9 @@ test("动态档位：eval 工具描述保持档位无关，支持面段落只按
   assert.equal(description, foundryDescription, "工具描述不把 attach 时档位写死；段落由动态 prompt 承担");
 });
 
-test("动态档位（A3）：foundry_page_eval 的描述同样与档位无关", (t) => {
+test("动态档位（A3）：map_page_eval 的描述同样与档位无关", (t) => {
   const file = temporaryArtifact(t, ARTIFACT);
-  const pageEval = (host) => host.buildTools().find((tool) => tool.name === "foundry_page_eval");
+  const pageEval = (host) => host.buildTools().find((tool) => tool.name === "map_page_eval");
   const foundryDescription = pageEval(prepHost({ getPanelProfileId: () => "foundry", mtcompatSurfaceFile: file })).description;
   const mtcompatDescription = pageEval(prepHost({ getPanelProfileId: () => "mtcompat", mtcompatSurfaceFile: file })).description;
   assert.equal(mtcompatDescription, foundryDescription);

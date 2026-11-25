@@ -5,7 +5,7 @@ description: 在奥法地图（mtcompat play）中导入地图或创建/更新�
 
 # 奥法地图场景导入
 
-`foundry_scene_import` 是三种地图来源的统一入口。工具内部完成有界读取、图片解码与上传、原生解析、场景写入和回读；你只传备团目录内的文件路径，不接触 Base64，不逐段拼墙灯。
+`map_scene_import` 是三种地图来源的统一入口。工具内部完成有界读取、图片解码与上传、原生解析、场景写入和回读；你只传备团目录内的文件路径，不接触 Base64，不逐段拼墙灯。
 
 ## 页面与交互预算
 
@@ -28,7 +28,7 @@ description: 在奥法地图（mtcompat play）中导入地图或创建/更新�
 Dungeondraft / Universal VTT，一次完成内嵌图上传与场景导入：
 
 ```js
-foundry_scene_import({
+map_scene_import({
   operation: "create",
   sourcePath: "maps/church.dd2vtt",
 })
@@ -37,7 +37,7 @@ foundry_scene_import({
 Foundry JSON 和独立背景图一次提交：
 
 ```js
-foundry_scene_import({
+map_scene_import({
   operation: "create",
   sourcePath: "maps/church.json",
   backgroundSourcePath: "maps/church.jpg",
@@ -47,7 +47,7 @@ foundry_scene_import({
 只有一张图片，并已知每格像素与距离：
 
 ```js
-foundry_scene_import({
+map_scene_import({
   operation: "create",
   sourcePath: "maps/church.jpg",
   name: "教堂",
@@ -67,7 +67,7 @@ foundry_scene_get({
   include: ["walls", "lights"],
 })
 
-foundry_scene_import({
+map_scene_import({
   operation: "update",
   sceneUuid: "Scene.<id>",
   readRef: "<上一步返回值>",
@@ -82,6 +82,6 @@ foundry_scene_import({
 - 成功回执看 `format/sceneUuid/dataPath/stats/verification`：格式、场景 UUID、持久图片地址、墙灯或 UVTT 门窗统计、尺寸和网格必须与实际任务一致。持久引用保持无签名，私有桶显示经页面换签，不把签名 URL 写回文档。
 - `completed` 才表示导入落定；`partial/indeterminate` 不自动重放，先用 `foundry_scene_get` 对账。图片上传成功而导入失败时，保留回执中的 `dataPath` 供人工复核，不重复上传。
 - `SCENE_FORMAT_UNSUPPORTED`、`SCENE_SIZE_INVALID`、`IMAGE_DECODE_FAILED` 或格式组合错误时修正输入，不改扩展名绕过。
-- 旧 App/runtime 不认识多格式导入时报告版本缺口，不退回 `browser_evaluate` 或 `foundry_page_eval` 手搓场景。
+- 旧 App/runtime 不认识多格式导入时报告版本缺口，不退回 `browser_evaluate` 或 `map_page_eval` 手搓场景。
 - 头像、物品图、Token 图和富文本图片仍用 `foundry_image`，不要用场景导入替代。Token 放置和小范围场景元数据修改才用 `foundry_scene_apply`。
-- 场景导入是带文件处理和专门回执的 workflow，始终用 `foundry_scene_import`，不走通用 `foundry_api_call`。
+- 场景导入是带文件处理和专门回执的 workflow，始终用 `map_scene_import`，不走通用 `map_api_call`。

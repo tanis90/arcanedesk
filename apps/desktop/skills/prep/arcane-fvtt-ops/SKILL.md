@@ -149,7 +149,7 @@ Get-ChildItem -LiteralPath $arcaneLogs -Filter "error*.log" -File |
 
 ## 页面视觉诊断
 
-本节只适用于 Foundry 本体页面。奥法地图的 `lobby.html` 与 `/auth/**` 不走这条诊断链：不要在这些页面调用 `foundry_screenshot`，也不要用 `world_status` 或 `foundry_page_eval` 检查大厅或登录状态；奥法地图任务转对应的 mtcompat skills。
+本节只适用于 Foundry 本体页面。奥法地图的 `lobby.html` 与 `/auth/**` 不走这条诊断链：不要在这些页面调用 `foundry_screenshot`，也不要用 `world_status` 或 `map_page_eval` 检查大厅或登录状态；奥法地图任务转对应的 mtcompat skills。
 
 端口、HTTP 和日志先完成探测；只有这些证据不能解释用户看到的页面时，才调用 `foundry_open` 打开或复用右侧 Foundry 面板，再调用一次 `foundry_screenshot` 查看当前可见 viewport。适合确认：
 

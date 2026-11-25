@@ -10,7 +10,7 @@
 //     served verbatim from disk (no hand-written runtime, no pageEval substitute).
 //   - DirectFoundryRuntime with the mtcompat runtimeSource/allowedActions/profile,
 //     including the SDK call queue and evaluateNavigationSafe transport.
-//   - MtLobbyClient and createLobbyTools; foundry_lobby_return({}) is the actual tool.
+//   - MtLobbyClient and createLobbyTools; map_lobby_return({}) is the actual tool.
 //
 // What is stubbed (allowed by the task): the fixture pages supply minimal
 // game/auth/lobby-service data, a delayed lobby service install, and auditable
@@ -642,7 +642,7 @@ async function main() {
       },
     };
     const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
-    const lobbyReturn = tools.get("foundry_lobby_return");
+    const lobbyReturn = tools.get("map_lobby_return");
     const campaignsList = tools.get("foundry_lobby_campaigns_list");
     requireCheck("realToolsRegistered", Boolean(lobbyReturn) && Boolean(campaignsList), { tools: [...tools.keys()] });
 
@@ -682,11 +682,11 @@ async function main() {
         && before.campaignParam === CAMPAIGN_ID, { url: before.url, expectedPlayUrl });
       requireCheck(`round${round}.playExitReady`, before.playReady === true && before.pendingTeardowns === 1, before);
 
-      log(`round ${round}: invoking foundry_lobby_return from ${before.url}`);
+      log(`round ${round}: invoking map_lobby_return from ${before.url}`);
       const returnStartedAt = Date.now();
-      const result = await invoke("foundry_lobby_return", {});
+      const result = await invoke("map_lobby_return", {});
       const returnFinishedAt = Date.now();
-      log(`round ${round}: foundry_lobby_return finished in ${returnFinishedAt - returnStartedAt} ms (isError=${Boolean(result.isError)})`);
+      log(`round ${round}: map_lobby_return finished in ${returnFinishedAt - returnStartedAt} ms (isError=${Boolean(result.isError)})`);
       currentRound.timings.returnMs = returnFinishedAt - returnStartedAt;
       currentRound.evidence.receipt = result.details;
       requireCheck(`round${round}.lobbyReturnCompleted`, result.isError !== true

@@ -12,7 +12,7 @@
 // What is real here:
 //   - the local stack face (play.html + bootstrap/shim/packs), the real Keycloak account
 //     and the real ArcaneVTT backend (campaigns, WS document persistence, user-files);
-//   - the real AgentHost tool pool (createFoundryTools + world_status + foundry_page_eval);
+//   - the real AgentHost tool pool (createFoundryTools + world_status + map_page_eval);
 //   - the real FoundryServices (operation journal, readRefs, local asset fence, Chromium
 //     image decode through evaluateNavigationSafe);
 //   - the real DirectFoundryRuntime over the real WebContents transport
@@ -31,7 +31,7 @@
 // Any regression in either path fails this contract instead of being skipped.
 //
 // Typed surfaces exercised (all via the real tool.execute path, never pageEval):
-//   world_status, foundry_page_eval, static/play context, compendium browse, content
+//   world_status, map_page_eval, static/play context, compendium browse, content
 //   search, actor create/read/update, conditions set, image (PNG/JPEG/WebP upload,
 //   Actor/Item/JournalEntryPage apply, syncPlacedTokens across two Scenes), scene import
 //   (create/update), scene apply (create, Token update, activate, delete, local
@@ -98,7 +98,7 @@ const report = {
     "Keycloak interactive browser login: the campaign and page session use the real Keycloak password grant token",
     "combat and automatic (midi/roll) execution: only the non-combat narrative path is exercised",
     "Ring-enabled Token image synchronization: the fixture Actors keep ring.enabled false",
-    "Lobby tools (foundry_lobby_*): covered by the separate lobby harness",
+    "Lobby and Map API tools: covered by the separate Electron lobby harness",
     "Cancellation/timeout interruption of typed writes: unit-tested, not repeated here",
   ],
   commands: {},
@@ -416,8 +416,8 @@ async function main() {
     });
 
     const tools = new Map(host.buildTools().map(tool => [tool.name, tool]));
-    const required = ["world_status", "foundry_page_eval", "foundry_image", "foundry_scene_get",
-      "foundry_scene_import", "foundry_actor_get", "foundry_actor_create", "foundry_actor_update",
+    const required = ["world_status", "map_page_eval", "foundry_image", "foundry_scene_get",
+      "map_scene_import", "foundry_actor_get", "foundry_actor_create", "foundry_actor_update",
       "foundry_conditions_set", "foundry_static_context", "foundry_play_context",
       "foundry_compendium_browse", "foundry_content_search"];
     check("setup.tool-pool", required.every(name => tools.has(name)), {
@@ -455,7 +455,7 @@ async function main() {
     });
 
     // ---- pageEval ---------------------------------------------------------
-    const pageEval = await invoke("foundry_page_eval", {
+    const pageEval = await invoke("map_page_eval", {
       code: "return { ready: game.ready === true, gm: game.user?.isGM === true, scenes: [...game.scenes].length };",
     });
     check("pageEval.receipt", pageEval.details?.status === "completed"
@@ -484,7 +484,7 @@ async function main() {
     });
 
     // ---- fixture: Actor Folder (no typed tool exists for folders) --------
-    const folderFixture = await invoke("foundry_page_eval", {
+    const folderFixture = await invoke("map_page_eval", {
       code: "const folder = await CONFIG.Folder.documentClass.create({ name: 'Contract Actors', type: 'Actor' }); return { folderId: folder.id };",
     });
     const folderId = folderFixture.details?.value?.folderId ?? null;
@@ -557,7 +557,7 @@ async function main() {
     const actorReadImage = await invoke("foundry_actor_get", { actorUuid });
     check("image.actor-img-persisted", actorReadImage.details?.img === uploadedUrl, { img: actorReadImage.details?.img });
 
-    const itemFixture = await invoke("foundry_page_eval", {
+    const itemFixture = await invoke("map_page_eval", {
       code: "const item = await CONFIG.Item.documentClass.create({ name: 'Contract Loot', type: 'loot' }); return { itemUuid: item.uuid };",
     });
     const itemUuid = itemFixture.details?.value?.itemUuid ?? null;
@@ -568,7 +568,7 @@ async function main() {
       && itemImage.details?.steps?.some(step => step.step === "document-image" && step.after === uploadedUrl)
       && itemImage.details?.verification?.[0]?.targetUuid === itemUuid, itemImage?.details);
 
-    const journalFixture = await invoke("foundry_page_eval", {
+    const journalFixture = await invoke("map_page_eval", {
       code: "const journal = await CONFIG.JournalEntry.documentClass.create({ name: 'Contract Journal' }); const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{ name: 'Contract Map', type: 'image', src: '' }]); return { pageUuid: pages?.[0]?.uuid ?? null };",
     });
     const pageUuid = journalFixture.details?.value?.pageUuid ?? null;
@@ -578,7 +578,7 @@ async function main() {
     check("image.apply-journal-page", journalImage?.details?.status === "completed"
       && journalImage.details?.steps?.some(step => step.step === "document-image" && step.after === uploadedUrl), journalImage?.details);
 
-    const appliedReadback = await invoke("foundry_page_eval", {
+    const appliedReadback = await invoke("map_page_eval", {
       code: `const item = await fromUuid(${JSON.stringify(itemUuid)}); const page = await fromUuid(${JSON.stringify(pageUuid)});
         return { itemImg: item?.img ?? null, pageSrc: page?.src ?? null };`,
     });
@@ -603,7 +603,7 @@ async function main() {
       lights: [{ x: 400, y: 350, dim: 60, bright: 30, color: "#ffaa00", alpha: 0.6 }],
     };
     writeFileSync(path.join(prepDir, "scene.json"), JSON.stringify(sceneJson));
-    const imported = await invoke("foundry_scene_import", {
+    const imported = await invoke("map_scene_import", {
       operation: "create", sourcePath: "scene.json", backgroundSourcePath: "map.png",
     });
     const sceneUuid = imported.details?.sceneUuid ?? null;
@@ -648,7 +648,7 @@ async function main() {
       lights: [],
     };
     writeFileSync(path.join(prepDir, "scene2.json"), JSON.stringify(sceneJson2));
-    const updated = await invoke("foundry_scene_import", {
+    const updated = await invoke("map_scene_import", {
       operation: "update", sceneUuid, readRef: sceneReadRef, sourcePath: "scene2.json",
     });
     check("scene.import-update", updated.details?.status === "completed"
@@ -679,7 +679,7 @@ async function main() {
       lights: [],
     };
     writeFileSync(path.join(prepDir, "scene3.json"), JSON.stringify(sceneJson3));
-    const importedRemote = await invoke("foundry_scene_import", { operation: "create", sourcePath: "scene3.json" });
+    const importedRemote = await invoke("map_scene_import", { operation: "create", sourcePath: "scene3.json" });
     check("scene.import-json-https-background", importedRemote.details?.status === "completed"
       && importedRemote.details?.dataPath === remoteBackground
       && importedRemote.details?.verification?.[0]?.["background.src"] === remoteBackground, {
@@ -690,15 +690,15 @@ async function main() {
 
     // ---- failure paths stay on the Desktop fenced side -------------------
     writeFileSync(path.join(rootDir, "outside.json"), "{}");
-    const outsideScene = await invoke("foundry_scene_import", { operation: "create", sourcePath: "../outside.json" });
+    const outsideScene = await invoke("map_scene_import", { operation: "create", sourcePath: "../outside.json" });
     check("scene.path-fence", outsideScene.details?.status === "rejected"
       && outsideScene.details?.code === "SCENE_PATH_OUTSIDE_CWD", outsideScene.details);
-    const outsideImage = await invoke("foundry_scene_import", {
+    const outsideImage = await invoke("map_scene_import", {
       operation: "create", sourcePath: "scene.json", backgroundSourcePath: path.join(rootDir, "outside.json"),
     });
     check("scene.background-path-fence", outsideImage.details?.status === "rejected"
       && outsideImage.details?.code === "IMAGE_PATH_OUTSIDE_CWD", outsideImage.details);
-    const missingRef = await invoke("foundry_scene_import", { operation: "update", sceneUuid, sourcePath: "scene2.json" });
+    const missingRef = await invoke("map_scene_import", { operation: "update", sceneUuid, sourcePath: "scene2.json" });
     check("scene.update-without-readref-rejected", missingRef.details?.status === "rejected"
       && missingRef.details?.code === "INPUT_INVALID", missingRef.details);
 
@@ -708,9 +708,9 @@ async function main() {
     }));
     const callsBeforeReplay = await runtimeCalls();
     const replayId = `scene-replay-${Date.now()}`;
-    const first = await invoke("foundry_scene_import", { operation: "create", sourcePath: "scene4.json" }, { id: replayId });
+    const first = await invoke("map_scene_import", { operation: "create", sourcePath: "scene4.json" }, { id: replayId });
     const callsAfterFirst = await runtimeCalls();
-    const replay = await invoke("foundry_scene_import", { operation: "create", sourcePath: "scene4.json" }, { id: replayId });
+    const replay = await invoke("map_scene_import", { operation: "create", sourcePath: "scene4.json" }, { id: replayId });
     const callsAfterReplay = await runtimeCalls();
     check("scene.import-replay-idempotent",
       replay.details?.operationRef === first.details?.operationRef
@@ -719,14 +719,14 @@ async function main() {
       firstRef: first.details?.operationRef, replayRef: replay.details?.operationRef,
       calls: [callsBeforeReplay, callsAfterFirst, callsAfterReplay],
     });
-    const conflict = await invoke("foundry_scene_import", { operation: "create", sourcePath: "scene.json", backgroundSourcePath: "map.png" }, { id: replayId });
+    const conflict = await invoke("map_scene_import", { operation: "create", sourcePath: "scene.json", backgroundSourcePath: "map.png" }, { id: replayId });
     check("scene.import-same-id-different-input-conflicts", conflict.details?.status === "rejected"
       && conflict.details?.code === "TOOL_CALL_CONFLICT", conflict.details);
 
     // ---- image: JPEG and WebP fixtures rendered by the real page canvas ---
     // The fixtures come from the page's own canvas encoder + Chromium decoder, so the
     // bytes are real JPEG/WebP rather than hand-written magic bytes.
-    const canvasFixtures = await invoke("foundry_page_eval", {
+    const canvasFixtures = await invoke("map_page_eval", {
       code: `const draw = (type, quality) => {
           const canvas = document.createElement("canvas"); canvas.width = 64; canvas.height = 48;
           const ctx = canvas.getContext("2d");
@@ -767,7 +767,7 @@ async function main() {
       image: png.toString("base64"),
     };
     writeFileSync(path.join(prepDir, "contract-uvtt.dd2vtt"), JSON.stringify(uvtt));
-    const uvttCreated = await invoke("foundry_scene_import", { operation: "create", sourcePath: "contract-uvtt.dd2vtt" });
+    const uvttCreated = await invoke("map_scene_import", { operation: "create", sourcePath: "contract-uvtt.dd2vtt" });
     const uvttUuid = uvttCreated.details?.sceneUuid;
     const uvttUrl = uvttCreated.details?.dataPath;
     check("scene.uvtt-create", uvttCreated.details?.status === "completed" && uvttCreated.details?.format === "uvtt"
@@ -788,7 +788,7 @@ async function main() {
       resolution: { ...uvtt.resolution, map_size: { x: 5, y: 4 } },
       line_of_sight: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], objects_line_of_sight: [], portals: [],
     }));
-    const uvttUpdated = await invoke("foundry_scene_import", {
+    const uvttUpdated = await invoke("map_scene_import", {
       operation: "update", sceneUuid: uvttUuid, readRef: uvttRead.details?.readRef, sourcePath: "contract-uvtt.dd2vtt",
     });
     const uvttUpdatedRead = await invoke("foundry_scene_get", { sceneUuid: uvttUuid, include: ["walls"], limit: 100 });
@@ -800,7 +800,7 @@ async function main() {
       walls: uvttUpdatedRead.details?.placeables?.walls?.length,
     });
 
-    const pureCreated = await invoke("foundry_scene_import", {
+    const pureCreated = await invoke("map_scene_import", {
       operation: "create", sourcePath: "fixture.jpg", name: `Pure Image ${RUN_ID}`,
       grid: { type: 1, size: 50, distance: 5, units: "ft" },
     });
@@ -814,7 +814,7 @@ async function main() {
       width: pureRead.details?.width, height: pureRead.details?.height, grid: pureRead.details?.["grid.size"],
     });
     if (pureUrl && !pureUrl.startsWith("data:")) imageProbes.push({ kind: "pure-jpeg", url: pureUrl });
-    await invoke("foundry_page_eval", {
+    await invoke("map_page_eval", {
       code: `const scene = [...game.scenes].find(value => value.uuid === ${JSON.stringify(pureUuid)});
         await scene.update({ background: { ...(scene.background ?? {}), offsetX: 17, offsetY: 19, scaleX: 2, scaleY: 3 },
           flags: { mtcompat: { ...(scene.flags?.mtcompat ?? {}), sceneRotation: { angle: 90 } } });
@@ -822,12 +822,12 @@ async function main() {
           rotation: scene.flags?.mtcompat?.sceneRotation?.angle };`,
     });
     const pureBeforeUpdate = await invoke("foundry_scene_get", { sceneUuid: pureUuid });
-    const pureUpdated = await invoke("foundry_scene_import", {
+    const pureUpdated = await invoke("map_scene_import", {
       operation: "update", sceneUuid: pureUuid, readRef: pureBeforeUpdate.details?.readRef,
       sourcePath: "fixture.webp", grid: { size: 75 },
     });
     const pureUpdatedRead = await invoke("foundry_scene_get", { sceneUuid: pureUuid });
-    const pureFlags = await invoke("foundry_page_eval", {
+    const pureFlags = await invoke("map_page_eval", {
       code: `const scene = [...game.scenes].find(value => value.uuid === ${JSON.stringify(pureUuid)});
         return { offsetX: scene.background?.offsetX, offsetY: scene.background?.offsetY,
           scaleX: scene.background?.scaleX, scaleY: scene.background?.scaleY,
@@ -912,7 +912,7 @@ async function main() {
     // read-only page inspection; layout fields still come from the typed scene read.
     const syncReadA = await invoke("foundry_scene_get", { sceneUuid: syncSceneAUuid, include: ["tokens"] });
     const syncReadB = await invoke("foundry_scene_get", { sceneUuid: syncSceneBUuid, include: ["tokens"] });
-    const syncTextures = await invoke("foundry_page_eval", {
+    const syncTextures = await invoke("map_page_eval", {
       code: `const pick = (uuid) => [...game.scenes].find(scene => scene.uuid === uuid);
         const one = pick(${JSON.stringify(syncSceneAUuid)}); const two = pick(${JSON.stringify(syncSceneBUuid)});
         const shape = scene => scene ? [...scene.tokens].map(token => ({ name: token.name,
@@ -1154,7 +1154,7 @@ async function main() {
     const narrativeSceneUuid = narrativeScene.details?.verification?.[0]?.sceneUuid ?? null;
     const narrativeRead = await invoke("foundry_scene_get", { sceneUuid: narrativeSceneUuid, include: ["tokens"] });
     const narrativeTokenUuid = narrativeRead.details?.placeables?.tokens?.[0]?.uuid ?? null;
-    const selected = await invoke("foundry_page_eval", {
+    const selected = await invoke("map_page_eval", {
       code: `const token = [...(canvas?.tokens?.placeables ?? [])]
           .find(placeable => (placeable.document?.uuid ?? placeable.uuid) === ${JSON.stringify(narrativeTokenUuid)});
         token?.control?.({ releaseOthers: true });
@@ -1222,7 +1222,7 @@ async function main() {
     });
 
     // ---- backend probe: ordinary Roll update entitlement -----------------
-    const rollProbe = await invoke("foundry_page_eval", {
+    const rollProbe = await invoke("map_page_eval", {
       code: `const roll = await new Roll("1d20").evaluate();
         const message = await ChatMessage.create({ content: "contract roll", type: 5, timestamp: Date.now() });
         try { await message.update({ rolls: [roll.toJSON()], flavor: "contract roll" }); return { updated: true }; }
@@ -1309,7 +1309,7 @@ async function main() {
         dim: 200, bright: 100, color: "#ffffff", alpha: 0.25,
       })),
     }));
-    const largeImport = await invoke("foundry_scene_import", {
+    const largeImport = await invoke("map_scene_import", {
       operation: "create", sourcePath: "large-map.json", backgroundSourcePath: "large-map.jpg",
     });
     const largeUuid = largeImport.details?.sceneUuid ?? null;

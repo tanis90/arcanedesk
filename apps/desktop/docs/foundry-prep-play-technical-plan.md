@@ -374,7 +374,7 @@ actorLink 缺省继承 actor prototypeToken，不强制设 false。坐标/尺寸
 create Scene 与 Token 都记录请求来源，导航不确定时可查已创建对象，不盲目重建。
 sceneApply 不写 walls/lights/tiles/notes/sounds；这些随完整场景 JSON 由下面的 sceneImport 处理。
 
-### 5.8a foundry_scene_import（仅 mtcompat）
+### 5.8a map_scene_import（仅 mtcompat）
 
 输入 `operation`、`sourcePath`，update 另需 `sceneUuid/readRef`。工具描述给一个 DD2VTT 正面示例，完整三分支示例由 `arcane-scene-import` skill 提供。按扩展名分流：
 

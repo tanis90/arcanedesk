@@ -7,16 +7,16 @@
 
 ## 1. 目标与边界
 
-新增无参数 typed 工具 `foundry_lobby_return`，让 prep Agent 能从 detected play 页安全回到大厅，完成大厅动作后再用真实 `returnPlayUrl` 回到原战役。
+新增无参数 typed 工具 `map_lobby_return`，让 prep Agent 能从 detected play 页安全回到大厅，完成大厅动作后再用真实 `returnPlayUrl` 回到原战役。
 
 ```text
-play → foundry_lobby_return → lobby 动作 → foundry_open(returnPlayUrl) → play
+play → map_lobby_return → lobby 动作 → foundry_open(returnPlayUrl) → play
 ```
 
 明确不做：
 
 - 不改 `foundry_open` 的同源/同 pathname 幂等，不实施方案 A。
-- 不用 `foundry_page_eval`、`location.assign` 或 `ui.nav` 代替 typed action。
+- 不用 `map_page_eval`、`location.assign` 或 `ui.nav` 代替 typed action。
 - combat 与普通 Foundry 不注入该工具。
 - 不修改 `packages/foundry-sdk` 的通用导航错误语义，不修改 `arcaneVTT-server` 或数据库。
 - 不新增审批卡；prep 引导需在导航前说明会暂时离开当前游戏。
@@ -42,7 +42,7 @@ play → foundry_lobby_return → lobby 动作 → foundry_open(returnPlayUrl) �
 ### 3.1 Agent 工具
 
 ```js
-foundry_lobby_return({})
+map_lobby_return({})
 ```
 
 正常结果：
@@ -83,7 +83,7 @@ navigateToLobby({})
 
 ### 3.3 Desktop 确认协议
 
-`foundry_lobby_return` 按以下顺序执行：
+`map_lobby_return` 按以下顺序执行：
 
 1. 校验 prep、当前页面与 runtime。
 2. 保存当前可信 play URL 作为 `returnPlayUrl`；campaign 来自 URL，不依赖旧目标记忆。
@@ -116,10 +116,10 @@ navigateToLobby({})
 
 1. `src/main/foundry-tool-policy.js`
    - `MTCOMPAT_RUNTIME_ACTIONS` 加 `navigateToLobby`。
-   - `LOBBY_TOOL_NAMES` 加 `foundry_lobby_return`。
+   - `LOBBY_TOOL_NAMES` 加 `map_lobby_return`。
    - 仍仅 mtcompat prep 注入；combat/Foundry 不声明。
 2. `src/main/lobby-tools.js`
-   - 实现 `foundry_lobby_return`、已在大厅幂等、真实回程 URL 和上述确认协议。
+   - 实现 `map_lobby_return`、已在大厅幂等、真实回程 URL 和上述确认协议。
    - 复用 runtime 队列；导航后旧世界调用不自动重放。
 3. `src/main/mt-lobby-client.js`
    - 增加有界只读等待，复用 preflight 等待 auth/runtime/service 就绪。
@@ -128,7 +128,7 @@ navigateToLobby({})
    - `skills/prep/arcane-mt-packs/SKILL.md`
    - `system-prompts/prep.md`
    - `system-prompts-intl/prep.md`
-   统一为 play 需要大厅时先调 `foundry_lobby_return`，不用 eval；完成后用 `returnPlayUrl` 回游戏。
+   统一为 play 需要大厅时先调 `map_lobby_return`，不用 eval；完成后用 `returnPlayUrl` 回游戏。
 5. 文档与 skills
    - 本文件作为最终方案 B。
    - `docs/lobby-actions-plan.md` 更新工具数与往返流程。
@@ -151,12 +151,12 @@ navigateToLobby({})
 
 ### 6.2 真实导航验收
 
-现有 `lobby-e2e-app.mjs` 只构造 lobby tools，不能证明 `openFoundryView`/runtime 接线。必须另做真实 Desktop/Agent 验收：
+现有 `lobby-e2e-app.mjs` 构造大厅与 Map API tools，不能证明 `openFoundryView`/runtime 接线。必须另做真实 Desktop/Agent 验收：
 
 1. prep play → lobby，回执含正确 from/to/returnPlayUrl。
-2. 返回后首次 `foundry_lobby_campaigns_list` 即成功。
+2. 返回后首次 `map_api_call({ id: "lobbyCampaignsList", args: {} })` 即成功。
 3. 用 `returnPlayUrl` 回到原战役，runtime 恢复。
-4. combat 工具列表无 `foundry_lobby_return`。
+4. combat 工具列表无 `map_lobby_return`。
 5. 连续三次往返无重复 socket/监听，认证不丢，GM 重进无锁。
 6. 全程无世界数据异常变化。
 

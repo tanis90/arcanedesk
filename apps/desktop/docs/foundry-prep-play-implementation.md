@@ -312,10 +312,10 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
   `evaluateNavigationSafe`/`readFoundryPageState` 经 Playwright 页面适配），页面 runtime
   取自 compat 工作树 `web/agent-runtime.js` 并经 `adoptMtcompatRuntimeFromPage` 的页面句柄
   委托分支采用。该脚本不驱动 Electron 窗口/面板 UI，也不构成用户点击验收。
-- 实测覆盖 `world_status`、`foundry_page_eval`、`foundry_static_context`/`foundry_play_context`、
+- 实测覆盖 `world_status`、`map_page_eval`、`foundry_static_context`/`foundry_play_context`、
   `foundry_compendium_browse`、`foundry_content_search`、`foundry_actor_create/get/update`
   （含 Folder 归属、改回根目录、未知 Folder 拒绝）、`foundry_conditions_set` 置位/清除、
-  `foundry_image` 本地 PNG 上传与 Actor/Item/JournalEntryPage 图片应用、`foundry_scene_import`
+  `foundry_image` 本地 PNG 上传与 Actor/Item/JournalEntryPage 图片应用、`map_scene_import`
   的 create/update（本地 JSON 与背景图一次调用）、JSON 内裸 HTTPS 背景、备团目录围栏、
   同 toolCall 幂等回放与同 ID 不同输入冲突、重载后场景持久化。update 的 readRef 带 Scene
   导入内容指纹，读取后墙灯等内容发生并发变化时以 `READ_REF_STALE` 拒绝导入，不覆盖新修改；
@@ -369,7 +369,7 @@ QA-B 保持原来的 exited 状态，primary 未操作；加密模型配置和�
 
 ## 多格式场景导入与 skill 验收（2026-11-23）
 
-- `foundry_scene_import` 仍是唯一模型工具，按扩展名支持 Foundry JSON、Universal VTT
+- `map_scene_import` 仍是唯一模型工具，按扩展名支持 Foundry JSON、Universal VTT
   （`.dd2vtt/.uvtt/.df2vtt`）和纯图片；不新增传送门工具。JSON 可另传背景，UVTT 使用内嵌图与网格，
   纯图片按真实解码尺寸写入背景、offset=0、scale=1，换图清理旧旋转元数据。图片 create 可选名称与
   网格，update 保留未显式给出的网格字段，不从图片猜网格。

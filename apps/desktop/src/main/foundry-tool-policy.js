@@ -3,8 +3,8 @@
 // 档位维度（A2 起）：档案词汇与页面档位同一份事实源（page-profiles.js 的
 // PAGE_PROFILES），机制语义是「页面档位决定策略面」——foundry 档（开放默认档）
 // 行为必须与引入档位维度之前逐字节一致；mtcompat 档的策略面独立成表，A3 在其上
-// 放 pageEval（foundry_page_eval），方案 B 再放 navigateToLobby（仅由
-// foundry_lobby_return 使用），两者都只进 mtcompat 备团档。归一规则：词汇表外的 id
+// 放 pageEval（map_page_eval），方案 B 再放 navigateToLobby（仅由
+// map_lobby_return 使用），两者都只进 mtcompat 备团档。归一规则：词汇表外的 id
 // （含 undefined/null）落开放默认档。
 import { PAGE_PROFILES } from "./page-profiles.js";
 
@@ -20,39 +20,33 @@ export const TOOL_NAMES_BY_MODE = Object.freeze({
 
 /**
  * mtcompat 档工具面：独立成表（不是 foundry 表的别名）。与 foundry 面的分叉是
- * 备团的 foundry_page_eval、foundry_scene_import（整场景 JSON 走页面原生 sceneImport，
- * 桌面只传备团目录内路径，字节不进模型）、9 个 lobby typed tools 与 2 个 Map API tools；备团是「typed action
+ * 备团的 map_page_eval、map_scene_import（整场景 JSON 走页面原生 sceneImport，
+ * 桌面只传备团目录内路径，字节不进模型）、3 个 lobby 专用工具与 2 个 Map API tools；备团是「typed action
  * 铺不满、eval 兜底」的主战场（PRD §2.5 规则 1），战斗模式保持纯 typed 面（与 foundry 档
  * 战斗档不给 eval 同理：任意代码执行在战斗中段的爆炸半径不可控，需要兜底时先出
  * 战斗再补）。
  *
- * mt-compat 大厅的 9 个 typed tool（仅 mtcompat 备团），含 play → lobby 的
- * foundry_lobby_return。实现静态注册在 lobby-tools.js；声明按真实页面档位动态切换，
- * 见 AgentHost.refreshToolLoadout。这组名字不进入 combat，也不进入普通 Foundry 档。
+ * mt-compat 大厅的 3 个专用 tool（仅 mtcompat 备团），含 play → lobby 的
+ * map_lobby_return。实现静态注册在 lobby-tools.js；声明按真实页面档位动态切换，
+ * 见 AgentHost.refreshToolLoadout。这组名字与 Map API tools 不进入 combat，也不进入普通 Foundry 档。
  */
 export const LOBBY_TOOL_NAMES = Object.freeze([
-  "foundry_lobby_rulesets_list",
-  "foundry_lobby_import_start",
-  "foundry_lobby_import_job",
-  "foundry_lobby_campaigns_list",
-  "foundry_lobby_campaign_packs_get",
-  "foundry_lobby_campaign_packs_update",
-  "foundry_lobby_packs_read",
-  "foundry_lobby_packs_delete",
-  "foundry_lobby_return",
+  "map_lobby_import_start",
+  "map_lobby_import_job",
+  "map_lobby_return",
 ]);
 
 export const MAP_API_TOOL_NAMES = Object.freeze([
-  "foundry_api_search",
-  "foundry_api_call",
+  "map_api_search",
+  "map_api_call",
 ]);
 
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
   combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
     "foundry_execute_action", "foundry_conditions_set"]),
-  prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "foundry_page_eval", "world_status",
+  prep: Object.freeze(["foundry_open", "foundry_screenshot", "browser_evaluate", "map_page_eval", "world_status",
     "foundry_play_context", "foundry_conditions_set", "foundry_content_search", "foundry_compendium_browse", "foundry_advancement_plan", "foundry_actor_get", "foundry_actor_create",
-    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "foundry_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
+    "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "map_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
     ...LOBBY_TOOL_NAMES,
     ...MAP_API_TOOL_NAMES,
     "web_search", "web_fetch"]),
@@ -90,7 +84,7 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
  * ——四者都不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里，只进本表，foundry 档
  * client 的白名单与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK
  * 既有路径。navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅
- * foundry_lobby_return 调用；sceneImport 只由 foundry_scene_import 调用。
+ * map_lobby_return 调用；sceneImport 只由 map_scene_import 调用。
  */
 export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby", "apiOperationSearch", "apiCall"]);
 

@@ -57,7 +57,7 @@ const REQUIRED_MARKERS = new Map([
     "arcane-dnd5e-2014-automation",
     "arcane-assets",
     "foundry_module_prepare",
-    "foundry_api_search({ prefix: \"game.actors\" })",
+    "map_api_search({ prefix: \"game.actors\" })",
     "prototypeToken.texture.src",
     "ring.subject.texture",
     "保持 `img`、原型和存量 Token 图像不变",
@@ -66,15 +66,15 @@ const REQUIRED_MARKERS = new Map([
     "原始 `.svg` 不传给 `foundry_image`",
   ]],
   ["skills/prep/arcane-item-update/SKILL.md", [
-    "foundry_api_search({ prefix: \"game.items\" })",
+    "map_api_search({ prefix: \"game.items\" })",
     "touched/missing",
   ]],
   ["skills/prep/arcane-journal-update/SKILL.md", [
     "JournalEntryPage",
     "`text.content` 是 HTML 字符串",
     "<h2>教堂调查</h2>",
-    "foundry_api_search({ prefix: \"game.journal\" })",
-    "foundry_page_eval",
+    "map_api_search({ prefix: \"game.journal\" })",
+    "map_page_eval",
     "browser_evaluate",
     "多页必须循环单页创建",
     "ownership: { default: 2 }",
@@ -93,11 +93,11 @@ const REQUIRED_MARKERS = new Map([
   ]],
   ["skills/prep/arcane-world-create/SKILL.md", [
     "lobbyCampaignCreate",
-    "foundry_lobby_rulesets_list",
-    "foundry_api_search",
-    "foundry_api_call",
+    "lobbyRulesetsList",
+    "map_api_search",
+    "map_api_call",
     "kind: \"action\"",
-    "不走 `foundry_api_call`",
+    "不走 `map_api_call`",
   ]],
   ["skills/prep/arcane-module-to-fvtt/SKILL.md", [
     "arcane-assets",
@@ -145,7 +145,7 @@ function toolExample(source, toolName) {
 test("journal examples execute native writes with HTML on both runtimes", async () => {
   const source = readFileSync(path.join(appRoot, "skills/prep/arcane-journal-update/SKILL.md"), "utf8");
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  for (const toolName of ["foundry_page_eval", "browser_evaluate"]) {
+  for (const toolName of ["map_page_eval", "browser_evaluate"]) {
     const writes = [];
     const context = vm.createContext({
       CONFIG: { JournalEntry: { documentClass: { create: async data => ({
@@ -161,7 +161,7 @@ test("journal examples execute native writes with HTML on both runtimes", async 
         },
       }) } } },
     });
-    context.foundry_page_eval = ({ code }) => new AsyncFunction("CONFIG", code)(context.CONFIG);
+    context.map_page_eval = ({ code }) => new AsyncFunction("CONFIG", code)(context.CONFIG);
     context.browser_evaluate = ({ code }) => vm.runInContext(code, context);
     const result = await vm.runInContext(toolExample(source, toolName), context);
     assert.equal(writes.length, 1, toolName);

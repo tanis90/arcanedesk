@@ -3,8 +3,8 @@
 //   界面层:foundry_open;browser_evaluate 仅备团
 //   运维视觉层:foundry_screenshot(仅备团/运维模式,返回当前 Foundry viewport)
 //   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
-//   兜底 eval:foundry_page_eval(A3,仅 mtcompat 档备团;pageEval 回执带 touched/missing 注记)
-//   大厅层:foundry_lobby_*(仅 mtcompat 档备团;实现静态注册,声明随真实页面档位动态激活)
+//   兜底 eval:map_page_eval(A3,仅 mtcompat 档备团;pageEval 回执带 touched/missing 注记)
+//   大厅层:map_lobby_*/map_api_*(仅 mtcompat 档备团;声明随真实页面档位动态激活,旧名仅作不激活兼容别名)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
@@ -1520,7 +1520,7 @@ export class AgentHost {
     // foundry 档不注册、不激活。审批与 browser_evaluate 同级——任意代码执行，不降档；
     // 通道与 typed action 同链（mtcompat client 的 pageEval，GM 门沿用宿主 requireGM）。
     const foundryPageEval = defineTool({
-      name: "foundry_page_eval",
+      name: "map_page_eval",
       label: "Page Eval (mt-compat)",
       description:
         "Run JavaScript in the controlled mt-compat page as an async function body (top-level await works) and return its JSON value. " +
@@ -1545,7 +1545,7 @@ export class AgentHost {
       ],
       execute: async (_toolCallId, params, signal) => {
         const approved = await host.maybeRequestApproval({
-          tool: "foundry_page_eval",
+          tool: "map_page_eval",
           summary: params.code?.slice(0, 200),
           args: params,
         });
@@ -1688,7 +1688,8 @@ export class AgentHost {
     }) : null;
 
     // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
-    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createMapApiTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
+    const legacyPageEval = { ...foundryPageEval, name: "foundry_page_eval" };
+    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, legacyPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createMapApiTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
       ...(webSearch ? [webSearch] : []),
       ...(webFetch ? [webFetch] : [])];
   }

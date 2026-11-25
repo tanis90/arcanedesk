@@ -4,9 +4,9 @@
 //        [--campaign-prefix=<name>] [--wait-auth-ms=120000] [--insecure-tls] [--keep]
 //
 // Fixture mode (default; no cloud, backend, or login required) serves the mt-compat
-// lobby contract from an in-process page and calls the real createLobbyTools
-// implementations. It asserts the native File was bound by CDP, the model never saw
-// preparationId/server paths, and Page.fileChooserOpened stayed zero.
+// lobby contract from an in-process page and calls the real createLobbyTools and
+// createMapApiTools implementations. It asserts native CDP File binding, generic
+// campaign create/read and pack-delete preview, and zero Page.fileChooserOpened.
 //
 // Real mode (--url=<lobby url>) loads the deployed mt-compat lobby page in a real
 // BrowserWindow and drives the same tools against the real ArcaneVTT backend:
@@ -20,13 +20,13 @@
 //     stack; it never touches production configuration.
 //
 // Real + --mutate runs the full mutation contract against isolated objects only:
-//   - a REST campaign (ruleset 2024) for campaigns_list / campaign packs;
+//   - map_api_call creates, reads and deletes an isolated campaign (ruleset 2024);
 //   - a collection (module) package imported through the native File channel;
 //   - a world package imported through the same channel, which creates its own
 //     campaign with ruleset=2024.
-// Then: packs read/entries, campaign_packs_get/update with expectedRevision, stale +
+// Then: packs read/entries, lobbyCampaignPacksGet/Update with expectedRevision, stale +
 // approval-denial zero-write checks, pack delete preview/delete, play-page rejection,
-// and foundry_lobby_return play->lobby through the production DirectFoundryRuntime.
+// and map_lobby_return play->lobby through the production DirectFoundryRuntime.
 // Every campaign/pack this run creates is deleted again; pre-existing packs and
 // campaigns are never deleted.
 import { app, BrowserWindow } from "electron";
@@ -213,7 +213,55 @@ const PAGE_HTML = `<!doctype html>
       state.packs = state.packs.filter(pack => !packIds.includes(pack.packId));
       state.packRevision += 1;
       return { deleted: packIds, revision: state.packRevision };
+    },
+    async lobbyRulesetsList() {
+      return { rulesets: [
+        { id: "2024", label: "D&D 2024", system: "dnd5e" },
+        { id: "coc7", label: "Call of Cthulhu", system: "brp", supportLevel: "experimental" },
+      ] };
+    },
+    async lobbyCampaignCreate({ name, ruleset }) {
+      const campaign = { id: "campaign-generic", name, ruleset, owner: "dm", imageUrl: null };
+      state.createdCampaign = campaign;
+      return { campaign, playUrl: "https://example.test/play.html?campaign=campaign-generic", warnings: [] };
+    },
+    async lobbyCampaignRead({ campaignId }) {
+      if (state.createdCampaign?.id === campaignId) {
+        return { campaign: state.createdCampaign, playUrl: "https://example.test/play.html?campaign=campaign-generic" };
+      }
+      throw Object.assign(new Error("campaign not found"), { code: "CAMPAIGN_NOT_FOUND" });
     }
+  };
+  const service = window.__MT_LOBBY_SERVICE__;
+  const action = (id, effect, inputSchema, example, extra = {}) => ({
+    id, kind: "action", effect, summary: id, access: effect === "read" ? "authenticated" : "owner",
+    inputSchema, example, idempotent: effect === "read", ...extra
+  });
+  const operations = [
+    action("lobbyRulesetsList", "read", { type: "object", properties: {} }, {}),
+    action("lobbyCampaignsList", "read", { type: "object", properties: {} }, {}),
+    action("lobbyCampaignCreate", "write", { type: "object", properties: { name: { type: "string" }, ruleset: { type: "string" } }, required: ["name", "ruleset"] }, { name: "Generic Campaign", ruleset: "2024" }, { idempotent: false }),
+    action("lobbyCampaignRead", "read", { type: "object", properties: { campaignId: { type: "string" } }, required: ["campaignId"] }, { campaignId: "campaign-generic" }),
+    action("lobbyPacksList", "read", { type: "object", properties: {} }, {}),
+    action("lobbyPackRead", "read", { type: "object", properties: { packId: { type: "string" }, limit: { type: "integer" } }, required: ["packId"] }, { packId: "pack-a", limit: 3 }),
+    action("lobbyCampaignPacksGet", "read", { type: "object", properties: { campaignId: { type: "string" } }, required: ["campaignId"] }, { campaignId: "campaign-e2e" }),
+    action("lobbyCampaignPacksUpdate", "write", { type: "object", properties: { campaignId: { type: "string" }, expectedRevision: {}, add: { type: "array" } }, required: ["campaignId", "expectedRevision"] }, { campaignId: "campaign-e2e", expectedRevision: 2, add: ["pack-b"] }, { idempotent: false }),
+    action("lobbyPacksDelete", "write", { type: "object", properties: { packIds: { type: "array" }, expectedRevision: {} }, required: ["packIds", "expectedRevision"] }, { packIds: ["pack-b"], expectedRevision: 5 }, { idempotent: false, requiresPreview: true })
+  ];
+  service.apiOperationSearch = async ({ prefix = "", kind, limit = 10 } = {}) => ({
+    revision: 2,
+    page: "lobby",
+    operations: operations.filter(operation => (!prefix || operation.id.startsWith(prefix)) && (!kind || operation.kind === kind)).slice(0, limit)
+  });
+  service.apiCall = async ({ id, args, preview = false }) => {
+    const operation = operations.find(candidate => candidate.id === id);
+    if (!operation) throw Object.assign(new Error("unknown operation"), { code: "ACTION_UNKNOWN" });
+    if (preview) {
+      if (!operation.requiresPreview) return { status: "preview", operationId: id, value: null };
+      return { status: "preview", operationId: id, value: await service.lobbyPacksDeletePreview(args) };
+    }
+    if (typeof service[id] !== "function") throw Object.assign(new Error("missing operation implementation"), { code: "CAPABILITY_UNAVAILABLE" });
+    return { status: "completed", operationId: id, value: await service[id](args) };
   };
 })();
 </script>
@@ -351,17 +399,22 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       && rulesets.details.rulesets.some(ruleset => ruleset.id === "2024");
     report.real.deploymentRulesets = (rulesets.details?.rulesets ?? []).map(ruleset => ruleset.id);
 
-    const created = await rest("POST", "/api/campaigns", { name: state.campaignName, ruleset: "2024" });
-    state.campaignId = created.json?.id ?? created.json?._id ?? null;
-    checks.isolatedCampaignCreated = created.status >= 200 && created.status < 300
-      && typeof state.campaignId === "string" && created.json?.ruleset === "2024";
+    const created = await invoke("map_api_call", {
+      id: "lobbyCampaignCreate", args: { name: state.campaignName, ruleset: "2024" },
+    });
+    state.campaignId = created.details?.value?.campaign?.id ?? created.details?.campaignId ?? null;
+    checks.isolatedCampaignCreated = created.details?.status === "completed"
+      && typeof state.campaignId === "string" && created.details.value.campaign.ruleset === "2024";
     if (!checks.isolatedCampaignCreated) {
-      throw new Error(`isolated campaign create failed: HTTP ${created.status} ${String(created.text).slice(0, 200)}`);
+      throw new Error(`isolated campaign create failed: ${JSON.stringify(created.details ?? created.content?.[0]?.text).slice(0, 300)}`);
     }
     report.real.campaignId = state.campaignId;
+    const readBack = await invoke("map_api_call", { id: "lobbyCampaignRead", args: { campaignId: state.campaignId } });
+    checks.isolatedCampaignReadBack = readBack.details?.value?.campaign?.name === state.campaignName
+      && readBack.details.value.campaign.ruleset === "2024";
 
-    const campaigns = await invoke("foundry_lobby_campaigns_list", {});
-    const listed = (campaigns.details?.campaigns ?? []).find(campaign => campaign.id === state.campaignId);
+    const campaigns = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+    const listed = (campaigns.details?.value?.campaigns ?? []).find(campaign => campaign.id === state.campaignId);
     checks.campaignsListReturnsIsolated = Boolean(listed)
       && listed.name === state.campaignName
       && listed.ruleset === "2024";
@@ -386,7 +439,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     const localSha256 = createHash("sha256").update(readFileSync(zipPath)).digest("hex");
     report.real.source = { filename: path.basename(zipPath), size: statSync(zipPath).size, sha256: localSha256 };
 
-    const start = await invoke("foundry_lobby_import_start", { sourcePath: zipPath, expectedKind: "collection" });
+    const start = await invoke("map_lobby_import_start", { sourcePath: zipPath, expectedKind: "collection" });
     checks.importStarted = typeof start.details?.jobId === "string" && start.details.jobId.length > 0;
     if (!checks.importStarted) {
       throw new Error(`import_start failed: ${JSON.stringify(start.details ?? start.content?.[0]?.text).slice(0, 300)}`);
@@ -402,7 +455,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
 
     let job = null;
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      job = await invoke("foundry_lobby_import_job", { jobId: start.details.jobId, action: "status", waitMs: 25_000 });
+      job = await invoke("map_lobby_import_job", { jobId: start.details.jobId, action: "status", waitMs: 25_000 });
       if (job.details?.terminal) break;
     }
     checks.importJobTerminal = job.details?.terminal === true;
@@ -489,7 +542,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       size: statSync(worldPath).size,
       sha256: createHash("sha256").update(worldFixture).digest("hex"),
     };
-    const worldStart = await invoke("foundry_lobby_import_start", {
+    const worldStart = await invoke("map_lobby_import_start", {
       sourcePath: worldPath,
       expectedKind: "world",
       campaignName: worldName,
@@ -498,7 +551,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     checks.worldImportStarted = typeof worldStart.details?.jobId === "string";
     let worldJob = null;
     for (let attempt = 0; attempt < 8 && checks.worldImportStarted; attempt += 1) {
-      worldJob = await invoke("foundry_lobby_import_job", { jobId: worldStart.details.jobId, action: "status", waitMs: 25_000 });
+      worldJob = await invoke("map_lobby_import_job", { jobId: worldStart.details.jobId, action: "status", waitMs: 25_000 });
       if (worldJob.details?.terminal) break;
     }
     checks.worldImportSucceeded = worldJob?.details?.status === "succeeded";
@@ -525,7 +578,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       warnings: worldReport?.warnings ?? null,
     };
 
-    const already = await invoke("foundry_lobby_return", {});
+    const already = await invoke("map_lobby_return", {});
     checks.lobbyReturnAlreadyInLobby = already.details?.status === "completed" && already.details?.alreadyInLobby === true;
 
     const playUrl = new URL("play.html", pageUrl);
@@ -575,7 +628,7 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       log: (level, message) => report.steps.push({ name: "runtime-log", level, message: String(message).slice(0, 300) }),
     });
     setRuntime(runtime);
-    const returned = await invoke("foundry_lobby_return", {});
+    const returned = await invoke("map_lobby_return", {});
     report.real.realReturn = returned.details;
     checks.lobbyReturnRealCompleted = returned.details?.status === "completed" && returned.details?.alreadyInLobby !== true;
     checks.lobbyReturnFromCampaign = returned.details?.from?.campaignId === state.campaignId;
@@ -624,11 +677,15 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     checks.noFileChooserOpened = report.fileChooserOpened === 0;
     report.real.afterDelete = { revision: postDelete.details?.revision, packCount: postDelete.details?.packCount };
 
-    const campaignDelete = await rest("DELETE", `/api/campaigns/${state.campaignId}`);
-    state.campaignDeleted = campaignDelete.status === 200 || campaignDelete.status === 204 || campaignDelete.status === 404;
+    const campaignDelete = await invoke("map_api_call", {
+      id: "lobbyCampaignDelete", args: { campaignId: state.campaignId, expectedName: state.campaignName },
+    });
+    state.campaignDeleted = campaignDelete.details?.value?.deleted === true;
     checks.isolatedCampaignDeleted = state.campaignDeleted;
-    const campaignsAfter = await invoke("foundry_lobby_campaigns_list", {});
-    checks.isolatedCampaignAbsentAfterDelete = !(campaignsAfter.details?.campaigns ?? []).some(campaign => campaign.id === state.campaignId);
+    checks.isolatedCampaignDeletePreview = report.approvals.some(approval => approval.tool === "map_api_call"
+      && approval.args?.operationId === "lobbyCampaignDelete" && approval.args.preview?.expectedNameMatches === true);
+    const campaignsAfter = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+    checks.isolatedCampaignAbsentAfterDelete = !(campaignsAfter.details?.value?.campaigns ?? []).some(campaign => campaign.id === state.campaignId);
 
     if (state.worldCampaignId) {
       const worldDelete = await rest("DELETE", `/api/campaigns/${state.worldCampaignId}`);
@@ -836,7 +893,8 @@ async function main() {
       return !deny;
     },
   };
-  const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
+  const { createMapApiTools } = await import("../../src/main/map-api-tools.js");
+  const tools = new Map([...createLobbyTools(host), ...createMapApiTools(host)].map(tool => [tool.name, tool]));
   const invoke = async (name, params) => {
     const result = await tools.get(name).execute(`e2e-${name}`, params);
     step(name, { text: result.content?.[0]?.text, details: result.details, isError: result.isError ?? false });
@@ -845,13 +903,17 @@ async function main() {
   const rest = (method, apiPath, body) => restJson(origin, login.token, method, apiPath, body);
 
   try {
-    const rulesets = await invoke("foundry_lobby_rulesets_list", {});
-    report.checks.rulesetsListed = rulesets.details?.rulesets?.some(ruleset => ruleset.id === "coc7" && ruleset.supportLevel === "experimental") === true;
-    const campaigns = await invoke("foundry_lobby_campaigns_list", {});
-    const library = await invoke("foundry_lobby_packs_read", {});
+    const catalog = await invoke("map_api_search", { prefix: "lobby", limit: 20 });
+    report.checks.mapApiCatalogIsMapOnly = catalog.details?.operations?.some(operation => operation.id === "lobbyCampaignCreate")
+      && catalog.details.operations.every(operation => operation.kind === "action")
+      && !JSON.stringify(catalog.details).includes("map_api_call");
+    const rulesets = await invoke("map_api_call", { id: "lobbyRulesetsList", args: {} });
+    report.checks.rulesetsListed = rulesets.details?.value?.rulesets?.some(ruleset => ruleset.id === "coc7" && ruleset.supportLevel === "experimental") === true;
+    const campaigns = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+    const library = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
     if (realUrl) {
-      report.checks.campaignsListed = Array.isArray(campaigns.details?.campaigns);
-      report.checks.packLibraryRead = typeof library.details?.revision === "string" && !library.isError;
+      report.checks.campaignsListed = Array.isArray(campaigns.details?.value?.campaigns);
+      report.checks.packLibraryRead = typeof library.details?.value?.revision === "string" && !library.isError;
       if (realMutate) {
         report.checks.realMutateEnabled = true;
         await runRealContract({
@@ -865,10 +927,18 @@ async function main() {
         });
       }
     } else {
-      report.checks.campaignsListed = campaigns.details?.campaigns?.[0]?.id === "campaign-e2e";
-      report.checks.packLibraryRead = library.details?.revision === 5;
-      const read = await invoke("foundry_lobby_packs_read", { packId: "pack-a", limit: 3 });
-      report.checks.packEntriesRead = read.details?.entries?.length === 3;
+      report.checks.campaignsListed = campaigns.details?.value?.campaigns?.[0]?.id === "campaign-e2e";
+      report.checks.packLibraryRead = library.details?.value?.revision === 5;
+      const created = await invoke("map_api_call", { id: "lobbyCampaignCreate", args: { name: "Generic Campaign", ruleset: "2024" } });
+      report.checks.mapApiCampaignCreated = created.details?.value?.campaign?.id === "campaign-generic"
+        && report.approvals.some(approval => approval.tool === "map_api_call" && approval.args?.operationId === "lobbyCampaignCreate");
+      const readBack = await invoke("map_api_call", { id: "lobbyCampaignRead", args: { campaignId: "campaign-generic" } });
+      report.checks.mapApiCampaignReadBack = readBack.details?.value?.campaign?.name === "Generic Campaign"
+        && readBack.details.value.campaign.ruleset === "2024";
+      const read = await invoke("map_api_call", { id: "lobbyPackRead", args: { packId: "pack-a", limit: 3 } });
+      report.checks.packEntriesRead = read.details?.value?.entries?.length === 3;
+      const legacy = await invoke("foundry_lobby_campaigns_list", {});
+      report.checks.legacyAliasesRemainCallable = Array.isArray(legacy.details?.campaigns);
     }
 
     if (realUrl && !realMutate) {
@@ -877,9 +947,9 @@ async function main() {
     }
 
     if (!realUrl && realMutate) {
-      const start = await invoke("foundry_lobby_import_start", { sourcePath: sourceFile, expectedKind: "world", ruleset: "2024" });
+      const start = await invoke("map_lobby_import_start", { sourcePath: sourceFile, expectedKind: "world", ruleset: "2024" });
       report.checks.importStarted = Boolean(start.details?.jobId);
-      const job = await invoke("foundry_lobby_import_job", { jobId: start.details.jobId, action: "status", waitMs: 3_000 });
+      const job = await invoke("map_lobby_import_job", { jobId: start.details.jobId, action: "status", waitMs: 3_000 });
       report.checks.importCompleted = job.details?.status === "succeeded";
       const pageState = await contents.executeJavaScript("window.__E2E__");
       report.fileEvidence = pageState.file;
@@ -887,29 +957,31 @@ async function main() {
       report.checks.nativeFilePathHidden = pageState.file?.path === undefined || pageState.file?.path === null;
       report.checks.nativeFileReadable = pageState.inspectCalls === 1;
 
-      const packs = await invoke("foundry_lobby_campaign_packs_get", { campaignId: "campaign-e2e" });
-      report.checks.campaignPacksRead = packs.details?.revision === 2;
-      const update = await invoke("foundry_lobby_campaign_packs_update", {
-        campaignId: "campaign-e2e", expectedRevision: packs.details.revision, add: ["pack-b"],
+      const packs = await invoke("map_api_call", { id: "lobbyCampaignPacksGet", args: { campaignId: "campaign-e2e" } });
+      report.checks.campaignPacksRead = packs.details?.value?.revision === 2;
+      const update = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
+        campaignId: "campaign-e2e", expectedRevision: packs.details.value.revision, add: ["pack-b"],
         enabledSourcesPatch: { srd2014: true },
-      });
-      report.checks.campaignPacksUpdated = update.details?.current?.revision === 3;
+      } });
+      report.checks.campaignPacksUpdated = update.details?.value?.revision === 3;
 
-      const deleted = await invoke("foundry_lobby_packs_delete", { packIds: ["pack-b"], expectedRevision: library.details.revision });
-      report.checks.packDeleted = deleted.details?.revision === 6;
+      const deleted = await invoke("map_api_call", { id: "lobbyPacksDelete", args: { packIds: ["pack-b"], expectedRevision: library.details.value.revision } });
+      report.checks.packDeleted = deleted.details?.value?.revision === 6;
 
-      const fence = await invoke("foundry_lobby_import_start", { sourcePath: outsideFile, ruleset: "2024" });
+      const fence = await invoke("map_lobby_import_start", { sourcePath: outsideFile, ruleset: "2024" });
       report.checks.outsideFenceRejected = fence.details?.code === "FILE_OUTSIDE_FENCE";
-      const mirror = await invoke("foundry_lobby_import_start", { sourcePath: mirrorFile, ruleset: "2024" });
+      const mirror = await invoke("map_lobby_import_start", { sourcePath: mirrorFile, ruleset: "2024" });
       report.checks.mirrorCacheAllowed = Boolean(mirror.details?.jobId);
 
       deny = true;
-      const denied = await invoke("foundry_lobby_campaign_packs_update", {
+      const denied = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
         campaignId: "campaign-e2e", expectedRevision: 3, add: ["pack-a"],
-      });
+      } });
       report.checks.approvalDenied = denied.details?.code === "DECLINED";
       const stateAfterDeny = await contents.executeJavaScript("window.__E2E__");
       report.checks.approvalDeniedZeroWrite = stateAfterDeny.updateCalls.length === 1;
+      report.checks.deletePreviewBeforeApproval = stateAfterDeny.deletePreviewCalls.length === 1
+        && stateAfterDeny.deleteCalls.length === 1;
       report.checks.planSanitized = !JSON.stringify(start.details).includes("prep-e2e")
         && !JSON.stringify(start.details).includes("/server/secret");
       report.checks.noFileChooserOpened = report.fileChooserOpened === 0;

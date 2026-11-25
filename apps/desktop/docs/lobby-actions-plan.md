@@ -13,7 +13,7 @@
 2. 上传合集包：写入用户个人库、`userpack-assets` 与导入批次；同 moduleId 重传即替换。
 3. 管理合集库：合集/单包清单、条目只读预览、按合集或单包删除。
 4. 管理战役选包：读取已选引用，增量勾选/取消，维护 SRD 两旗并 bump `packsRev`。
-5. 往返游戏页：Agent 当前在某个战役的 play 页而任务需要大厅时，用 `foundry_lobby_return` 回大厅，完成后再用真实 `returnPlayUrl` 回到原战役。
+5. 往返游戏页：Agent 当前在某个战役的 play 页而任务需要大厅时，用 `map_lobby_return` 回大厅，完成后再用真实 `returnPlayUrl` 回到原战役。
 
 明确不做：
 
@@ -58,14 +58,14 @@
 | D10 | 复用现有镜像流程产生的真实暂存产物，再走同一原生 File 通道 | Desktop 只识别带可信标记、hash 与真实 ZIP 的 `world-stage`/`stage` 目录；不新增下载器或 `sourceUrl` 输入，不开放桶 CORS |
 | D11 | CDP 验收分“大厅 runtime”与“真实 Desktop tool”两层 | 直接调 runtime 会绕过路径围栏、审批、tool policy 和 job 管理，不能冒充端到端 |
 | D12 | Code Mode 只留作未来只读批量聚合选项；WebMCP 只借鉴生命周期 | 官方也建议审批敏感写操作走直接调用；当前不需要新协议或脚本执行面 |
-| D13 | 追加第 9 个工具 `foundry_lobby_return`，不改 `foundry_open` 幂等 | 同源/同 pathname 幂等是 `foundry_open` 的正确语义，为回大厅放宽会让所有导航调用失去重放保护；独立无参 typed action 与 play 原生“返回战役大厅”共用退出实现，失败语义可枚举 |
+| D13 | 追加第 9 个工具 `map_lobby_return`，不改 `foundry_open` 幂等 | 同源/同 pathname 幂等是 `foundry_open` 的正确语义，为回大厅放宽会让所有导航调用失去重放保护；独立无参 typed action 与 play 原生“返回战役大厅”共用退出实现，失败语义可枚举 |
 
 ## 3. 技术设计
 
 ### 3.1 总体链路
 
 ```text
-LLM：9 个大厅 typed tools + 2 个 Map API tools（`foundry_api_search` / `foundry_api_call`；后者只接 Map 轻量同步 JSON action）
+LLM：3 个大厅专用工具 + 2 个 Map API tools（`map_api_search` / `map_api_call`；后者只接 Map 轻量同步 JSON action）。旧 `foundry_lobby_*` 仅保留不激活的兼容别名，不进 activatedTools。
   ↓
 Desktop tool policy + 每次调用的目标守卫
   ↓
@@ -159,28 +159,28 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 - Foundry SDK 的 `/game` preflight。
 - 普通 Foundry 的 runtime 与工具名单。
 
-### 3.5 LLM 工具面（当前 9 个）
+### 3.5 LLM 工具面（3 个大厅专用工具 + 2 个通用 API 工具）
 
-| Tool | 最小入参 | 返回与独立理由 |
-|---|---|---|
-| `foundry_lobby_rulesets_list` | `{}` | 当前部署 `rulesets.mjs` 的 `{id,label,system,supportLevel?}`，世界导入前读取并让用户选择；不由 skill 硬编码规则 |
-| `foundry_lobby_import_start` | 世界：`{sourcePath, expectedKind?, campaignName?, ruleset, failurePolicy?}`；合集包：`{sourcePath, expectedKind:"collection", failurePolicy?}` | 内部绑定、inspect、现有审批链并启动，返回 `{jobId, plan}`；唯一导入写入口。世界（含自动识别）的 `ruleset` 由用户明确选择，缺参或不在当前规则列表都拒绝，不走大厅默认值 |
-| `foundry_lobby_import_job` | `{jobId, action:"status", waitMs?}` 或 `{jobId, action:"cancel"}` | 长任务状态与生命周期；status 默认精简，终态才给完整报告 |
-| `foundry_lobby_campaigns_list` | `{}` | 战役目录 `{id,name,ruleset,owner,playUrl}`，解决按名称发现目标 |
-| `foundry_lobby_campaign_packs_get` | `{campaignId}` | 当前选包、missing、内建组、SRD 和选包 `revision`，是 update 的读取前置 |
-| `foundry_lobby_campaign_packs_update` | `{campaignId, expectedRevision, add?, remove?, enabledSourcesPatch?}` | 唯一选包写入口；增量合并、现有审批链、回读、packsRev |
-| `foundry_lobby_packs_read` | `{}`、`{moduleId?}` 或 `{packId, query?, cursor?, limit?}` | 合集库清单与条目预览两个只读形态；清单给库 `revision`，条目强制分页 |
-| `foundry_lobby_packs_delete` | `{packIds, expectedRevision}` | 唯一合集库删除入口；影响预览、现有审批链、purge 与清理结果 |
-| `foundry_lobby_return` | `{}` | 仅 mtcompat 备团：把当前 play 页送回大厅，回执 `{status,from,to,returnPlayUrl}`（已在大厅为 `alreadyInLobby:true`）；回游戏用 `foundry_open({url:returnPlayUrl})`，不改 `foundry_open` 幂等 |
+| Tool | 职责 |
+|---|---|
+| `map_lobby_return` | 仅 mtcompat 备团：把当前 play 页送回大厅，保留真实 `returnPlayUrl`；回游戏用 `foundry_open({url:returnPlayUrl})` |
+| `map_lobby_import_start` | 绑定真实文件、inspect、审批并启动一个世界或合集 ZIP 导入 job；世界的 `ruleset` 必须由用户明确选择 |
+| `map_lobby_import_job` | 查询或取消已有 job；终态返回完整报告，导航打断后结果 indeterminate，不自动重放 |
+| `map_api_search` | 只搜索 Map 自有操作、schema、示例与 action/workflow/job 类型，不登记 Desk 工具 |
+| `map_api_call` | 按 operation id 调用轻量同步 JSON action；只接受 `args` 对象，不接受 JS、REST 路径或文件 |
+
+规则读取、战役目录/读取/创建/改名/删除、成员列表/请离、合集库和条目读取、战役选包、合集删除都是 Map 注册的轻量 action，不再分别占一个 Desk 工具。调用前用 `map_api_search` 获取真实 schema 和示例。选包用 `expectedRevision` 做陈旧检测；删除操作由 Desk 先取 `preview:true`，展示影响并审批后才执行。合集 ZIP 上传仍走上面的 start/job，不把文件塞进通用 action。
+
+旧的 `foundry_lobby_*` 仅以不激活别名保留历史调用，不进入 `activatedTools` 或 skill 主路径。
 
 明确不提供：
 
-- 独立 inspect/run/status/cancel 四件套。
-- 全量 `campaign_packs_set`、单独“更新合集包”工具或删除时自动 detach。
+- 独立 inspect/run/status/cancel 四件套或逐 action 一个 Desk 工具。
+- 全量 `campaign_packs_set`、删除时自动 detach、通过通用工具导入 workflow/job。
 - `preparationId`、`keepAssetIds`、原始 REST/eval、CDP 或文件绑定工具。
 - 额外登录工具；继续使用 `foundry_open`，需要登录时结束当前轮次让用户直接在面板登录。
 
-审批边界：start、update、delete 统一接 App 现有 `maybeRequestApproval`，是否展示审批卡及缺省放行行为完全沿用当前策略，不新增强制审批级别或权限框架；status/list/get/read 只读；cancel 只能取消已启动的 job，且“已接受取消”不等于“已停止并清理”。
+审批边界：导入 start、通用写 action 统一接 App 现有 `maybeRequestApproval`，是否展示审批卡及缺省放行行为完全沿用当前策略，不新增强制审批级别或权限框架；search/read 只读；cancel 只能取消已启动的 job，且“已接受取消”不等于“已停止并清理”。
 
 输出纪律：轮询只给 phase/progress/currentItem/failureCount；完整 failures/report 仅终态或显式错误返回；清单与条目有界。
 
@@ -197,12 +197,12 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 #### play → lobby → play 往返（方案 B）
 
 ```text
-play → foundry_lobby_return({}) → lobby 动作 → foundry_open({url:returnPlayUrl}) → play
+play → map_lobby_return({}) → lobby 动作 → foundry_open({url:returnPlayUrl}) → play
 ```
 
 - 只在 mtcompat prep 注入；combat 与普通 Foundry 不声明，combat prompt 不改。与 play 原生“返回战役大厅”共用退出实现，清理 live client/socket/订阅一次，保留 Keycloak 会话。
 - `completed` 与预期 `NAVIGATED` 都只进入确认阶段：Desktop 再确认受信 lobby 且 auth/runtime/`__MT_LOBBY_SERVICE__` 就绪后才报成功；Agent 不把导航中断当可重放失败。
-- `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`PROFILE_MISMATCH`（不在 ready play 页或缺 `?campaign=`）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 均不自动重放，也不降级 `foundry_page_eval`。
+- `CAPABILITY_UNAVAILABLE`（旧前端无 action）、`PROFILE_MISMATCH`（不在 ready play 页或缺 `?campaign=`）、`LOGIN_REQUIRED`、`TARGET_CHANGED`、`JOB_INDETERMINATE` 均不自动重放，也不降级 `map_page_eval`。
 - 回程 URL 由 play URL 的 `?campaign=` 决定，不用 `game.world.id` 猜；不串战役。
 - 引导落在现有 skill：世界导入与内容包分别沿用 `arcane-world-import`、`arcane-mt-packs`，不新增独立路由 skill。完整契约见 [foundry-open-lobby-return-plan.md](foundry-open-lobby-return-plan.md)。
 
@@ -284,7 +284,7 @@ job 只活在当前大厅文档：
 ### Stage 2 —— arcanedesk
 
 1. 实现 `MtLobbyClient` 与原生 File 适配器。
-2. 新增 `lobby-tools.js` 的 9 个工具，保持 schema 精确、输出有界、审批 deny 零底层写；`foundry_lobby_return` 走 runtime `navigateToLobby` 与大厅就绪确认，不碰 `foundry_open` 幂等。
+2. 新增 `lobby-tools.js` 的 9 个工具，保持 schema 精确、输出有界、审批 deny 零底层写；`map_lobby_return` 走 runtime `navigateToLobby` 与大厅就绪确认，不碰 `foundry_open` 幂等。
 3. 扩展 `foundry_open` 为 loader：按真实档位刷新所有相关 host 的 active tools，返回 activatedTools。
 4. 执行层独立目标守卫、资源租约、navigationEpoch 和 indeterminate 对账。
 5. runtime 按真实来源同步 parity，不跨版本盲拷。
@@ -314,7 +314,7 @@ job 只活在当前大厅文档：
 
 - 入口仍是 `apps/desktop/test/e2e-lobby-actions.mjs`（真实 Electron + 真实 `createLobbyTools` + `MtLobbyClient`），fixture 模式 19 项全过（新增报告泄密扫描 `noSecretsInReport`）。
 - 新增真实栈合同：`node test/e2e-lobby-actions.mjs --url=https://mtlocal.internal:30002/user-files/compat-fix-agent-runtime-integration/lobby.html --mutate --insecure-tls --compat-root=<compat 工作树>`，**56/56** 项通过。身份只从 `MT_ACCEPT_USER` / `MT_ACCEPT_PASSWORD` 环境变量读取，token 仅注入 `sessionStorage["mt.session"]` 并 reload；结束时清 session 并调用 Keycloak logout（204），报告经脱敏（无密码/token）。缺凭据时在开窗之前以 `needs-credentials` 退出。
-- 覆盖：真实 rulesets（2014/2024/coc7）；REST 隔离战役（ruleset=2024）→ `campaigns_list` 命中；`packs_read` 基线；compat `moduleZip()` 夹具经 `DOM.setFileInputFiles` 原生 File 通道 `import_start` → `import_job` 终态 succeeded；`packs_read`/条目分页；`campaign_packs_get` → 带 `expectedRevision` 的 `campaign_packs_update`（`add` 真实导入 pack + `enabledSourcesPatch.srd2024`）读回对账；stale revision 与审批拒绝均零写入；`packs_delete` preview/delete 后库 revision 回到基线、既有 30 pack 未动。真实 `worldZip()` 同样走原生 File 通道导入，建出 ruleset=2024 的战役并写入 1 条文档，`campaigns_list` 与 `campaign_packs_get` 对账；play 页 `PROFILE_MISMATCH` 拒绝保留；真实 play（`game.ready`）→ `foundry_lobby_return` 经生产 `DirectFoundryRuntime` 调页内 `navigateToLobby` 回大厅并 ready。清理只删本次创建的 pack 与两个战役。
+- 覆盖：真实 rulesets（2014/2024/coc7）；REST 隔离战役（ruleset=2024）→ `campaigns_list` 命中；`packs_read` 基线；compat `moduleZip()` 夹具经 `DOM.setFileInputFiles` 原生 File 通道 `import_start` → `import_job` 终态 succeeded；`packs_read`/条目分页；`campaign_packs_get` → 带 `expectedRevision` 的 `campaign_packs_update`（`add` 真实导入 pack + `enabledSourcesPatch.srd2024`）读回对账；stale revision 与审批拒绝均零写入；`packs_delete` preview/delete 后库 revision 回到基线、既有 30 pack 未动。真实 `worldZip()` 同样走原生 File 通道导入，建出 ruleset=2024 的战役并写入 1 条文档，`campaigns_list` 与 `campaign_packs_get` 对账；play 页 `PROFILE_MISMATCH` 拒绝保留；真实 play（`game.ready`）→ `map_lobby_return` 经生产 `DirectFoundryRuntime` 调页内 `navigateToLobby` 回大厅并 ready。清理只删本次创建的 pack 与两个战役。
 - `test/lobby-e2e-harness.test.mjs` 静态守门：凭据不进 argv、报告泄密扫描、TLS 绕过与 origin 覆盖仅限 harness（生产 `MT_COMPAT_TRUSTED_ORIGINS` 未加本地测试域）、真实合同检查项与清理边界在位。
 - 全量 `node --test test/*.test.mjs`：995 通过 / 11 失败，11 项全部是 `spawn python ENOENT`（本机只有 `python3`，无 `python`），分布在 `archive`/`fvtt-local-module`/`fvtt-mod-manager`/`subprocess-env`，与大厅改动无关且未修改。
 
@@ -349,8 +349,8 @@ job 只活在当前大厅文档：
 
 至少覆盖：
 
-1. 新会话未知目标时不声明 9 个 lobby 工具。
-2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确 9 个工具，无需额外用户轮次。
+1. 新会话未知目标时不声明 3 个 lobby 专用工具和 2 个 Map API 工具。
+2. 同一会话首次 `foundry_open(mtcompat)` 后，下一次模型请求已激活准确的 5 个工具，无需额外用户轮次。
 3. 首次打开普通 FVTT 不激活；mtcompat→FVTT 后旧调用被移除且执行层仍 fail-closed。
 4. lobby→play→lobby 不改变 active set，不反复重载或清空 job。
 5. 恢复带历史工具声明的会话时按当前真实档位对账。
@@ -368,18 +368,18 @@ job 只活在当前大厅文档：
 
 ### 5.6 play → lobby → play 往返（方案 B）
 
-- prep play → `foundry_lobby_return({})`，回执 `from`/`to`/`returnPlayUrl` 正确，campaign 来自 play URL 的 `?campaign=`。
-- 返回大厅后第一次 `foundry_lobby_campaigns_list` 立即成功（auth/runtime/`__MT_LOBBY_SERVICE__` 就绪确认生效）。
+- prep play → `map_lobby_return({})`，回执 `from`/`to`/`returnPlayUrl` 正确，campaign 来自 play URL 的 `?campaign=`。
+- 返回大厅后第一次 `map_api_call({ id: "lobbyCampaignsList", args: {} })` 立即成功（auth/runtime/`__MT_LOBBY_SERVICE__` 就绪确认生效）。
 - 用 `returnPlayUrl` 回到原战役，runtime 恢复，不串世界。
 - `completed` 与预期 `NAVIGATED` 都经确认阶段才报成功；错误目的地、超时、runtime 缺席不报假成功。
 - 已在大厅时 `alreadyInLobby:true` 幂等；重复调用不重复清理。
-- combat 工具列表无 `foundry_lobby_return`；连续三次往返无重复 socket/监听，认证不丢，GM 重进无锁。
+- combat 工具列表无 `map_lobby_return`；连续三次往返无重复 socket/监听，认证不丢，GM 重进无锁。
 
 ## 6. 发布与回滚
 
-1. 本期交付范围是两个仓库的 `feat/mtcompat-lobby-actions` 分支；不自动创建 PR、合并、部署生产或发布 skills 到 OSS。
+1. Map 从 `feat/runtime-api-operations` 提 PR 到 dev；Desk 从 `feat/mtcompat-map-api-migration` 推送独立分支。生产 main 与 skills OSS latest 不在本轮自动发布范围。
 2. 后续生产发布仍需分别走 compat 与 ArcaneDesk 的评审/发布流程；安装包 smoke 是发布前检查，不能用源码 Electron 验收替代。
-3. skills r46 起（当前 r49）的 `minAppVersion:"0.9.0"` 让旧 App fail-closed；只有包含本功能的 Desktop 发布后才推进 skill bundle。
+3. skills 当前为 r56。包含 `map_api_*` 与新命名的 Desktop 正式发布前不得推进 skill latest；发布时把 `minAppVersion` 对齐到实际包含这些工具的版本，避免旧 App 收到无法执行的引导。
 4. 回滚可分别撤掉 lobby runtime 装配、Desktop 版本或 skills latest 指针；业务数据不做逆向迁移。
 
 ## 7. 残余风险
