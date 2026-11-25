@@ -571,5 +571,5 @@
 
 - 大厅轻量操作统一走 `map_api_search` / `map_api_call`：规则列表、战役读取/创建/改名/删除、成员列表/请离、个人库与条目读取、战役选包和删除。删除类操作通过 `preview:true` 先取影响预览，再审批执行；revision 过期、名称不匹配和 job/workflow 均零写入拒绝。封面上传仍是独立文件 workflow，不在本轮通用化范围。
 - 独立 Map 通道只保留 `map_lobby_return`、`map_lobby_import_start`、`map_lobby_import_job`、`map_scene_import`、`map_page_eval` 与两个通用 API 工具。普通 Foundry 不支持的 `foundry_lobby_*`、`foundry_scene_import`、`foundry_page_eval` 不再作为模型可见的平行工具面。
-- main 上已有的 9 个 `foundry_lobby_*` 和 `foundry_page_eval` 保留不激活的兼容别名，避免历史调用失效；它们不进入 activatedTools，不是新的模型引导入口。`foundry_scene_import` 与 `foundry_api_search/call` 属新增能力，直接改名、无别名。新 skill 只教 `map_api_call` 与上述专用通道。
+- 不保留 `foundry_lobby_*` / `foundry_page_eval` 兼容别名。按实际 release 核对：0.9.0-78def2f7 的 Map 支持只经内部试用；上一个纯 FVTT 版本 0.8.0-dea6b56c 不含这些工具，本次改名不影响该版本用户体验。隐藏别名也不能保证真实 LLM 调用未激活工具，故删除旧专用实现，只保留 `map_api_call` 与上述专用通道。
 - `arcane-mt-packs` 的列表、条目预览、选包和删除全部改为 `map_api_call` 加操作 id；合集 ZIP 仍走 `map_lobby_import_start` / `map_lobby_import_job` 长程任务，不经过通用调用。

@@ -4,7 +4,7 @@
 //   运维视觉层:foundry_screenshot(仅备团/运维模式,返回当前 Foundry viewport)
 //   数据层:world_status + foundry_*(固定页面 runtime,备团／跑团,四态)
 //   兜底 eval:map_page_eval(A3,仅 mtcompat 档备团;pageEval 回执带 touched/missing 注记)
-//   大厅层:map_lobby_*/map_api_*(仅 mtcompat 档备团;声明随真实页面档位动态激活,旧名仅作不激活兼容别名)
+//   大厅层:map_lobby_*/map_api_*(仅 mtcompat 档备团;声明随真实页面档位动态激活)
 // 审批门默认关闭(ARCANE_APPROVALS=1 恢复 R2 审批卡)。
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync, openSync, writeFileSync, fsyncSync, closeSync } from "node:fs";
@@ -1688,8 +1688,7 @@ export class AgentHost {
     }) : null;
 
     // Pool is the union for both modes; per-mode activation is options.tools = activeToolNames(mode).
-    const legacyPageEval = { ...foundryPageEval, name: "foundry_page_eval" };
-    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, legacyPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createMapApiTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
+    return [foundryOpen, foundryScreenshot, browserEvaluate, foundryPageEval, worldStatus, ...createFoundryTools(host), ...createLobbyTools(host), ...createMapApiTools(host), ...createModMirrorTools(host), requestUserInput, openDocument,
       ...(webSearch ? [webSearch] : []),
       ...(webFetch ? [webFetch] : [])];
   }

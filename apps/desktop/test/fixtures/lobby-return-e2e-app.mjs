@@ -288,6 +288,13 @@ const LOBBY_HTML = `<!doctype html>
       record("lobbyCampaignsList");
       return { campaigns: [{ id: "campaign-alpha", name: "Alpha campaign", ruleset: "dnd5e", owner: "gm-e2e", playUrl: "/user-files/compat/play.html?campaign=campaign-alpha" }] };
     },
+    async apiOperationSearch() {
+      return { page: "lobby", operations: [{ id: "lobbyCampaignsList", kind: "action", effect: "read", summary: "列出战役" }] };
+    },
+    async apiCall({ id }) {
+      if (id !== "lobbyCampaignsList") throw Object.assign(new Error("unknown operation"), { code: "ACTION_UNKNOWN" });
+      return { status: "completed", operationId: id, value: await service.lobbyCampaignsList() };
+    },
     async lobbyCampaignPacksGet(input) { record("lobbyCampaignPacksGet"); return { campaignId: input && input.campaignId, revision: 1, selected: [], missing: [], builtIn: [], enabledSources: {} }; },
     async lobbyCampaignPacksUpdate(input) { record("lobbyCampaignPacksUpdate"); return { campaignId: input && input.campaignId, revision: 2, selected: [] }; },
     async lobbyPacksList() { record("lobbyPacksList"); return { revision: 1, packCount: 0, modules: [] }; },
@@ -394,7 +401,7 @@ async function main() {
       bytes: agentRuntime.bytes,
       sha256: agentRuntime.sha256,
       hasNavigateToLobbyAction: agentRuntime.text.includes('action === "navigateToLobby"'),
-      hasProtocolVersion3: /protocolVersion:\s*3/.test(agentRuntime.text),
+      hasProtocolVersion4: /protocolVersion:\s*4/.test(agentRuntime.text),
       hasPageRuntimeHandle: agentRuntime.text.includes("__MT_AGENT_RUNTIME_SOURCE__"),
     },
     playExit: {
@@ -407,7 +414,7 @@ async function main() {
     },
   };
   requireCheck("compatAgentRuntimeIsPlanB", report.compat.agentRuntime.hasNavigateToLobbyAction
-    && report.compat.agentRuntime.hasProtocolVersion3
+    && report.compat.agentRuntime.hasProtocolVersion4
     && report.compat.agentRuntime.hasPageRuntimeHandle, report.compat.agentRuntime);
   requireCheck("compatPlayExitIsPlanB", report.compat.playExit.hasCreatePlayExit
     && report.compat.playExit.hasRegisterTeardown
@@ -568,7 +575,7 @@ async function main() {
     ]);
     log(`baseline worldInfo done runtime=${baseline?.runtime?.name}@${baseline?.runtime?.protocolVersion}`);
     requireCheck("baselineWorldInfoViaRealRuntime", baseline?.runtime?.name === "mt-agent-runtime"
-      && baseline?.runtime?.protocolVersion === 3
+      && baseline?.runtime?.protocolVersion === 4
       && baseline?.world?.id === DECOY_WORLD_ID
       && baseline?.user?.isGM === true
       && baseline?.page?.path === "/user-files/compat/play.html", baseline);
@@ -641,10 +648,11 @@ async function main() {
         if (report.console.length < 40) report.console.push({ level: "host", message: String(message).slice(0, 500) });
       },
     };
-    const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
+    const { createMapApiTools } = await import("../../src/main/map-api-tools.js");
+    const tools = new Map([...createLobbyTools(host), ...createMapApiTools(host)].map(tool => [tool.name, tool]));
     const lobbyReturn = tools.get("map_lobby_return");
-    const campaignsList = tools.get("foundry_lobby_campaigns_list");
-    requireCheck("realToolsRegistered", Boolean(lobbyReturn) && Boolean(campaignsList), { tools: [...tools.keys()] });
+    const mapApiCall = tools.get("map_api_call");
+    requireCheck("realToolsRegistered", Boolean(lobbyReturn) && Boolean(mapApiCall), { tools: [...tools.keys()] });
 
     const invoke = async (name, params) => {
       const tool = tools.get(name);
@@ -724,10 +732,10 @@ async function main() {
         serviceInstalledAt: lobbyState.serviceInstalledAt,
       });
 
-      const campaigns = await invoke("foundry_lobby_campaigns_list", {});
+      const campaigns = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
       requireCheck(`round${round}.immediateCampaignsListSucceeded`, campaigns.isError !== true
-        && Array.isArray(campaigns.details?.campaigns)
-        && campaigns.details.campaigns[0]?.id === CAMPAIGN_ID, campaigns.details);
+        && Array.isArray(campaigns.details?.value?.campaigns)
+        && campaigns.details.value.campaigns[0]?.id === CAMPAIGN_ID, campaigns.details);
 
       const afterList = await evalPage(contents, readLobbyStateExpression(), `round${round}-lobby-after-list`);
       currentRound.evidence.lobbyAfterList = afterList;
@@ -767,7 +775,7 @@ async function main() {
         page: worldInfo?.page,
       };
       requireCheck(`round${round}.realRuntimeWorldInfoAfterReturn`, worldInfo?.runtime?.name === "mt-agent-runtime"
-        && worldInfo?.runtime?.protocolVersion === 3
+        && worldInfo?.runtime?.protocolVersion === 4
         && worldInfo?.world?.id === DECOY_WORLD_ID
         && worldInfo?.user?.isGM === true
         && worldInfo?.page?.path === "/user-files/compat/play.html", currentRound.evidence.worldInfo);

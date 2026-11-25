@@ -65,7 +65,7 @@
 ### 3.1 总体链路
 
 ```text
-LLM：3 个大厅专用工具 + 2 个 Map API tools（`map_api_search` / `map_api_call`；后者只接 Map 轻量同步 JSON action）。旧 `foundry_lobby_*` 仅保留不激活的兼容别名，不进 activatedTools。
+LLM：3 个大厅专用工具 + 2 个 Map API tools（`map_api_search` / `map_api_call`；后者只接 Map 轻量同步 JSON action）。旧 `foundry_lobby_*` / `foundry_page_eval` 不注册、不激活。
   ↓
 Desktop tool policy + 每次调用的目标守卫
   ↓
@@ -171,7 +171,7 @@ MtLobbyClient（独立 preflight、串行队列、navigationEpoch）
 
 规则读取、战役目录/读取/创建/改名/删除、成员列表/请离、合集库和条目读取、战役选包、合集删除都是 Map 注册的轻量 action，不再分别占一个 Desk 工具。调用前用 `map_api_search` 获取真实 schema 和示例。选包用 `expectedRevision` 做陈旧检测；删除操作由 Desk 先取 `preview:true`，展示影响并审批后才执行。合集 ZIP 上传仍走上面的 start/job，不把文件塞进通用 action。
 
-旧的 `foundry_lobby_*` 仅以不激活别名保留历史调用，不进入 `activatedTools` 或 skill 主路径。
+不保留 `foundry_lobby_*` / `foundry_page_eval` 别名。兼容基线按实际发布版本确定：0.8.0-dea6b56c 是纯 FVTT 工具面，不含这些 Map 工具；0.9 的 Map 支持仅内部试用，不为它维护无法被真实 LLM 调用的隐藏别名。
 
 明确不提供：
 

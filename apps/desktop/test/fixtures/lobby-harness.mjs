@@ -93,10 +93,17 @@ export function createLobbyService(state = createLobbyState(), overrides = {}) {
     },
     async apiOperationSearch(params) {
       state.apiSearchCalls = [...(state.apiSearchCalls ?? []), params];
-      return { page: "lobby", operations: [{ id: "lobbyCampaignCreate", kind: "action", effect: "write", summary: "创建空白战役" }] };
+      const operations = [
+        { id: "lobbyCampaignCreate", kind: "action", effect: "write", summary: "创建空白战役" },
+        { id: "lobbyCampaignsList", kind: "action", effect: "read", summary: "列出战役" },
+      ];
+      return { page: "lobby", operations: operations.filter(operation => !params.prefix || operation.id.startsWith(params.prefix)) };
     },
     async apiCall(params) {
       state.apiCallCalls = [...(state.apiCallCalls ?? []), params];
+      if (params.id === "lobbyCampaignsList") {
+        return { status: "completed", operationId: params.id, value: await this.lobbyCampaignsList() };
+      }
       return { status: "completed", operationId: params.id, value: { campaign: { id: "campaign-1" } } };
     },
     async lobbyPacksList({ moduleId } = {}) {

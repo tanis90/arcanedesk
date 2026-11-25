@@ -394,10 +394,10 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     tlsVerification: insecureTls ? "disabled (harness-only, self-signed local stack)" : "system",
   };
   try {
-    const rulesets = await invoke("foundry_lobby_rulesets_list", {});
-    checks.realRulesetsListed = Array.isArray(rulesets.details?.rulesets)
-      && rulesets.details.rulesets.some(ruleset => ruleset.id === "2024");
-    report.real.deploymentRulesets = (rulesets.details?.rulesets ?? []).map(ruleset => ruleset.id);
+    const rulesets = await invoke("map_api_call", { id: "lobbyRulesetsList", args: {} });
+    checks.realRulesetsListed = Array.isArray(rulesets.details?.value?.rulesets)
+      && rulesets.details.value.rulesets.some(ruleset => ruleset.id === "2024");
+    report.real.deploymentRulesets = (rulesets.details?.value?.rulesets ?? []).map(ruleset => ruleset.id);
 
     const created = await invoke("map_api_call", {
       id: "lobbyCampaignCreate", args: { name: state.campaignName, ruleset: "2024" },
@@ -419,10 +419,10 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       && listed.name === state.campaignName
       && listed.ruleset === "2024";
 
-    const baseline = await invoke("foundry_lobby_packs_read", {});
-    state.baselineRevision = baseline.details?.revision ?? null;
-    state.baselinePackCount = baseline.details?.packCount ?? null;
-    const baselineModules = baseline.details?.modules ?? [];
+    const baseline = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
+    state.baselineRevision = baseline.details?.value?.revision ?? null;
+    state.baselinePackCount = baseline.details?.value?.packCount ?? null;
+    const baselineModules = baseline.details?.value?.modules ?? [];
     state.baselinePackIds = baselineModules.flatMap(module => (module.packs ?? []).map(pack => pack.packId));
     checks.libraryBaselineRead = typeof state.baselineRevision === "string" && state.baselineRevision.length > 0;
     checks.fixtureModuleAbsentBeforeImport = !baselineModules.some(module => module.moduleId === moduleId);
@@ -468,64 +468,64 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       throw new Error(`import job did not succeed: ${JSON.stringify(job.details ?? {}).slice(0, 400)}`);
     }
 
-    const afterImport = await invoke("foundry_lobby_packs_read", {});
-    const importedModule = (afterImport.details?.modules ?? []).find(module => module.moduleId === moduleId);
+    const afterImport = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
+    const importedModule = (afterImport.details?.value?.modules ?? []).find(module => module.moduleId === moduleId);
     state.packIds = (importedModule?.packs ?? []).map(pack => pack.packId);
     checks.importedPackListed = state.packIds.length > 0;
-    checks.libraryRevisionChanged = afterImport.details?.revision !== state.baselineRevision;
+    checks.libraryRevisionChanged = afterImport.details?.value?.revision !== state.baselineRevision;
 
     const packRead = state.packIds[0]
-      ? await invoke("foundry_lobby_packs_read", { packId: state.packIds[0], limit: 2 })
+      ? await invoke("map_api_call", { id: "lobbyPackRead", args: { packId: state.packIds[0], limit: 2 } })
       : null;
-    checks.packEntriesRead = (packRead?.details?.entries?.length ?? 0) === 2
-      && Boolean(packRead?.details?.nextCursor)
-      && packRead?.details?.pack?.packId === state.packIds[0];
+    checks.packEntriesRead = (packRead?.details?.value?.entries?.length ?? 0) === 2
+      && Boolean(packRead?.details?.value?.nextCursor)
+      && packRead?.details?.value?.pack?.packId === state.packIds[0];
 
-    const packsGet = await invoke("foundry_lobby_campaign_packs_get", { campaignId: state.campaignId });
-    checks.campaignPacksRead = typeof packsGet.details?.revision === "string"
-      && packsGet.details?.ruleset === "2024"
-      && packsGet.details?.srdApplicable === true;
+    const packsGet = await invoke("map_api_call", { id: "lobbyCampaignPacksGet", args: { campaignId: state.campaignId } });
+    checks.campaignPacksRead = typeof packsGet.details?.value?.revision === "string"
+      && packsGet.details?.value?.ruleset === "2024"
+      && packsGet.details?.value?.srdApplicable === true;
 
-    const updated = await invoke("foundry_lobby_campaign_packs_update", {
+    const updated = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
       campaignId: state.campaignId,
-      expectedRevision: packsGet.details.revision,
+      expectedRevision: packsGet.details.value.revision,
       add: state.packIds,
       enabledSourcesPatch: { srd2024: true },
-    });
-    const current = updated.details?.current;
+    } });
+    const current = updated.details?.value?.after;
     checks.campaignPacksUpdated = Boolean(current)
       && state.packIds.every(packId => (current.selected ?? []).some(entry => entry.packId === packId))
       && current.enabledSources?.srd2024 === true;
-    checks.campaignPacksRevisionBumped = Boolean(current?.revision) && current.revision !== packsGet.details.revision;
+    checks.campaignPacksRevisionBumped = Boolean(current?.revision) && current.revision !== packsGet.details.value.revision;
 
-    const stale = await invoke("foundry_lobby_campaign_packs_update", {
+    const stale = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
       campaignId: state.campaignId,
-      expectedRevision: packsGet.details.revision,
+      expectedRevision: packsGet.details.value.revision,
       remove: state.packIds,
-    });
+    } });
     checks.staleCampaignUpdateRejected = stale.details?.code === "REVISION_MISMATCH";
-    const afterStale = await invoke("foundry_lobby_campaign_packs_get", { campaignId: state.campaignId });
-    checks.staleCampaignUpdateZeroWrite = afterStale.details?.revision === current?.revision
-      && (afterStale.details?.selected ?? []).some(entry => entry.packId === state.packIds[0]);
+    const afterStale = await invoke("map_api_call", { id: "lobbyCampaignPacksGet", args: { campaignId: state.campaignId } });
+    checks.staleCampaignUpdateZeroWrite = afterStale.details?.value?.revision === current?.revision
+      && (afterStale.details?.value?.selected ?? []).some(entry => entry.packId === state.packIds[0]);
 
     setDeny(true);
-    const denied = await invoke("foundry_lobby_campaign_packs_update", {
+    const denied = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
       campaignId: state.campaignId,
-      expectedRevision: afterStale.details.revision,
+      expectedRevision: afterStale.details.value.revision,
       remove: state.packIds,
-    });
+    } });
     setDeny(false);
     checks.approvalDenied = denied.details?.code === "DECLINED";
-    const afterDenied = await invoke("foundry_lobby_campaign_packs_get", { campaignId: state.campaignId });
-    checks.approvalDeniedZeroWrite = afterDenied.details?.revision === afterStale.details?.revision
-      && (afterDenied.details?.selected ?? []).some(entry => entry.packId === state.packIds[0]);
+    const afterDenied = await invoke("map_api_call", { id: "lobbyCampaignPacksGet", args: { campaignId: state.campaignId } });
+    checks.approvalDeniedZeroWrite = afterDenied.details?.value?.revision === afterStale.details?.value?.revision
+      && (afterDenied.details?.value?.selected ?? []).some(entry => entry.packId === state.packIds[0]);
 
-    const removed = await invoke("foundry_lobby_campaign_packs_update", {
+    const removed = await invoke("map_api_call", { id: "lobbyCampaignPacksUpdate", args: {
       campaignId: state.campaignId,
-      expectedRevision: afterDenied.details.revision,
+      expectedRevision: afterDenied.details.value.revision,
       remove: state.packIds,
-    });
-    checks.campaignPacksRemoved = state.packIds.every(packId => !(removed.details?.current?.selected ?? []).some(entry => entry.packId === packId));
+    } });
+    checks.campaignPacksRemoved = state.packIds.every(packId => !(removed.details?.value?.after?.selected ?? []).some(entry => entry.packId === packId));
 
     // Real world import: same native File channel, world dump parsed by the shared
     // compat service, campaign created with ruleset=2024. The world's own campaign is
@@ -564,11 +564,11 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     checks.worldImportPlanSanitized = !JSON.stringify(worldStart.details ?? {}).includes("preparationId")
       && !JSON.stringify(worldJob?.details ?? {}).includes("preparationId");
     if (state.worldCampaignId) {
-      const worldList = await invoke("foundry_lobby_campaigns_list", {});
-      const worldListed = (worldList.details?.campaigns ?? []).find(campaign => campaign.id === state.worldCampaignId);
+      const worldList = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+      const worldListed = (worldList.details?.value?.campaigns ?? []).find(campaign => campaign.id === state.worldCampaignId);
       checks.worldCampaignListedWithRuleset = worldListed?.ruleset === "2024" && worldListed?.name === worldName;
-      const worldPacks = await invoke("foundry_lobby_campaign_packs_get", { campaignId: state.worldCampaignId });
-      checks.worldCampaignPacksReadable = worldPacks.details?.ruleset === "2024" && !worldPacks.isError;
+      const worldPacks = await invoke("map_api_call", { id: "lobbyCampaignPacksGet", args: { campaignId: state.worldCampaignId } });
+      checks.worldCampaignPacksReadable = worldPacks.details?.value?.ruleset === "2024" && !worldPacks.isError;
     }
     report.real.worldImport = {
       campaignId: state.worldCampaignId,
@@ -603,11 +603,10 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
     checks.playPageHasNoLobbyService = playState?.hasLobbyService === false;
     checks.playPageExposesTypedReturn = playState?.navigateToLobby === "function" && playState?.runtime === "function";
 
-    const rejected = await invoke("foundry_lobby_campaigns_list", {});
-    checks.playPageRejectsLobbyTool = rejected.details?.code === "PROFILE_MISMATCH"
-      && /lobby\.html/.test(String(rejected.content?.[0]?.text ?? ""));
-    const rejectedPacks = await invoke("foundry_lobby_packs_read", {});
-    checks.playPageRejectsPacksRead = rejectedPacks.details?.code === "PROFILE_MISMATCH";
+    const rejected = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+    checks.playPageRejectsLobbyTool = rejected.details?.code === "ACTION_UNKNOWN";
+    const rejectedPacks = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
+    checks.playPageRejectsPacksRead = rejectedPacks.details?.code === "ACTION_UNKNOWN";
 
     // Real play -> lobby through the actual typed action: the page's own
     // __MT_PLAY_EXIT__.navigateToLobby, dispatched by the production
@@ -660,22 +659,23 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       }, waitAuthMs, "lobby ready after play rejection");
     }
 
-    const preDelete = await invoke("foundry_lobby_packs_read", {});
-    const deleted = await invoke("foundry_lobby_packs_delete", {
+    const preDelete = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
+    const deleted = await invoke("map_api_call", { id: "lobbyPacksDelete", args: {
       packIds: state.packIds,
-      expectedRevision: preDelete.details.revision,
-    });
-    state.deletedPack = !deleted.isError;
-    checks.packDeletePreviewReported = Boolean(deleted.details?.preview?.totals)
-      && (deleted.details.preview.totals.packs ?? 0) >= state.packIds.length;
-    const postDelete = await invoke("foundry_lobby_packs_read", {});
-    checks.packDeleted = !(postDelete.details?.modules ?? []).some(module => module.moduleId === moduleId);
-    checks.libraryRevisionRestored = postDelete.details?.revision === state.baselineRevision;
-    const remainingPackIds = new Set((postDelete.details?.modules ?? []).flatMap(module => (module.packs ?? []).map(pack => pack.packId)));
-    checks.existingPacksUntouched = postDelete.details?.packCount === state.baselinePackCount
+      expectedRevision: preDelete.details.value.revision,
+    } });
+    state.deletedPack = deleted.details?.status === "completed";
+    checks.packDeletePreviewReported = report.approvals.some(approval => approval.tool === "map_api_call"
+      && approval.args?.operationId === "lobbyPacksDelete"
+      && (approval.args.preview?.totals?.packs ?? 0) >= state.packIds.length);
+    const postDelete = await invoke("map_api_call", { id: "lobbyPacksList", args: {} });
+    checks.packDeleted = !(postDelete.details?.value?.modules ?? []).some(module => module.moduleId === moduleId);
+    checks.libraryRevisionRestored = postDelete.details?.value?.revision === state.baselineRevision;
+    const remainingPackIds = new Set((postDelete.details?.value?.modules ?? []).flatMap(module => (module.packs ?? []).map(pack => pack.packId)));
+    checks.existingPacksUntouched = postDelete.details?.value?.packCount === state.baselinePackCount
       && state.baselinePackIds.every(packId => remainingPackIds.has(packId) && !state.packIds.includes(packId));
     checks.noFileChooserOpened = report.fileChooserOpened === 0;
-    report.real.afterDelete = { revision: postDelete.details?.revision, packCount: postDelete.details?.packCount };
+    report.real.afterDelete = { revision: postDelete.details?.value?.revision, packCount: postDelete.details?.value?.packCount };
 
     const campaignDelete = await invoke("map_api_call", {
       id: "lobbyCampaignDelete", args: { campaignId: state.campaignId, expectedName: state.campaignName },
@@ -691,8 +691,8 @@ async function runRealContract({ contents, invoke, rest, scratch, pageUrl, setDe
       const worldDelete = await rest("DELETE", `/api/campaigns/${state.worldCampaignId}`);
       state.worldCampaignDeleted = worldDelete.status === 200 || worldDelete.status === 204 || worldDelete.status === 404;
       checks.worldCampaignDeleted = state.worldCampaignDeleted;
-      const campaignsAfterWorld = await invoke("foundry_lobby_campaigns_list", {});
-      checks.worldCampaignAbsentAfterDelete = !(campaignsAfterWorld.details?.campaigns ?? []).some(campaign => campaign.id === state.worldCampaignId);
+      const campaignsAfterWorld = await invoke("map_api_call", { id: "lobbyCampaignsList", args: {} });
+      checks.worldCampaignAbsentAfterDelete = !(campaignsAfterWorld.details?.value?.campaigns ?? []).some(campaign => campaign.id === state.worldCampaignId);
     }
   } finally {
     // Cleanup is limited to objects this run created: the recorded pack ids and the
@@ -937,8 +937,8 @@ async function main() {
         && readBack.details.value.campaign.ruleset === "2024";
       const read = await invoke("map_api_call", { id: "lobbyPackRead", args: { packId: "pack-a", limit: 3 } });
       report.checks.packEntriesRead = read.details?.value?.entries?.length === 3;
-      const legacy = await invoke("foundry_lobby_campaigns_list", {});
-      report.checks.legacyAliasesRemainCallable = Array.isArray(legacy.details?.campaigns);
+      report.checks.noLegacyAliasesRegistered = !tools.has("foundry_lobby_campaigns_list")
+        && !tools.has("foundry_lobby_import_start") && !tools.has("foundry_page_eval");
     }
 
     if (realUrl && !realMutate) {

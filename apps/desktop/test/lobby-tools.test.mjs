@@ -6,6 +6,7 @@ import test from "node:test";
 import { Value } from "typebox/value";
 import { FOUNDRY_SDK_ERROR_CODES, FoundrySdkError } from "@arcanedesk/foundry-sdk/contracts";
 import { createLobbyTools } from "../src/main/lobby-tools.js";
+import { createMapApiTools } from "../src/main/map-api-tools.js";
 import { MtLobbyClient } from "../src/main/mt-lobby-client.js";
 import { LOBBY_URL, createLobbyFixture } from "./fixtures/lobby-harness.mjs";
 
@@ -73,25 +74,16 @@ function returnHarness(t, {
     panelProfileId: () => panelProfile,
     ...(foundryRuntime ? { foundryRuntime } : {}),
   };
-  const tools = new Map(createLobbyTools(host).map(tool => [tool.name, tool]));
+  const tools = new Map([...createLobbyTools(host), ...createMapApiTools(host)].map(tool => [tool.name, tool]));
   return { page, client, calls, host, tools, tool: tools.get("map_lobby_return") };
 }
 
-test("the tool pool exposes three dedicated lobby tools and nine inactive legacy aliases", () => {
+test("the tool pool exposes only three dedicated lobby tools", () => {
   const tools = new Map(createLobbyTools({ profile: { mode: "prep" } }).map(tool => [tool.name, tool]));
   assert.deepEqual([...tools.keys()], [
     "map_lobby_return",
     "map_lobby_import_start",
     "map_lobby_import_job",
-    "foundry_lobby_return",
-    "foundry_lobby_rulesets_list",
-    "foundry_lobby_import_start",
-    "foundry_lobby_import_job",
-    "foundry_lobby_campaigns_list",
-    "foundry_lobby_campaign_packs_get",
-    "foundry_lobby_campaign_packs_update",
-    "foundry_lobby_packs_read",
-    "foundry_lobby_packs_delete",
   ]);
   const lobbyReturn = tools.get("map_lobby_return");
   assert.equal(Value.Check(lobbyReturn.parameters, {}), true);
@@ -103,20 +95,6 @@ test("the tool pool exposes three dedicated lobby tools and nine inactive legacy
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "collection" }), true, "collection imports do not require ruleset");
   assert.equal(Value.Check(start.parameters, { sourcePath: "a.zip", expectedKind: "module", ruleset: "2024" }), false);
   assert.equal(Value.Check(tools.get("map_lobby_import_job").parameters, { jobId: "j", action: "status", waitMs: 30000 }), false);
-  const update = tools.get("foundry_lobby_campaign_packs_update");
-  assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, add: ["a"], remove: ["b"] }), true);
-  assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, enabledSourcesPatch: { srd2014: true, srd2024: false } }), true);
-  assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, enabledSourcesPatch: { srd: true } }), false);
-  assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, enabledSourcesPatch: { srd2014: ["srd"] } }), false);
-  assert.equal(Value.Check(update.parameters, { campaignId: "c", expectedRevision: 1, enabledSourcesPatch: {} }), true, "empty patch is rejected at execution, not by the structural schema");
-});
-
-test("rulesets_list returns the current deployment registry including non-DND choices", async (t) => {
-  const h = harness(t);
-  const result = await h.tools.get("foundry_lobby_rulesets_list").execute("rulesets-1", {});
-  assert.equal(result.isError, undefined);
-  assert.deepEqual(result.details.rulesets.map(ruleset => ruleset.id), ["2014", "2024", "octopus", "coc7"]);
-  assert.equal(result.details.rulesets.find(ruleset => ruleset.id === "coc7").supportLevel, "experimental");
 });
 
 test("world imports reject missing ruleset before binding, inspecting, approval, or dispatch", async (t) => {
@@ -247,104 +225,11 @@ test("union arguments reject invalid combinations before any page call", async (
   assert.equal(status.details.code, "INPUT_INVALID");
   const cancel = await h.tools.get("map_lobby_import_job").execute("bad-cancel", { jobId: "job-1", action: "cancel", waitMs: 10 });
   assert.equal(cancel.details.code, "INPUT_INVALID");
-  const read = await h.tools.get("foundry_lobby_packs_read").execute("bad-read", { packId: "p", moduleId: "m" });
-  assert.equal(read.details.code, "INPUT_INVALID");
+  const start = await h.tools.get("map_lobby_import_start").execute("bad-kind", { sourcePath: "world.zip", expectedKind: "module", ruleset: "2024" });
+  assert.equal(start.details.code, "INPUT_INVALID");
   assert.equal(h.page.state.statusCalls, 0);
   assert.equal(h.page.state.cancelCalls.length, 0);
-  assert.equal(h.page.state.packReadCalls.length, 0);
-});
-
-test("campaigns, campaign pack reads and stale updates are bounded and remain zero-write", async (t) => {
-  const h = harness(t);
-  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns", {});
-  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
-
-  const current = await h.tools.get("foundry_lobby_campaign_packs_get").execute("get", { campaignId: "campaign-1" });
-  assert.equal(current.details.revision, 4);
-  assert.equal(current.details.selected.includes("pack-a"), true);
-
-  const stale = await h.tools.get("foundry_lobby_campaign_packs_update").execute("update-stale", {
-    campaignId: "campaign-1",
-    expectedRevision: 3,
-    add: ["pack-b"],
-  });
-  assert.equal(stale.details.code, "REVISION_MISMATCH");
-  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 0);
-  assert.equal(h.approvals.length, 0);
-
-  const update = await h.tools.get("foundry_lobby_campaign_packs_update").execute("update", {
-    campaignId: "campaign-1",
-    expectedRevision: 4,
-    add: ["pack-b"],
-    remove: ["pack-c"],
-    enabledSourcesPatch: { srd2014: false },
-  });
-  assert.equal(update.isError, undefined);
-  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.page.state.campaignPacksUpdateCalls[0])), {
-    campaignId: "campaign-1",
-    expectedRevision: 4,
-    add: ["pack-b"],
-    remove: ["pack-c"],
-    enabledSourcesPatch: { srd2014: false },
-  });
-  assert.equal(update.details.current.revision, 5);
-  assert.equal(h.approvals.length, 1);
-});
-
-test("campaign pack update denial and empty patches never write", async (t) => {
-  const h = harness(t, { approved: false });
-  const empty = await h.tools.get("foundry_lobby_campaign_packs_update").execute("empty", { campaignId: "campaign-1", expectedRevision: 4 });
-  assert.equal(empty.details.code, "INPUT_INVALID");
-  const emptyPatch = await h.tools.get("foundry_lobby_campaign_packs_update").execute("empty-patch", {
-    campaignId: "campaign-1", expectedRevision: 4, add: ["pack-b"], enabledSourcesPatch: {},
-  });
-  assert.equal(emptyPatch.details.code, "INPUT_INVALID");
-  const unknownPatch = await h.tools.get("foundry_lobby_campaign_packs_update").execute("unknown-patch", {
-    campaignId: "campaign-1", expectedRevision: 4, add: ["pack-b"], enabledSourcesPatch: { srd: true },
-  });
-  assert.equal(unknownPatch.details.code, "INPUT_INVALID");
-  const denied = await h.tools.get("foundry_lobby_campaign_packs_update").execute("denied", { campaignId: "campaign-1", expectedRevision: 4, add: ["pack-b"] });
-  assert.equal(denied.details.code, "DECLINED");
-  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 0);
-});
-
-test("pack library reads are paginated and bounded", async (t) => {
-  const h = harness(t);
-  const list = await h.tools.get("foundry_lobby_packs_read").execute("list", {});
-  assert.equal(list.details.revision, 7);
-  assert.equal(list.details.modules.length, 1);
-  const read = await h.tools.get("foundry_lobby_packs_read").execute("read", { packId: "pack-a", limit: 10 });
-  assert.equal(read.details.entries.length, 10);
-  assert.equal(read.details.nextCursor, "10");
-  assert.equal(JSON.stringify(read).includes("Entry 0"), true);
-
-  h.page.service.lobbyPackRead = async ({ packId }) => ({
-    pack: { packId, name: "Pack A" },
-    entries: Array.from({ length: 500 }, (_, index) => ({ entryId: `e-${index}`, name: `Entry ${index}` })),
-    nextCursor: "500",
-  });
-  const oversized = await h.tools.get("foundry_lobby_packs_read").execute("read-big", { packId: "pack-a", limit: 50 });
-  assert.equal(oversized.details.entries.length, 50);
-});
-
-test("pack library projection keeps packCount=0 and omits batches/legacy presentation fields", async (t) => {
-  const h = harness(t);
-  h.page.service.lobbyPacksList = async () => ({
-    revision: "empty-revision",
-    packCount: 0,
-    modules: [],
-    batches: [{ batchId: "large-presentation-row" }],
-    legacy: [{ rowId: "large-legacy-row" }],
-  });
-  const list = await h.tools.get("foundry_lobby_packs_read").execute("empty-list", {});
-  assert.equal(list.details.packCount, 0);
-  assert.equal(list.details.revision, "empty-revision");
-  assert.deepEqual(list.details.modules, []);
-  assert.equal("batches" in list.details, false);
-  assert.equal("legacy" in list.details, false);
-  assert.equal(JSON.stringify(list).includes("large-presentation-row"), false);
-  assert.equal(JSON.stringify(list).includes("large-legacy-row"), false);
+  assert.equal(h.page.state.inspectCalls.length, 0);
 });
 
 test("tool redaction preserves remote URLs while masking real local paths", async (t) => {
@@ -372,35 +257,12 @@ test("tool redaction preserves remote URLs while masking real local paths", asyn
   assert.equal(JSON.stringify(result).includes("D:\\prep\\world.zip"), false);
 });
 
-test("pack delete previews, asks approval, then deletes; stale revisions never preview", async (t) => {
-  const staleHarness = harness(t);
-  const stale = await staleHarness.tools.get("foundry_lobby_packs_delete").execute("delete-stale", { packIds: ["pack-a"], expectedRevision: 6 });
-  assert.equal(stale.details.code, "REVISION_MISMATCH");
-  assert.equal(staleHarness.page.state.deletePreviewCalls.length, 0);
-  assert.equal(staleHarness.page.state.deleteCalls.length, 0);
-
-  const deniedHarness = harness(t, { approved: false });
-  const denied = await deniedHarness.tools.get("foundry_lobby_packs_delete").execute("delete-denied", { packIds: ["pack-a"], expectedRevision: 7 });
-  assert.equal(denied.details.code, "DECLINED");
-  assert.equal(deniedHarness.page.state.deletePreviewCalls.length, 1);
-  assert.equal(deniedHarness.page.state.deleteCalls.length, 0);
-
-  const h = harness(t);
-  const deleted = await h.tools.get("foundry_lobby_packs_delete").execute("delete", { packIds: ["pack-a", "pack-b"], expectedRevision: 7 });
-  assert.equal(deleted.isError, undefined);
-  assert.equal(h.page.state.deletePreviewCalls.length, 1);
-  assert.equal(h.page.state.deleteCalls.length, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.page.state.deleteCalls[0])), { packIds: ["pack-a", "pack-b"], expectedRevision: 7 });
-  assert.equal(deleted.details.revision, 8);
-  assert.equal(h.approvals[0].tool, "foundry_lobby_packs_delete");
-});
-
-test("lobby tools fail closed outside prep mode even if invoked from history", async (t) => {
+test("lobby tools fail closed outside prep mode", async (t) => {
   const h = harness(t);
   h.host.profile.mode = "combat";
-  const result = await h.tools.get("foundry_lobby_campaigns_list").execute("combat", {});
+  const result = await h.tools.get("map_lobby_import_start").execute("combat", { sourcePath: "world.zip", ruleset: "2024" });
   assert.equal(result.details.code, "PROFILE_MISMATCH");
-  assert.equal(h.page.state.listCalls, 0);
+  assert.equal(h.page.state.inspectCalls.length, 0);
 });
 
 test("import_start reports jobStarted=false before dispatch and unknown after a run was sent", async (t) => {
@@ -448,8 +310,8 @@ test("map_lobby_return saves the trusted play URL, dispatches navigateToLobby, t
   assert.match(result.content[0].text, /foundry_open/);
   assert.match(result.content[0].text, /campaign-1/);
 
-  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns", {});
-  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+  const campaigns = await h.tools.get("map_api_call").execute("campaigns", { id: "lobbyCampaignsList", args: {} });
+  assert.equal(campaigns.details.value.campaigns[0].id, "campaign-1");
 });
 
 test("an expected NAVIGATED from navigateToLobby also enters the confirmation stage", async (t) => {
@@ -487,9 +349,9 @@ test("already in the lobby still waits for auth/runtime/service, then the first 
   assert.equal(result.isError, undefined);
   assert.deepEqual(result.details, { status: "completed", alreadyInLobby: true });
   assert.equal(h.calls.length, 0, "already-in-lobby must not dispatch navigateToLobby");
-  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns-first", {});
+  const campaigns = await h.tools.get("map_api_call").execute("campaigns-first", { id: "lobbyCampaignsList", args: {} });
   assert.equal(campaigns.isError, undefined);
-  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+  assert.equal(campaigns.details.value.campaigns[0].id, "campaign-1");
   assert.equal(h.page.state.listCalls, 1);
 });
 
@@ -503,9 +365,9 @@ test("a delayed lobby service is waited for, then the first campaigns_list succe
   const result = await h.tool.execute("return-delayed-service", {});
   assert.equal(result.isError, undefined);
   assert.equal(result.details.status, "completed");
-  const campaigns = await h.tools.get("foundry_lobby_campaigns_list").execute("campaigns-first", {});
+  const campaigns = await h.tools.get("map_api_call").execute("campaigns-first", { id: "lobbyCampaignsList", args: {} });
   assert.equal(campaigns.isError, undefined);
-  assert.equal(campaigns.details.campaigns[0].id, "campaign-1");
+  assert.equal(campaigns.details.value.campaigns[0].id, "campaign-1");
   assert.equal(h.page.state.listCalls, 1);
 });
 

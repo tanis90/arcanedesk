@@ -1,4 +1,4 @@
-// mt-compat 大厅的 3 个专用工具与 9 个不激活的历史别名。Map 的 apiOperationSearch/apiCall 另见 map-api-tools.js。
+// mt-compat 大厅的 3 个专用工具。Map 的 apiOperationSearch/apiCall 另见 map-api-tools.js。
 // 实现静态注册；声明由 AgentHost 按真实页面档位动态激活。写面只接 App 现有 maybeRequestApproval，不新增权限框架。
 import { Type } from "typebox";
 import { Value } from "typebox/value";
@@ -12,7 +12,6 @@ import { PAGE_PROFILES } from "./page-profiles.js";
 const exact = properties => Type.Object(properties, { additionalProperties: false });
 const ref = () => Type.String({ minLength: 1, maxLength: 256 });
 const localFile = () => Type.String({ minLength: 1, maxLength: 4096 });
-const revision = () => Type.Union([Type.Integer({ minimum: 0 }), Type.String({ minLength: 1, maxLength: 128 })]);
 
 const DROP_KEYS = new Set([
   "preparationid", "keepassetids", "sourcepath", "realpath", "filepath", "path", "token",
@@ -116,10 +115,6 @@ function defineTool(definition) {
     if (!Value.Check(contract, params)) return rejection("INPUT_INVALID", "Arguments do not match a supported parameter combination; no action was dispatched.");
     return definition.execute(id, params, signal, update, context);
   } });
-}
-
-function sameRevision(left, right) {
-  return left === right || String(left) === String(right);
 }
 
 function requirePrep(host) {
@@ -327,24 +322,6 @@ export function createLobbyTools(host) {
     },
   });
 
-  const rulesetsList = defineTool({
-    name: "foundry_lobby_rulesets_list",
-    label: "mt-compat supported rulesets",
-    description:
-      "List the rulesets supported by the current mt-compat deployment as {id, label, system, supportLevel?}. Read-only. " +
-      "Always call this before asking the user to choose ruleset for a world import; present the returned choices without hardcoding DND editions or other rules.",
-    parameters: exact({}),
-    execute: async (_toolCallId, _params, signal) => {
-      try {
-        const data = await requirePrep(host).call("lobbyRulesetsList", {}, { signal });
-        const rulesets = Array.isArray(data?.rulesets) ? data.rulesets.slice(0, 100).map(ruleset => bounded(ruleset)) : [];
-        return textResult({ rulesets }, { rulesets });
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
   const importStart = defineTool({
     name: "map_lobby_import_start",
     label: "Import into mt-compat lobby",
@@ -469,220 +446,5 @@ export function createLobbyTools(host) {
     },
   });
 
-  const campaignsList = defineTool({
-    name: "foundry_lobby_campaigns_list",
-    label: "mt-compat campaigns",
-    description:
-      "List mt-compat lobby campaigns visible to the signed-in user: {id, name, ruleset, owner, playUrl}. Read-only; use it to resolve a campaign name to an id. " +
-      "Only available on the trusted mt-compat lobby page after foundry_open.",
-    parameters: exact({}),
-    execute: async (_toolCallId, _params, signal) => {
-      try {
-        const data = await requirePrep(host).call("lobbyCampaignsList", {}, { signal });
-        const campaigns = Array.isArray(data?.campaigns) ? data.campaigns.slice(0, 200).map(campaign => bounded(campaign)) : [];
-        return textResult({ campaigns }, { campaigns });
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
-  const campaignPacksGet = defineTool({
-    name: "foundry_lobby_campaign_packs_get",
-    label: "mt-compat campaign packs",
-    description:
-      "Read one campaign's current pack selection: selected refs, missing refs, built-in read-only groups, SRD flags, enabledSources, and the selection revision. " +
-      "This revision is required by foundry_lobby_campaign_packs_update. Read-only and only available on the mt-compat lobby page.",
-    parameters: exact({ campaignId: ref() }),
-    execute: async (_toolCallId, params, signal) => {
-      try {
-        const data = await requirePrep(host).call("lobbyCampaignPacksGet", { campaignId: params.campaignId }, { signal });
-        const safe = bounded(data);
-        return textResult(safe, safe);
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
-  const campaignPacksUpdate = defineTool({
-    name: "foundry_lobby_campaign_packs_update",
-    label: "Update mt-compat campaign packs",
-    description:
-      "Incrementally update one campaign's pack selection. Read foundry_lobby_campaign_packs_get first and pass its exact revision as expectedRevision. " +
-      "add/remove touch only the named refs; enabledSourcesPatch is an exact {srd2014?, srd2024?} boolean object and merges only those keys. Never a full packsSet. " +
-      "The tool re-reads and rejects a stale revision with zero writes, asks for the existing approval, writes once, then reads back. " +
-      "Only available on the mt-compat lobby page.",
-    parameters: exact({
-      campaignId: ref(),
-      expectedRevision: revision(),
-      add: Type.Optional(Type.Array(ref(), { maxItems: 200, uniqueItems: true })),
-      remove: Type.Optional(Type.Array(ref(), { maxItems: 200, uniqueItems: true })),
-      enabledSourcesPatch: Type.Optional(exact({
-        srd2014: Type.Optional(Type.Boolean()),
-        srd2024: Type.Optional(Type.Boolean()),
-      })),
-    }),
-    executionMode: "sequential",
-    execute: async (_toolCallId, params, signal) => {
-      try {
-        const patchProvided = params.enabledSourcesPatch !== undefined;
-        const patchKeys = patchProvided && params.enabledSourcesPatch && typeof params.enabledSourcesPatch === "object"
-          ? Object.keys(params.enabledSourcesPatch) : [];
-        const hasPatch = patchKeys.length > 0;
-        if (patchProvided && (!hasPatch
-          || patchKeys.some(key => key !== "srd2014" && key !== "srd2024")
-          || patchKeys.some(key => typeof params.enabledSourcesPatch[key] !== "boolean"))) {
-          return rejection("INPUT_INVALID", "enabledSourcesPatch must be exactly {srd2014?: boolean, srd2024?: boolean} with at least one boolean.");
-        }
-        if (!(params.add?.length) && !(params.remove?.length) && !hasPatch) {
-          return rejection("INPUT_INVALID", "Supply at least one of add, remove, or enabledSourcesPatch.");
-        }
-        const client = requirePrep(host);
-        const current = await client.call("lobbyCampaignPacksGet", { campaignId: params.campaignId }, { signal });
-        if (!sameRevision(current?.revision, params.expectedRevision)) {
-          return rejection(
-            "REVISION_MISMATCH",
-            `Campaign pack selection changed (current revision ${String(current?.revision)}, expected ${String(params.expectedRevision)}); no write was made. Read it again.`,
-            { revision: bounded(current?.revision) },
-          );
-        }
-        const summary = `Update campaign ${params.campaignId} packs: add ${params.add?.length ?? 0}, remove ${params.remove?.length ?? 0}, enabledSources fields ${hasPatch ? Object.keys(params.enabledSourcesPatch).length : 0}`;
-        const approved = await approve(host, "foundry_lobby_campaign_packs_update", summary, {
-          campaignId: params.campaignId,
-          expectedRevision: params.expectedRevision,
-          add: params.add ?? [],
-          remove: params.remove ?? [],
-          ...(hasPatch ? { enabledSourcesPatch: params.enabledSourcesPatch } : {}),
-        });
-        if (!approved) return rejection("DECLINED", "The user declined this pack-selection update; do not retry it.");
-        const updated = await client.call("lobbyCampaignPacksUpdate", {
-          campaignId: params.campaignId,
-          expectedRevision: current.revision,
-          ...(params.add?.length ? { add: params.add } : {}),
-          ...(params.remove?.length ? { remove: params.remove } : {}),
-          ...(hasPatch ? { enabledSourcesPatch: params.enabledSourcesPatch } : {}),
-        }, { signal });
-        let readBack = null;
-        try {
-          readBack = await client.call("lobbyCampaignPacksGet", { campaignId: params.campaignId }, { signal });
-        } catch (error) {
-          host.log?.(`[lobby] campaign packs readback failed: ${error?.code ?? error?.message ?? error}`);
-        }
-        return textResult(
-          `Campaign ${params.campaignId} pack selection updated.${readBack ? ` Current revision: ${String(readBack.revision)}.` : " Read it back with foundry_lobby_campaign_packs_get before further edits."}`,
-          { update: bounded(updated), current: bounded(readBack) },
-        );
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
-  const packsRead = defineTool({
-    name: "foundry_lobby_packs_read",
-    label: "Read mt-compat pack library",
-    description:
-      "Two read-only shapes. Omit packId (optionally moduleId) to list the personal pack library with its revision and modules. " +
-      "Pass packId to page one pack's entries; use query/cursor/limit (limit max 50) and follow nextCursor. " +
-      "Entries are always paginated and bounded. Only available on the mt-compat lobby page.",
-    parameters: Type.Union([
-      exact({ moduleId: Type.Optional(ref()) }),
-      exact({ packId: ref(), query: Type.Optional(Type.String({ maxLength: 256 })), cursor: Type.Optional(ref()), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })) }),
-    ]),
-    execute: async (_toolCallId, params, signal) => {
-      try {
-        const client = requirePrep(host);
-        if (params.packId) {
-          const data = await client.call("lobbyPackRead", {
-            packId: params.packId,
-            ...(params.query ? { query: params.query } : {}),
-            ...(params.cursor ? { cursor: params.cursor } : {}),
-            ...(params.limit ? { limit: params.limit } : {}),
-          }, { signal });
-          const safe = {
-            pack: bounded(data?.pack),
-            entries: Array.isArray(data?.entries) ? data.entries.slice(0, 50).map(entry => bounded(entry)) : [],
-            nextCursor: data?.nextCursor ?? null,
-          };
-          return textResult(safe, safe);
-        }
-        const data = await client.call("lobbyPacksList", params.moduleId ? { moduleId: params.moduleId } : {}, { signal });
-        const safe = {
-          revision: bounded(data?.revision),
-          packCount: data?.packCount,
-          modules: Array.isArray(data?.modules) ? data.modules.slice(0, 50).map(module => bounded(module)) : [],
-        };
-        return textResult(safe, safe);
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
-  const packsDelete = defineTool({
-    name: "foundry_lobby_packs_delete",
-    label: "Delete mt-compat packs",
-    description:
-      "Delete one or more personal pack-library entries by packId. Read the library first and pass its revision as expectedRevision. " +
-      "The tool re-reads the library, rejects a stale revision with zero writes, requests an impact preview, uses the existing approval, then deletes and reads the library back. " +
-      "It never detaches campaign references: untouched references keep their existing missing semantics. Only available on the mt-compat lobby page.",
-    parameters: exact({
-      packIds: Type.Array(ref(), { minItems: 1, maxItems: 100, uniqueItems: true }),
-      expectedRevision: revision(),
-    }),
-    executionMode: "sequential",
-    execute: async (_toolCallId, params, signal) => {
-      try {
-        const client = requirePrep(host);
-        const current = await client.call("lobbyPacksList", {}, { signal });
-        if (!sameRevision(current?.revision, params.expectedRevision)) {
-          return rejection(
-            "REVISION_MISMATCH",
-            `The pack library changed (current revision ${String(current?.revision)}, expected ${String(params.expectedRevision)}); no delete was made. Read it again.`,
-            { revision: bounded(current?.revision) },
-          );
-        }
-        const preview = await client.call("lobbyPacksDeletePreview", {
-          packIds: params.packIds,
-          expectedRevision: current.revision,
-        }, { signal });
-        const summary = `Delete ${params.packIds.length} pack(s): ${params.packIds.slice(0, 8).join(", ")}${params.packIds.length > 8 ? ", …" : ""}. ${planSummary(preview)}`;
-        const approved = await approve(host, "foundry_lobby_packs_delete", summary, {
-          packIds: params.packIds,
-          expectedRevision: current.revision,
-        });
-        if (!approved) return rejection("DECLINED", "The user declined this pack deletion; do not retry it.", { preview: bounded(preview) });
-        const deleted = await client.call("lobbyPacksDelete", {
-          packIds: params.packIds,
-          expectedRevision: current.revision,
-        }, { signal });
-        let readBack = null;
-        try {
-          readBack = await client.call("lobbyPacksList", {}, { signal });
-        } catch (error) {
-          host.log?.(`[lobby] pack library readback failed: ${error?.code ?? error?.message ?? error}`);
-        }
-        return textResult(
-          `Deleted ${params.packIds.length} pack(s).${readBack ? ` Library revision is now ${String(readBack.revision)}.` : " Read the library back with foundry_lobby_packs_read."}`,
-          { preview: bounded(preview), delete: bounded(deleted), revision: bounded(readBack?.revision) },
-        );
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  });
-
-  const legacyAliases = [
-    { ...lobbyReturn, name: "foundry_lobby_return" },
-    rulesetsList,
-    { ...importStart, name: "foundry_lobby_import_start" },
-    { ...importJob, name: "foundry_lobby_import_job" },
-    campaignsList,
-    campaignPacksGet,
-    campaignPacksUpdate,
-    packsRead,
-    packsDelete,
-  ];
-  return [lobbyReturn, importStart, importJob, ...legacyAliases];
+  return [lobbyReturn, importStart, importJob];
 }
