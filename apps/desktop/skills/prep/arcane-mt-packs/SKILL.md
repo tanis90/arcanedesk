@@ -5,7 +5,7 @@ description: 管理 ArcaneDesk mt compat 大厅（奥法地图）的个人内容
 
 # mt compat 内容包与战役选包
 
-mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归当前账号所有，物理存在大厅）和**战役选包**（战役引用库里的包，play 页据此聚合 compendium）。本 skill 只管这两层，以及删除包后的影响说明；世界包导入属于 `arcane-world-import`。
+mt compat 大厅里有两层内容资源：**个人内容包库**（上传后归当前账号所有，物理存在大厅）和**战役选包**（战役引用库里的包，play 页据此聚合 compendium）。先按 `arcane-mt-lobby` 确认大厅与 action/job 分工；本 skill 只管这两层，以及删除包后的影响说明；世界包导入属于 `arcane-world-import`。
 
 所有动作走 `foundry_open` 与 `foundry_lobby_*` typed 工具。不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 

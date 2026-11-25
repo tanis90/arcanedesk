@@ -82,6 +82,15 @@ const REQUIRED_MARKERS = new Map([
     "不等于已经在玩家屏幕弹窗展示",
     "foundry_image",
   ]],
+  ["skills/prep/arcane-mt-lobby/SKILL.md", [
+    "大厅写入前必读",
+    "activatedTools",
+    "action/workflow/job",
+    "arcane-world-create",
+    "arcane-world-import",
+    "arcane-mt-packs",
+    "OPERATION_KIND_UNSUPPORTED",
+  ]],
   ["skills/prep/arcane-world-create/SKILL.md", [
     "lobbyCampaignCreate",
     "foundry_lobby_rulesets_list",

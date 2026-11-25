@@ -561,3 +561,8 @@
 - 新增 `arcane-world-create`：空白创建走 Map `lobbyCampaignCreate`，UI 与 agent 共用规则回执校验、默认封面、规则落档和 CoC 门禁。规则选择、登录与创建审批沿用现有边界；先查同名，成功后回读，partial/indeterminate 只按战役 id 对账，不重建、不盲删。ZIP 世界导入继续 `arcane-world-import` 的 start/job，场景导入继续 `foundry_scene_import`，不与通用调用混合。
 - mtcompat 原生 API 回退在人物、物品、日志 skill 中分别补 `foundry_api_search` 的 `game.actors` / `game.items` / `game.journal` 前缀；声明面与可调用操作分开解读，不能把查不到 `JournalEntry` 当成不支持，也不能把 surface 条目当 Desk 工具名。统一路由规则由 Desk 蒸馏段持有，Map 不反向耦合。
 - 回归包括 Map 操作元数据无 Desk 路由、job 零写入拒绝、共享创建回滚/partial、真实 Chromium 空白创建，以及 Desk 搜索/审批/partial 单测；skill 发布校验覆盖新 skill 与查询前缀。
+
+### 大厅总则与专项路由（2026-11-25，r55）
+
+- 新增 `arcane-mt-lobby` 作为所有大厅写操作的基础 skill：负责登录与 play↔lobby 导航、Desk 与 Map 各自的能力发现、action/workflow/job 分流、规则选择、审批、回读和不确定结果对账。它不是“提到奥法地图就全部加载”，而是 description 负责发现，mtcompat 蒸馏段额外保证大厅创建、导入、选包和删除前必读。
+- `arcane-world-create` 只保留空白创建的同名检查、规则选择、`lobbyCampaignCreate` 调用和 campaignId/playUrl 回读；`arcane-world-import` 继续世界 ZIP 长程 job；`arcane-mt-packs` 继续个人内容包库与战役选包的专用语义。三者链接总则而不复制大厅通用原则，避免合集包任务漏掉统一路由。

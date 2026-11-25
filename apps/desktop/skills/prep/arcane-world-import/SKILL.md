@@ -5,7 +5,7 @@ description: 把本地 Foundry VTT（FVTT）世界包（zip）导入 ArcaneDesk 
 
 # FVTT 世界 → mt compat 云端战役
 
-把本机 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。你和用户只面对 `foundry_open` 与 `foundry_lobby_*` 这几个 typed 工具；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
+把本机 FVTT 世界 zip 交给 ArcaneDesk 的 mt compat 大厅（奥法地图）：大厅负责解析、素材上传、创建或复用战役、文档写入、导入批次与失败清理。先按 `arcane-mt-lobby` 确认大厅页面与长程 job 路由，再按本 skill 处理世界包。你和用户只面对 `foundry_open` 与 `foundry_lobby_*` 这几个 typed 工具；不要手写 HTTP、在页面里跑脚本或用 shell 调云端接口。
 
 ## 用户交互预算
 

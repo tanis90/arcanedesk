@@ -11,6 +11,7 @@ import {
   SURFACE_ALLOW_MISSING_ENV,
   SURFACE_RULES,
   MAP_API_ROUTING_RULE,
+  MAP_LOBBY_SKILL_RULE,
   distillSurface,
   fetchSurface,
   main,
@@ -121,6 +122,7 @@ test("§2.5 三规则逐字进段落（编号独立成行）", () => {
   }
   assert.ok(lines.includes("纪律（逐字，PRD §2.5）："));
   assert.ok(lines.includes(MAP_API_ROUTING_RULE));
+  assert.ok(lines.includes(MAP_LOBBY_SKILL_RULE));
 });
 
 test("revision 钉进产物与段落；扩展动词只收 agent=prefer", () => {
