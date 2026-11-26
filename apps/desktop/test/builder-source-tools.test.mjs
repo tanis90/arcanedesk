@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { Value } from "typebox/value";
-import { createBuilderSourceTools } from "../src/main/builder-source.js";
+import { buildVerificationExpectations, createBuilderSourceTools, normalizeVerification, rootExpectations, verificationScript } from "../src/main/builder-source.js";
 import { MtLobbyClient } from "../src/main/mt-lobby-client.js";
 import { LOBBY_URL, createLobbyFixture } from "./fixtures/lobby-harness.mjs";
 
@@ -893,6 +894,115 @@ test("an import report uuidMap overrides same-id derivation for publication and 
   assert.equal(result.details.published.uuidMap.find(row => row.sourceUuid === ROOT_CLASS).uuid, alternate);
   const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
   assert.match(pageEval.args.code, new RegExp(alternate.replaceAll(".", "\\.")));
+});
+
+test("verificationScript returns a pageEval value under Map's async-function-body wrapper", async t => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-builder-page-eval-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(path.join(directory, "studio"), { recursive: true });
+  writeFileSync(path.join(directory, "studio", "data.mjs"), [
+    "const state = globalThis.__TEST_STUDIO__;",
+    "export async function listChoices(version) { return state.choices[version] ?? { classes: [], subclasses: [], races: [], backgrounds: [] }; }",
+    "export async function loadFeatOptions() { return state.feats; }",
+    "export async function loadSpellOptions(maxLevel, version, packId) { return state.spells.filter(spell => spell._pack === packId); }",
+    "export async function classSpellFilter(className, version, packId) {",
+    "  return spell => state.allowed.has(packId + '|' + spell.id + '|' + className);",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+
+  const dump = makeDump();
+  dump.packs.push({
+    name: "feats",
+    label: "自建专长",
+    type: "Item",
+    system: "dnd5e",
+    entries: [{
+      _id: "eeeeeeeeeeeeeeee",
+      name: "Ash Gift",
+      type: "feat",
+      system: { type: { value: "feat" }, identifier: "ash-gift" },
+    }],
+  });
+  const featRoot = "Item.eeeeeeeeeeeeeeee";
+  const plan = { ...makePlan(), spellLists: { mage: ["bbbbbbbbbbbbbbbb"] } };
+  const { roots, index } = rootExpectations({ dump, moduleId: MODULE_ID, sourceUuids: [ROOT_CLASS, ROOT_SPELL, featRoot], plan });
+  const packIds = ["user-alice-homebrew.classes", "user-alice-homebrew.spells", "user-alice-homebrew.feats"];
+  const expectations = buildVerificationExpectations({ index, moduleId: MODULE_ID, plan, roots, packIds });
+  const code = verificationScript(expectations);
+  assert.match(code, /^return \(async \(\) => \{/, "pageEval code must be an async function body with a top-level return");
+  assert.doesNotMatch(code, /^\(async/, "a bare IIFE would make pageEval return undefined");
+
+  const saved = {
+    location: Object.hasOwn(globalThis, "location") ? globalThis.location : undefined,
+    hadLocation: Object.hasOwn(globalThis, "location"),
+    game: globalThis.game,
+    fromUuid: globalThis.fromUuid,
+    register: globalThis.__MT_REGISTER_USER_PACKS__,
+    bridge: globalThis.__MT_BRIDGE__,
+    studio: globalThis.__TEST_STUDIO__,
+  };
+  t.after(() => {
+    if (saved.hadLocation) globalThis.location = saved.location;
+    else delete globalThis.location;
+    globalThis.game = saved.game;
+    globalThis.fromUuid = saved.fromUuid;
+    globalThis.__MT_REGISTER_USER_PACKS__ = saved.register;
+    globalThis.__MT_BRIDGE__ = saved.bridge;
+    globalThis.__TEST_STUDIO__ = saved.studio;
+  });
+
+  let registered = 0;
+  const docs = new Map([
+    [CLASS_UUID, { type: "class", system: { identifier: "mage" } }],
+    [SPELL_UUID, { type: "spell", system: { level: 1, identifier: "ember" } }],
+    ["Compendium.user-alice-homebrew.feats.Item.eeeeeeeeeeeeeeee", { type: "feat", system: { type: { value: "feat" }, identifier: "ash-gift" } }],
+  ]);
+  globalThis.location = { href: pathToFileURL(path.join(directory, "play.html")).href };
+  globalThis.game = { packs: { get: packId => packIds.includes(packId) ? { getIndex: async () => ({ size: 1 }) } : null } };
+  globalThis.fromUuid = async uuid => docs.get(uuid) ?? null;
+  globalThis.__MT_REGISTER_USER_PACKS__ = async () => { registered += 1; };
+  globalThis.__MT_BRIDGE__ = {
+    auth: { campaign: { id: "campaign-1" }, authedFetch: async () => ({ ok: true, json: async () => [] }) },
+  };
+  globalThis.__TEST_STUDIO__ = {
+    choices: {
+      "2014": {
+        classes: [{ _id: "aaaaaaaaaaaaaaaa", _pack: "user-alice-homebrew.classes" }],
+        subclasses: [],
+        races: [],
+        backgrounds: [],
+      },
+    },
+    feats: [{ id: "eeeeeeeeeeeeeeee", _pack: "user-alice-homebrew.feats" }],
+    spells: [{ id: "bbbbbbbbbbbbbbbb", _pack: "user-alice-homebrew.spells", level: 1 }],
+    allowed: new Set(["user-alice-homebrew.spells|bbbbbbbbbbbbbbbb|mage"]),
+  };
+
+  const evaluatePageEval = new Function("return (async()=>{\n" + code + "\n})()");
+  const value = await evaluatePageEval();
+  assert.ok(value, "Map's wrapper must receive the IIFE value; a bare IIFE yields undefined");
+  assert.equal(registered, 1);
+  assert.equal(value.register.ok, true);
+  assert.equal(value.identity.length, 1);
+  assert.equal(value.identity[0].present, true);
+  assert.equal(value.feats.length, 1);
+  assert.equal(value.feats[0].present, true);
+  assert.equal(value.spells.length, 1);
+  assert.equal(value.spells[0].present, true);
+  assert.deepEqual(value.spells[0].checks, [{ classIdentifier: "mage", allowed: true }]);
+  assert.equal(value.readback.ok, true);
+  assert.deepEqual(value.errors, []);
+  assert.deepEqual(value.missing, []);
+
+  const verification = normalizeVerification(value, expectations, { unresolvedRefs: [], worldRefs: [] });
+  assert.equal(verification.packRegistry, "passed");
+  assert.equal(verification.identityCandidates, "passed");
+  assert.equal(verification.featCandidates, "passed");
+  assert.equal(verification.spellLists, "passed");
+  assert.equal(verification.readback, "passed");
+  assert.equal(verification.dependencyResolution, "passed");
+  assert.deepEqual(verification.unresolvedRefs, []);
 });
 
 test("replaying the same tool call returns the recorded result instead of re-importing", async t => {

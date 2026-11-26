@@ -433,8 +433,14 @@ export function inspectReferenceClosure(dump, { moduleId } = {}) {
 
 // ---- 导入后回读（play 页固定只读脚本） ----
 
-function verificationScript(expectations) {
-  return `(async () => {
+/**
+ * pageEval 的 code 是 async function body：Map 用
+ * `new Function("return (async()=>{\n"+code+"\n})()")()` 包裹。这里必须用顶层
+ * `return` 把 IIFE 的 Promise 返回给外层 async 函数；裸 IIFE 会让外层返回 undefined，
+ * 回执 status=completed 但 value 为空。
+ */
+export function verificationScript(expectations) {
+  return `return (async () => {
   const EXPECTED = ${JSON.stringify(expectations)};
   const missing = [];
   const errors = [];
@@ -560,7 +566,7 @@ function verificationScript(expectations) {
 })()`;
 }
 
-function normalizeVerification(value, expectations, localClosure) {
+export function normalizeVerification(value, expectations, localClosure) {
   const register = value?.register ?? {};
   const packs = asArray(value?.packs);
   const roots = asArray(value?.roots);
