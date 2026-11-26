@@ -207,6 +207,7 @@ LLM 创建/修改世界 Item
 - **UUID 映射**：优先采用 plan 的 `uuidMap` / `roots`；缺失时按设计约定的相同 `_id` 映射从 dump 推导，并统一改写为 `Compendium.user-<moduleId>.*`。模型输出仍只含根映射与失败诊断。
 - **失败计数**：兼容真实 `runModule` 报告的 `report.totals.failed`（条目数）与 `report.assets.failures`（素材数）数值口径，也兼容新入口的 `entryFailures`/`assetFailures` 数组和旧 `report.failures` 合集。数组优先保留明细；只有数值时生成 `{code:"ENTRY_FAILURES"|"ASSET_FAILURES",count}` 诊断。任一项 >0、任一数组非空或 mixed failures 非空都只能 `partial`。
 - **preflight 兼容**：`builderSourceImportStart` 加进大厅 client 的 action 白名单与写动作集，但不进旧部署的 required preflight 集；旧 Map 只会让本工具报 `CAPABILITY_UNAVAILABLE`，不会打断世界导入、合集导入与选包等既有工具。
+- **世界漂移门**：正式 apply 在首次规划后、离开 play 前用相同参数再规划一次，只比较 `plan.digest`。缺失 digest、第二次 rejected/异常或 digest 漂移都在本地拒绝，绝不进入大厅；一致时继续用初次 dump。dryRun 不受影响，仍只规划一次。
 - **状态判定**：写入前失败一律 `rejected`；内容导入已派发后的失败为 `partial`；导航结果未知、job 未知或回原 play 未确认为 `indeterminate`。`completed` 还要求 plan 的内部引用闭包与回读全部通过。
 - **revision 漂移**：选包更新最多重读 3 次选包并重试 add；导入只派发一次，任何一次重试都不重跑 `builderSourceImportStart`。
 - **失败清理**：partial/indeterminate 不自动回 play、不自动重放；回执明确给出 `jobId`/`operationRef`、实际 packIds 与后续对账入口。若导入已完成但回 play 失败，结果保持 `indeterminate` 而不是伪造 `completed`。
@@ -239,7 +240,7 @@ pack 名采用稳定语义名，例如 `classes/subclasses/races/backgrounds/fea
 ## 9. 状态、并发与更新
 
 - plan digest 覆盖根/依赖文档、素材、moduleId、campaignId、曝光与目标 pack。
-- 导入前重算 digest；世界内容漂移则 `TARGET_CHANGED`，零写入。
+- **离开 play 前重算 digest**：正式 apply 在首次 `builderSourcePlan` 之后、`navigateToLobby` 之前，用完全相同的参数再规划一次。初次/再次 digest 任一缺失都拒绝（`PLAN_DIGEST_MISSING`）；第二次 rejected、抛错或缺 plan/dump 协议异常都拒绝（`PLAN_RECHECK_FAILED`）；digest 不一致返回 `TARGET_CHANGED`，提示重新 dryRun。所有拒绝路径零大厅导航、零写入。digest 一致时继续使用初次 dump，不在大厅里再规划；大厅侧仍按自己的 `dump.digest` 复核。dryRun 只规划一次。
 - 选包使用最新 `expectedRevision`；漂移只重读选包状态，不重新导入。
 - 同一世界 Item 重复发布保持目标 UUID 不变，已有 Actor 快照不改写。
 - 同 moduleId 更新必须合并旧条目，禁止整模块清空后只写本次根节点。

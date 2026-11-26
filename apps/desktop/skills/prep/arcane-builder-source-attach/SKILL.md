@@ -55,7 +55,7 @@ dry run 中 `issues.errors` 必须为空才继续；`issues.warnings` 要如实�
 - `completed`：导入无条目/素材失败、所有必需 pack 已加入战役、回原 play 后回读通过。回执里的 `published.uuidMap`、`campaign.attachedPackIds`、`verification` 才是对账依据。
 - `partial`：导入或选包已开始但未全部成功。带 `jobId`、完成阶段、实际 packIds 和 `entryFailures`/`assetFailures`。
 - `indeterminate`：导航、超时或页面中断导致结果未知。带 `operationRef`，可能带 `jobId`。
-- `rejected`：写入前失败，带 `code/issues`；不会产生合集或选包变更。
+- `rejected`：写入前失败，带 `code/issues`；不会产生合集或选包变更。发布前会再规划一次比对 digest，世界 Item 在规划后被改动时返回 `TARGET_CHANGED` 且零写入，先重新 dryRun 再重试。
 
 条目/素材失败、选包未完成或回读失败都不得当成 `completed` 汇报。
 

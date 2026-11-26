@@ -856,6 +856,17 @@ class BuilderSourceAttachService {
 
     const plan = planned.plan;
     const dump = planned.dump;
+    const initialDigest = plan?.digest != null ? String(plan.digest).trim() : "";
+    if (!initialDigest) {
+      return {
+        ...base,
+        status: "rejected",
+        code: "PLAN_DIGEST_MISSING",
+        retry: false,
+        message: "builderSourcePlan returned no digest; the world drift gate cannot be evaluated and nothing was written.",
+        stages: [...stages, { step: "plan", state: "failed" }],
+      };
+    }
     const dumpModuleId = String(dump?.moduleId ?? dump?.moduleJson?.id ?? "").trim();
     if (!dumpModuleId || dumpModuleId !== moduleId) {
       return {
@@ -933,6 +944,67 @@ class BuilderSourceAttachService {
     base.target = target;
     base.plan = summary;
     stage("plan", "completed", `${summary.rootCount ?? sourceUuids.length} roots, ${summary.dependencyCount ?? "?"} dependencies`);
+
+    // 离开 play 前再规划一次同一组参数：世界 Item 在首次规划后被改动时，digest 会漂移。
+    // 这一步不进入大厅、不写内容；digest 一致时继续使用初次 dump（大厅侧还会复核 dump.digest）。
+    let rechecked;
+    try {
+      rechecked = await this.plan({ sourceUuids, moduleId, title: params.title, version: params.version, signal });
+    } catch (error) {
+      return {
+        ...base,
+        status: "rejected",
+        code: "PLAN_RECHECK_FAILED",
+        retry: false,
+        message: `The world could not be re-planned before leaving the play page; nothing was written and the lobby was not entered: ${String(error?.message ?? error)}`,
+        stages: [...stages, { step: "plan_recheck", state: "failed" }],
+      };
+    }
+    if (!rechecked || rechecked.status === "rejected") {
+      return {
+        ...base,
+        status: "rejected",
+        code: "PLAN_RECHECK_FAILED",
+        retry: false,
+        plannerCode: rechecked?.code ?? null,
+        issues: rechecked?.issues ?? null,
+        message: "The world planner rejected the recheck before leaving the play page; nothing was written and the lobby was not entered.",
+        stages: [...stages, { step: "plan_recheck", state: "failed" }],
+      };
+    }
+    if (rechecked.status !== "completed" || !rechecked.plan || !rechecked.dump) {
+      return {
+        ...base,
+        status: "rejected",
+        code: "PLAN_RECHECK_FAILED",
+        retry: false,
+        message: "The world planner returned no completed plan/dump on the recheck; nothing was written and the lobby was not entered.",
+        stages: [...stages, { step: "plan_recheck", state: "failed" }],
+      };
+    }
+    const recheckDigest = rechecked.plan?.digest != null ? String(rechecked.plan.digest).trim() : "";
+    if (!recheckDigest) {
+      return {
+        ...base,
+        status: "rejected",
+        code: "PLAN_DIGEST_MISSING",
+        retry: false,
+        message: "The world planner returned no digest on the recheck; nothing was written and the lobby was not entered.",
+        stages: [...stages, { step: "plan_recheck", state: "failed" }],
+      };
+    }
+    if (recheckDigest !== initialDigest) {
+      return {
+        ...base,
+        status: "rejected",
+        code: "TARGET_CHANGED",
+        retry: false,
+        planDigest: { initial: initialDigest, recheck: recheckDigest },
+        message: "World content changed between planning and leaving the play page; nothing was written and the lobby was not entered. Run dryRun again before retrying.",
+        stages: [...stages, { step: "plan_recheck", state: "failed" }],
+      };
+    }
+    stage("plan_recheck", "completed", "digest unchanged");
 
     // 进入大厅；这一步只导航，不写内容。
     let navigation;
@@ -1239,10 +1311,10 @@ export function createBuilderSourceTools(host) {
       "Pass 1..20 world Item UUIDs (Item.<id>) as sourceUuids — for example a custom class with its subclass, features, spells and starting equipment. " +
       "Dependencies, exposure and output packs are derived by the Map planner; never pass pack ids, owner ids, revisions, user-* module ids, ZIPs, dumps or Base64. " +
       "moduleId is optional and must not start with user-; it defaults to homebrew-<campaignId>. version is optional; when omitted the planner decides. " +
-      "The default call validates the plan, returns to the campaign lobby, imports the prepared dump, enables every required pack, returns to the original play page and reads back pack registration, root UUIDs, identity candidates, spell lists and the reference closure. " +
+      "The default call validates the plan, re-plans once with identical arguments to reject world drift before leaving play, returns to the campaign lobby, imports the prepared dump, enables every required pack, returns to the original play page and reads back pack registration, root UUIDs, identity candidates, feat candidates, spell lists and the reference closure. " +
       "Example: {sourceUuids:[\"Item.aaaaaaaaaaaaaaaa\",\"Item.bbbbbbbbbbbbbbbb\"], title:\"灰烬秘法\"}. " +
       "Set dryRun:true to return only the structured plan and coverage; a dry run performs zero writes and never returns the dump or Base64 bytes. " +
-      "completed means the import had no entry/asset failures, every required pack is selected, and post-import verification passed; it never claims a real player finished character creation. " +
+      "completed means the import had no entry/asset failures, every required pack is selected, and post-import verification passed; it never claims a real player finished character creation. TARGET_CHANGED before leaving play means the world Items changed after planning: nothing was written or navigated; run dryRun again. " +
       "partial carries jobId plus the actual failures; indeterminate means the result is unknown. For either, do not replay: inspect map_lobby_import_job and the campaign pack selection first.",
     parameters: exact({
       sourceUuids: Type.Array(Type.String({ minLength: 1, maxLength: 256 }), { minItems: 1, maxItems: 20 }),

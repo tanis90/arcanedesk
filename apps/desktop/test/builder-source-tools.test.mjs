@@ -197,6 +197,7 @@ function harness(t, {
   verification = null,
   navigateError = null,
   openPlay = true,
+  secondPlan = undefined,
 } = {}) {
   const page = createLobbyFixture({ url: PLAY_URL });
   const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-builder-source-"));
@@ -210,6 +211,7 @@ function harness(t, {
 
   const service = page.service;
   let importStartCalls = 0;
+  let planCalls = 0;
   const selectedPacks = new Set(["pack-a"]);
   service.lobbyCampaignPacksGet = async ({ campaignId }) => {
     page.state.campaignPacksGetCalls.push({ campaignId });
@@ -268,6 +270,11 @@ function harness(t, {
     callFoundryRuntime: async (action, args, options) => {
       runtimeCalls.push({ action, args, options });
       if (action === "builderSourcePlan") {
+        planCalls += 1;
+        if (planCalls === 2 && secondPlan !== undefined) {
+          if (secondPlan instanceof Error) throw secondPlan;
+          return secondPlan;
+        }
         return { status: "completed", plan: effectivePlan, dump: effectiveDump };
       }
       if (action === "navigateToLobby") {
@@ -288,6 +295,7 @@ function harness(t, {
     page, directory, client, service, host, tools, calls, runtimeCalls, approvals, openCalls,
     tool: tools.get("map_builder_source_attach"),
     importStartCalls: () => importStartCalls,
+    planCalls: () => planCalls,
     selectedPacks,
     originalStatus,
   };
@@ -376,7 +384,8 @@ test("the default call walks plan → lobby import → pack selection → return
   assert.equal(result.details.navigation.returnedToPlay, true);
   assert.equal(result.details.navigation.url, PLAY_URL);
 
-  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan", "navigateToLobby", "pageEval"]);
+  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan", "builderSourcePlan", "navigateToLobby", "pageEval"]);
+  assert.equal(h.planCalls(), 2);
   assert.equal(h.importStartCalls(), 1);
   assert.deepEqual(h.page.state.campaignPacksUpdateCalls.map(call => call.add.join(",")), [
     "user-alice-homebrew.classes,user-alice-homebrew.spells",
@@ -411,6 +420,71 @@ test("user-* and dotted module ids are rejected before the planner is called", a
   assert.match(dotted.content[0].text, /without dots/);
   assert.equal(h.runtimeCalls.length, 0);
   assert.equal(h.approvals.length, 0);
+});
+
+test("a digest drift on the pre-lobby recheck is TARGET_CHANGED with zero lobby writes", async t => {
+  const changedPlan = { ...makePlan(), digest: "digest-2" };
+  const h = harness(t, {
+    secondPlan: { status: "completed", plan: changedPlan, dump: makeDump() },
+  });
+  const result = await h.tool.execute("digest-drift", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "TARGET_CHANGED");
+  assert.deepEqual(result.details.planDigest, { initial: "digest-1", recheck: "digest-2" });
+  assert.match(result.content[0].text, /Run dryRun again/);
+  assert.equal(h.planCalls(), 2);
+  assert.equal(h.runtimeCalls.some(call => call.action === "navigateToLobby"), false);
+  assert.equal(h.importStartCalls(), 0);
+  assert.deepEqual(h.openCalls, []);
+  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 0);
+  assert.equal(h.page.webContents.getURL(), PLAY_URL);
+});
+
+test("a rejected pre-lobby recheck rejects with zero writes and never enters the lobby", async t => {
+  const h = harness(t, {
+    secondPlan: {
+      status: "rejected",
+      code: "DEPENDENCY_MISSING",
+      issues: { errors: [{ code: "DEPENDENCY_MISSING" }], warnings: [] },
+      retry: false,
+    },
+  });
+  const result = await h.tool.execute("recheck-rejected", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "PLAN_RECHECK_FAILED");
+  assert.equal(result.details.plannerCode, "DEPENDENCY_MISSING");
+  assert.equal(h.planCalls(), 2);
+  assert.equal(h.runtimeCalls.some(call => call.action === "navigateToLobby"), false);
+  assert.equal(h.importStartCalls(), 0);
+  assert.deepEqual(h.openCalls, []);
+  assert.equal(h.page.webContents.getURL(), PLAY_URL);
+});
+
+test("a thrown or digest-less pre-lobby recheck rejects with zero writes", async t => {
+  for (const [label, secondPlan, code] of [
+    ["thrown", Object.assign(new Error("planner exploded"), { code: "EVALUATION_FAILED" }), "PLAN_RECHECK_FAILED"],
+    ["missing-digest", { status: "completed", plan: { ...makePlan(), digest: null }, dump: makeDump() }, "PLAN_DIGEST_MISSING"],
+    ["protocol", { status: "completed", plan: makePlan() }, "PLAN_RECHECK_FAILED"],
+  ]) {
+    const h = harness(t, { secondPlan });
+    const result = await h.tool.execute(`recheck-${label}`, ARGS);
+    assert.equal(result.details.status, "rejected", label);
+    assert.equal(result.details.code, code, label);
+    assert.equal(h.planCalls(), 2, label);
+    assert.equal(h.runtimeCalls.some(call => call.action === "navigateToLobby"), false, label);
+    assert.equal(h.importStartCalls(), 0, label);
+    assert.deepEqual(h.openCalls, [], label);
+  }
+});
+
+test("an initial plan without a digest is rejected before the pre-lobby recheck", async t => {
+  const h = harness(t, { plan: { ...makePlan(), digest: null } });
+  const result = await h.tool.execute("initial-no-digest", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "PLAN_DIGEST_MISSING");
+  assert.equal(h.planCalls(), 1);
+  assert.equal(h.runtimeCalls.some(call => call.action === "navigateToLobby"), false);
+  assert.equal(h.importStartCalls(), 0);
 });
 
 test("non-world or duplicate UUIDs are rejected and roots are deduplicated in order", async t => {
@@ -827,7 +901,7 @@ test("replaying the same tool call returns the recorded result instead of re-imp
   const second = await h.tool.execute("same-call", ARGS);
   assert.deepEqual(second.details, first.details);
   assert.equal(h.importStartCalls(), 1);
-  assert.equal(h.runtimeCalls.filter(call => call.action === "builderSourcePlan").length, 1);
+  assert.equal(h.runtimeCalls.filter(call => call.action === "builderSourcePlan").length, 2);
 
   const conflict = await h.tool.execute("same-call", { ...ARGS, title: "Different" });
   assert.equal(conflict.details.code, "TOOL_CALL_CONFLICT");
