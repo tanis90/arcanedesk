@@ -63,7 +63,7 @@ export class WebContentsFoundryTransport {
  * 只由 map_lobby_return 调用。
  * sceneImport（整场景 JSON 导入）是同一类 mtcompat 档扩展名：只由 map_scene_import
  * 调用，桌面侧不实现导入本体（页面 runtime 负责），只传备团目录内路径与后台直传字节。
- * @typedef {"pageEval" | "navigateToLobby" | "sceneImport" | "apiOperationSearch" | "apiCall"} MtcompatRuntimeAction
+ * @typedef {"pageEval" | "navigateToLobby" | "sceneImport" | "apiOperationSearch" | "apiCall" | "builderSourcePlan"} MtcompatRuntimeAction
  */
 
 /**

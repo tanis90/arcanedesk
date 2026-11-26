@@ -585,3 +585,11 @@
 - 事实记录只能做语言组织，环境痕迹、程度、时间和因果推断也属于新增事实；用户没有要求创作时不补写。交互预算不变。
 - `arcane-assets` 是 `tanis90/arcanedesk-fvtt-mods` 的第一方正式模块，镜像未收录不代表不可用。按名称查询失败后改用仓库 URL 解析一次，再读第一方 manifest 的正式 download；仍走备团目录下载、实际 SHA-256、解压索引与 typed 图片工具，不增加提问，也不以默认图代替完成。
 - 真实矩阵补参：advance 的 readRef 必须包含 items 投影；授予条目的 uuid 与 packId+entryId 二选一。物品 skill 区分真实 Document 与 plain-object 合集投影，后者直接复制 JSON 数据。人物、物品、日志任务在蒸馏段和专项 skill 都要求先读对应领域，混合任务逐份加载，不让物品 skill 代替日志流程。
+
+### 自定义内容接入车卡器（2026-11-27，r59）
+
+- 新增 `arcane-builder-source-attach`：路由“先创作世界 Item，再发布为用户合集并给战役选包”。内容创作仍归 `arcane-item-update`，大厅边界归 `arcane-mt-lobby`；本 skill 只负责发布链与回执对账。交互预算 0，dry run 由模型自行决定，不设人工审批。
+- 模型只看见 `map_builder_source_attach` 一个工具：输入 `{sourceUuids[1..20],moduleId?,title?,version?,dryRun?}`，`moduleId` 缺省 `homebrew-<campaignId>` 且禁止 `user-`；不暴露 planRef、apply、packId、revision、ZIP 或 dump。工具内部走 Map 的 `builderSourcePlan` 与大厅 `builderSourceImportStart`，选包复用 `lobbyCampaignPacksGet/Update`，回 play 复用 `foundry_open(returnPlayUrl)`。
+- 四态严格区分：任何 entryFailures/assetFailures、选包未完成或回读失败都只能 `partial`；导航/超时/job 未知为 `indeterminate`；写入前失败为 `rejected`。partial/indeterminate 带 jobId 或 operationRef，引导 `map_lobby_import_job` 与选包对账，禁止自动重放；revision 漂移只重读选包，不重跑导入。
+- 回读是 play 页固定只读脚本：`__MT_REGISTER_USER_PACKS__`、`game.packs`、`fromUuid`、身份 identifier 与法术 `spellClasses` 标注；模型输出不含 dump、文档全文或 base64。真实玩家建卡/升级/战斗不冒充验收。
+- 数据规范以 `references/userpack-data-spec.md` 随 skill 自包含分发，覆盖五种 advancement 根 Item、法术列表、装备组与 CoC 技能/职业；不运行时依赖 Map 仓文档。大厅新增 action 不进入旧部署的 preflight required 集，避免新工具阻断既有大厅工具。

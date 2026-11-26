@@ -20,11 +20,12 @@ import { AgentHost } from "../src/main/agent-host.js";
 import {
   LOBBY_TOOL_NAMES,
   MAP_API_TOOL_NAMES,
+  BUILDER_SOURCE_TOOL_NAMES,
   activeToolNamesForPoolInProfile,
   TOOL_NAMES_BY_PROFILE,
 } from "../src/main/foundry-tool-policy.js";
 
-const LOBBY = new Set([...LOBBY_TOOL_NAMES, ...MAP_API_TOOL_NAMES]);
+const LOBBY = new Set([...LOBBY_TOOL_NAMES, ...MAP_API_TOOL_NAMES, ...BUILDER_SOURCE_TOOL_NAMES]);
 
 function fakeSession(pool) {
   return {
@@ -86,7 +87,7 @@ test("foundry_open loads the mtcompat lobby tools for the next request and repor
   assert.deepEqual(new Set(result.details.activatedTools), new Set([...LOBBY, "map_page_eval", "map_scene_import"]));
   assert.equal(h.session.calls.length, beforeCalls + 1);
   for (const name of LOBBY) assert.equal(h.session.active.includes(name), true, name);
-  assert.match(result.content[0].text, /Activated for the next model request \(7\)/);
+  assert.match(result.content[0].text, /Activated for the next model request \(8\)/);
 });
 
 test("opening plain Foundry first activates no lobby tools", async () => {

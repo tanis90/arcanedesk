@@ -16,6 +16,7 @@ description: 在奥法地图（mt compat）大厅创建或管理战役、导入�
 | 从空白创建战役/世界 | Map 轻量 action | `arcane-world-create` |
 | 上传 Foundry 世界 ZIP | 长程 job | `arcane-world-import` |
 | 上传/替换合集 ZIP、管理个人内容包或战役选包 | 通用 action、文件 workflow 与长程 job | `arcane-mt-packs` |
+| 把自建职业/种族/专长/法术/装备或 CoC 内容接入车卡器 | 专用 prepared-dump workflow | 先 `arcane-item-update` 创作 Item，再 `arcane-builder-source-attach` |
 | 导入地图图片、场景 JSON 或 UVTT | 文件 workflow | `arcane-scene-import` |
 | 在游戏页处理人物、物品、日志等文档 | 对应领域 skill + Map 声明面 | 先查对应 `apiSurface` 前缀 |
 

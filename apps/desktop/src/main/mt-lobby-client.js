@@ -34,12 +34,17 @@ export const MT_LOBBY_ACTIONS = Object.freeze([
   "lobbyPacksDelete",
   "lobbyCampaignPacksGet",
   "lobbyCampaignPacksUpdate",
+  // map_builder_source_attach 的专用 prepared-dump 入口（Map 内部 workflow，不暴露给通用 api_call）。
+  "builderSourceImportStart",
 ]);
 
 const ACTION_SET = new Set(MT_LOBBY_ACTIONS);
+// 新增专用入口不进入 preflight 的 required 集：旧部署缺少该 action 时只让新工具
+// 报 CAPABILITY_UNAVAILABLE，不连带打断既有大厅工具（world/pack 导入与选包）。
+const OPTIONAL_LOBBY_ACTIONS = new Set(["builderSourceImportStart"]);
 // rulesetsList 由当前部署的 rulesets.mjs 提供，不要求 lobby service 另装同名方法。
-const LOBBY_TOOL_ACTIONS = new Set(MT_LOBBY_ACTIONS.filter(name => name !== "getFileInput" && name !== "lobbyRulesetsList"));
-const WRITE_ACTIONS = new Set(["lobbyImportRun", "lobbyPacksDelete", "lobbyCampaignPacksUpdate", "apiCall"]);
+const LOBBY_TOOL_ACTIONS = new Set(MT_LOBBY_ACTIONS.filter(name => name !== "getFileInput" && name !== "lobbyRulesetsList" && !OPTIONAL_LOBBY_ACTIONS.has(name)));
+const WRITE_ACTIONS = new Set(["lobbyImportRun", "lobbyPacksDelete", "lobbyCampaignPacksUpdate", "apiCall", "builderSourceImportStart"]);
 /** 兼容 compat 的 phase、未来可能的 status/state；succeeded 是 compat 的成功终态。 */
 export const TERMINAL_JOB_STATES = Object.freeze([
   "succeeded", "completed", "failed", "cancelled", "canceled", "aborted", "indeterminate", "done", "rejected", "error",

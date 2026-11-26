@@ -49,6 +49,13 @@ test("Foundry screenshots are read-only visual diagnosis in the task taxonomy", 
   assert.equal(classifyTask({ shape: [{ family, count: 1 }] }), "world.diagnose");
 });
 
+test("custom content publication is a world write in the task taxonomy", () => {
+  const family = toolFamily("map_builder_source_attach");
+  assert.equal(family, "prep.content_publish");
+  assert.equal(sideEffectClass("map_builder_source_attach"), "world_write");
+  assert.equal(classifyTask({ shape: [{ family, count: 1 }] }), "prep.publish_content");
+});
+
 test("duration and elapsed buckets are ordered ranges", () => {
   assert.equal(durationBucket(4_999), "<5s");
   assert.equal(durationBucket(15_000), "10-30s");

@@ -34,6 +34,8 @@ export function toolFamily(toolName) {
     case "foundry_actor_grant_items":
     case "foundry_scene_apply":
       return "combat.execute";
+    case "map_builder_source_attach":
+      return "prep.content_publish";
     case "read":
       return "filesystem.read";
     case "write":
@@ -52,6 +54,7 @@ export function sideEffectClass(toolName) {
     case "foundry.open":
       return "navigation";
     case "combat.execute":
+    case "prep.content_publish":
       return "world_write";
     case "filesystem.write":
       return "filesystem_write";
@@ -73,6 +76,7 @@ export function actionFamily(action) {
     case "compendiumBrowse":
     case "actorRead":
     case "sceneRead":
+    case "builderSourcePlan":
       return "world_info";
     case "battleContext":
     case "staticContext":
@@ -109,6 +113,7 @@ export function classifyTask({ shape, receipts = [] }) {
   if (rereadAfterUncertain) return "combat.recover_uncertain";
   if (has("combat.execute")) return "combat.execute_action";
   if (has("combat.battle_context") || has("combat.turn_context")) return "combat.inspect";
+  if (has("prep.content_publish")) return "prep.publish_content";
   if (has("foundry.diagnose") || has("foundry.visual_inspect")) return "world.diagnose";
   if (has("world.inspect")) return "world.inspect";
   if (has("foundry.open")) return "world.open";

@@ -117,7 +117,7 @@ function defineTool(definition) {
   } });
 }
 
-function requirePrep(host) {
+export function requireLobbyPrep(host) {
   if (host.profile?.mode !== "prep") {
     throw new MtLobbyError("PROFILE_MISMATCH", "Lobby tools are only available in prep mode");
   }
@@ -185,7 +185,7 @@ function compactJobStatus(value) {
  * 模式）及其串行队列，绝不另建队列或走 pageEval。测试/适配宿主可只提供
  * callFoundryRuntime，或只提供 foundryRuntime。
  */
-function callPageRuntime(host, action, args, options) {
+export function callPageRuntime(host, action, args, options) {
   if (typeof host.callFoundryRuntime === "function") return host.callFoundryRuntime(action, args, options);
   const runtime = host.foundryRuntime;
   if (!runtime || (typeof runtime.call !== "function" && typeof runtime.callForSession !== "function")) {
@@ -236,6 +236,52 @@ function navigateToLobbyFailure(error) {
   return new MtLobbyError("JOB_INDETERMINATE", message || "navigateToLobby did not return a result");
 }
 
+/**
+ * play → 受信 lobby 的唯一实现：复用页面 runtime 的 typed navigateToLobby，绝不 pageEval、
+ * ui.nav 或裸 location.assign。map_lobby_return 与 map_builder_source_attach 共用本函数。
+ * 返回 {alreadyInLobby:true} 或 {from, to, returnPlayUrl}；失败一律抛 MtLobbyError，不重放。
+ * @param {any} host @param {any} client @param {any} current @param {{ signal?: AbortSignal }} [options]
+ */
+export async function navigatePlayToLobby(host, client, current, { signal } = {}) {
+  if (current.kind === "lobby") {
+    // 已在大厅不是豁免：任何 completed 都必须先确认 auth/runtime/service 就绪，
+    // 否则紧接着的第一次大厅动作可能落在尚未启动的 SPA 上。
+    await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
+    return { alreadyInLobby: true };
+  }
+  if (current.kind === "auth") {
+    throw new MtLobbyError("LOGIN_REQUIRED", "The panel is in the Keycloak login flow; ask the user to sign in directly");
+  }
+  const runtime = host.foundryRuntime;
+  const hasRuntime = typeof host.callFoundryRuntime === "function"
+    || (Boolean(runtime) && (typeof runtime.call === "function" || typeof runtime.callForSession === "function"));
+  if (!hasRuntime) {
+    throw new MtLobbyError("CAPABILITY_UNAVAILABLE", "The mt-compat page runtime is not installed; call foundry_open on the play page first");
+  }
+
+  // 回程身份只认当前 URL；不读 game.world.id，也不复用旧的 returnPlayUrl 记忆。
+  const returnPlayUrl = current.url;
+  const from = { path: current.path, campaignId: current.campaignId };
+  // completed 回执与 catch 到的预期 NAVIGATED 必须分开：正常返回不允许缺回执。
+  let expectedNavigation = false;
+  let receipt;
+  try {
+    receipt = await callPageRuntime(host, "navigateToLobby", {}, { signal, executionTimeoutMs: 15_000 });
+  } catch (error) {
+    const failure = navigateToLobbyFailure(error);
+    // null = 预期的 NAVIGATED：导航已发起，只进入确认阶段。
+    if (failure) throw failure;
+    expectedNavigation = true;
+  }
+  if (!expectedNavigation
+    && (receipt === null || typeof receipt !== "object" || receipt.status !== "completed")) {
+    throw new MtLobbyError("JOB_INDETERMINATE", "navigateToLobby did not return a completed receipt; the navigation result was not confirmed and was not replayed");
+  }
+
+  const ready = await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
+  return { alreadyInLobby: false, from, to: { path: ready.path }, returnPlayUrl };
+}
+
 /** @param {any} host */
 export function createLobbyTools(host) {
   const lobbyReturn = defineTool({
@@ -261,55 +307,19 @@ export function createLobbyTools(host) {
     ],
     execute: async (_toolCallId, _params, signal) => {
       try {
-        const client = requirePrep(host);
+        const client = requireLobbyPrep(host);
         const panelProfile = typeof host.panelProfileId === "function" ? host.panelProfileId() : null;
         if (panelProfile !== null && panelProfile !== undefined && panelProfile !== PAGE_PROFILES.mtcompat.id) {
           throw new MtLobbyError("PROFILE_MISMATCH", "map_lobby_return is only available on the mt-compat page profile");
         }
         const current = client.classifyPanelUrl();
-        if (current.kind === "lobby") {
-          // 已在大厅不是豁免：任何 completed 都必须先确认 auth/runtime/service 就绪，
-          // 否则紧接着的第一次 campaigns_list 可能落在尚未启动的 SPA 上。
-          await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
+        const navigation = await navigatePlayToLobby(host, client, current, { signal });
+        if (navigation.alreadyInLobby) {
           const details = { status: "completed", alreadyInLobby: true };
           return textResult(details, details);
         }
-        if (current.kind === "auth") {
-          throw new MtLobbyError("LOGIN_REQUIRED", "The panel is in the Keycloak login flow; ask the user to sign in directly");
-        }
-        const runtime = host.foundryRuntime;
-        const hasRuntime = typeof host.callFoundryRuntime === "function"
-          || (Boolean(runtime) && (typeof runtime.call === "function" || typeof runtime.callForSession === "function"));
-        if (!hasRuntime) {
-          throw new MtLobbyError("CAPABILITY_UNAVAILABLE", "The mt-compat page runtime is not installed; call foundry_open on the play page first");
-        }
-
-        // 回程身份只认当前 URL；不读 game.world.id，也不复用旧的 returnPlayUrl 记忆。
-        const returnPlayUrl = current.url;
-        const from = { path: current.path, campaignId: current.campaignId };
-        // completed 回执与 catch 到的预期 NAVIGATED 必须分开：正常返回不允许缺回执。
-        let expectedNavigation = false;
-        let receipt;
-        try {
-          receipt = await callPageRuntime(host, "navigateToLobby", {}, { signal, executionTimeoutMs: 15_000 });
-        } catch (error) {
-          const failure = navigateToLobbyFailure(error);
-          // null = 预期的 NAVIGATED：导航已发起，只进入确认阶段。
-          if (failure) throw failure;
-          expectedNavigation = true;
-        }
-        if (!expectedNavigation
-          && (receipt === null || typeof receipt !== "object" || receipt.status !== "completed")) {
-          throw new MtLobbyError("JOB_INDETERMINATE", "navigateToLobby did not return a completed receipt; the navigation result was not confirmed and was not replayed");
-        }
-
-        const ready = await client.waitForLobbyReady({ signal, expectedOrigin: current.origin });
-        const details = {
-          status: "completed",
-          from,
-          to: { path: ready.path },
-          returnPlayUrl,
-        };
+        const { from, to, returnPlayUrl } = navigation;
+        const details = { status: "completed", from, to, returnPlayUrl };
         return textResult(
           `Returned to the mt-compat lobby from ${from.path} (campaign ${from.campaignId}). ` +
             `Lobby service is ready; lobby tools can be used now. ` +
@@ -358,7 +368,7 @@ export function createLobbyTools(host) {
       let file;
       let runDispatched = false;
       try {
-        const client = requirePrep(host);
+        const client = requireLobbyPrep(host);
         if (params.expectedKind !== "collection") {
           const supported = await client.call("lobbyRulesetsList", {}, { signal });
           const rulesets = Array.isArray(supported?.rulesets) ? supported.rulesets : [];
@@ -423,7 +433,7 @@ export function createLobbyTools(host) {
     executionMode: "sequential",
     execute: async (_toolCallId, params, signal) => {
       try {
-        const client = requirePrep(host);
+        const client = requireLobbyPrep(host);
         if (params.action === "cancel") {
           const result = await client.cancelJob(params.jobId, { signal });
           const compact = compactJobStatus(result);

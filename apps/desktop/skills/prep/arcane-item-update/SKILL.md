@@ -1,6 +1,6 @@
 ---
 name: arcane-item-update
-description: 在 Foundry 或奥法地图（mtcompat play）中复制合集物品、创建自定义世界 Item（装备/武器/法术/特性）、给已有物品换图，或需要区分“创建世界 Item”和“把物品授予 Actor”时使用。来源查找配合 arcane-content-catalog，人物授予配合 arcane-actor-update。
+description: 在 Foundry 或奥法地图（mtcompat play）中复制合集物品、创建自定义世界 Item（装备/武器/法术/特性），给已有物品换图，或需要区分“创建世界 Item”和“把物品授予 Actor”时使用。来源查找配合 arcane-content-catalog，人物授予配合 arcane-actor-update；自定义职业/种族/专长等要接入车卡器时，创作完世界 Item 后接 arcane-builder-source-attach。
 ---
 
 # 物品（Item）创建与更新
@@ -63,3 +63,12 @@ foundry_image({
 - 报告实际完成的是世界 Item、Actor 嵌入 Item，还是仅发现来源；给出 UUID 和来源。
 - 图片看 `dataPath` 与文档步骤，写入失败不重复上传。
 - 不把合集物品默认字段当作自定义规则已验证，也不把物品卡可显示当作自动化可执行。
+
+## 自定义内容要接入车卡器
+
+创建世界 Item 只是第一步。用户要把自建职业、子职业、物种/种族、背景、专长、法术、装备或 CoC 技能/职业放进奥法地图车卡器时：
+
+1. 先按本 skill 在当前世界创建或修改这些 Item，并回读 `uuid/name/type/system` 与相关 `advancement/activities/effects`。
+2. 再读 `arcane-builder-source-attach`，用它的 `map_builder_source_attach` 发布为用户合集并给当前战役选包；涉及大厅页面时先读 `arcane-mt-lobby`。
+3. 不要自己上传 ZIP、拼 `module.json`、改 `user-*` 包名、写 revision 或调用裸 HTTP；也不要把“世界 Item 已创建”当成“玩家车卡器已可用”。
+4. 发布回执的 `completed/partial/indeterminate/rejected` 按该 skill 对账；条目/素材失败或回读失败不能报成完成。

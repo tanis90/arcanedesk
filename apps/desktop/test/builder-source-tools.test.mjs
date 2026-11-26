@@ -1,0 +1,622 @@
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { Value } from "typebox/value";
+import { createBuilderSourceTools } from "../src/main/builder-source.js";
+import { MtLobbyClient } from "../src/main/mt-lobby-client.js";
+import { LOBBY_URL, createLobbyFixture } from "./fixtures/lobby-harness.mjs";
+
+const PLAY_URL = "https://arcanemap.com/user-files/compat/play.html?campaign=campaign-1";
+const MODULE_ID = "alice-homebrew";
+const ROOT_CLASS = "Item.aaaaaaaaaaaaaaaa";
+const ROOT_SPELL = "Item.bbbbbbbbbbbbbbbb";
+const CLASS_UUID = "Compendium.user-alice-homebrew.classes.Item.aaaaaaaaaaaaaaaa";
+const SPELL_UUID = "Compendium.user-alice-homebrew.spells.Item.bbbbbbbbbbbbbbbb";
+
+function makeDump(moduleId = MODULE_ID) {
+  return {
+    moduleId,
+    moduleJson: { id: moduleId, title: "Alice 自建合集", version: "1.0.0" },
+    title: "Alice 自建合集",
+    version: "1.0.0",
+    packs: [
+      {
+        name: "classes",
+        label: "自建职业",
+        type: "Item",
+        system: "dnd5e",
+        entries: [{
+          _id: "aaaaaaaaaaaaaaaa",
+          name: "Mage",
+          type: "class",
+          system: {
+            identifier: "mage",
+            advancement: [{
+              type: "ItemGrant",
+              configuration: { items: [`Compendium.${moduleId}.spells.Item.bbbbbbbbbbbbbbbb`] },
+            }],
+          },
+        }],
+      },
+      {
+        name: "spells",
+        label: "自建法术",
+        type: "Item",
+        system: "dnd5e",
+        entries: [{
+          _id: "bbbbbbbbbbbbbbbb",
+          name: "Ember",
+          type: "spell",
+          flags: { [moduleId]: { spellClasses: ["mage"] } },
+        }],
+      },
+    ],
+    assets: [{ path: "assets/ember.png", bytesBase64: "cG5n" }],
+    rawAssetBytes: 3,
+    entryCount: 2,
+    outwardEntryCount: 2,
+  };
+}
+
+function makePlan(moduleId = MODULE_ID) {
+  return {
+    digest: "digest-1",
+    rootCount: 2,
+    dependencyCount: 1,
+    exposure: { identity: 1, spells: 1 },
+    packs: [
+      { packId: "classes", operation: "create", entries: 1 },
+      { packId: "spells", operation: "create", entries: 1 },
+    ],
+    assets: { reuse: 0, upload: 1, bytes: 3 },
+    coverage: {
+      schema: "passed",
+      identityAndVersions: "passed",
+      dependencyClosure: "passed",
+      catalogExposure: "passed",
+      spellLists: "passed",
+      startingEquipment: "not-applicable",
+      assetPreflight: "passed",
+      campaignPreflight: "passed",
+      advancementApply: "not-run",
+      persistenceAfterRefresh: "not-run",
+      playerBuild: "not-run",
+      automationExecution: "not-run",
+      crossClientRefresh: "not-run",
+    },
+    issues: { errors: [], warnings: [] },
+    ...(moduleId === MODULE_ID ? {} : {}),
+  };
+}
+
+function parseExpectations(code) {
+  const match = /const EXPECTED = (\{.*\});\n  const missing/s.exec(code);
+  assert.ok(match, "pageEval must embed EXPECTED");
+  return JSON.parse(match[1]);
+}
+
+function verificationFor(expectations, { omitPack = null, unresolvedRoot = null, spellClasses } = {}) {
+  const packs = expectations.packIds.map(packId => ({ packId, present: packId !== omitPack, count: 1 }));
+  const roots = expectations.roots.map(root => {
+    if (root.uuid === unresolvedRoot) return { ...root, resolved: false };
+    return {
+      ...root,
+      resolved: true,
+      actualType: root.type,
+      actualIdentifier: root.identifier,
+      spellClasses: spellClasses !== undefined ? spellClasses : (root.expectedSpellClasses ?? null),
+    };
+  });
+  return {
+    register: { called: true, ok: true },
+    packs,
+    roots,
+    missing: omitPack ? [{ feature: "pack", path: omitPack }] : (unresolvedRoot ? [{ feature: "uuid", path: unresolvedRoot }] : []),
+  };
+}
+
+function harness(t, {
+  approved = true,
+  plan = null,
+  dump = null,
+  importError = null,
+  jobStatus = null,
+  packsUpdate = null,
+  verification = null,
+  navigateError = null,
+  openPlay = true,
+} = {}) {
+  const page = createLobbyFixture({ url: PLAY_URL });
+  const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-builder-source-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const calls = [];
+  const runtimeCalls = [];
+  const approvals = [];
+  const openCalls = [];
+  const effectiveDump = dump ?? makeDump();
+  const effectivePlan = plan ?? makePlan(effectiveDump.moduleId);
+
+  const service = page.service;
+  let importStartCalls = 0;
+  const selectedPacks = new Set(["pack-a"]);
+  service.lobbyCampaignPacksGet = async ({ campaignId }) => {
+    page.state.campaignPacksGetCalls.push({ campaignId });
+    return {
+      campaignId,
+      revision: page.state.campaignRevision,
+      selected: [...selectedPacks],
+      missing: [],
+      builtIn: [{ id: "srd", readOnly: true }],
+      enabledSources: { srd: true },
+    };
+  };
+  if (!packsUpdate) {
+    service.lobbyCampaignPacksUpdate = async ({ campaignId, expectedRevision, add, remove }) => {
+      page.state.campaignPacksUpdateCalls.push({ campaignId, expectedRevision, add, remove });
+      if (String(expectedRevision) !== String(page.state.campaignRevision)) throw Object.assign(new Error("stale revision"), { code: "REVISION_MISMATCH" });
+      for (const packId of add ?? []) selectedPacks.add(packId);
+      page.state.campaignRevision += 1;
+      return { campaignId, revision: page.state.campaignRevision, selected: [...selectedPacks] };
+    };
+  }
+  service.builderSourceImportStart = async payload => {
+    importStartCalls += 1;
+    calls.push({ action: "builderSourceImportStart", args: payload });
+    if (importError) throw importError;
+    return { jobId: "job-1", plan: effectivePlan };
+  };
+  const originalStatus = service.lobbyImportStatus;
+  if (jobStatus) service.lobbyImportStatus = jobStatus;
+  if (packsUpdate) service.lobbyCampaignPacksUpdate = packsUpdate;
+
+  const client = new MtLobbyClient({ getWebContents: () => page.webContents, readyTimeoutMs: 2_000, readyPollMs: 10 });
+  const host = {
+    profile: { mode: "prep" },
+    log: () => {},
+    panelProfileId: () => "mtcompat",
+    lobbyClient: () => client,
+    operationStorageDir: directory,
+    describeCurrent: () => ({ id: "session-1" }),
+    taskCoordinator: () => ({
+      currentInputBinding: () => ({
+        taskId: "task-1",
+        metadata: Promise.resolve({ world: { origin: "https://arcanemap.com", id: "world-1" } }),
+      }),
+    }),
+    maybeRequestApproval: async request => {
+      approvals.push(request);
+      return approved;
+    },
+    openFoundry: async url => {
+      openCalls.push(url);
+      if (!openPlay) return { ok: false, summary: "navigation refused" };
+      page.webContents.navigate(PLAY_URL);
+      return { ok: true, profile: "mtcompat", summary: "opened" };
+    },
+    callFoundryRuntime: async (action, args, options) => {
+      runtimeCalls.push({ action, args, options });
+      if (action === "builderSourcePlan") {
+        return { status: "completed", plan: effectivePlan, dump: effectiveDump };
+      }
+      if (action === "navigateToLobby") {
+        if (navigateError) throw navigateError;
+        page.webContents.navigate(LOBBY_URL);
+        return { status: "completed" };
+      }
+      if (action === "pageEval") {
+        const expectations = parseExpectations(args.code);
+        const value = verification ? verification(expectations) : verificationFor(expectations);
+        return { status: "completed", value, touched: [], missing: [] };
+      }
+      throw new Error(`unexpected runtime action ${action}`);
+    },
+  };
+  const tools = new Map(createBuilderSourceTools(host).map(tool => [tool.name, tool]));
+  return {
+    page, directory, client, service, host, tools, calls, runtimeCalls, approvals, openCalls,
+    tool: tools.get("map_builder_source_attach"),
+    importStartCalls: () => importStartCalls,
+    selectedPacks,
+    originalStatus,
+  };
+}
+
+const ARGS = { sourceUuids: [ROOT_CLASS, ROOT_SPELL], moduleId: MODULE_ID, title: "灰烬秘法" };
+
+test("the tool pool exposes only the builder source tool with a strict schema", () => {
+  const tools = new Map(createBuilderSourceTools({ profile: { mode: "prep" } }).map(tool => [tool.name, tool]));
+  assert.deepEqual([...tools.keys()], ["map_builder_source_attach"]);
+  const schema = tools.get("map_builder_source_attach").parameters;
+  assert.equal(Value.Check(schema, ARGS), true);
+  assert.equal(Value.Check(schema, { sourceUuids: [ROOT_CLASS] }), true);
+  assert.equal(Value.Check(schema, { sourceUuids: [] }), false);
+  assert.equal(Value.Check(schema, { sourceUuids: [ROOT_CLASS], dryRun: "yes" }), false);
+  assert.equal(Value.Check(schema, { sourceUuids: [ROOT_CLASS], planRef: "plan-1" }), false);
+  assert.equal(Value.Check(schema, { sourceUuids: [ROOT_CLASS], apply: true }), false);
+  assert.equal(Value.Check(schema, { sourceUuids: [ROOT_CLASS], approval: true }), false);
+  assert.equal(Value.Check(schema, { sourceUuids: Array.from({ length: 21 }, (_, i) => `Item.${"a".repeat(15)}${i % 10}`) }), false);
+  const description = tools.get("map_builder_source_attach").description;
+  assert.match(description, /dryRun:true/);
+  assert.match(description, /sourceUuids/);
+  assert.match(description, /\{sourceUuids:/);
+  assert.match(description, /never returns the dump or Base64/);
+});
+
+test("a dry run returns preview + coverage + issues and performs zero writes", async t => {
+  const h = harness(t);
+  const result = await h.tool.execute("dry-1", { ...ARGS, dryRun: true });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.details.status, "preview");
+  assert.equal(result.details.plan.digest, "digest-1");
+  assert.equal(result.details.plan.rootCount, 2);
+  assert.equal(result.details.coverage.schema, "passed");
+  assert.deepEqual(result.details.issues.errors, []);
+  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan"]);
+  assert.equal(h.calls.length, 0, "no lobby import");
+  assert.equal(h.importStartCalls(), 0);
+  assert.deepEqual(h.openCalls, []);
+  assert.deepEqual(readdirSync(h.directory), [], "no operation journal is written for a dry run");
+  const payload = JSON.stringify(result);
+  assert.equal(payload.includes("bytesBase64"), false);
+  assert.equal(payload.includes("cG5n"), false);
+  assert.equal(payload.includes('"dump"'), false);
+});
+
+test("a rejected plan is returned as rejected before any lobby navigation", async t => {
+  const h = harness(t, {
+    plan: { status: "rejected", code: "PLAN_REJECTED", issues: { errors: [{ code: "BROKEN_REF" }], warnings: [] }, retry: false },
+  });
+  // The runtime mock always returns completed; make the plan itself rejected instead.
+  h.host.callFoundryRuntime = async (action, args, options) => {
+    h.runtimeCalls.push({ action, args, options });
+    assert.equal(action, "builderSourcePlan");
+    return { status: "rejected", code: "DEPENDENCY_MISSING", issues: { errors: [{ code: "DEPENDENCY_MISSING" }], warnings: [] }, retry: false };
+  };
+  const result = await h.tool.execute("plan-rejected", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "DEPENDENCY_MISSING");
+  assert.deepEqual(result.details.issues.errors, [{ code: "DEPENDENCY_MISSING" }]);
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.openCalls.length, 0);
+  assert.equal(h.page.webContents.getURL(), PLAY_URL);
+  assert.deepEqual(h.approvals.length, 1, "approval is the shared write gate before planning the publication");
+});
+
+test("the default call walks plan → lobby import → pack selection → return play → verification", async t => {
+  const h = harness(t);
+  const result = await h.tool.execute("apply-1", ARGS);
+  assert.equal(result.isError, undefined, JSON.stringify(result.details));
+  assert.equal(result.details.status, "completed");
+  assert.equal(result.details.jobId, "job-1");
+  assert.equal(typeof result.details.operationRef, "string");
+  assert.deepEqual(result.details.published.uuidMap, [
+    { sourceUuid: ROOT_CLASS, uuid: CLASS_UUID },
+    { sourceUuid: ROOT_SPELL, uuid: SPELL_UUID },
+  ]);
+  assert.deepEqual(result.details.campaign.attachedPackIds, ["user-alice-homebrew.classes", "user-alice-homebrew.spells"]);
+  assert.equal(result.details.verification.packRegistry, "passed");
+  assert.equal(result.details.verification.identityCandidates, "passed");
+  assert.equal(result.details.verification.spellLists, "passed");
+  assert.equal(result.details.verification.dependencyResolution, "passed");
+  assert.deepEqual(result.details.verification.unresolvedRefs, []);
+  assert.equal(result.details.navigation.returnedToPlay, true);
+  assert.equal(result.details.navigation.url, PLAY_URL);
+
+  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan", "navigateToLobby", "pageEval"]);
+  assert.equal(h.importStartCalls(), 1);
+  assert.deepEqual(h.page.state.campaignPacksUpdateCalls.map(call => call.add.join(",")), [
+    "user-alice-homebrew.classes,user-alice-homebrew.spells",
+  ]);
+  assert.deepEqual(h.openCalls, [PLAY_URL]);
+  assert.equal(h.approvals.length, 1);
+  assert.equal(h.approvals[0].tool, "map_builder_source_attach");
+
+  const payload = JSON.stringify(result);
+  assert.equal(payload.includes("bytesBase64"), false, "dump asset bytes never reach the model");
+  assert.equal(payload.includes("cG5n"), false);
+  assert.equal(payload.includes('"dump"'), false);
+  assert.match(result.content[0].text, /not proof that a real player completed character creation/);
+});
+
+test("moduleId defaults to homebrew-<campaignId> and the planner receives it", async t => {
+  const h = harness(t, { dump: makeDump("homebrew-campaign-1"), plan: makePlan("homebrew-campaign-1") });
+  const result = await h.tool.execute("default-module", { sourceUuids: [ROOT_CLASS, ROOT_SPELL] });
+  assert.equal(result.details.module.id, "homebrew-campaign-1");
+  const planCall = h.runtimeCalls.find(call => call.action === "builderSourcePlan");
+  assert.equal(planCall.args.moduleId, "homebrew-campaign-1");
+});
+
+test("user-* module ids are rejected before the planner is called", async t => {
+  const h = harness(t);
+  const result = await h.tool.execute("bad-module", { ...ARGS, moduleId: "user-alice-homebrew" });
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "INPUT_INVALID");
+  assert.equal(h.runtimeCalls.length, 0);
+  assert.equal(h.approvals.length, 0);
+});
+
+test("non-world or duplicate UUIDs are rejected and roots are deduplicated in order", async t => {
+  const h = harness(t);
+  const bad = await h.tool.execute("bad-uuid", { ...ARGS, sourceUuids: ["Compendium.x.classes.Item.aaaaaaaaaaaaaaaa"] });
+  assert.equal(bad.details.code, "INPUT_INVALID");
+  assert.equal(h.runtimeCalls.length, 0);
+
+  const dedup = await h.tool.execute("dedup", { ...ARGS, sourceUuids: [ROOT_CLASS, ROOT_CLASS, ROOT_SPELL], dryRun: true });
+  const planCall = h.runtimeCalls.find(call => call.action === "builderSourcePlan");
+  assert.deepEqual(planCall.args.sourceUuids, [ROOT_CLASS, ROOT_SPELL]);
+  assert.equal(dedup.details.status, "preview");
+});
+
+test("a campaign pack preflight failure rejects before any import is started", async t => {
+  const h = harness(t);
+  h.client.call = async action => {
+    if (action === "lobbyCampaignPacksGet") throw Object.assign(new Error("denied"), { code: "LOGIN_REQUIRED" });
+    return {};
+  };
+  const result = await h.tool.execute("preflight", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "LOGIN_REQUIRED");
+  assert.equal(result.details.stages.at(-1).step, "campaign_preflight");
+  assert.equal(h.importStartCalls(), 0);
+});
+
+test("entryFailures or assetFailures make the result partial, never completed", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: {
+        batchId: "batch-1",
+        entryFailures: [{ entryId: "aaaaaaaaaaaaaaaa", error: "bad schema" }],
+        assetFailures: [],
+        failures: [],
+      },
+    }),
+  });
+  const result = await h.tool.execute("entry-failure", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "IMPORT_ENTRY_FAILURES");
+  assert.equal(result.details.jobId, "job-1");
+  assert.equal(result.details.retry, false);
+  assert.equal(result.details.published.entryFailures.length, 1);
+  assert.match(result.content[0].text, /map_lobby_import_job/);
+  assert.equal(h.importStartCalls(), 1);
+  assert.deepEqual(h.openCalls, [], "no return to play is claimed after a partial import");
+  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 0, "packs are not changed for an incomplete import");
+});
+
+test("a failed import job is partial with the job id and is not replayed", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({ jobId, phase: "failed", terminal: true, report: { failures: [{ reason: "disk" }] } }),
+  });
+  const result = await h.tool.execute("job-failed", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "IMPORT_FAILED");
+  assert.equal(result.details.jobId, "job-1");
+  assert.equal(result.details.retry, false);
+  assert.equal(h.importStartCalls(), 1);
+  assert.match(result.content[0].text, /never replay|do not replay/i);
+});
+
+test("an indeterminate job keeps the job id and never re-dispatches the import", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({ jobId, phase: "indeterminate", terminal: true, indeterminate: true }),
+  });
+  const result = await h.tool.execute("job-indeterminate", ARGS);
+  assert.equal(result.details.status, "indeterminate");
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(result.details.jobId, "job-1");
+  assert.equal(result.details.retry, false);
+  assert.equal(h.importStartCalls(), 1);
+  assert.deepEqual(h.openCalls, []);
+});
+
+test("an import call with an unknown outcome is indeterminate and not replayed", async t => {
+  const h = harness(t, {
+    importError: Object.assign(new Error("timeout after dispatch"), { code: "JOB_INDETERMINATE" }),
+  });
+  const result = await h.tool.execute("import-unknown", ARGS);
+  assert.equal(result.details.status, "indeterminate");
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(result.details.jobId, null);
+  assert.equal(h.importStartCalls(), 1);
+  assert.match(result.content[0].text, /never replay/i);
+});
+
+test("a pre-dispatch lobby capability failure rejects without claiming a job", async t => {
+  const h = harness(t, {
+    importError: Object.assign(new Error("builderSourceImportStart is not implemented"), { code: "CAPABILITY_UNAVAILABLE" }),
+  });
+  const result = await h.tool.execute("import-unavailable", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "CAPABILITY_UNAVAILABLE");
+  assert.equal(result.details.jobId, null);
+  assert.equal(h.importStartCalls(), 1);
+});
+
+test("revision drift re-reads the campaign selection without re-running the import", async t => {
+  const h = harness(t, {
+    packsUpdate: async function update({ campaignId, expectedRevision, add }) {
+      h.page.state.campaignPacksUpdateCalls.push({ campaignId, expectedRevision, add });
+      if (h.page.state.campaignPacksUpdateCalls.length === 1) {
+        throw Object.assign(new Error("stale revision"), { code: "REVISION_MISMATCH" });
+      }
+      for (const packId of add ?? []) h.selectedPacks.add(packId);
+      h.page.state.campaignRevision += 1;
+      return { campaignId, revision: h.page.state.campaignRevision, selected: ["pack-a", ...(add ?? [])] };
+    },
+  });
+  const result = await h.tool.execute("revision-drift", ARGS);
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 2);
+  assert.equal(h.importStartCalls(), 1);
+  assert.ok(h.page.state.campaignPacksGetCalls.length >= 3, "selection is re-read after drift");
+});
+
+test("persistent revision drift is partial with the job id and no import replay", async t => {
+  const h = harness(t, {
+    packsUpdate: async function update({ campaignId, expectedRevision, add }) {
+      h.page.state.campaignPacksUpdateCalls.push({ campaignId, expectedRevision, add });
+      throw Object.assign(new Error("stale revision"), { code: "REVISION_MISMATCH" });
+    },
+  });
+  const result = await h.tool.execute("revision-stuck", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "REVISION_MISMATCH");
+  assert.equal(result.details.jobId, "job-1");
+  assert.equal(h.importStartCalls(), 1);
+  assert.equal(h.page.state.campaignPacksUpdateCalls.length, 3);
+  assert.match(result.content[0].text, /retry only the selection|re-read the campaign packs/i);
+});
+
+test("a failed post-import read-back is partial, not completed", async t => {
+  const h = harness(t, {
+    verification: expectations => verificationFor(expectations, { omitPack: "user-alice-homebrew.spells" }),
+  });
+  const result = await h.tool.execute("verify-pack-missing", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "VERIFICATION_FAILED");
+  assert.equal(result.details.verification.packRegistry, "failed");
+  assert.equal(result.details.verification.dependencyResolution, "failed");
+  assert.ok(result.details.verification.unresolvedRefs.includes("user-alice-homebrew.spells"));
+  assert.equal(result.details.navigation.returnedToPlay, true);
+});
+
+test("an unresolved root UUID fails verification and identity/spell checks", async t => {
+  const h = harness(t, {
+    verification: expectations => verificationFor(expectations, { unresolvedRoot: CLASS_UUID }),
+  });
+  const result = await h.tool.execute("verify-root-missing", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.verification.identityCandidates, "failed");
+  assert.equal(result.details.verification.dependencyResolution, "failed");
+  assert.ok(result.details.verification.unresolvedRefs.includes(CLASS_UUID));
+});
+
+test("a spell-list mismatch fails the spell-list check", async t => {
+  const h = harness(t, {
+    verification: expectations => verificationFor(expectations, { spellClasses: ["cleric"] }),
+  });
+  const result = await h.tool.execute("verify-spells", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.verification.spellLists, "failed");
+});
+
+test("an unconfirmed return to play is indeterminate with completed import and pack state", async t => {
+  const h = harness(t, { openPlay: false });
+  const result = await h.tool.execute("return-failed", ARGS);
+  assert.equal(result.details.status, "indeterminate");
+  assert.equal(result.details.code, "NAVIGATION_FAILED");
+  assert.equal(result.details.jobId, "job-1");
+  assert.deepEqual(result.details.campaign.attachedPackIds, ["user-alice-homebrew.classes", "user-alice-homebrew.spells"]);
+  assert.equal(result.details.navigation.returnedToPlay, false);
+  assert.equal(h.importStartCalls(), 1);
+});
+
+test("navigating to the lobby before the play page rejects with PROFILE_MISMATCH", async t => {
+  const h = harness(t);
+  h.page.webContents.navigate(LOBBY_URL);
+  const result = await h.tool.execute("already-lobby", ARGS);
+  assert.equal(result.details.code, "PROFILE_MISMATCH");
+  assert.equal(h.runtimeCalls.length, 0);
+});
+
+test("a login failure during lobby navigation rejects before importing", async t => {
+  const h = harness(t, { navigateError: Object.assign(new Error("login"), { code: "LOGIN_REQUIRED" }) });
+  const result = await h.tool.execute("login-nav", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "LOGIN_REQUIRED");
+  assert.equal(h.importStartCalls(), 0);
+});
+
+test("an uncertain lobby navigation is indeterminate rather than rejected", async t => {
+  const h = harness(t, { navigateError: Object.assign(new Error("timeout"), { code: "JOB_INDETERMINATE" }) });
+  const result = await h.tool.execute("unknown-nav", ARGS);
+  assert.equal(result.details.status, "indeterminate");
+  assert.equal(result.details.code, "JOB_INDETERMINATE");
+  assert.equal(result.details.jobId, null);
+  assert.equal(h.importStartCalls(), 0);
+});
+
+test("a declined write gate performs no plan, import, or navigation", async t => {
+  const h = harness(t, { approved: false });
+  const result = await h.tool.execute("declined", ARGS);
+  assert.equal(result.details.code, "DECLINED");
+  assert.equal(h.runtimeCalls.length, 0);
+  assert.equal(h.importStartCalls(), 0);
+  assert.deepEqual(h.openCalls, []);
+  assert.deepEqual(readdirSync(h.directory), []);
+});
+
+test("an internal canonical reference outside the dump rejects before any lobby write", async t => {
+  const dump = makeDump();
+  dump.packs[0].entries[0].system.advancement[0].configuration.items = [
+    "Compendium.alice-homebrew.spells.Item.cccccccccccccccc",
+  ];
+  const h = harness(t, { dump });
+  const result = await h.tool.execute("broken-closure", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "DEPENDENCY_CLOSURE_FAILED");
+  assert.ok(result.details.unresolvedRefs.some(ref => ref.includes("cccccccccccccccc")));
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.importStartCalls(), 0);
+});
+
+test("a leftover world UUID and a module-id mismatch both reject before importing", async t => {
+  const leftover = makeDump();
+  leftover.packs[0].entries[0].system.description = "@UUID[Item.aaaaaaaaaaaaaaaa]";
+  const h = harness(t, { dump: leftover });
+  const leftoverResult = await h.tool.execute("world-ref", ARGS);
+  assert.equal(leftoverResult.details.code, "DEPENDENCY_CLOSURE_FAILED");
+  assert.equal(h.importStartCalls(), 0);
+
+  const mismatch = harness(t, { dump: makeDump("other-module") });
+  const mismatchResult = await mismatch.tool.execute("module-mismatch", ARGS);
+  assert.equal(mismatchResult.details.code, "PLAN_PROTOCOL_INVALID");
+  assert.equal(mismatch.importStartCalls(), 0);
+});
+
+test("a plan that still carries blocking issues rejects without importing", async t => {
+  const plan = makePlan();
+  plan.issues = { errors: [{ code: "SPELL_LIST_EMPTY" }], warnings: [] };
+  const h = harness(t, { plan });
+  const result = await h.tool.execute("plan-issues", ARGS);
+  assert.equal(result.details.status, "rejected");
+  assert.equal(result.details.code, "PLAN_ISSUES");
+  assert.equal(result.details.issues.errors[0].code, "SPELL_LIST_EMPTY");
+  assert.equal(h.importStartCalls(), 0);
+});
+
+test("an import report uuidMap overrides same-id derivation for publication and read-back", async t => {
+  const alternate = "Compendium.user-alice-homebrew.classes.Item.dddddddddddddddd";
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: { batchId: "batch-2", uuidMap: [{ sourceUuid: ROOT_CLASS, uuid: alternate }], failures: [] },
+    }),
+  });
+  const result = await h.tool.execute("report-uuid", ARGS);
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  assert.equal(result.details.published.batchId, "batch-2");
+  assert.equal(result.details.published.uuidMap.find(row => row.sourceUuid === ROOT_CLASS).uuid, alternate);
+  const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
+  assert.match(pageEval.args.code, new RegExp(alternate.replaceAll(".", "\\.")));
+});
+
+test("replaying the same tool call returns the recorded result instead of re-importing", async t => {
+  const h = harness(t);
+  const first = await h.tool.execute("same-call", ARGS);
+  const second = await h.tool.execute("same-call", ARGS);
+  assert.deepEqual(second.details, first.details);
+  assert.equal(h.importStartCalls(), 1);
+  assert.equal(h.runtimeCalls.filter(call => call.action === "builderSourcePlan").length, 1);
+
+  const conflict = await h.tool.execute("same-call", { ...ARGS, title: "Different" });
+  assert.equal(conflict.details.code, "TOOL_CALL_CONFLICT");
+  assert.equal(h.importStartCalls(), 1);
+});

@@ -4,6 +4,7 @@
 > 涉及仓：mt-foundry-compat（业务真源）→ arcanedesk（桌面端 0.9.0）→ skills r49
 > 日期：2026-11-11（设计）/ 2026-11-12（实现与验收）
 > 追加：play → lobby → play 往返（方案 B）见 [foundry-open-lobby-return-plan.md](foundry-open-lobby-return-plan.md)；大厅 typed 工具随之由 8 个增至 9 个。
+> 追加：自定义内容接入车卡器的 `map_builder_source_attach`（第 10 个 mtcompat 专用工具）见 [map-builder-source-attach-design.md](map-builder-source-attach-design.md)。它复用本文件的 typed 大厅通道与选包 action，不新增模型可见的通用调用面。
 
 ## 0. 目标与边界
 

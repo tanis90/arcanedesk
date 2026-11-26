@@ -41,6 +41,14 @@ export const MAP_API_TOOL_NAMES = Object.freeze([
   "map_api_call",
 ]);
 
+/**
+ * 自定义内容接入车卡器（Map builderSourcePlan → 大厅 prepared-dump 导入 → 选包 → 回 play）。
+ * 只进 mtcompat 备团面：普通 Foundry 没有 Map 大厅，combat 不做内容发布。
+ */
+export const BUILDER_SOURCE_TOOL_NAMES = Object.freeze([
+  "map_builder_source_attach",
+]);
+
 const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
   combat: Object.freeze(["foundry_open", "world_status", "foundry_static_context", "foundry_play_context",
     "foundry_execute_action", "foundry_conditions_set"]),
@@ -49,6 +57,7 @@ const MTCOMPAT_TOOL_NAMES_BY_MODE = Object.freeze({
     "foundry_actor_update", "foundry_actor_grant_items", "foundry_actor_advance", "foundry_scene_get", "foundry_scene_apply", "map_scene_import", "foundry_image", "foundry_module_prepare", "request_user_input", "open_document",
     ...LOBBY_TOOL_NAMES,
     ...MAP_API_TOOL_NAMES,
+    ...BUILDER_SOURCE_TOOL_NAMES,
     "web_search", "web_fetch"]),
 });
 
@@ -84,9 +93,10 @@ export const DESKTOP_FOUNDRY_ACTIONS = /** @type {const} */ ([
  * ——四者都不在 SDK 的 foundry 契约（ALL_DIRECT_ACTIONS）里，只进本表，foundry 档
  * client 的白名单与行为逐字不变。宿主侧 GM 门（requireGM 默认 true）与中断语义走 SDK
  * 既有路径。navigateToLobby 与 play 页原生「返回战役大厅」共用实现，仅
- * map_lobby_return 调用；sceneImport 只由 map_scene_import 调用。
+ * map_lobby_return 调用；sceneImport 只由 map_scene_import 调用。builderSourcePlan 是
+ * play 页的只读规划入口，只由 map_builder_source_attach 调用。
  */
-export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby", "apiOperationSearch", "apiCall"]);
+export const MTCOMPAT_RUNTIME_ACTIONS = /** @type {const} */ ([...DESKTOP_FOUNDRY_ACTIONS, "sceneImport", "pageEval", "navigateToLobby", "apiOperationSearch", "apiCall", "builderSourcePlan"]);
 
 /**
  * Pi built-ins for prep. The coding quartet plus the read-only trio
