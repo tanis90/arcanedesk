@@ -89,6 +89,7 @@ const REQUIRED_MARKERS = new Map([
     "世界 Item 创建成功不等于玩家可用",
     "页面往返与统一写入门",
     "readback: failed",
+    "game.ready",
   ]],
   ["skills/prep/arcane-builder-source-attach/references/userpack-data-spec.md", [
     "五种 advancement 根 Item",

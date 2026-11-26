@@ -805,6 +805,27 @@ async function waitForPlay(client, campaignId, signal) {
   return null;
 }
 
+/**
+ * URL 回到 play 不等于游戏就绪：pageEval 前必须经 typed worldInfo 确认真实的
+ * game.ready 与 world id，并再次确认当前仍是同一 campaign 的 play 页。大厅 URL
+ * 即使能返回 worldInfo 也不能被当作 ready play。
+ */
+async function confirmPlayReady(host, client, campaignId, signal) {
+  const info = await callPageRuntime(host, "worldInfo", {}, {
+    signal,
+    readyTimeoutMs: 30_000,
+    executionTimeoutMs: 30_000,
+  });
+  if (!info || typeof info !== "object" || info.ready !== true || !info.world?.id) {
+    throw new MtLobbyError("PLAY_NOT_READY", "The campaign play page did not report game.ready; read-back was not dispatched");
+  }
+  const page = client.classifyPanelUrl();
+  if (page.kind !== "play" || page.campaignId !== campaignId) {
+    throw new MtLobbyError("PLAY_NOT_READY", "The panel is not the original campaign play page after returning; read-back was not dispatched");
+  }
+  return { info, page };
+}
+
 class BuilderSourceAttachService {
   constructor(host, { page, client }) {
     this.host = host;
@@ -1186,6 +1207,26 @@ class BuilderSourceAttachService {
       };
     }
     stage("navigation", "completed", "Returned to the original campaign play page");
+
+    // URL 回到 play 仍可能未 ready；pageEval 前先走 typed worldInfo 确认 game.ready。
+    try {
+      await confirmPlayReady(this.host, this.client, campaignId, signal);
+      stage("play_ready", "completed", "game.ready confirmed");
+    } catch (error) {
+      return {
+        ...base,
+        status: "partial",
+        code: "VERIFICATION_UNAVAILABLE",
+        retry: false,
+        jobId,
+        published,
+        campaign: { attachedPackIds: packsResult.attachedPackIds, packsRev: packsResult.packsRev },
+        message: `The import and pack selection completed, but the game was not confirmed ready before read-back: ${String(error?.message ?? error)}. Read-back was not dispatched; do not replay the import; reopen the campaign and verify manually.`,
+        stages: [...stages, { step: "play_ready", state: "failed" }],
+        verification: null,
+        navigation: { returnedToPlay: true, url: navigation.returnPlayUrl ?? null },
+      };
+    }
 
     let verification;
     try {

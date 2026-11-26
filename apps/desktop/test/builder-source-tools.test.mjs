@@ -199,6 +199,9 @@ function harness(t, {
   navigateError = null,
   openPlay = true,
   secondPlan = undefined,
+  worldReady = true,
+  worldInfoBehavior = null,
+  worldInfoError = null,
 } = {}) {
   const page = createLobbyFixture({ url: PLAY_URL });
   const directory = mkdtempSync(path.join(os.tmpdir(), "arcane-builder-source-"));
@@ -282,6 +285,11 @@ function harness(t, {
         if (navigateError) throw navigateError;
         page.webContents.navigate(LOBBY_URL);
         return { status: "completed" };
+      }
+      if (action === "worldInfo") {
+        if (worldInfoError) throw worldInfoError;
+        if (worldInfoBehavior) return worldInfoBehavior({ page, client });
+        return { ready: worldReady, world: { id: "world-1" }, user: { isGM: true } };
       }
       if (action === "pageEval") {
         const expectations = parseExpectations(args.code);
@@ -385,7 +393,10 @@ test("the default call walks plan → lobby import → pack selection → return
   assert.equal(result.details.navigation.returnedToPlay, true);
   assert.equal(result.details.navigation.url, PLAY_URL);
 
-  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan", "builderSourcePlan", "navigateToLobby", "pageEval"]);
+  assert.deepEqual(h.runtimeCalls.map(call => call.action), ["builderSourcePlan", "builderSourcePlan", "navigateToLobby", "worldInfo", "pageEval"]);
+  const worldInfoCall = h.runtimeCalls.find(call => call.action === "worldInfo");
+  assert.equal(worldInfoCall.options.readyTimeoutMs, 30_000);
+  assert.equal(worldInfoCall.options.executionTimeoutMs, 30_000);
   assert.equal(h.planCalls(), 2);
   assert.equal(h.importStartCalls(), 1);
   assert.deepEqual(h.page.state.campaignPacksUpdateCalls.map(call => call.add.join(",")), [
@@ -705,6 +716,46 @@ test("a studio data read failure is partial, never silently passed", async t => 
   assert.equal(result.details.verification.readback, "failed");
   assert.equal(result.details.verification.identityCandidates, "passed", "the raw candidate rows can still be present while the readback reports failure");
   assert.equal(result.details.verification.verificationErrors[0].feature, "readback");
+});
+
+test("pageEval is not dispatched until the returned play page reports game.ready", async t => {
+  const h = harness(t, { worldReady: false });
+  const result = await h.tool.execute("not-ready", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "VERIFICATION_UNAVAILABLE");
+  assert.match(result.content[0].text, /not confirmed ready|did not report game\.ready/);
+  assert.equal(h.runtimeCalls.some(call => call.action === "worldInfo"), true);
+  assert.equal(h.runtimeCalls.some(call => call.action === "pageEval"), false, "read-back must not run before game.ready");
+  assert.equal(result.details.stages.at(-1).step, "play_ready");
+  assert.equal(result.details.stages.at(-1).state, "failed");
+  assert.equal(result.details.verification, null);
+  assert.equal(h.importStartCalls(), 1, "the import is not replayed");
+  assert.deepEqual(h.openCalls, [PLAY_URL]);
+});
+
+test("a failed or timed-out ready read is partial and never falls through to pageEval", async t => {
+  const h = harness(t, { worldInfoError: Object.assign(new Error("worldInfo timed out"), { code: "TIMEOUT" }) });
+  const result = await h.tool.execute("ready-read-failed", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "VERIFICATION_UNAVAILABLE");
+  assert.equal(h.runtimeCalls.some(call => call.action === "pageEval"), false);
+  assert.equal(h.importStartCalls(), 1);
+  assert.match(result.content[0].text, /worldInfo timed out/);
+});
+
+test("a lobby URL during the ready read is not accepted as a ready play page", async t => {
+  const h = harness(t, {
+    worldInfoBehavior: ({ page }) => {
+      page.webContents.navigate(LOBBY_URL);
+      return { ready: true, world: { id: "world-1" } };
+    },
+  });
+  const result = await h.tool.execute("ready-on-lobby", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "VERIFICATION_UNAVAILABLE");
+  assert.match(result.content[0].text, /original campaign play page/);
+  assert.equal(h.runtimeCalls.some(call => call.action === "pageEval"), false);
+  assert.equal(h.importStartCalls(), 1);
 });
 
 test("an unresolved root UUID fails verification and identity/spell checks", async t => {

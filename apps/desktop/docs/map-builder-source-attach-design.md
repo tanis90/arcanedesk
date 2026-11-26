@@ -140,7 +140,8 @@ LLM 创建/修改世界 Item
   → Desk 复用 lobbyImportStatus 等待终态
   → Desk 复用 lobbyCampaignPacksGet/Update 一次性启用所有必需 pack
   → foundry_open(returnPlayUrl) 回原战役
-  → 刷新用户包注册，回读身份候选、法术列表、UUID 与引用闭包
+  → worldInfo 确认同一 campaign 的 play 页 game.ready 与 world id
+  → 刷新用户包注册，回读身份候选、专长候选、法术列表、UUID 与引用闭包
   → 输出 completed / partial / indeterminate
 ```
 
@@ -203,7 +204,7 @@ LLM 创建/修改世界 Item
 
 ### 6.1 实现对齐（2026-11-27）
 
-- **回读实现**：Map 只承诺 `builderSourcePlan` 与大厅 `builderSourceImportStart`，没有额外的 typed verify action。Desk 在回原 play 后执行固定只读 `pageEval` 脚本：先做 `__MT_REGISTER_USER_PACKS__`、`game.packs`、`fromUuid`、根 identifier 与引用闭包检查；再动态 `import("./studio/data.mjs")`，用 `__MT_BRIDGE__.auth` 调 `listChoices(rulesVersion,{auth,refresh:true})` 验证 class/subclass/race/background 根按 `_id + pack` 进入候选，用 `loadFeatOptions` 验证可选择专长根，用 `loadSpellOptions` + `classSpellFilter` 验证 dump 中全部 spell 文档与 `spellClasses`/plan `spellLists` 对应的职业候选。`rulesVersion` 只从根文档 `system.source.rules` 或 plan 的明确字段推导，缺省 2014。脚本不接受模型输入，不是大厅操作，也不替代 `map_page_eval` 的模型入口；任一读面失败都记 `readback`/`verificationErrors` 并只能 `partial`。注意 `pageEval` 的 code 按 async function body 执行（Map 包装为 `new Function("return (async()=>{\n"+code+"\n})()")()`），脚本必须以顶层 `return (async () => { ... })()` 返回结果；裸 IIFE 会让回执 `status:"completed"` 但 `value` 为空。
+- **回读实现**：Map 只承诺 `builderSourcePlan` 与大厅 `builderSourceImportStart`，没有额外的 typed verify action。Desk 在回原 play 后执行固定只读 `pageEval` 脚本：先做 `__MT_REGISTER_USER_PACKS__`、`game.packs`、`fromUuid`、根 identifier 与引用闭包检查；再动态 `import("./studio/data.mjs")`，用 `__MT_BRIDGE__.auth` 调 `listChoices(rulesVersion,{auth,refresh:true})` 验证 class/subclass/race/background 根按 `_id + pack` 进入候选，用 `loadFeatOptions` 验证可选择专长根，用 `loadSpellOptions` + `classSpellFilter` 验证 dump 中全部 spell 文档与 `spellClasses`/plan `spellLists` 对应的职业候选。`rulesVersion` 只从根文档 `system.source.rules` 或 plan 的明确字段推导，缺省 2014。URL 回到 play 后先通过 typed `worldInfo`（`readyTimeoutMs:30000`、`executionTimeoutMs:30000`）确认 `ready:true` 与 `world.id`，并再次校验当前仍是同一 `?campaign=` 的 play URL；大厅/登录 URL 即使能返回读面也不接受。ready 失败或超时按 `VERIFICATION_UNAVAILABLE` 的 `partial` 处理，不派发 `pageEval`、不重放导入。脚本不接受模型输入，不是大厅操作，也不替代 `map_page_eval` 的模型入口；任一读面失败都记 `readback`/`verificationErrors` 并只能 `partial`。注意 `pageEval` 的 code 按 async function body 执行（Map 包装为 `new Function("return (async()=>{\n"+code+"\n})()")()`），脚本必须以顶层 `return (async () => { ... })()` 返回结果；裸 IIFE 会让回执 `status:"completed"` 但 `value` 为空。
 - **UUID 映射**：优先采用 plan 的 `uuidMap` / `roots`；缺失时按设计约定的相同 `_id` 映射从 dump 推导，并统一改写为 `Compendium.user-<moduleId>.*`。模型输出仍只含根映射与失败诊断。
 - **失败计数**：兼容真实 `runModule` 报告的 `report.totals.failed`（条目数）与 `report.assets.failures`（素材数）数值口径，也兼容新入口的 `entryFailures`/`assetFailures` 数组和旧 `report.failures` 合集。数组优先保留明细；只有数值时生成 `{code:"ENTRY_FAILURES"|"ASSET_FAILURES",count}` 诊断。任一项 >0、任一数组非空或 mixed failures 非空都只能 `partial`。
 - **preflight 兼容**：`builderSourceImportStart` 加进大厅 client 的 action 白名单与写动作集，但不进旧部署的 required preflight 集；旧 Map 只会让本工具报 `CAPABILITY_UNAVAILABLE`，不会打断世界导入、合集导入与选包等既有工具。

@@ -69,6 +69,7 @@ dry run 中 `issues.errors` 必须为空才继续；`issues.warnings` 要如实�
 
 ## 验收边界
 
+- 工具回原 play 后会先用 typed `worldInfo` 确认同一战役的 `game.ready`，再执行回读；未就绪时结果是 `partial`，不会把大厅或登录页当 ready play。
 - 工具回读覆盖：用户包注册、根 UUID 解析、identity 候选（class/subclass/race/background 按 `_id + pack` 进入 `listChoices`）、可选择专长候选、法术选项与职业法术过滤（按 dump 中全部 spell 文档和 `spellClasses`）、内部引用闭包；读面失败会明确标 `readback: failed`。不覆盖真实玩家建卡、升级、战斗或刷新持久化。
 - 世界里看得到 Item、合集导入成功、统一写入门放行，都不是“玩家已能选择并使用”。
 - 最终报告写清实际发布的 moduleId/version、pack、根 UUID、未覆盖项和失败项，不把 `partial` 写成完成。
