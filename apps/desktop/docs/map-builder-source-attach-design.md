@@ -79,11 +79,15 @@
   };
   campaign: { attachedPackIds: string[]; packsRev: number | null };
   verification: {
-    packRegistry: "passed";
-    identityCandidates: "passed" | "not-applicable";
-    spellLists: "passed" | "not-applicable";
-    dependencyResolution: "passed";
-    unresolvedRefs: [];
+    packRegistry: "passed" | "failed";
+    identityCandidates: "passed" | "not-applicable" | "failed";
+    featCandidates: "passed" | "not-applicable" | "failed";
+    spellLists: "passed" | "not-applicable" | "failed";
+    dependencyResolution: "passed" | "failed";
+    readback: "passed" | "failed";
+    unresolvedRefs: string[];
+    candidateFailures: Array<{ feature: string; path?: string; bucket?: string; packId?: string; classIdentifier?: string }>;
+    verificationErrors: Array<{ feature: string; error: string }>;
   };
   navigation: { returnedToPlay: boolean; url: string | null };
 }
@@ -178,7 +182,7 @@ LLM 创建/修改世界 Item
   - 首版无删除，不因旧 pack 未出现在本次依赖闭包而 purge。
 - `replace.packIds` 只包含本次实际更新的 pack，复用现有素材保留、失败清理和批次逻辑。
 - 调用 `runModule`/`importModuleZip({dump, replace})`，沿用现有 `lobbyImportStatus/Cancel`。
-- 导入返回的 `entryFailures/assetFailures` 不得被 Desk 折叠成成功。
+- 导入返回的 `entryFailures`/`assetFailures` 数组或真实 `runModule` 的 `totals.failed`/`assets.failures` 数值都不得被 Desk 折叠成成功；数值无法展开明细时至少生成 `{code,count}` 诊断。
 
 大厅 service 版本、API surface revision、操作清单、runtime seams 和发布 FULL 清单按仓内约定同步更新。
 
@@ -199,8 +203,9 @@ LLM 创建/修改世界 Item
 
 ### 6.1 实现对齐（2026-11-27）
 
-- **回读实现**：Map 只承诺 `builderSourcePlan` 与大厅 `builderSourceImportStart`，没有额外的 typed verify action。Desk 在回原 play 后用固定只读 `pageEval` 脚本读取 `__MT_REGISTER_USER_PACKS__`、`game.packs`、`fromUuid` 与根文档的 identifier / `flags.<moduleId>.spellClasses`；脚本不接受模型输入，不是大厅操作，也不替代 `map_page_eval` 的模型入口。车卡 `listChoices` 不是全局句柄，未直接调用。
+- **回读实现**：Map 只承诺 `builderSourcePlan` 与大厅 `builderSourceImportStart`，没有额外的 typed verify action。Desk 在回原 play 后执行固定只读 `pageEval` 脚本：先做 `__MT_REGISTER_USER_PACKS__`、`game.packs`、`fromUuid`、根 identifier 与引用闭包检查；再动态 `import("./studio/data.mjs")`，用 `__MT_BRIDGE__.auth` 调 `listChoices(rulesVersion,{auth,refresh:true})` 验证 class/subclass/race/background 根按 `_id + pack` 进入候选，用 `loadFeatOptions` 验证可选择专长根，用 `loadSpellOptions` + `classSpellFilter` 验证 dump 中全部 spell 文档与 `spellClasses`/plan `spellLists` 对应的职业候选。`rulesVersion` 只从根文档 `system.source.rules` 或 plan 的明确字段推导，缺省 2014。脚本不接受模型输入，不是大厅操作，也不替代 `map_page_eval` 的模型入口；任一读面失败都记 `readback`/`verificationErrors` 并只能 `partial`。
 - **UUID 映射**：优先采用 plan 的 `uuidMap` / `roots`；缺失时按设计约定的相同 `_id` 映射从 dump 推导，并统一改写为 `Compendium.user-<moduleId>.*`。模型输出仍只含根映射与失败诊断。
+- **失败计数**：兼容真实 `runModule` 报告的 `report.totals.failed`（条目数）与 `report.assets.failures`（素材数）数值口径，也兼容新入口的 `entryFailures`/`assetFailures` 数组和旧 `report.failures` 合集。数组优先保留明细；只有数值时生成 `{code:"ENTRY_FAILURES"|"ASSET_FAILURES",count}` 诊断。任一项 >0、任一数组非空或 mixed failures 非空都只能 `partial`。
 - **preflight 兼容**：`builderSourceImportStart` 加进大厅 client 的 action 白名单与写动作集，但不进旧部署的 required preflight 集；旧 Map 只会让本工具报 `CAPABILITY_UNAVAILABLE`，不会打断世界导入、合集导入与选包等既有工具。
 - **状态判定**：写入前失败一律 `rejected`；内容导入已派发后的失败为 `partial`；导航结果未知、job 未知或回原 play 未确认为 `indeterminate`。`completed` 还要求 plan 的内部引用闭包与回读全部通过。
 - **revision 漂移**：选包更新最多重读 3 次选包并重试 add；导入只派发一次，任何一次重试都不重跑 `builderSourceImportStart`。

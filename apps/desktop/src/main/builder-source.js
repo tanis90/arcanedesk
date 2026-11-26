@@ -20,7 +20,7 @@ import { PAGE_PROFILES } from "./page-profiles.js";
 
 const TOOL_NAME = "map_builder_source_attach";
 const ACTION = "builderSourceAttach";
-const MODULE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const MODULE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const WORLD_ITEM_PATTERN = /^Item\.[A-Za-z0-9]{8,64}$/;
 const IDENTITY_TYPES = new Set(["class", "subclass", "race", "background"]);
 const SUCCESS_JOB_PHASES = new Set(["succeeded", "completed", "done", "success"]);
@@ -163,6 +163,29 @@ function spellClassesOf(entry, moduleId) {
   return Array.isArray(values) ? values.map(value => String(value)) : null;
 }
 
+function isSelectableFeatEntry(entry, packName) {
+  if (entry?.type !== "feat") return false;
+  const value = String(entry?.system?.type?.value ?? "").toLowerCase();
+  if (value === "class") return false;
+  if (value === "feat") return true;
+  if (value === "") return /^feats?$/i.test(String(packName ?? ""));
+  return false;
+}
+
+function rulesVersionOf(plan, roots) {
+  const candidates = [
+    plan?.rulesVersion,
+    plan?.rules?.version,
+    plan?.target?.rulesVersion,
+    ...roots.map(root => root.rules),
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (value === "2014" || value === "2024") return value;
+  }
+  return "2014";
+}
+
 /** 根期望表：published UUID、文档类型、identifier 与法术列表标注（用于导入后回读）。
  * @param {{ dump: any, moduleId: string, sourceUuids: string[], plan?: any }} input */
 export function rootExpectations({ dump, moduleId, sourceUuids, plan }) {
@@ -171,19 +194,119 @@ export function rootExpectations({ dump, moduleId, sourceUuids, plan }) {
   const roots = sourceUuids.map(sourceUuid => {
     const id = sourceUuid.slice("Item.".length);
     const hit = index.docs.get(id) ?? null;
-    if (!hit) return { sourceUuid, uuid: provided.get(sourceUuid) ?? null, missing: true };
+    if (!hit) return { sourceUuid, id, uuid: provided.get(sourceUuid) ?? null, missing: true };
     const uuid = provided.get(sourceUuid) ?? publishedUuid(`Compendium.${moduleId}.${hit.pack}.${hit.documentType}.${id}`, moduleId);
     const entry = hit.entry;
     return {
       sourceUuid,
+      id,
       uuid,
+      pack: hit.pack,
+      packId: `user-${moduleId}.${hit.pack}`,
       type: entry?.type != null ? String(entry.type) : null,
       identifier: entry?.system?.identifier != null ? String(entry.system.identifier) : null,
-      pack: hit?.pack ?? null,
-      spellClasses: entry?.type === "spell" ? spellClassesOf(entry, moduleId) : null,
+      rules: entry?.system?.source?.rules != null ? String(entry.system.source.rules) : null,
+      featSelectable: isSelectableFeatEntry(entry, hit.pack),
     };
   });
   return { roots, index };
+}
+
+const IDENTITY_BUCKETS = Object.freeze({ class: "classes", subclass: "subclasses", race: "races", background: "backgrounds" });
+
+function spellIdOf(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (!text.includes(".")) return text;
+  const matched = /\.([A-Za-z0-9]{8,64})$/.exec(text);
+  return matched?.[1] ?? text.split(".").pop() ?? text;
+}
+
+function dumpSpellExpectations(index, moduleId) {
+  const spells = [];
+  for (const [id, hit] of index.docs) {
+    if (hit.entry?.type !== "spell") continue;
+    spells.push({
+      id,
+      packId: `user-${moduleId}.${hit.pack}`,
+      uuid: publishedUuid(`Compendium.${moduleId}.${hit.pack}.${hit.documentType}.${id}`, moduleId),
+      level: Number(hit.entry?.system?.level ?? 0) || 0,
+      spellClasses: spellClassesOf(hit.entry, moduleId) ?? [],
+    });
+  }
+  return spells.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
+/** plan 若提供 spellLists 映射（classIdentifier → spell ids），与 flags 推导合并检查。 */
+function planSpellChecks(plan, spells) {
+  const source = plan?.spellLists ?? plan?.exposure?.spellLists ?? plan?.spellListChecks ?? null;
+  const byId = new Map(spells.map(spell => [spell.id, spell]));
+  const checks = [];
+  const add = (classIdentifier, values) => {
+    const key = String(classIdentifier ?? "").trim();
+    if (!key) return;
+    for (const value of asArray(values)) {
+      const spell = byId.get(spellIdOf(value));
+      if (!spell) continue;
+      checks.push({ id: spell.id, packId: spell.packId, uuid: spell.uuid, classIdentifier: key });
+    }
+  };
+  if (Array.isArray(source)) {
+    for (const row of source) {
+      if (!row || typeof row !== "object") continue;
+      add(row.classIdentifier ?? row.class ?? row.identifier,
+        row.spellIds ?? row.spells ?? row.items ?? row.ids);
+    }
+  } else if (source && typeof source === "object") {
+    for (const [classIdentifier, values] of Object.entries(source)) add(classIdentifier, values);
+  }
+  return checks;
+}
+
+export function buildVerificationExpectations({ index, moduleId, plan, roots, packIds }) {
+  const identity = roots
+    .filter(root => IDENTITY_TYPES.has(root.type) && IDENTITY_BUCKETS[root.type])
+    .map(root => ({
+      sourceUuid: root.sourceUuid,
+      uuid: root.uuid,
+      id: root.id,
+      packId: root.packId,
+      type: root.type,
+      bucket: IDENTITY_BUCKETS[root.type],
+    }));
+  const feats = roots
+    .filter(root => root.featSelectable)
+    .map(root => ({ sourceUuid: root.sourceUuid, uuid: root.uuid, id: root.id, packId: root.packId }));
+  const spells = dumpSpellExpectations(index, moduleId);
+  const checks = [];
+  const seen = new Set();
+  const pushCheck = check => {
+    const key = `${check.classIdentifier}|${check.id}|${check.packId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    checks.push(check);
+  };
+  for (const spell of spells) {
+    for (const classIdentifier of spell.spellClasses) {
+      pushCheck({ id: spell.id, packId: spell.packId, uuid: spell.uuid, classIdentifier });
+    }
+  }
+  for (const check of planSpellChecks(plan, spells)) pushCheck(check);
+  return {
+    moduleId,
+    rulesVersion: rulesVersionOf(plan, roots),
+    packIds,
+    roots: roots.map(root => ({
+      sourceUuid: root.sourceUuid,
+      uuid: root.uuid,
+      type: root.type,
+      identifier: root.identifier,
+    })),
+    identity,
+    feats,
+    spells: spells.map(({ spellClasses: _spellClasses, ...spell }) => spell),
+    classChecks: checks,
+  };
 }
 
 function normalizePlanPacks(plan, dump, moduleId) {
@@ -314,6 +437,10 @@ function verificationScript(expectations) {
   return `(async () => {
   const EXPECTED = ${JSON.stringify(expectations)};
   const missing = [];
+  const errors = [];
+  const recordError = (feature, error) => {
+    errors.push({ feature, error: String(error && error.message ? error.message : error) });
+  };
   const register = { called: false, ok: false };
   try {
     if (typeof globalThis.__MT_REGISTER_USER_PACKS__ === "function") {
@@ -357,21 +484,80 @@ function verificationScript(expectations) {
     if (row.identifier != null && doc.system?.identifier !== row.identifier) {
       missing.push({ feature: "identifier", path: row.uuid, expected: row.identifier, actual: doc.system?.identifier ?? null });
     }
-    const spellClasses = Array.isArray(doc.flags?.[EXPECTED.moduleId]?.spellClasses)
-      ? doc.flags[EXPECTED.moduleId].spellClasses.map(value => String(value))
-      : null;
     roots.push({ ...row, resolved: true, actualType: doc.type ?? null,
-      actualIdentifier: doc.system?.identifier ?? null, spellClasses });
+      actualIdentifier: doc.system?.identifier ?? null });
   }
-  return { register, packs, roots, missing };
-})()`;
-}
 
-function sameStringSet(expected, actual) {
-  if (!Array.isArray(expected) || !Array.isArray(actual)) return false;
-  const left = [...new Set(expected)].sort();
-  const right = [...new Set(actual)].sort();
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  const identity = [];
+  const feats = [];
+  const spells = [];
+  const needsStudioData = Boolean(EXPECTED.identity.length || EXPECTED.feats.length || EXPECTED.spells.length);
+  const readback = { ok: !needsStudioData, skipped: !needsStudioData, authAvailable: false, version: EXPECTED.rulesVersion, error: null };
+  if (needsStudioData) try {
+    const data = await import(new URL("./studio/data.mjs", location.href).href);
+    const auth = globalThis.__MT_BRIDGE__?.auth ?? null;
+    readback.authAvailable = Boolean(auth && typeof auth.authedFetch === "function"
+      && (auth?.campaign?.id || auth?.campaignId));
+    if (!readback.authAvailable) {
+      missing.push({ feature: "auth" });
+    }
+    if (EXPECTED.identity.length) {
+      try {
+        const choices = await data.listChoices(EXPECTED.rulesVersion, { auth, refresh: true });
+        for (const row of EXPECTED.identity) {
+          const bucket = choices && Array.isArray(choices[row.bucket]) ? choices[row.bucket] : [];
+          const present = bucket.some(entry => entry && entry._id === row.id && String(entry._pack || "") === row.packId);
+          identity.push({ ...row, present });
+          if (!present) missing.push({ feature: "identity", path: row.uuid, bucket: row.bucket, packId: row.packId });
+        }
+      } catch (error) { recordError("identity", error); }
+    }
+    if (EXPECTED.feats.length) {
+      try {
+        const catalog = await data.loadFeatOptions({ auth, refresh: true, version: EXPECTED.rulesVersion });
+        for (const row of EXPECTED.feats) {
+          const present = (Array.isArray(catalog) ? catalog : []).some(entry => entry
+            && String(entry.id || "") === row.id && String(entry._pack || "") === row.packId);
+          feats.push({ ...row, present });
+          if (!present) missing.push({ feature: "feat", path: row.uuid, packId: row.packId });
+        }
+      } catch (error) { recordError("feats", error); }
+    }
+    if (EXPECTED.spells.length) {
+      const byPack = new Map();
+      for (const row of EXPECTED.spells) {
+        if (!byPack.has(row.packId)) byPack.set(row.packId, []);
+        byPack.get(row.packId).push(row);
+      }
+      for (const [packId, rows] of byPack) {
+        try {
+          const options = await data.loadSpellOptions(9, EXPECTED.rulesVersion, packId);
+          for (const row of rows) {
+            const present = (Array.isArray(options) ? options : []).some(entry => entry
+              && String(entry.id || "") === row.id && String(entry._pack || "") === packId);
+            spells.push({ ...row, present, checks: [] });
+            if (!present) missing.push({ feature: "spell", path: row.uuid, packId });
+          }
+        } catch (error) { recordError("spell", error); }
+      }
+      for (const check of EXPECTED.classChecks) {
+        try {
+          const filter = await data.classSpellFilter(check.classIdentifier, EXPECTED.rulesVersion, check.packId);
+          const allowed = Boolean(filter({ id: check.id, _pack: check.packId }));
+          const row = spells.find(spell => spell.id === check.id && spell.packId === check.packId);
+          if (row) row.checks.push({ classIdentifier: check.classIdentifier, allowed });
+          if (!allowed) missing.push({ feature: "spellClass", path: check.uuid, classIdentifier: check.classIdentifier });
+        } catch (error) { recordError("spellClass", error); }
+      }
+    }
+    readback.ok = errors.length === 0 && readback.authAvailable;
+  } catch (error) {
+    readback.error = String(error && error.message ? error.message : error);
+    recordError("readback", error);
+    readback.ok = false;
+  }
+  return { register, packs, roots, identity, feats, spells, readback, missing, errors };
+})()`;
 }
 
 function normalizeVerification(value, expectations, localClosure) {
@@ -379,43 +565,60 @@ function normalizeVerification(value, expectations, localClosure) {
   const packs = asArray(value?.packs);
   const roots = asArray(value?.roots);
   const missing = asArray(value?.missing);
+  const errors = asArray(value?.errors);
+  const readbackOk = value?.readback?.ok === true && errors.length === 0;
   const packRegistry = register.ok === true && expectations.packIds.every(packId => packs.some(pack => pack?.packId === packId && pack.present === true))
     ? "passed"
     : "failed";
-  const identity = roots.filter(root => IDENTITY_TYPES.has(root?.type));
-  const identityFailures = new Set(missing
-    .filter(item => item?.feature === "uuid" || item?.feature === "type" || item?.feature === "identifier")
-    .map(item => String(item?.path ?? "")));
-  const identityPassed = identity.length === 0
+  const identityRows = asArray(value?.identity);
+  const identityCandidates = !expectations.identity.length
     ? "not-applicable"
-    : identity.every(root => root?.resolved === true && !identityFailures.has(String(root.uuid)))
-      ? "passed"
-      : "failed";
-  const spellRoots = roots.filter(root => root?.type === "spell" && Array.isArray(root?.expectedSpellClasses) && root.expectedSpellClasses.length > 0);
-  const spellLists = spellRoots.length === 0
+    : errors.some(error => error?.feature === "identity") || identityRows.length !== expectations.identity.length
+      ? "failed"
+      : identityRows.every(row => row?.present === true) ? "passed" : "failed";
+  const featRows = asArray(value?.feats);
+  const featCandidates = !expectations.feats.length
     ? "not-applicable"
-    : spellRoots.every(root => root.resolved === true && sameStringSet(root.expectedSpellClasses, root.spellClasses))
-      ? "passed"
-      : "failed";
+    : errors.some(error => error?.feature === "feats") || featRows.length !== expectations.feats.length
+      ? "failed"
+      : featRows.every(row => row?.present === true) ? "passed" : "failed";
+  const spellRows = asArray(value?.spells);
+  const spellErrors = errors.some(error => error?.feature === "spell" || error?.feature === "spellClass");
+  const spellLists = !expectations.spells.length
+    ? "not-applicable"
+    : spellErrors || spellRows.length !== expectations.spells.length
+      ? "failed"
+      : spellRows.every(row => row?.present === true && asArray(row?.checks).every(check => check?.allowed === true))
+        ? "passed"
+        : "failed";
   const unresolved = new Set([...asArray(localClosure?.unresolvedRefs), ...asArray(localClosure?.worldRefs)]);
   for (const item of missing) {
-    if (item?.path) unresolved.add(String(item.path));
-    else if (item?.feature) unresolved.add(String(item.feature));
+    if (["uuid", "type", "identifier"].includes(String(item?.feature ?? "")) && item?.path) {
+      unresolved.add(String(item.path));
+    }
   }
   return {
     packRegistry,
-    identityCandidates: identityPassed,
+    identityCandidates,
+    featCandidates,
     spellLists,
     dependencyResolution: unresolved.size === 0 && roots.every(root => root?.resolved !== false) ? "passed" : "failed",
+    readback: readbackOk ? "passed" : "failed",
     unresolvedRefs: [...unresolved].sort(),
+    candidateFailures: missing
+      .filter(item => ["identity", "feat", "spell", "spellClass", "auth"].includes(String(item?.feature ?? "")))
+      .slice(0, 50),
+    verificationErrors: errors.slice(0, 20),
   };
 }
 
 function verificationPassed(verification) {
   return verification.packRegistry === "passed"
     && ["passed", "not-applicable"].includes(verification.identityCandidates)
+    && ["passed", "not-applicable"].includes(verification.featCandidates)
     && ["passed", "not-applicable"].includes(verification.spellLists)
     && verification.dependencyResolution === "passed"
+    && verification.readback === "passed"
     && verification.unresolvedRefs.length === 0;
 }
 
@@ -425,12 +628,55 @@ function jobReport(status) {
   return status?.report && typeof status.report === "object" ? status.report : null;
 }
 
+function positiveCount(value) {
+  if (Array.isArray(value)) return value.length;
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+/**
+ * 真实大厅 runModule 报告同时存在多种失败口径：
+ * - module 报告：`report.totals.failed`（条目数）、`report.assets.failures`（素材数）；
+ * - prepared-dump / 新入口可能直接给 `entryFailures` / `assetFailures` 数组；
+ * - 旧兼容合集可能只给 `report.failures` 混合数组。
+ * 数组优先保留明细；只有数值时生成 `{code,count}` 诊断，绝不把失败静默折叠成成功。
+ */
 function splitFailures(status) {
   const report = jobReport(status) ?? {};
-  const entryFailures = asArray(report.entryFailures ?? report.entries?.failures ?? status?.entryFailures);
-  const assetFailures = asArray(report.assetFailures ?? report.assets?.failures ?? status?.assetFailures);
+  const entryValue = report.entryFailures ?? report.entries?.failures ?? status?.entryFailures;
+  const assetValue = report.assetFailures ?? report.assets?.failures ?? status?.assetFailures;
+  const entryFailures = Array.isArray(entryValue) ? [...entryValue] : [];
+  const assetFailures = Array.isArray(assetValue) ? [...assetValue] : [];
+  const entryCount = Math.max(
+    positiveCount(entryValue),
+    positiveCount(report.totals?.failed),
+    positiveCount(report.totals?.entriesFailed),
+    positiveCount(status?.totals?.failed),
+  );
+  const assetCount = Math.max(
+    positiveCount(assetValue),
+    positiveCount(report.assets?.failureCount),
+    positiveCount(report.assets?.failedCount),
+    positiveCount(status?.assets?.failures),
+  );
+  if (entryCount > entryFailures.length) {
+    entryFailures.push({
+      code: "ENTRY_FAILURES",
+      count: entryCount,
+      ...(entryFailures.length ? { detailed: entryFailures.length } : {}),
+    });
+  }
+  if (assetCount > assetFailures.length) {
+    const failedFiles = asArray(report.assets?.failedFiles);
+    assetFailures.push({
+      code: "ASSET_FAILURES",
+      count: assetCount,
+      ...(assetFailures.length ? { detailed: assetFailures.length } : {}),
+      ...(failedFiles.length ? { files: failedFiles.slice(0, 20) } : {}),
+    });
+  }
   const failures = asArray(report.failures ?? status?.failures);
-  return { entryFailures, assetFailures, failures };
+  return { entryFailures, assetFailures, failures, entryCount, assetCount };
 }
 
 function reportUuidMap(status, moduleId) {
@@ -458,7 +704,7 @@ function publishedFrom(plan, status, { roots, moduleId }) {
   const map = new Map([...planUuidMap(plan, moduleId), ...reportUuidMap(status, moduleId)]);
   const uuidMap = roots.map(root => ({ sourceUuid: root.sourceUuid, uuid: map.get(root.sourceUuid) ?? root.uuid ?? null }))
     .filter(row => row.uuid);
-  const { entryFailures, assetFailures } = splitFailures(status);
+  const { entryFailures, assetFailures, failures } = splitFailures(status);
   return {
     batchId: report.batchId ?? report.batch?.batchId ?? status?.batchId ?? null,
     uuidMap,
@@ -467,6 +713,7 @@ function publishedFrom(plan, status, { roots, moduleId }) {
       : (Number.isInteger(plan?.dependencyCount) ? plan.dependencyCount : null),
     entryFailures,
     assetFailures,
+    ...(failures.length ? { failures } : {}),
   };
 }
 
@@ -645,7 +892,7 @@ class BuilderSourceAttachService {
       };
     }
 
-    const { roots } = rootExpectations({ dump, moduleId, sourceUuids, plan });
+    const { roots, index } = rootExpectations({ dump, moduleId, sourceUuids, plan });
     const missingRoots = roots.filter(root => root.missing || !root.uuid);
     if (missingRoots.length) {
       return {
@@ -783,7 +1030,7 @@ class BuilderSourceAttachService {
 
     const phase = jobPhaseOf(status);
     const succeeded = SUCCESS_JOB_PHASES.has(phase.toLowerCase());
-    const { entryFailures, assetFailures, failures } = splitFailures(status);
+    const { entryFailures, assetFailures, failures, entryCount, assetCount } = splitFailures(status);
     const reportMap = new Map([...planUuidMap(plan, moduleId), ...reportUuidMap(status, moduleId)]);
     const publishedRoots = roots.map(root => ({ ...root, uuid: reportMap.get(root.sourceUuid) ?? root.uuid }));
     const published = publishedFrom(plan, status, { roots: publishedRoots, moduleId });
@@ -795,7 +1042,7 @@ class BuilderSourceAttachService {
         retry: false,
         jobId,
         published,
-        message: `Import job ${jobId} ended as ${phase} with ${entryFailures.length} entry and ${assetFailures.length} asset failures. Do not replay; reconcile with map_lobby_import_job and the campaign packs.`,
+        message: `Import job ${jobId} ended as ${phase} with ${entryCount} entry, ${assetCount} asset and ${failures.length} unclassified failures. Do not replay; reconcile with map_lobby_import_job and the campaign packs.`,
         stages: [...stages, { step: "import", state: succeeded && !entryFailures.length && !assetFailures.length && !failures.length ? "completed" : "failed", summary: phase }],
         campaign: { attachedPackIds: [], packsRev: null },
         verification: null,
@@ -864,19 +1111,13 @@ class BuilderSourceAttachService {
 
     let verification;
     try {
-      const expectations = {
+      const expectations = buildVerificationExpectations({
+        index,
         moduleId,
+        plan,
+        roots: publishedRoots,
         packIds: neededPackIds,
-        roots: publishedRoots.map(root => ({
-          sourceUuid: root.sourceUuid,
-          uuid: root.uuid,
-          type: root.type,
-          identifier: root.identifier,
-          ...(Array.isArray(root.spellClasses) && root.spellClasses.length
-            ? { expectedSpellClasses: root.spellClasses }
-            : {}),
-        })),
-      };
+      });
       const receipt = await callPageRuntime(this.host, "pageEval", { code: verificationScript(expectations) }, { signal, executionTimeoutMs: 45_000 });
       if (receipt?.status !== "completed" || !receipt.value) {
         throw new MtLobbyError("VERIFICATION_FAILED", "The play page did not return a verification receipt");
@@ -946,7 +1187,7 @@ function assertSourceUuids(sourceUuids) {
 function resolveModuleId(params, campaignId) {
   const moduleId = params.moduleId !== undefined ? String(params.moduleId) : `homebrew-${campaignId}`;
   if (!MODULE_ID_PATTERN.test(moduleId) || moduleId.startsWith("user-")) {
-    throw new MtLobbyError("INPUT_INVALID", "moduleId must be a stable lowercase id without the user- prefix; leave it out to use homebrew-<campaignId>");
+    throw new MtLobbyError("INPUT_INVALID", "moduleId must be lowercase letters/digits/underscore/hyphen, without dots or the user- prefix; leave it out to use homebrew-<campaignId>");
   }
   return moduleId;
 }

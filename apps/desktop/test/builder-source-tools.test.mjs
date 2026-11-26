@@ -60,6 +60,44 @@ function makeDump(moduleId = MODULE_ID) {
   };
 }
 
+function makeFeatDump(moduleId = MODULE_ID) {
+  return {
+    moduleId,
+    moduleJson: { id: moduleId, title: "Alice 自建合集", version: "1.0.0" },
+    title: "Alice 自建合集",
+    version: "1.0.0",
+    packs: [{
+      name: "feats",
+      label: "自建专长",
+      type: "Item",
+      system: "dnd5e",
+      entries: [{
+        _id: "eeeeeeeeeeeeeeee",
+        name: "Ash Gift",
+        type: "feat",
+        system: { type: { value: "feat" }, identifier: "ash-gift", source: { rules: "2024" } },
+      }],
+    }],
+    assets: [],
+    rawAssetBytes: 0,
+    entryCount: 1,
+    outwardEntryCount: 1,
+  };
+}
+
+function makeFeatPlan(moduleId = MODULE_ID) {
+  return {
+    digest: "feat-digest",
+    rootCount: 1,
+    dependencyCount: 0,
+    exposure: { feats: 1 },
+    packs: [{ packId: "feats", operation: "create", entries: 1 }],
+    assets: { reuse: 0, upload: 0, bytes: 0 },
+    coverage: makePlan(moduleId).coverage,
+    issues: { errors: [], warnings: [] },
+  };
+}
+
 function makePlan(moduleId = MODULE_ID) {
   return {
     digest: "digest-1",
@@ -97,7 +135,13 @@ function parseExpectations(code) {
   return JSON.parse(match[1]);
 }
 
-function verificationFor(expectations, { omitPack = null, unresolvedRoot = null, spellClasses } = {}) {
+function verificationFor(expectations, {
+  omitPack = null,
+  unresolvedRoot = null,
+  omitIdentity = null,
+  denyClassChecks = false,
+  dropReadback = false,
+} = {}) {
   const packs = expectations.packIds.map(packId => ({ packId, present: packId !== omitPack, count: 1 }));
   const roots = expectations.roots.map(root => {
     if (root.uuid === unresolvedRoot) return { ...root, resolved: false };
@@ -106,14 +150,40 @@ function verificationFor(expectations, { omitPack = null, unresolvedRoot = null,
       resolved: true,
       actualType: root.type,
       actualIdentifier: root.identifier,
-      spellClasses: spellClasses !== undefined ? spellClasses : (root.expectedSpellClasses ?? null),
     };
   });
+  const identity = expectations.identity.map(row => ({ ...row, present: row.uuid !== omitIdentity }));
+  const feats = expectations.feats.map(row => ({ ...row, present: true }));
+  const spells = expectations.spells.map(row => ({
+    ...row,
+    present: true,
+    checks: expectations.classChecks
+      .filter(check => check.id === row.id && check.packId === row.packId)
+      .map(check => ({ classIdentifier: check.classIdentifier, allowed: !denyClassChecks })),
+  }));
+  const missing = [];
+  if (omitPack) missing.push({ feature: "pack", path: omitPack });
+  if (unresolvedRoot) missing.push({ feature: "uuid", path: unresolvedRoot });
+  if (omitIdentity) {
+    const row = expectations.identity.find(entry => entry.uuid === omitIdentity);
+    missing.push({ feature: "identity", path: omitIdentity, bucket: row?.bucket ?? null, packId: row?.packId ?? null });
+  }
+  if (denyClassChecks) {
+    for (const check of expectations.classChecks) {
+      missing.push({ feature: "spellClass", path: check.uuid, classIdentifier: check.classIdentifier });
+    }
+  }
+  const errors = dropReadback ? [{ feature: "readback", error: "studio data unavailable" }] : [];
   return {
     register: { called: true, ok: true },
     packs,
     roots,
-    missing: omitPack ? [{ feature: "pack", path: omitPack }] : (unresolvedRoot ? [{ feature: "uuid", path: unresolvedRoot }] : []),
+    identity,
+    feats,
+    spells,
+    readback: { ok: !dropReadback, authAvailable: true, version: expectations.rulesVersion, error: dropReadback ? "studio data unavailable" : null },
+    missing,
+    errors,
   };
 }
 
@@ -298,8 +368,10 @@ test("the default call walks plan → lobby import → pack selection → return
   assert.deepEqual(result.details.campaign.attachedPackIds, ["user-alice-homebrew.classes", "user-alice-homebrew.spells"]);
   assert.equal(result.details.verification.packRegistry, "passed");
   assert.equal(result.details.verification.identityCandidates, "passed");
+  assert.equal(result.details.verification.featCandidates, "not-applicable");
   assert.equal(result.details.verification.spellLists, "passed");
   assert.equal(result.details.verification.dependencyResolution, "passed");
+  assert.equal(result.details.verification.readback, "passed");
   assert.deepEqual(result.details.verification.unresolvedRefs, []);
   assert.equal(result.details.navigation.returnedToPlay, true);
   assert.equal(result.details.navigation.url, PLAY_URL);
@@ -328,11 +400,15 @@ test("moduleId defaults to homebrew-<campaignId> and the planner receives it", a
   assert.equal(planCall.args.moduleId, "homebrew-campaign-1");
 });
 
-test("user-* module ids are rejected before the planner is called", async t => {
+test("user-* and dotted module ids are rejected before the planner is called", async t => {
   const h = harness(t);
-  const result = await h.tool.execute("bad-module", { ...ARGS, moduleId: "user-alice-homebrew" });
-  assert.equal(result.details.status, "rejected");
-  assert.equal(result.details.code, "INPUT_INVALID");
+  const userPrefixed = await h.tool.execute("bad-module", { ...ARGS, moduleId: "user-alice-homebrew" });
+  assert.equal(userPrefixed.details.status, "rejected");
+  assert.equal(userPrefixed.details.code, "INPUT_INVALID");
+  const dotted = await h.tool.execute("dotted-module", { ...ARGS, moduleId: "alice.homebrew" });
+  assert.equal(dotted.details.status, "rejected");
+  assert.equal(dotted.details.code, "INPUT_INVALID");
+  assert.match(dotted.content[0].text, /without dots/);
   assert.equal(h.runtimeCalls.length, 0);
   assert.equal(h.approvals.length, 0);
 });
@@ -386,6 +462,66 @@ test("entryFailures or assetFailures make the result partial, never completed", 
   assert.equal(h.importStartCalls(), 1);
   assert.deepEqual(h.openCalls, [], "no return to play is claimed after a partial import");
   assert.equal(h.page.state.campaignPacksUpdateCalls.length, 0, "packs are not changed for an incomplete import");
+});
+
+test("real runModule numeric failure counts are preserved as explicit diagnostics", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: {
+        kind: "module",
+        totals: { entries: 120, packs: 4, failed: 3, reused: 0 },
+        assets: { uploads: 2, uploadBytes: 10, failures: 2, reused: 0, assetCount: 4 },
+        warnings: [],
+      },
+    }),
+  });
+  const result = await h.tool.execute("numeric-failures", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "IMPORT_ENTRY_FAILURES");
+  assert.deepEqual(result.details.published.entryFailures, [{ code: "ENTRY_FAILURES", count: 3 }]);
+  assert.deepEqual(result.details.published.assetFailures, [{ code: "ASSET_FAILURES", count: 2 }]);
+  assert.match(result.content[0].text, /3 entry/);
+  assert.match(result.content[0].text, /2 asset/);
+});
+
+test("array failure details win over numeric totals and keep the real entries", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: {
+        totals: { failed: 1 },
+        assets: { failures: 1 },
+        entryFailures: [{ entryId: "aaaaaaaaaaaaaaaa", error: "bad schema" }],
+        assetFailures: [{ filename: "ember.png", error: "upload failed" }],
+        failures: [],
+      },
+    }),
+  });
+  const result = await h.tool.execute("array-failures", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.deepEqual(result.details.published.entryFailures, [{ entryId: "aaaaaaaaaaaaaaaa", error: "bad schema" }]);
+  assert.deepEqual(result.details.published.assetFailures, [{ filename: "ember.png", error: "upload failed" }]);
+});
+
+test("legacy report.failures alone still prevents completed and is exposed", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: { totals: { failed: 0 }, assets: { failures: 0 }, failures: [{ filename: "x.png", error: "upload failed" }] },
+    }),
+  });
+  const result = await h.tool.execute("legacy-failures", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.code, "IMPORT_ENTRY_FAILURES");
+  assert.deepEqual(result.details.published.failures, [{ filename: "x.png", error: "upload failed" }]);
+  assert.match(result.content[0].text, /1 unclassified/);
 });
 
 test("a failed import job is partial with the job id and is not replayed", async t => {
@@ -474,35 +610,112 @@ test("persistent revision drift is partial with the job id and no import replay"
 
 test("a failed post-import read-back is partial, not completed", async t => {
   const h = harness(t, {
-    verification: expectations => verificationFor(expectations, { omitPack: "user-alice-homebrew.spells" }),
+    verification: expectations => verificationFor(expectations, { omitPack: "user-alice-homebrew.spells", unresolvedRoot: SPELL_UUID }),
   });
   const result = await h.tool.execute("verify-pack-missing", ARGS);
   assert.equal(result.details.status, "partial");
   assert.equal(result.details.code, "VERIFICATION_FAILED");
   assert.equal(result.details.verification.packRegistry, "failed");
   assert.equal(result.details.verification.dependencyResolution, "failed");
-  assert.ok(result.details.verification.unresolvedRefs.includes("user-alice-homebrew.spells"));
+  assert.ok(result.details.verification.unresolvedRefs.includes(SPELL_UUID));
   assert.equal(result.details.navigation.returnedToPlay, true);
+});
+
+test("a studio data read failure is partial, never silently passed", async t => {
+  const h = harness(t, {
+    verification: expectations => verificationFor(expectations, { dropReadback: true }),
+  });
+  const result = await h.tool.execute("verify-readback-failed", ARGS);
+  assert.equal(result.details.status, "partial");
+  assert.equal(result.details.verification.readback, "failed");
+  assert.equal(result.details.verification.identityCandidates, "passed", "the raw candidate rows can still be present while the readback reports failure");
+  assert.equal(result.details.verification.verificationErrors[0].feature, "readback");
 });
 
 test("an unresolved root UUID fails verification and identity/spell checks", async t => {
   const h = harness(t, {
-    verification: expectations => verificationFor(expectations, { unresolvedRoot: CLASS_UUID }),
+    verification: expectations => verificationFor(expectations, { unresolvedRoot: CLASS_UUID, omitIdentity: CLASS_UUID }),
   });
   const result = await h.tool.execute("verify-root-missing", ARGS);
   assert.equal(result.details.status, "partial");
   assert.equal(result.details.verification.identityCandidates, "failed");
   assert.equal(result.details.verification.dependencyResolution, "failed");
   assert.ok(result.details.verification.unresolvedRefs.includes(CLASS_UUID));
+  assert.equal(result.details.verification.candidateFailures[0].feature, "identity");
 });
 
 test("a spell-list mismatch fails the spell-list check", async t => {
   const h = harness(t, {
-    verification: expectations => verificationFor(expectations, { spellClasses: ["cleric"] }),
+    verification: expectations => verificationFor(expectations, { denyClassChecks: true }),
   });
   const result = await h.tool.execute("verify-spells", ARGS);
   assert.equal(result.details.status, "partial");
   assert.equal(result.details.verification.spellLists, "failed");
+  assert.equal(result.details.verification.candidateFailures[0].feature, "spellClass");
+});
+
+test("a selectable feat root is checked through loadFeatOptions, not only fromUuid", async t => {
+  const featRoot = "Item.eeeeeeeeeeeeeeee";
+  const h = harness(t, {
+    dump: makeFeatDump(),
+    plan: makeFeatPlan(),
+  });
+  const result = await h.tool.execute("feat-root", { sourceUuids: [featRoot], moduleId: MODULE_ID });
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  assert.equal(result.details.verification.featCandidates, "passed");
+  assert.equal(result.details.verification.identityCandidates, "not-applicable");
+  assert.equal(result.details.verification.spellLists, "not-applicable");
+  const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
+  assert.match(pageEval.args.code, /loadFeatOptions/);
+  assert.equal(parseExpectations(pageEval.args.code).feats.length, 1);
+});
+
+test("rulesVersion comes from the root document and is passed to the studio data reads", async t => {
+  const dump = makeDump();
+  dump.packs[0].entries[0].system.source = { rules: "2024" };
+  dump.packs[1].entries[0].system = { source: { rules: "2024" } };
+  const h = harness(t, { dump });
+  const result = await h.tool.execute("rules-2024", ARGS);
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
+  const expectations = parseExpectations(pageEval.args.code);
+  assert.equal(expectations.rulesVersion, "2024");
+  assert.match(pageEval.args.code, /listChoices\(EXPECTED\.rulesVersion/);
+  assert.match(pageEval.args.code, /loadSpellOptions\(9, EXPECTED\.rulesVersion/);
+  assert.match(pageEval.args.code, /classSpellFilter\(check\.classIdentifier, EXPECTED\.rulesVersion/);
+});
+
+test("spell checks come from dump dependencies even when the spell is not a source root", async t => {
+  const h = harness(t);
+  const result = await h.tool.execute("dependency-spell", { sourceUuids: [ROOT_CLASS], moduleId: MODULE_ID, title: "灰烬秘法" });
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  assert.equal(result.details.verification.spellLists, "passed");
+  const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
+  const expectations = parseExpectations(pageEval.args.code);
+  assert.equal(expectations.spells.length, 1, "the spell dependency is checked even though it is not a root");
+  assert.equal(expectations.classChecks.length, 1);
+  assert.equal(expectations.classChecks[0].classIdentifier, "mage");
+  assert.match(pageEval.args.code, /listChoices\(EXPECTED\.rulesVersion/);
+  assert.match(pageEval.args.code, /loadSpellOptions\(9, EXPECTED\.rulesVersion/);
+  assert.match(pageEval.args.code, /classSpellFilter\(check\.classIdentifier, EXPECTED\.rulesVersion/);
+});
+
+test("plan spellLists mappings add class checks when spell flags are absent", async t => {
+  const dump = makeDump();
+  dump.packs[1].entries[0].flags = {};
+  const plan = makePlan();
+  plan.spellLists = { mage: ["bbbbbbbbbbbbbbbb"] };
+  const h = harness(t, { dump, plan });
+  const result = await h.tool.execute("plan-spell-lists", ARGS);
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  const pageEval = h.runtimeCalls.find(call => call.action === "pageEval");
+  const expectations = parseExpectations(pageEval.args.code);
+  assert.deepEqual(expectations.classChecks, [{
+    id: "bbbbbbbbbbbbbbbb",
+    packId: "user-alice-homebrew.spells",
+    uuid: SPELL_UUID,
+    classIdentifier: "mage",
+  }]);
 });
 
 test("an unconfirmed return to play is indeterminate with completed import and pack state", async t => {

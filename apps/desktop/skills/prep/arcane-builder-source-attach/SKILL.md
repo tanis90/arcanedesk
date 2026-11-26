@@ -10,7 +10,7 @@ description: 把自建职业、子职业、物种/种族、背景、专长、法
 ## 分工与前置
 
 1. **先创作世界 Item**：按 `arcane-item-update` 在当前世界创建或修改 `Item.<id>`。本工具只接受世界 Item UUID，不接受合集 UUID、名称、ZIP、user-* 包名或 revision。
-2. **涉及大厅前先读 `arcane-mt-lobby/SKILL.md`**：本工具内部会走 play → 大厅 → play，登录、审批和页面边界沿用大厅总则。
+2. **涉及大厅前先读 `arcane-mt-lobby/SKILL.md`**：本工具内部会走 play → 大厅 → play；登录、页面往返与统一写入门沿用大厅总则。
 3. **发布用 `map_builder_source_attach`**：默认一次调用完成规划、导入、选包、回原 play 与回读。不要自己上传 ZIP、拼 `module.json`、改 `user-*` 包或调用裸 REST。
 4. 数据字段不确定时读随包参考 `references/userpack-data-spec.md`；它是本 skill 的运行时规范，不依赖仓库外文件。
 
@@ -69,8 +69,8 @@ dry run 中 `issues.errors` 必须为空才继续；`issues.warnings` 要如实�
 
 ## 验收边界
 
-- 工具回读覆盖：用户包注册、根 UUID 解析、身份候选（适用时）、法术表标注（适用时）、内部引用闭包；不覆盖真实玩家建卡、升级、战斗或刷新持久化。
-- 世界里看得到 Item、合集导入成功、审批通过，都不是“玩家已能选择并使用”。
+- 工具回读覆盖：用户包注册、根 UUID 解析、identity 候选（class/subclass/race/background 按 `_id + pack` 进入 `listChoices`）、可选择专长候选、法术选项与职业法术过滤（按 dump 中全部 spell 文档和 `spellClasses`）、内部引用闭包；读面失败会明确标 `readback: failed`。不覆盖真实玩家建卡、升级、战斗或刷新持久化。
+- 世界里看得到 Item、合集导入成功、统一写入门放行，都不是“玩家已能选择并使用”。
 - 最终报告写清实际发布的 moduleId/version、pack、根 UUID、未覆盖项和失败项，不把 `partial` 写成完成。
 - 发布后要验证玩家侧时，另走真实账号验收；没有执行就明确写“未执行”。
 
