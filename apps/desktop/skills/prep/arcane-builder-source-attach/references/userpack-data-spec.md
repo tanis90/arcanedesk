@@ -82,6 +82,7 @@
 
 - 法术要能被选择还要能被使用：原生活动、攻击/豁免、伤害、效果和持续时间字段必须合法。
 - 法术与职业的关联使用目标版本原生 `system.classes` 字段。需要声明职业法术列表时，使用 `flags.<moduleId>.spellClasses`（或该版本支持的 `spellLists`），值为职业 `system.identifier` 小写数组；不能只靠名称相似或 pack 名推断。
+- 自定义施法职业还要给出目标规则版的原生施法数量进阶，不能只写 `system.spellcasting.progression`。2014 使用 `ScaleValue` 的 `configuration.identifier: "cantrips-known"` / `"spells-known"` 与 `configuration.scale`，例如一级已知法术 6 写成 `{"1":{"value":6}}`；需要数量随等级变化时逐档给出，漏写会让对应法术配额变成 0。
 - 按表准备法术使用特性上的 `flags.<moduleId>.preparedSpellTable`，候选、数量、过滤条件按接收端数据契约完整提供，不能只写布尔开关。
 - 自动化只使用接收端已支持的 flag 和运行时协议；共享 DND 自动化数据按其约定命名，导入时由前端归一，不要并列写多份旧 flag。
 - 动画所需绑定、投射物、图片或音视频素材必须随包并可解析。自定义脚本不会被本规范授予执行能力。
