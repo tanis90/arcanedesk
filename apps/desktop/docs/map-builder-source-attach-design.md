@@ -211,6 +211,7 @@ LLM 创建/修改世界 Item
 - **世界漂移门**：正式 apply 在首次规划后、离开 play 前用相同参数再规划一次，只比较 `plan.digest`。缺失 digest、第二次 rejected/异常或 digest 漂移都在本地拒绝，绝不进入大厅；一致时继续用初次 dump。dryRun 不受影响，仍只规划一次。
 - **状态判定**：写入前失败一律 `rejected`；内容导入已派发后的失败为 `partial`；导航结果未知、job 未知或回原 play 未确认为 `indeterminate`。`completed` 还要求 plan 的内部引用闭包与回读全部通过。
 - **revision 漂移**：选包更新最多重读 3 次选包并重试 add；导入只派发一次，任何一次重试都不重跑 `builderSourceImportStart`。
+- **版本回执**：进入大厅前的 `plan.module.version` / `dump.version` 只是规划值。默认版本由大厅在读取本人旧合集后递增，因此正式导入等待终态后，Desk 使用 `job.report.module` 中匹配当前 `moduleId` 的真实标题与版本覆盖成功及后续回执；不能把规划默认的 `1.0.0` 当作已入库版本。Dry run 仍展示规划值，不预猜实际版本。
 - **失败清理**：partial/indeterminate 不自动回 play、不自动重放；回执明确给出 `jobId`/`operationRef`、实际 packIds 与后续对账入口。若导入已完成但回 play 失败，结果保持 `indeterminate` 而不是伪造 `completed`。
 
 ## 7. 内容角色与曝光推导

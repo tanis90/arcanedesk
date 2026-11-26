@@ -1127,6 +1127,14 @@ class BuilderSourceAttachService {
       };
     }
 
+    const reportedModule = jobReport(status)?.module;
+    if (reportedModule?.id === moduleId && typeof reportedModule.version === "string" && reportedModule.version) {
+      base.module = {
+        ...base.module,
+        title: typeof reportedModule.title === "string" && reportedModule.title ? reportedModule.title : base.module.title,
+        version: reportedModule.version,
+      };
+    }
     const phase = jobPhaseOf(status);
     const succeeded = SUCCESS_JOB_PHASES.has(phase.toLowerCase());
     const { entryFailures, assetFailures, failures, entryCount, assetCount } = splitFailures(status);

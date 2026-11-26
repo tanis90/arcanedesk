@@ -929,6 +929,25 @@ test("a plan that still carries blocking issues rejects without importing", asyn
   assert.equal(h.importStartCalls(), 0);
 });
 
+test("an incremental import reports the stored version instead of the planner default", async t => {
+  const h = harness(t, {
+    jobStatus: async ({ jobId }) => ({
+      jobId,
+      phase: "succeeded",
+      terminal: true,
+      report: {
+        module: { id: MODULE_ID, title: "Alice 自建合集", version: "1.0.2" },
+        totals: { failed: 0 },
+        assets: { failures: 0 },
+      },
+    }),
+  });
+  const result = await h.tool.execute("stored-version", ARGS);
+  assert.equal(result.details.status, "completed", JSON.stringify(result.details));
+  assert.equal(result.details.module.version, "1.0.2");
+  assert.match(result.content[0].text, /Published alice-homebrew 1\.0\.2/);
+});
+
 test("an import report uuidMap overrides same-id derivation for publication and read-back", async t => {
   const alternate = "Compendium.user-alice-homebrew.classes.Item.dddddddddddddddd";
   const h = harness(t, {
