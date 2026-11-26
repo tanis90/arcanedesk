@@ -293,6 +293,13 @@ pack 名采用稳定语义名，例如 `classes/subclasses/races/backgrounds/fea
 
 结束删除隔离战役、测试合集、上传素材和本地临时产物，停止 Desk/keyring/遥测进程。
 
+### 本轮实测记录（2026-11-27）
+
+- 真实 Desk LLM 先创建世界 Item，读取 `arcane-item-update` 与 `arcane-builder-source-attach`，通过 `map_builder_source_attach` 正式发布既有 16 个根 Item 和 6 个依赖；回执 `status:"completed"`，6 个 pack 共 22 条，零条目/素材失败。回执与大厅库实际版本均为 **1.0.5**，同一 UUID 更新不重复，既有 Fighter 子职业与 Wizard 法术的外部职业解析通过。
+- 另一真实玩家账号在工作室创建 `Actor.AGqPArhyYiWYIO7a`：1 级、HP 8，自定义职业、星辉回想、3 个戏法、6 个一环法术及星辉法杖真实入卡；升到 2 级、HP 14 后选择星轨学派，星轨共鸣与星尘护壁入卡。来源 UUID 全为 `Compendium.user-homebrew-builder-attach-e2e.*`，连续两次刷新读回一致。
+- 真实玩家验收定位并修复了 Map 独立 studio 的选包 auth、过期渲染与泛型装备来源三个问题，补了 B32/B33 真实向导回归。2014 默认整包仍是既有“只记录意向”语义，验收通过正常「逐组自选」选择法杖，不是直接给 Actor 塞物品。
+- 不把此结果扩展为战斗自动化或 CoC 真实账号验收。测试战役和 6 个测试合集在验收后删除。
+
 ## 12. 子 Agent 分工
 
 - Map coder：实现 play planner、prepared-dump 大厅导入、Map 测试、runtime seams/发布清单/PROGRESS。
