@@ -21,6 +21,7 @@ export const EVENT_NAMES = new Set([
   "tool.completed",
   "approval.resolved",
   "foundry.runtime_completed",
+  "play.turn_injected",
   "skill.loaded",
   "skills.update_completed",
 ]);
@@ -108,6 +109,8 @@ export const APPROVAL_OUTCOMES = new Set(["allowed", "denied", "timeout"]);
 export const RUNTIME_PHASES = new Set(["preflight", "dispatched"]);
 export const RUNTIME_STATUSES = new Set(["completed", "error", "aborted", "timeout", "navigated"]);
 export const RUNTIME_RECEIPTS = new Set(["none", "completed", "rejected", "partial", "indeterminate"]);
+// 投递时现场注入结果(play-turn-injection-spec §6):成功/超时/错误,不记现场内容。
+export const TURN_INJECTION_OUTCOMES = new Set(["injected", "timeout", "error"]);
 export const INPUT_SOURCES = new Set(["unknown", "voice", "keyboard", "mixed", "image_only"]);
 export const SUBMIT_METHODS = new Set(["unknown", "enter", "click"]);
 
@@ -311,6 +314,10 @@ export const buildEventData = {
     receipt: oneOf(receipt, RUNTIME_RECEIPTS, "receipt"),
     duration_ms: int(durationMs, "duration_ms"),
     error_class: oneOf(errorClass, ERROR_CLASSES, "error_class"),
+  }),
+  "play.turn_injected": ({ outcome, latencyBucket: latency }) => ({
+    outcome: oneOf(outcome, TURN_INJECTION_OUTCOMES, "outcome"),
+    latency_bucket: String(latency),
   }),
   // skill_name 非法即抛错丢事件(fail closed):能落到这里的本应只有我们发布的目录名。
   "skill.loaded": ({ skillName, bundleRevision, fileKind }) => {
